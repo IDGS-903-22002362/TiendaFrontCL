@@ -1,3 +1,82 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "hero-banner-1",
+      "description": "A panoramic view of a packed soccer stadium at night, with bright lights and a cheering crowd.",
+      "imageUrl": "https://images.unsplash.com/photo-1540379708242-14a809bef941?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8c29jY2VyJTIwc3RhZGl1bXxlbnwwfHx8fDE3NzE5NDkxNTZ8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "soccer stadium"
+    },
+    {
+      "id": "product-jersey-home",
+      "description": "Front view of the green home soccer jersey.",
+      "imageUrl": "https://images.unsplash.com/photo-1695302373645-3d19bcba2587?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHxncmVlbiUyMGplcnNleXxlbnwwfHx8fDE3NzE5NTQxNjF8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "green jersey"
+    },
+    {
+      "id": "product-jersey-away",
+      "description": "Front view of the white away soccer jersey.",
+      "imageUrl": "https://images.unsplash.com/photo-1600544054557-073f71b2aca7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHx3aGl0ZSUyMGplcnNleXxlbnwwfHx8fDE3NzE5NTQxNjF8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "white jersey"
+    },
+    {
+      "id": "product-jacket-travel",
+      "description": "Black travel jacket with club logo.",
+      "imageUrl": "https://images.unsplash.com/photo-1629201984490-81e29719a94c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw5fHxibGFjayUyMGphY2tldHxlbnwwfHx8fDE3NzE5NTQxNjF8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "black jacket"
+    },
+    {
+      "id": "product-cap-logo",
+      "description": "Green baseball cap with embroidered logo.",
+      "imageUrl": "https://picsum.photos/seed/104/600/600",
+      "imageHint": "green cap"
+    },
+    {
+      "id": "product-scarf",
+      "description": "Green and yellow fan scarf.",
+      "imageUrl": "https://images.unsplash.com/photo-1761299145926-d065e95f5791?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxmYW4lMjBzY2FyZnxlbnwwfHx8fDE3NzE5NTQxNjF8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "fan scarf"
+    },
+    {
+      "id": "product-ball",
+      "description": "Official match soccer ball.",
+      "imageUrl": "https://images.unsplash.com/photo-1575830210841-25272641379b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8c29jY2VyJTIwYmFsbHxlbnwwfHx8fDE3NzE5MzkyNzl8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "soccer ball"
+    },
+    {
+      "id": "product-tshirt-women",
+      "description": "Women's gray t-shirt with club crest.",
+      "imageUrl": "https://images.unsplash.com/photo-1619425883001-c3df68e2b8f3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHx3b21hbiUyMHRzaGlydHxlbnwwfHx8fDE3NzE5NTQxNjF8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "woman tshirt"
+    },
+    {
+      "id": "product-hoodie-kids",
+      "description": "Kid's green hoodie.",
+      "imageUrl": "https://images.unsplash.com/photo-1770954179366-7a85687c1b64?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxraWRzJTIwaG9vZGllfGVufDB8fHx8MTc3MTk1NDE2MXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "kids hoodie"
+    },
+    {
+      "id": "product-mug",
+      "description": "Ceramic mug with club logo.",
+      "imageUrl": "https://images.unsplash.com/photo-1643946404043-178456b0e3f8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxjb2ZmZWUlMjBtdWd8ZW58MHx8fHwxNzcxOTU0MTYxfDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "coffee mug"
+    },
+    {
+      "id": "product-keychain",
+      "description": "Metal keychain of the club crest.",
+      "imageUrl": "https://images.unsplash.com/photo-1727154085760-134cc942246e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxtZXRhbCUyMGtleWNoYWlufGVufDB8fHx8MTc3MTk1NDE2MXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "metal keychain"
+    },
+    {
+      "id": "product-jersey-retro",
+      "description": "Retro-style jersey from a past season.",
+      "imageUrl": "https://images.unsplash.com/photo-1761637504548-1a32a23e41a8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxyZXRybyUyMGplcnNleXxlbnwwfHx8fDE3NzE5NTQxNjF8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "retro jersey"
+    },
+    {
+      "id": "product-training-shirt",
+      "description": "Black training shirt.",
+      "imageUrl": "https://images.unsplash.com/photo-1599446691418-9938936aa43b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHx0cmFpbmluZyUyMHNoaXJ0fGVufDB8fHx8MTc3MTk1NDE2MXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "training shirt"
+    }
+  ]
 }

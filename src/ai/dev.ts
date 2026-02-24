@@ -1,1 +1,5 @@
-// Flows will be imported for their side effects in this file.
+import { config } from 'dotenv';
+config();
+
+import '@/ai/flows/product-information-bot-flow.ts';
+import '@/ai/flows/ai-product-search-flow.ts';
