@@ -17,7 +17,7 @@ export default function ProductsPage({
           Todos los Productos
         </h1>
         <p className="mt-2 text-lg text-muted-foreground">
-          Encuentra todo lo que necesitas para mostrar tu pasión por La Fiera.
+          Encuentra todo lo que necesitas para tu próxima aventura.
         </p>
       </header>
       <Suspense fallback={<div>Cargando filtros...</div>}>

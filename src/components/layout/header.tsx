@@ -43,7 +43,7 @@ export function Header() {
                 <Link href="/" className="mb-8 flex items-center gap-2">
                   <Logo className="h-8 w-auto" />
                   <span className="font-headline text-xl font-bold">
-                    León Fanshop
+                    La Dungeon
                   </span>
                 </Link>
                 <nav className="flex flex-col gap-4">
@@ -63,7 +63,7 @@ export function Header() {
           <Link href="/" className="hidden items-center gap-2 md:flex">
             <Logo className="h-8 w-auto" />
             <span className="hidden font-headline text-xl font-bold sm:inline-block">
-              León Fanshop
+              La Dungeon
             </span>
           </Link>
         </div>

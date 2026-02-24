@@ -27,11 +27,11 @@ export function Footer() {
             <Link href="/" className="flex items-center gap-2">
               <Logo className="h-10 w-auto" />
               <span className="font-headline text-2xl font-bold">
-                León Fanshop
+                La Dungeon
               </span>
             </Link>
             <p className="mt-4 text-muted-foreground">
-              La tienda oficial para la afición de La Fiera.
+              Tu tienda de confianza.
             </p>
           </div>
           <div>
@@ -85,7 +85,7 @@ export function Footer() {
           </div>
         </div>
         <div className="mt-12 border-t pt-8 text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} Club León Fanshop. Todos los derechos reservados.</p>
+          <p>&copy; {new Date().getFullYear()} La Dungeon. Todos los derechos reservados.</p>
         </div>
       </div>
     </footer>

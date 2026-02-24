@@ -17,19 +17,19 @@ import {
 
 const orders = [
   {
-    id: '#LEON-17052024-001',
+    id: '#DUNGEON-17052024-001',
     date: '17 de Mayo, 2024',
     status: 'Entregado',
     total: 1798.0,
   },
   {
-    id: '#LEON-02042024-003',
+    id: '#DUNGEON-02042024-003',
     date: '2 de Abril, 2024',
     status: 'Entregado',
     total: 499.0,
   },
   {
-    id: '#LEON-15012024-002',
+    id: '#DUNGEON-15012024-002',
     date: '15 de Enero, 2024',
     status: 'Entregado',
     total: 2100.0,

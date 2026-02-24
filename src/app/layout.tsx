@@ -6,8 +6,8 @@ import { Toaster } from '@/components/ui/toaster';
 import { CartProvider } from '@/hooks/use-cart';
 
 export const metadata: Metadata = {
-  title: 'León Fanshop',
-  description: 'Tienda oficial del Club León',
+  title: 'La Dungeon',
+  description: 'Tu tienda de confianza',
 };
 
 export default function RootLayout({

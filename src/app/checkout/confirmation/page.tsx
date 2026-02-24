@@ -23,7 +23,7 @@ export default function ConfirmationPage() {
           </p>
           <div className="mt-6">
             <p className="font-semibold">Número de pedido:</p>
-            <p className="font-mono text-lg text-primary">#LEON-17052024-001</p>
+            <p className="font-mono text-lg text-primary">#DUNGEON-17052024-001</p>
           </div>
           <Button asChild className="mt-8 w-full" size="lg">
             <Link href="/products">Seguir comprando</Link>

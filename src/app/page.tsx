@@ -59,11 +59,10 @@ export default function Home() {
             Nueva Colección 2024/2025
           </Badge>
           <h1 className="font-headline text-4xl font-bold tracking-tight text-white md:text-6xl lg:text-7xl">
-            LA PIEL DE LA FIERA
+            Equípate para la Aventura
           </h1>
           <p className="mt-4 max-w-2xl text-lg text-gray-200">
-            Viste los colores de la garra y la pasión. La nueva equipación ya
-            está aquí.
+            Todo lo que necesitas para tu próxima partida. La nueva mercancía ya está aquí.
           </p>
           <Button asChild className="mt-8" size="lg">
             <Link href="/products">
