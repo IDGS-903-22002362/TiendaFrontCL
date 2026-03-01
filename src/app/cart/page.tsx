@@ -1,31 +1,57 @@
-'use client';
+"use client";
 
-import Image from 'next/image';
-import Link from 'next/link';
-import { useCart } from '@/hooks/use-cart';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { QuantitySelector } from '@/components/product/quantity-selector';
-import { Frown, Trash2 } from 'lucide-react';
-import { PriceTag } from '@/components/product/price-tag';
+import Image from "next/image";
+import Link from "next/link";
+import { useCart } from "@/hooks/use-cart";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { QuantitySelector } from "@/components/product/quantity-selector";
+import { Frown, Trash2 } from "lucide-react";
 
 export default function CartPage() {
-  const { state, dispatch, totalItems, subtotal } = useCart();
+  const {
+    state,
+    totalItems,
+    subtotal,
+    removeItem,
+    setItemQuantity,
+    isLoading,
+  } = useCart();
 
   const handleRemoveItem = (id: string, size?: string) => {
-    dispatch({ type: 'REMOVE_ITEM', payload: { id, size } });
+    void removeItem(id, size);
   };
 
-  const handleUpdateQuantity = (id: string, size: string | undefined, quantity: number) => {
-    dispatch({ type: 'UPDATE_QUANTITY', payload: { id, size, quantity } });
+  const handleUpdateQuantity = (
+    id: string,
+    size: string | undefined,
+    quantity: number,
+  ) => {
+    void setItemQuantity(id, size, quantity);
   };
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto flex min-h-[60vh] items-center justify-center px-4 py-8 text-center text-muted-foreground">
+        Cargando carrito...
+      </div>
+    );
+  }
 
   if (totalItems === 0) {
     return (
       <div className="container mx-auto flex min-h-[60vh] flex-col items-center justify-center px-4 py-8 text-center">
         <Frown className="h-16 w-16 text-muted-foreground" />
-        <h1 className="mt-6 font-headline text-3xl font-bold">Tu carrito está vacío</h1>
+        <h1 className="mt-6 font-headline text-3xl font-bold">
+          Tu carrito está vacío
+        </h1>
         <p className="mt-2 text-muted-foreground">
           Parece que aún no has agregado productos.
         </p>
@@ -44,8 +70,11 @@ export default function CartPage() {
           <Card>
             <CardContent className="p-0">
               <ul className="divide-y">
-                {state.items.map(item => (
-                  <li key={`${item.id}-${item.size}`} className="flex items-start gap-4 p-4">
+                {state.items.map((item) => (
+                  <li
+                    key={`${item.id}-${item.size}`}
+                    className="flex items-start gap-4 p-4"
+                  >
                     <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-md">
                       <Image
                         src={item.image}
@@ -55,22 +84,39 @@ export default function CartPage() {
                       />
                     </div>
                     <div className="flex-grow">
-                      <Link href={`/products/${item.id}`} className="font-headline font-semibold hover:underline">
+                      <Link
+                        href={`/products/${item.id}`}
+                        className="font-headline font-semibold hover:underline"
+                      >
                         {item.name}
                       </Link>
                       {item.size && (
-                        <p className="text-sm text-muted-foreground">Talla: {item.size}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Talla: {item.size}
+                        </p>
                       )}
                       <div className="mt-2 flex items-center justify-between">
-                         <QuantitySelector
+                        <QuantitySelector
                           quantity={item.quantity}
-                          onQuantityChange={(newQuantity) => handleUpdateQuantity(item.id, item.size, newQuantity)}
+                          onQuantityChange={(newQuantity) =>
+                            handleUpdateQuantity(
+                              item.id,
+                              item.size,
+                              newQuantity,
+                            )
+                          }
                           maxQuantity={10} // Assuming a max quantity, should come from product stock
                         />
-                         <p className="font-semibold">${(item.price * item.quantity).toFixed(2)}</p>
+                        <p className="font-semibold">
+                          ${(item.price * item.quantity).toFixed(2)}
+                        </p>
                       </div>
                     </div>
-                     <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.id, item.size)}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleRemoveItem(item.id, item.size)}
+                    >
                       <Trash2 className="h-5 w-5 text-muted-foreground" />
                       <span className="sr-only">Eliminar</span>
                     </Button>

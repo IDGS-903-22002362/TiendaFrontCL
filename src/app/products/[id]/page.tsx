@@ -1,24 +1,31 @@
-import { getProduct, getProducts } from '@/lib/mock-data';
-import { notFound } from 'next/navigation';
-import { ProductDetailsClient } from './product-details-client';
-import { ProductCard } from '@/components/product/product-card';
+import { fetchProductById, fetchProducts } from "@/lib/api/storefront";
+import { notFound } from "next/navigation";
+import { ProductDetailsClient } from "./product-details-client";
+import { ProductCard } from "@/components/product/product-card";
 import {
   Carousel,
   CarouselContent,
   CarouselItem,
   CarouselNext,
   CarouselPrevious,
-} from '@/components/ui/carousel';
+} from "@/components/ui/carousel";
 
-export default function ProductPage({ params }: { params: { id: string } }) {
-  const product = getProduct(params.id);
+export default async function ProductPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const product = await fetchProductById(id);
 
   if (!product) {
     notFound();
   }
 
-  const relatedProducts = getProducts()
-    .filter(p => p.category === product.category && p.id !== product.id)
+  const allProducts = await fetchProducts();
+
+  const relatedProducts = allProducts
+    .filter((p) => p.category === product.category && p.id !== product.id)
     .slice(0, 8);
 
   return (
@@ -32,12 +39,12 @@ export default function ProductPage({ params }: { params: { id: string } }) {
           </h2>
           <Carousel
             opts={{
-              align: 'start',
+              align: "start",
             }}
             className="w-full"
           >
             <CarouselContent>
-              {relatedProducts.map(relatedProduct => (
+              {relatedProducts.map((relatedProduct) => (
                 <CarouselItem
                   key={relatedProduct.id}
                   className="md:basis-1/2 lg:basis-1/3 xl:basis-1/4"

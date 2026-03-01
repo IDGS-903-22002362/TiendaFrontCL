@@ -1,33 +1,45 @@
-import Image from 'next/image';
-import Link from 'next/link';
-import {
-  ArrowRight,
-  Shirt,
-  ShoppingBag,
-  Ticket,
-  Trophy,
-} from 'lucide-react';
+import Image from "next/image";
+import Link from "next/link";
+import { ArrowRight, Shirt, ShoppingBag, Ticket, Trophy } from "lucide-react";
 
-import { getProducts, getCategories } from '@/lib/mock-data';
-import { ProductCard } from '@/components/product/product-card';
+import { fetchCategories, fetchProducts } from "@/lib/api/storefront";
+import { ProductCard } from "@/components/product/product-card";
 import {
   Carousel,
   CarouselContent,
   CarouselItem,
   CarouselNext,
   CarouselPrevious,
-} from '@/components/ui/carousel';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
+} from "@/components/ui/carousel";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { PlaceHolderImages } from "@/lib/placeholder-images";
 
-export default function Home() {
-  const featuredProducts = getProducts().slice(0, 8);
-  const newArrivals = getProducts()
-    .filter(p => p.tags.includes('new'))
+const normalizeCategoryValue = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
+
+export default async function Home() {
+  const [products, categories] = await Promise.all([
+    fetchProducts(),
+    fetchCategories(),
+  ]);
+
+  const visibleCategories = categories.filter((category) => {
+    const normalized = normalizeCategoryValue(
+      `${category.name} ${category.slug}`,
+    );
+    return !normalized.includes("prueba") && !normalized.includes("test");
+  });
+
+  const featuredProducts = products.slice(0, 8);
+  const newArrivals = products
+    .filter((p) => p.tags.includes("new"))
     .slice(0, 8);
-  const categories = getCategories();
-  const heroImage = PlaceHolderImages.find(img => img.id === 'hero-banner-1');
+  const heroImage = PlaceHolderImages.find((img) => img.id === "hero-banner-1");
 
   const categoryIcons: { [key: string]: React.ReactNode } = {
     Jerseys: <Shirt className="h-8 w-8" />,
@@ -62,7 +74,8 @@ export default function Home() {
             Equípate para la Aventura
           </h1>
           <p className="mt-4 max-w-2xl text-lg text-gray-200">
-            Todo lo que necesitas para tu próxima partida. La nueva mercancía ya está aquí.
+            Todo lo que necesitas para tu próxima partida. La nueva mercancía ya
+            está aquí.
           </p>
           <Button asChild className="mt-8" size="lg">
             <Link href="/products">
@@ -78,7 +91,7 @@ export default function Home() {
           Nuestras Categorías
         </h2>
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:gap-8">
-          {categories.map(category => (
+          {visibleCategories.map((category) => (
             <Link
               href={`/products?category=${category.slug}`}
               key={category.id}
@@ -100,13 +113,13 @@ export default function Home() {
         </h2>
         <Carousel
           opts={{
-            align: 'start',
+            align: "start",
             loop: true,
           }}
           className="w-full"
         >
           <CarouselContent>
-            {featuredProducts.map(product => (
+            {featuredProducts.map((product) => (
               <CarouselItem
                 key={product.id}
                 className="md:basis-1/2 lg:basis-1/3 xl:basis-1/4"
@@ -129,7 +142,7 @@ export default function Home() {
             Novedades
           </h2>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 md:grid-cols-4 md:gap-6">
-            {newArrivals.slice(0, 4).map(product => (
+            {newArrivals.slice(0, 4).map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}
           </div>

@@ -1,14 +1,22 @@
-import { Suspense } from 'react';
-import { ProductFilters } from './product-filters';
-import { getCategories, getProducts } from '@/lib/mock-data';
+import { Suspense } from "react";
+import { ProductFilters } from "./product-filters";
+import { fetchCategories, fetchProducts } from "@/lib/api/storefront";
+import { lineasApi } from "@/lib/api/lineas";
+import { tallasApi } from "@/lib/api/tallas";
 
-export default function ProductsPage({
+export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: { [key: string]: string | string[] | undefined };
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const products = getProducts();
-  const categories = getCategories();
+  await searchParams;
+
+  const [products, categories, lineas, tallas] = await Promise.all([
+    fetchProducts(),
+    fetchCategories(),
+    lineasApi.getAll(),
+    tallasApi.getAll(),
+  ]);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -21,7 +29,12 @@ export default function ProductsPage({
         </p>
       </header>
       <Suspense fallback={<div>Cargando filtros...</div>}>
-        <ProductFilters allProducts={products} categories={categories} searchParams={searchParams} />
+        <ProductFilters
+          allProducts={products}
+          categories={categories}
+          lineas={lineas}
+          tallas={tallas}
+        />
       </Suspense>
     </div>
   );

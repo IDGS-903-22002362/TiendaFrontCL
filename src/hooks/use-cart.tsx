@@ -1,110 +1,225 @@
 "use client";
 
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import type { CartItem } from '@/lib/types';
-import { useToast } from '@/hooks/use-toast';
-
-type CartState = {
-  items: CartItem[];
-};
-
-type CartAction =
-  | { type: 'ADD_ITEM'; payload: CartItem }
-  | { type: 'REMOVE_ITEM'; payload: { id: string; size?: string } }
-  | { type: 'UPDATE_QUANTITY'; payload: { id:string; size?: string; quantity: number } }
-  | { type: 'CLEAR_CART' }
-  | { type: 'SET_STATE'; payload: CartState };
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import type { CartItem } from "@/lib/types";
+import { useToast } from "@/hooks/use-toast";
+import {
+  addCartItem,
+  clearCart,
+  fetchCart,
+  getOrCreateSessionId,
+  mergeCartSession,
+  removeCartItem,
+  updateCartItem,
+} from "@/lib/api/cart";
+import { useAuth } from "@/hooks/use-auth";
 
 type CartContextType = {
-  state: CartState;
-  dispatch: React.Dispatch<CartAction>;
-  addToCart: (item: Omit<CartItem, 'quantity'>) => void;
+  state: { items: CartItem[] };
+  addToCart: (item: Omit<CartItem, "quantity">) => Promise<void>;
+  removeItem: (id: string, size?: string) => Promise<void>;
+  setItemQuantity: (
+    id: string,
+    size: string | undefined,
+    quantity: number,
+  ) => Promise<void>;
+  clearAllItems: () => Promise<void>;
+  isLoading: boolean;
   totalItems: number;
   subtotal: number;
 };
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-const cartReducer = (state: CartState, action: CartAction): CartState => {
-  switch (action.type) {
-    case 'ADD_ITEM': {
-      const existingItemIndex = state.items.findIndex(
-        item => item.id === action.payload.id && item.size === action.payload.size
-      );
-      if (existingItemIndex > -1) {
-        const updatedItems = [...state.items];
-        updatedItems[existingItemIndex].quantity += action.payload.quantity;
-        return { ...state, items: updatedItems };
-      }
-      return { ...state, items: [...state.items, action.payload] };
-    }
-    case 'REMOVE_ITEM': {
-      return {
-        ...state,
-        items: state.items.filter(
-          item => !(item.id === action.payload.id && item.size === action.payload.size)
-        ),
-      };
-    }
-    case 'UPDATE_QUANTITY': {
-      return {
-        ...state,
-        items: state.items.map(item =>
-          item.id === action.payload.id && item.size === action.payload.size
-            ? { ...item, quantity: action.payload.quantity }
-            : item
-        ),
-      };
-    }
-    case 'CLEAR_CART':
-      return { ...state, items: [] };
-    case 'SET_STATE':
-        return action.payload;
-    default:
-      return state;
-  }
-};
-
-const initialState: CartState = {
-  items: [],
-};
-
-export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [state, dispatch] = useReducer(cartReducer, initialState);
+export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const [items, setItems] = useState<CartItem[]>([]);
+  const [sessionId, setSessionId] = useState("");
+  const [mergedToken, setMergedToken] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  const { token, isAuthenticated } = useAuth();
 
   useEffect(() => {
-    try {
-      const storedCart = localStorage.getItem('la_dungeon_cart');
-      if (storedCart) {
-        dispatch({ type: 'SET_STATE', payload: JSON.parse(storedCart) });
+    const loadCart = async () => {
+      const activeSessionId = getOrCreateSessionId();
+      setSessionId(activeSessionId);
+
+      try {
+        const cart = await fetchCart(
+          activeSessionId,
+          isAuthenticated ? token : undefined,
+        );
+        setItems(cart.items);
+      } catch (error) {
+        console.error("Failed to load cart from API", error);
+        toast({
+          variant: "destructive",
+          title: "No se pudo cargar el carrito",
+          description: "Intenta nuevamente en unos segundos.",
+        });
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error("Failed to load cart from localStorage", error);
-    }
-  }, []);
+    };
+
+    void loadCart();
+  }, [toast, isAuthenticated, token]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('la_dungeon_cart', JSON.stringify(state));
-    } catch (error) {
-      console.error("Failed to save cart to localStorage", error);
+    if (!isAuthenticated || !token || !sessionId || mergedToken === token) {
+      return;
     }
-  }, [state]);
 
-  const addToCart = (item: Omit<CartItem, 'quantity'>) => {
-    dispatch({ type: 'ADD_ITEM', payload: { ...item, quantity: 1 } });
-    toast({
-      title: "¡Agregado al carrito!",
-      description: `${item.name} ha sido añadido a tu carrito.`,
-    });
+    const mergeAndReload = async () => {
+      try {
+        await mergeCartSession(sessionId);
+        const cart = await fetchCart(sessionId, token);
+        setItems(cart.items);
+        setMergedToken(token);
+      } catch (error) {
+        console.error("Failed to merge guest cart", error);
+        toast({
+          variant: "destructive",
+          title: "No se pudo fusionar tu carrito",
+          description: "Puedes seguir comprando y reintentar más tarde.",
+        });
+      }
+    };
+
+    void mergeAndReload();
+  }, [isAuthenticated, mergedToken, sessionId, toast, token]);
+
+  const addToCart = async (item: Omit<CartItem, "quantity">) => {
+    if (!sessionId) {
+      return;
+    }
+
+    try {
+      const cart = await addCartItem(
+        sessionId,
+        {
+          id: item.id,
+          quantity: 1,
+          size: item.size,
+          color: item.color,
+        },
+        isAuthenticated ? token : undefined,
+      );
+
+      setItems(cart.items);
+      toast({
+        title: "¡Agregado al carrito!",
+        description: `${item.name} ha sido añadido a tu carrito.`,
+      });
+    } catch (error) {
+      console.error("Failed to add item to cart", error);
+      toast({
+        variant: "destructive",
+        title: "No se pudo agregar al carrito",
+        description: "Revisa tu conexión e inténtalo nuevamente.",
+      });
+    }
   };
 
-  const totalItems = state.items.reduce((total, item) => total + item.quantity, 0);
-  const subtotal = state.items.reduce((total, item) => total + item.price * item.quantity, 0);
+  const removeItem = async (id: string, size?: string) => {
+    if (!sessionId) {
+      return;
+    }
+
+    try {
+      const cart = await removeCartItem(
+        sessionId,
+        { id, size },
+        isAuthenticated ? token : undefined,
+      );
+      setItems(cart.items);
+    } catch (error) {
+      console.error("Failed to remove cart item", error);
+      toast({
+        variant: "destructive",
+        title: "No se pudo eliminar el producto",
+        description: "Intenta nuevamente.",
+      });
+    }
+  };
+
+  const setItemQuantity = async (
+    id: string,
+    size: string | undefined,
+    quantity: number,
+  ) => {
+    if (!sessionId) {
+      return;
+    }
+
+    try {
+      const cart = await updateCartItem(
+        sessionId,
+        { id, size, quantity },
+        isAuthenticated ? token : undefined,
+      );
+      setItems(cart.items);
+    } catch (error) {
+      console.error("Failed to update cart item quantity", error);
+      toast({
+        variant: "destructive",
+        title: "No se pudo actualizar la cantidad",
+        description: "Intenta nuevamente.",
+      });
+    }
+  };
+
+  const clearAllItems = async () => {
+    if (!sessionId) {
+      return;
+    }
+
+    try {
+      const cart = await clearCart(
+        sessionId,
+        isAuthenticated ? token : undefined,
+      );
+      setItems(cart.items);
+    } catch (error) {
+      console.error("Failed to clear cart", error);
+      toast({
+        variant: "destructive",
+        title: "No se pudo vaciar el carrito",
+        description: "Intenta nuevamente.",
+      });
+    }
+  };
+
+  const totalItems = useMemo(
+    () => items.reduce((total, item) => total + item.quantity, 0),
+    [items],
+  );
+  const subtotal = useMemo(
+    () => items.reduce((total, item) => total + item.price * item.quantity, 0),
+    [items],
+  );
 
   return (
-    <CartContext.Provider value={{ state, dispatch, addToCart, totalItems, subtotal }}>
+    <CartContext.Provider
+      value={{
+        state: { items },
+        addToCart,
+        removeItem,
+        setItemQuantity,
+        clearAllItems,
+        isLoading,
+        totalItems,
+        subtotal,
+      }}
+    >
       {children}
     </CartContext.Provider>
   );
@@ -113,7 +228,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 export const useCart = () => {
   const context = useContext(CartContext);
   if (context === undefined) {
-    throw new Error('useCart must be used within a CartProvider');
+    throw new Error("useCart must be used within a CartProvider");
   }
   return context;
 };
