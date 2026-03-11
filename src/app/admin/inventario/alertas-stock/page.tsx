@@ -1,15 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { fetchCategories, fetchProducts } from "@/lib/api/storefront";
+import { lineasApi } from "@/lib/api/lineas";
 import { inventarioApi } from "@/lib/api/inventario";
 import { getApiErrorMessage } from "@/lib/api/errors";
-import type { InventoryAlert } from "@/lib/types";
+import type { Category, InventoryAlert, Linea, Product } from "@/lib/types";
 import { useAuth } from "@/hooks/use-auth";
+import { EntityPicker, type EntityOption } from "@/components/admin/entity-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -23,17 +25,89 @@ import { useToast } from "@/hooks/use-toast";
 export default function InventoryLowStockAlertsPage() {
   const { token, role } = useAuth();
   const { toast } = useToast();
+
+  const [products, setProducts] = useState<Product[]>([]);
+  const [lineas, setLineas] = useState<Linea[]>([]);
+  const [categorias, setCategorias] = useState<Category[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+
   const [rows, setRows] = useState<InventoryAlert[]>([]);
   const [loading, setLoading] = useState(false);
+
+  const [productQuery, setProductQuery] = useState("");
   const [productoId, setProductoId] = useState("");
+
+  const [lineaQuery, setLineaQuery] = useState("");
   const [lineaId, setLineaId] = useState("");
+
+  const [categoriaQuery, setCategoriaQuery] = useState("");
   const [categoriaId, setCategoriaId] = useState("");
+
   const [soloCriticas, setSoloCriticas] = useState(false);
 
   const canUseInventory = useMemo(
     () => Boolean(token) && (role === "ADMIN" || role === "EMPLEADO"),
     [role, token],
   );
+
+  const productOptions: EntityOption[] = useMemo(
+    () =>
+      products.map((product) => ({
+        id: product.id,
+        label: product.name,
+        subtitle: product.description,
+      })),
+    [products],
+  );
+
+  const lineOptions: EntityOption[] = useMemo(
+    () =>
+      lineas.map((linea) => ({
+        id: linea.id,
+        label: linea.nombre,
+        subtitle: `Código ${linea.codigo}`,
+      })),
+    [lineas],
+  );
+
+  const categoryOptions: EntityOption[] = useMemo(
+    () =>
+      categorias.map((categoria) => ({
+        id: categoria.id,
+        label: categoria.name,
+        subtitle: categoria.slug,
+      })),
+    [categorias],
+  );
+
+  useEffect(() => {
+    if (!canUseInventory) return;
+
+    const loadCatalog = async () => {
+      setCatalogLoading(true);
+      try {
+        const [productsData, lineasData, categoriasData] = await Promise.all([
+          fetchProducts(),
+          lineasApi.getAll(),
+          fetchCategories(),
+        ]);
+
+        setProducts(productsData);
+        setLineas(lineasData);
+        setCategorias(categoriasData);
+      } catch (error) {
+        toast({
+          variant: "destructive",
+          title: "No se pudieron cargar catálogos",
+          description: getApiErrorMessage(error),
+        });
+      } finally {
+        setCatalogLoading(false);
+      }
+    };
+
+    void loadCatalog();
+  }, [canUseInventory, toast]);
 
   const onSearch = async () => {
     if (!token) return;
@@ -82,28 +156,50 @@ export default function InventoryLowStockAlertsPage() {
               <CardTitle>Filtros</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-4">
-              <Input
-                placeholder="Producto ID"
+              <EntityPicker
+                label="Producto"
+                searchLabel="Buscar producto por nombre o clave"
+                selectLabel="Filtrar por producto"
+                query={productQuery}
                 value={productoId}
-                onChange={(event) => setProductoId(event.target.value)}
+                options={productOptions}
+                onQueryChange={setProductQuery}
+                onValueChange={setProductoId}
+                allowEmpty
+                disabled={catalogLoading}
               />
-              <Input
-                placeholder="Línea ID"
+
+              <EntityPicker
+                label="Línea"
+                searchLabel="Buscar línea por nombre"
+                selectLabel="Filtrar por línea"
+                query={lineaQuery}
                 value={lineaId}
-                onChange={(event) => setLineaId(event.target.value)}
+                options={lineOptions}
+                onQueryChange={setLineaQuery}
+                onValueChange={setLineaId}
+                allowEmpty
+                disabled={catalogLoading}
               />
-              <Input
-                placeholder="Categoría ID"
+
+              <EntityPicker
+                label="Categoría"
+                searchLabel="Buscar categoría por nombre"
+                selectLabel="Filtrar por categoría"
+                query={categoriaQuery}
                 value={categoriaId}
-                onChange={(event) => setCategoriaId(event.target.value)}
+                options={categoryOptions}
+                onQueryChange={setCategoriaQuery}
+                onValueChange={setCategoriaId}
+                allowEmpty
+                disabled={catalogLoading}
               />
-              <div className="flex items-center gap-2 rounded-md border px-3 py-2">
+
+              <div className="flex items-center gap-2 rounded-md border px-3 py-2 self-end">
                 <Checkbox
                   id="solo-criticas"
                   checked={soloCriticas}
-                  onCheckedChange={(checked) =>
-                    setSoloCriticas(Boolean(checked))
-                  }
+                  onCheckedChange={(checked) => setSoloCriticas(Boolean(checked))}
                 />
                 <label htmlFor="solo-criticas" className="text-sm">
                   Solo críticas
@@ -146,23 +242,13 @@ export default function InventoryLowStockAlertsPage() {
                     </TableRow>
                   ) : (
                     rows.map((row) => (
-                      <TableRow
-                        key={`${row.productoId}-${row.tallaId ?? "na"}`}
-                      >
-                        <TableCell>
-                          {row.productoNombre ?? row.productoId}
-                        </TableCell>
-                        <TableCell>
-                          {row.tallaCodigo ?? row.tallaId ?? "-"}
-                        </TableCell>
+                      <TableRow key={`${row.productoId}-${row.tallaId ?? "na"}`}>
+                        <TableCell>{row.productoNombre ?? row.productoId}</TableCell>
+                        <TableCell>{row.tallaCodigo ?? row.tallaId ?? "-"}</TableCell>
                         <TableCell>{row.stockActual}</TableCell>
                         <TableCell>{row.stockMinimo ?? "-"}</TableCell>
                         <TableCell>
-                          <Badge
-                            variant={
-                              row.esCritica ? "destructive" : "secondary"
-                            }
-                          >
+                          <Badge variant={row.esCritica ? "destructive" : "secondary"}>
                             {row.esCritica ? "Crítica" : "Baja"}
                           </Badge>
                         </TableCell>

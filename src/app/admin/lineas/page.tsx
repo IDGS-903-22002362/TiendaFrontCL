@@ -1,9 +1,10 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { lineasApi } from "@/lib/api/lineas";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import type { Linea } from "@/lib/types";
+import { EntityPicker, type EntityOption } from "@/components/admin/entity-picker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -25,8 +26,18 @@ const EMPTY_FORM = {
   activo: true,
 };
 
+function normalizeSearch(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
+}
+
 export default function AdminLineasPage() {
   const [lineas, setLineas] = useState<Linea[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedLineaId, setSelectedLineaId] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -37,6 +48,9 @@ export default function AdminLineasPage() {
     try {
       const data = await lineasApi.getAll();
       setLineas(data);
+      setSelectedLineaId((current) =>
+        current && !data.some((linea) => linea.id === current) ? "" : current,
+      );
     } catch (error) {
       toast({
         variant: "destructive",
@@ -52,7 +66,51 @@ export default function AdminLineasPage() {
     void loadLineas();
   }, [loadLineas]);
 
-  const resetForm = () => setForm(EMPTY_FORM);
+  const lineOptions: EntityOption[] = useMemo(
+    () =>
+      lineas.map((linea) => ({
+        id: linea.id,
+        label: linea.nombre,
+        subtitle: `Código ${linea.codigo}`,
+      })),
+    [lineas],
+  );
+
+  const filteredLineas = useMemo(() => {
+    const query = normalizeSearch(searchQuery);
+
+    return lineas.filter((linea) => {
+      if (selectedLineaId && linea.id !== selectedLineaId) {
+        return false;
+      }
+
+      if (!query) {
+        return true;
+      }
+
+      return normalizeSearch(`${linea.nombre} ${linea.codigo}`).includes(query);
+    });
+  }, [lineas, searchQuery, selectedLineaId]);
+
+  const resetForm = () => {
+    setForm(EMPTY_FORM);
+    setSelectedLineaId("");
+  };
+
+  const selectLineaForEdit = (lineaId: string) => {
+    setSelectedLineaId(lineaId);
+    const selected = lineas.find((linea) => linea.id === lineaId);
+    if (!selected) {
+      return;
+    }
+
+    setForm({
+      id: selected.id,
+      codigo: String(selected.codigo),
+      nombre: selected.nombre,
+      activo: selected.activo,
+    });
+  };
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -92,6 +150,9 @@ export default function AdminLineasPage() {
     try {
       await lineasApi.remove(id);
       toast({ title: "Línea inactivada" });
+      if (selectedLineaId === id) {
+        resetForm();
+      }
       await loadLineas();
     } catch (error) {
       toast({
@@ -108,6 +169,33 @@ export default function AdminLineasPage() {
         <h1 className="font-headline text-3xl font-bold">Líneas</h1>
         <p className="text-sm text-muted-foreground">CRUD parcial de líneas.</p>
       </header>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Búsqueda inteligente</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <EntityPicker
+            label="Buscar línea"
+            searchLabel="Buscar por nombre o código"
+            selectLabel="Selecciona línea para editar"
+            query={searchQuery}
+            value={selectedLineaId}
+            options={lineOptions}
+            onQueryChange={setSearchQuery}
+            onValueChange={(value) => {
+              if (!value) {
+                resetForm();
+                return;
+              }
+              selectLineaForEdit(value);
+            }}
+            allowEmpty
+            emptyLabel="Sin selección"
+            disabled={isLoading}
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -177,12 +265,14 @@ export default function AdminLineasPage() {
                 <TableRow>
                   <TableCell colSpan={4}>Cargando...</TableCell>
                 </TableRow>
-              ) : lineas.length === 0 ? (
+              ) : filteredLineas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4}>Sin líneas disponibles.</TableCell>
+                  <TableCell colSpan={4}>
+                    Sin líneas disponibles para el filtro actual.
+                  </TableCell>
                 </TableRow>
               ) : (
-                lineas.map((linea) => (
+                filteredLineas.map((linea) => (
                   <TableRow key={linea.id}>
                     <TableCell>{linea.codigo}</TableCell>
                     <TableCell>{linea.nombre}</TableCell>
@@ -192,14 +282,7 @@ export default function AdminLineasPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() =>
-                            setForm({
-                              id: linea.id,
-                              codigo: String(linea.codigo),
-                              nombre: linea.nombre,
-                              activo: linea.activo,
-                            })
-                          }
+                          onClick={() => selectLineaForEdit(linea.id)}
                         >
                           Editar
                         </Button>

@@ -463,11 +463,11 @@ Para reducir exposición de token en cliente:
 
 ## 26) Checklist de integración frontend
 
-- [ ] Variables de entorno por ambiente.
-- [ ] Login Firebase + canje a JWT propio.
+- [x] Variables de entorno por ambiente.
+- [x] Login Firebase + canje a JWT propio.
 - [ ] Cliente API centralizado con manejo uniforme de errores.
-- [ ] `x-session-id` persistente para carrito anónimo.
-- [ ] Merge de carrito al autenticarse.
+- [x] `x-session-id` persistente para carrito anónimo.
+- [x] Merge de carrito al autenticar.
 - [ ] Pago con `Idempotency-Key` y retries seguros.
 - [ ] Vistas admin protegidas por rol y manejo 403.
 - [ ] Verificación manual de payloads en `/api-docs`.
@@ -486,7 +486,7 @@ Fin.
 
 ---
 
-## 28) Estado de implementación (2026-02-28)
+## 28) Estado de implementación (2026-03-02)
 
 Se completó la unificación **storefront** de este frontend con backend real para:
 
@@ -529,8 +529,8 @@ API_BASE_URL=https://us-central1-e-comerce-leon.cloudfunctions.net/api
 
 - ✅ Unificación de datos reales en catálogo y carrito.
 - ✅ Configuración completa local/producción documentada.
-- ⏳ Pendiente fase siguiente: login Firebase -> `/auth/register-or-login`.
-- ⏳ Pendiente fase siguiente: `POST /carrito/merge` al autenticar.
+- ✅ Login Firebase -> `/auth/register-or-login` implementado con sesión BFF (`/api/auth/session`).
+- ✅ `POST /carrito/merge` al autenticar implementado en `use-cart`.
 - ⏳ Pendiente fase siguiente: checkout/órdenes/pagos reales.
 
 ### 28.5 Pruebas requeridas al cierre

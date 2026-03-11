@@ -14,6 +14,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { QuantitySelector } from "@/components/product/quantity-selector";
 import { Frown, Trash2 } from "lucide-react";
+import { getCartVariantKey } from "@/lib/api/cart";
 
 export default function CartPage() {
   const {
@@ -25,16 +26,16 @@ export default function CartPage() {
     isLoading,
   } = useCart();
 
-  const handleRemoveItem = (id: string, size?: string) => {
-    void removeItem(id, size);
+  const handleRemoveItem = (id: string, tallaId?: string) => {
+    void removeItem(id, tallaId);
   };
 
   const handleUpdateQuantity = (
     id: string,
-    size: string | undefined,
+    tallaId: string | undefined,
     quantity: number,
   ) => {
-    void setItemQuantity(id, size, quantity);
+    void setItemQuantity(id, tallaId, quantity);
   };
 
   if (isLoading) {
@@ -72,7 +73,7 @@ export default function CartPage() {
               <ul className="divide-y">
                 {state.items.map((item) => (
                   <li
-                    key={`${item.id}-${item.size}`}
+                    key={getCartVariantKey(item)}
                     className="flex items-start gap-4 p-4"
                   >
                     <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-md">
@@ -90,9 +91,9 @@ export default function CartPage() {
                       >
                         {item.name}
                       </Link>
-                      {item.size && (
+                      {(item.tallaId ?? item.size) && (
                         <p className="text-sm text-muted-foreground">
-                          Talla: {item.size}
+                          Talla: {item.tallaId ?? item.size}
                         </p>
                       )}
                       <div className="mt-2 flex items-center justify-between">
@@ -101,7 +102,7 @@ export default function CartPage() {
                           onQuantityChange={(newQuantity) =>
                             handleUpdateQuantity(
                               item.id,
-                              item.size,
+                              item.tallaId ?? item.size,
                               newQuantity,
                             )
                           }
@@ -115,7 +116,9 @@ export default function CartPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => handleRemoveItem(item.id, item.size)}
+                      onClick={() =>
+                        handleRemoveItem(item.id, item.tallaId ?? item.size)
+                      }
                     >
                       <Trash2 className="h-5 w-5 text-muted-foreground" />
                       <span className="sr-only">Eliminar</span>

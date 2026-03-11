@@ -23,7 +23,24 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:3000/api
 API_BASE_URL=http://localhost:3000/api
 ```
 
-3. Instalar dependencias y arrancar:
+3. Configurar Firebase Auth (proyecto recomendado: `app-oficial-leon`):
+
+```bash
+NEXT_PUBLIC_AUTH_FIREBASE_API_KEY=...
+NEXT_PUBLIC_AUTH_FIREBASE_AUTH_DOMAIN=app-oficial-leon.firebaseapp.com
+NEXT_PUBLIC_AUTH_FIREBASE_PROJECT_ID=app-oficial-leon
+NEXT_PUBLIC_AUTH_FIREBASE_APP_ID=...
+```
+
+Si no defines `NEXT_PUBLIC_AUTH_FIREBASE_*`, la app usa `NEXT_PUBLIC_FIREBASE_*` por compatibilidad.
+
+4. Configurar Stripe para pago con tarjeta en checkout:
+
+```bash
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
+```
+
+5. Instalar dependencias y arrancar:
 
 ```bash
 npm install
@@ -38,6 +55,7 @@ Configurar variables de entorno en el host de despliegue:
 
 - `NEXT_PUBLIC_API_BASE_URL=https://us-central1-e-comerce-leon.cloudfunctions.net/api`
 - `API_BASE_URL=https://us-central1-e-comerce-leon.cloudfunctions.net/api`
+- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...` (o `pk_test_...` en entorno de pruebas)
 
 Si el backend entrega imágenes en Firebase Storage, esta app ya tiene dominios permitidos en `next.config.ts`.
 

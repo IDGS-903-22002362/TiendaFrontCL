@@ -5,6 +5,12 @@ import type {
   InventoryMovement,
   InventoryMovementPayload,
   InventoryMovementType,
+  ProductSizeInventoryReplacePayload,
+  ProductSizeInventoryReplaceResult,
+  ProductSizeStock,
+  ProductStockSnapshot,
+  ProductStockUpdatePayload,
+  ProductStockUpdateResult,
 } from "@/lib/types";
 import { apiFetch, unwrapData } from "./client";
 
@@ -33,6 +39,96 @@ function toBoolean(value: unknown, fallback = false): boolean {
   if (typeof value === "boolean") return value;
   if (typeof value === "string") return value.toLowerCase() === "true";
   return fallback;
+}
+
+function mapSizeStock(input: unknown): ProductSizeStock {
+  const item = (
+    input && typeof input === "object" ? input : {}
+  ) as UnknownRecord;
+
+  return {
+    tallaId: toStringValue(item.tallaId),
+    cantidad: toNumber(item.cantidad),
+  };
+}
+
+function mapProductStockSnapshot(input: unknown): ProductStockSnapshot {
+  const item = (
+    input && typeof input === "object" ? input : {}
+  ) as UnknownRecord;
+
+  const tallaIds = Array.isArray(item.tallaIds)
+    ? item.tallaIds.map((value) => toStringValue(value)).filter(Boolean)
+    : [];
+  const inventarioPorTalla = Array.isArray(item.inventarioPorTalla)
+    ? item.inventarioPorTalla.map(mapSizeStock).filter((entry) => entry.tallaId)
+    : [];
+
+  return {
+    productoId: toStringValue(item.productoId ?? item.id),
+    tallaIds,
+    existencias: toNumber(item.existencias ?? item.stock),
+    inventarioPorTalla,
+  };
+}
+
+function mapProductStockUpdateResult(input: unknown): ProductStockUpdateResult {
+  const item = (
+    input && typeof input === "object" ? input : {}
+  ) as UnknownRecord;
+
+  const inventarioPorTalla = Array.isArray(item.inventarioPorTalla)
+    ? item.inventarioPorTalla.map(mapSizeStock).filter((entry) => entry.tallaId)
+    : [];
+
+  return {
+    productoId: toStringValue(item.productoId),
+    tallaId: toStringValue(item.tallaId) || undefined,
+    cantidadAnterior: toNumber(item.cantidadAnterior),
+    cantidadNueva: toNumber(item.cantidadNueva),
+    diferencia: toNumber(item.diferencia),
+    existencias: toNumber(item.existencias),
+    inventarioPorTalla,
+    movimientoId: toStringValue(item.movimientoId) || undefined,
+    createdAt: toStringValue(item.createdAt) || undefined,
+  };
+}
+
+function mapProductSizeInventoryReplaceResult(
+  input: unknown,
+): ProductSizeInventoryReplaceResult {
+  const item = (
+    input && typeof input === "object" ? input : {}
+  ) as UnknownRecord;
+
+  const inventarioPorTalla = Array.isArray(item.inventarioPorTalla)
+    ? item.inventarioPorTalla.map(mapSizeStock).filter((entry) => entry.tallaId)
+    : [];
+  const tallaIds = Array.isArray(item.tallaIds)
+    ? item.tallaIds.map((value) => toStringValue(value)).filter(Boolean)
+    : [];
+  const cambios = Array.isArray(item.cambios)
+    ? item.cambios.map((rawChange) => {
+        const change = (
+          rawChange && typeof rawChange === "object" ? rawChange : {}
+        ) as UnknownRecord;
+        return {
+          tallaId: toStringValue(change.tallaId),
+          cantidadAnterior: toNumber(change.cantidadAnterior),
+          cantidadNueva: toNumber(change.cantidadNueva),
+          diferencia: toNumber(change.diferencia),
+          movimientoId: toStringValue(change.movimientoId) || undefined,
+        };
+      })
+    : [];
+
+  return {
+    productoId: toStringValue(item.productoId),
+    tallaIds,
+    inventarioPorTalla,
+    existencias: toNumber(item.existencias),
+    cambios,
+  };
 }
 
 function mapMovement(input: unknown): InventoryMovement {
@@ -108,6 +204,51 @@ export type ListAlertsParams = {
 };
 
 export const inventarioApi = {
+  async getProductStock(productoId: string) {
+    const payload = await apiFetch<ApiEnvelope<unknown>>(
+      `/api/productos/${productoId}/stock`,
+      { method: "GET" },
+      { local: true },
+    );
+
+    const data = unwrapData<unknown>(payload);
+    return mapProductStockSnapshot(data);
+  },
+
+  async updateProductStock(
+    token: string,
+    productoId: string,
+    payload: ProductStockUpdatePayload,
+  ) {
+    const response = await apiFetch<ApiEnvelope<unknown>>(
+      `/api/productos/${productoId}/stock`,
+      {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      },
+      { token, local: true },
+    );
+
+    return mapProductStockUpdateResult(unwrapData<unknown>(response));
+  },
+
+  async replaceProductSizeInventory(
+    token: string,
+    productoId: string,
+    payload: ProductSizeInventoryReplacePayload,
+  ) {
+    const response = await apiFetch<ApiEnvelope<unknown>>(
+      `/api/productos/${productoId}/inventario-tallas`,
+      {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      },
+      { token, local: true },
+    );
+
+    return mapProductSizeInventoryReplaceResult(unwrapData<unknown>(response));
+  },
+
   registerMovement(token: string, payload: InventoryMovementPayload) {
     return apiFetch<ApiEnvelope<InventoryMovement>>(
       "/api/inventario/movimientos",
@@ -115,7 +256,7 @@ export const inventarioApi = {
         method: "POST",
         body: JSON.stringify(payload),
       },
-      { token },
+      { token, local: true },
     );
   },
 
@@ -130,7 +271,7 @@ export const inventarioApi = {
         method: "POST",
         body: JSON.stringify(payload),
       },
-      { token, idempotencyKey },
+      { token, idempotencyKey, local: true },
     );
   },
 
@@ -138,7 +279,7 @@ export const inventarioApi = {
     const payload = await apiFetch<ApiEnvelope<unknown[]>>(
       `/api/inventario/movimientos${buildQuery(params)}`,
       { method: "GET" },
-      { token },
+      { token, local: true },
     );
 
     const data = unwrapData<unknown>(payload);
@@ -155,7 +296,7 @@ export const inventarioApi = {
     const payload = await apiFetch<ApiEnvelope<unknown[]>>(
       `/api/inventario/alertas-stock${buildQuery(params)}`,
       { method: "GET" },
-      { token },
+      { token, local: true },
     );
 
     const data = unwrapData<unknown>(payload);

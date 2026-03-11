@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { loadStripe } from "@stripe/stripe-js";
 import {
   CardElement,
   Elements,
@@ -19,6 +18,7 @@ import { checkoutCart } from "@/lib/api/cart";
 import { paymentsApi } from "@/lib/api/payments";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import { useToast } from "@/hooks/use-toast";
+import { useStripeConfig } from "@/hooks/use-stripe-config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,8 +33,12 @@ import {
 
 const shippingSchema = z.object({
   name: z.string().min(2, "Nombre es requerido"),
-  address: z.string().min(5, "Dirección es requerida"),
+  telefono: z.string().min(10, "Teléfono a 10 dígitos requerido"),
+  calle: z.string().min(2, "Calle es requerida"),
+  numero: z.string().min(1, "Número es requerido"),
+  colonia: z.string().min(2, "Colonia es requerida"),
   city: z.string().min(2, "Ciudad es requerida"),
+  estado: z.string().min(2, "Estado es requerido"),
   zip: z.string().min(4, "Código postal inválido"),
   email: z.string().email("Email inválido"),
 });
@@ -47,8 +51,7 @@ const steps = [
   { id: "confirmation", name: "Confirmación", icon: CheckCircle },
 ];
 
-const stripePublicKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "";
-const stripePromise = stripePublicKey ? loadStripe(stripePublicKey) : null;
+// stripe config now loaded dynamically using useStripeConfig hook
 
 function getOrderIdFromCheckoutResult(payload: unknown): string {
   if (!payload || typeof payload !== "object") {
@@ -118,10 +121,13 @@ function PaymentForm({
       const checkoutResult = await checkoutCart({
         direccionEnvio: {
           nombre: values.name,
-          direccion: values.address,
+          calle: values.calle,
+          numero: values.numero,
+          colonia: values.colonia,
           ciudad: values.city,
+          estado: values.estado,
           codigoPostal: values.zip,
-          email: values.email,
+          telefono: values.telefono,
         },
         metodoPago: "TARJETA",
         costoEnvio: 99,
@@ -152,7 +158,9 @@ function PaymentForm({
               email: values.email,
               address: {
                 city: values.city,
-                line1: values.address,
+                state: values.estado,
+                line1: `${values.calle} ${values.numero}`,
+                line2: values.colonia,
                 postal_code: values.zip,
               },
             },
@@ -201,18 +209,18 @@ function PaymentForm({
           />
         </div>
 
-        <div className="flex gap-2">
+        <div className="fixed bottom-0 left-0 w-full bg-background p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] md:relative md:bg-transparent md:p-0 md:shadow-none flex gap-2">
           <Button
             type="button"
             variant="outline"
-            className="w-full"
+            className="flex-1 h-12 md:h-10"
             onClick={onBack}
           >
             Volver
           </Button>
           <Button
             type="button"
-            className="w-full"
+            className="flex-1 h-12 md:h-10"
             onClick={() => void handlePay()}
             disabled={isProcessing || !stripe}
           >
@@ -229,6 +237,7 @@ export default function CheckoutPage() {
   const router = useRouter();
   const { subtotal, isLoading } = useCart();
   const { isAuthenticated } = useAuth();
+  const stripePromise = useStripeConfig();
   const { toast } = useToast();
 
   const shippingForm = useForm<ShippingValues>({
@@ -308,7 +317,7 @@ export default function CheckoutPage() {
               </CardHeader>
               <CardContent>
                 <Form {...shippingForm}>
-                  <form className="space-y-4">
+                  <form className="space-y-4 pb-20 md:pb-0">
                     <FormField
                       control={shippingForm.control}
                       name="name"
@@ -316,20 +325,52 @@ export default function CheckoutPage() {
                         <FormItem>
                           <FormLabel>Nombre Completo</FormLabel>
                           <FormControl>
-                            <Input {...field} />
+                            <Input
+                              {...field}
+                              className="h-12 md:h-10"
+                              autoComplete="name"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
+                    <div className="flex gap-4">
+                      <FormField
+                        control={shippingForm.control}
+                        name="calle"
+                        render={({ field }) => (
+                          <FormItem className="flex-1">
+                            <FormLabel>Calle</FormLabel>
+                            <FormControl>
+                              <Input {...field} className="h-12 md:h-10" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={shippingForm.control}
+                        name="numero"
+                        render={({ field }) => (
+                          <FormItem className="w-1/3">
+                            <FormLabel>Num. Ext/Int</FormLabel>
+                            <FormControl>
+                              <Input {...field} className="h-12 md:h-10" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                     <FormField
                       control={shippingForm.control}
-                      name="address"
+                      name="colonia"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Dirección</FormLabel>
+                          <FormLabel>Colonia</FormLabel>
                           <FormControl>
-                            <Input {...field} />
+                            <Input {...field} className="h-12 md:h-10" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -343,7 +384,7 @@ export default function CheckoutPage() {
                           <FormItem className="flex-1">
                             <FormLabel>Ciudad</FormLabel>
                             <FormControl>
-                              <Input {...field} />
+                              <Input {...field} className="h-12 md:h-10" autoComplete="address-level2" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -351,12 +392,40 @@ export default function CheckoutPage() {
                       />
                       <FormField
                         control={shippingForm.control}
+                        name="estado"
+                        render={({ field }) => (
+                          <FormItem className="flex-1">
+                            <FormLabel>Estado</FormLabel>
+                            <FormControl>
+                              <Input {...field} className="h-12 md:h-10" autoComplete="address-level1" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    <div className="flex gap-4">
+                      <FormField
+                        control={shippingForm.control}
                         name="zip"
                         render={({ field }) => (
                           <FormItem className="w-1/3">
                             <FormLabel>C.P.</FormLabel>
                             <FormControl>
-                              <Input {...field} />
+                              <Input {...field} inputMode="numeric" className="h-12 md:h-10" autoComplete="postal-code" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={shippingForm.control}
+                        name="telefono"
+                        render={({ field }) => (
+                          <FormItem className="flex-1">
+                            <FormLabel>Teléfono</FormLabel>
+                            <FormControl>
+                              <Input {...field} type="tel" className="h-12 md:h-10" autoComplete="tel" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -370,7 +439,13 @@ export default function CheckoutPage() {
                         <FormItem>
                           <FormLabel>Email</FormLabel>
                           <FormControl>
-                            <Input type="email" {...field} />
+                            <Input
+                              type="email"
+                              inputMode="email"
+                              className="h-12 md:h-10"
+                              autoComplete="email"
+                              {...field}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -393,9 +468,8 @@ export default function CheckoutPage() {
               <CardHeader>
                 <CardTitle>Configuración faltante</CardTitle>
               </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">
-                Configura <strong>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</strong>{" "}
-                para habilitar el pago con tarjeta.
+              <CardContent className="text-sm text-muted-foreground pb-20 md:pb-6">
+                No se pudo inicializar Stripe.
               </CardContent>
             </Card>
           )}
@@ -423,13 +497,15 @@ export default function CheckoutPage() {
           </Card>
 
           {currentStep === 0 && (
-            <Button
-              onClick={() => void onContinueToPayment()}
-              className="mt-6 w-full"
-              size="lg"
-            >
-              Continuar a Pago
-            </Button>
+            <div className="fixed bottom-0 left-0 w-full bg-background p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] md:relative md:bg-transparent md:p-0 md:shadow-none">
+              <Button
+                onClick={() => void onContinueToPayment()}
+                className="w-full h-12 md:h-10"
+                size="lg"
+              >
+                Continuar a Pago
+              </Button>
+            </div>
           )}
         </div>
       </div>

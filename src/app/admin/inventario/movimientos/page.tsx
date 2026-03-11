@@ -7,10 +7,19 @@ import {
   useMemo,
   useState,
 } from "react";
+import { fetchProducts } from "@/lib/api/storefront";
 import { inventarioApi } from "@/lib/api/inventario";
+import { tallasApi } from "@/lib/api/tallas";
 import { getApiErrorMessage } from "@/lib/api/errors";
-import type { InventoryMovement, InventoryMovementType } from "@/lib/types";
+import type {
+  InventoryMovement,
+  InventoryMovementType,
+  Product,
+  ProductStockSnapshot,
+  Talla,
+} from "@/lib/types";
 import { useAuth } from "@/hooks/use-auth";
+import { EntityPicker, type EntityOption } from "@/components/admin/entity-picker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -44,23 +53,40 @@ const TYPE_OPTIONS: Array<{
   { label: "Devolución", value: "devolucion" },
 ];
 
+function formatTallaOption(tallas: Talla[], tallaId: string) {
+  const matched = tallas.find((item) => item.id === tallaId);
+  return matched ? `${matched.codigo} (${tallaId})` : tallaId;
+}
+
 export default function InventoryMovementsPage() {
   const { token, role } = useAuth();
   const { toast } = useToast();
+
+  const [products, setProducts] = useState<Product[]>([]);
+  const [tallas, setTallas] = useState<Talla[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+
   const [rows, setRows] = useState<InventoryMovement[]>([]);
   const [loading, setLoading] = useState(false);
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const [hasNextPage, setHasNextPage] = useState(false);
 
-  const [productoId, setProductoId] = useState("");
-  const [tallaId, setTallaId] = useState("");
+  const [filterProductQuery, setFilterProductQuery] = useState("");
+  const [filterProductId, setFilterProductId] = useState("");
+  const [filterProductStock, setFilterProductStock] =
+    useState<ProductStockSnapshot | null>(null);
+  const [filterTallaId, setFilterTallaId] = useState("");
   const [tipo, setTipo] = useState<InventoryMovementType | "all">("all");
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
+
   const [movTipo, setMovTipo] = useState<
     "entrada" | "salida" | "venta" | "devolucion"
   >("entrada");
-  const [movProductoId, setMovProductoId] = useState("");
+  const [movProductQuery, setMovProductQuery] = useState("");
+  const [movProductId, setMovProductId] = useState("");
+  const [movStockSnapshot, setMovStockSnapshot] =
+    useState<ProductStockSnapshot | null>(null);
   const [movTallaId, setMovTallaId] = useState("");
   const [movCantidad, setMovCantidad] = useState("1");
   const [movMotivo, setMovMotivo] = useState("");
@@ -72,6 +98,49 @@ export default function InventoryMovementsPage() {
     [role, token],
   );
 
+  const productOptions: EntityOption[] = useMemo(
+    () =>
+      products.map((product) => ({
+        id: product.id,
+        label: product.name,
+        subtitle: product.description,
+      })),
+    [products],
+  );
+
+  const productNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    products.forEach((product) => {
+      map.set(product.id, product.name);
+    });
+    return map;
+  }, [products]);
+
+  const loadCatalog = useCallback(async () => {
+    setCatalogLoading(true);
+    try {
+      const [productsData, tallasData] = await Promise.all([
+        fetchProducts(),
+        tallasApi.getAll(),
+      ]);
+      setProducts(productsData);
+      setTallas(tallasData);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "No se pudieron cargar catálogos",
+        description: getApiErrorMessage(error),
+      });
+    } finally {
+      setCatalogLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    if (!canUseInventory) return;
+    void loadCatalog();
+  }, [canUseInventory, loadCatalog]);
+
   const loadPage = useCallback(
     async (nextCursor?: string, append = false) => {
       if (!token) return;
@@ -79,8 +148,8 @@ export default function InventoryMovementsPage() {
       setLoading(true);
       try {
         const result = await inventarioApi.listMovements(token, {
-          productoId: productoId || undefined,
-          tallaId: tallaId || undefined,
+          productoId: filterProductId || undefined,
+          tallaId: filterTallaId || undefined,
           tipo: tipo === "all" ? undefined : tipo,
           fechaDesde: fechaDesde || undefined,
           fechaHasta: fechaHasta || undefined,
@@ -101,13 +170,57 @@ export default function InventoryMovementsPage() {
         setLoading(false);
       }
     },
-    [fechaDesde, fechaHasta, productoId, tallaId, tipo, toast, token],
+    [fechaDesde, fechaHasta, filterProductId, filterTallaId, tipo, toast, token],
   );
 
   useEffect(() => {
     if (!canUseInventory) return;
     void loadPage(undefined, false);
   }, [canUseInventory, loadPage]);
+
+  useEffect(() => {
+    setMovTallaId("");
+    setMovStockSnapshot(null);
+
+    if (!movProductId) return;
+
+    const loadStock = async () => {
+      try {
+        const snapshot = await inventarioApi.getProductStock(movProductId);
+        setMovStockSnapshot(snapshot);
+      } catch (error) {
+        toast({
+          variant: "destructive",
+          title: "No se pudo cargar stock del producto",
+          description: getApiErrorMessage(error),
+        });
+      }
+    };
+
+    void loadStock();
+  }, [movProductId, toast]);
+
+  useEffect(() => {
+    setFilterTallaId("");
+    setFilterProductStock(null);
+
+    if (!filterProductId) return;
+
+    const loadStock = async () => {
+      try {
+        const snapshot = await inventarioApi.getProductStock(filterProductId);
+        setFilterProductStock(snapshot);
+      } catch (error) {
+        toast({
+          variant: "destructive",
+          title: "No se pudo cargar tallas para filtros",
+          description: getApiErrorMessage(error),
+        });
+      }
+    };
+
+    void loadStock();
+  }, [filterProductId, toast]);
 
   const onRegisterMovement = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -116,11 +229,59 @@ export default function InventoryMovementsPage() {
       return;
     }
 
+    if (!movProductId) {
+      toast({
+        variant: "destructive",
+        title: "Producto requerido",
+        description: "Selecciona un producto por nombre o clave.",
+      });
+      return;
+    }
+
     try {
+      const stockSnapshot =
+        movStockSnapshot?.productoId === movProductId
+          ? movStockSnapshot
+          : await inventarioApi.getProductStock(movProductId);
+
+      const hasSizeInventory = stockSnapshot.tallaIds.length > 0;
+
+      if (hasSizeInventory && !movTallaId) {
+        toast({
+          variant: "destructive",
+          title: "Talla requerida",
+          description:
+            "Este producto maneja inventario por talla. Selecciona una talla.",
+        });
+        return;
+      }
+
+      if (!hasSizeInventory && movTallaId) {
+        toast({
+          variant: "destructive",
+          title: "Talla no permitida",
+          description: "Este producto no maneja inventario por talla.",
+        });
+        return;
+      }
+
+      if (
+        hasSizeInventory &&
+        movTallaId &&
+        !stockSnapshot.tallaIds.includes(movTallaId)
+      ) {
+        toast({
+          variant: "destructive",
+          title: "Talla inválida",
+          description: "La talla no pertenece al producto seleccionado.",
+        });
+        return;
+      }
+
       await inventarioApi.registerMovement(token, {
         tipo: movTipo,
-        productoId: movProductoId.trim(),
-        tallaId: movTallaId.trim() || undefined,
+        productoId: movProductId,
+        tallaId: movTallaId || undefined,
         cantidad: Number(movCantidad),
         motivo: movMotivo.trim() || undefined,
         referencia: movReferencia.trim() || undefined,
@@ -128,8 +289,10 @@ export default function InventoryMovementsPage() {
       });
 
       toast({ title: "Movimiento registrado" });
-      setMovProductoId("");
+      setMovProductId("");
+      setMovProductQuery("");
       setMovTallaId("");
+      setMovStockSnapshot(null);
       setMovCantidad("1");
       setMovMotivo("");
       setMovReferencia("");
@@ -143,6 +306,12 @@ export default function InventoryMovementsPage() {
       });
     }
   };
+
+  const registerTallas = movStockSnapshot?.tallaIds ?? [];
+  const filterTallas =
+    filterProductStock && filterProductStock.tallaIds.length > 0
+      ? filterProductStock.tallaIds
+      : tallas.map((item) => item.id);
 
   return (
     <div className="container mx-auto space-y-6 px-4 py-8">
@@ -191,17 +360,42 @@ export default function InventoryMovementsPage() {
                     <SelectItem value="devolucion">Devolución</SelectItem>
                   </SelectContent>
                 </Select>
-                <Input
-                  required
-                  placeholder="Producto ID"
-                  value={movProductoId}
-                  onChange={(event) => setMovProductoId(event.target.value)}
-                />
-                <Input
-                  placeholder="Talla ID"
-                  value={movTallaId}
-                  onChange={(event) => setMovTallaId(event.target.value)}
-                />
+
+                <div className="md:col-span-2">
+                  <EntityPicker
+                    label="Producto"
+                    searchLabel="Buscar por nombre, clave o descripción"
+                    selectLabel="Selecciona producto"
+                    query={movProductQuery}
+                    value={movProductId}
+                    options={productOptions}
+                    onQueryChange={setMovProductQuery}
+                    onValueChange={setMovProductId}
+                    allowEmpty={false}
+                    disabled={catalogLoading}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Talla</p>
+                  {registerTallas.length > 0 ? (
+                    <Select value={movTallaId || ""} onValueChange={setMovTallaId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona talla" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {registerTallas.map((id) => (
+                          <SelectItem key={id} value={id}>
+                            {formatTallaOption(tallas, id)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input value="No aplica para este producto" disabled />
+                  )}
+                </div>
+
                 <Input
                   required
                   type="number"
@@ -229,7 +423,9 @@ export default function InventoryMovementsPage() {
                 />
 
                 <div className="md:col-span-4">
-                  <Button type="submit">Registrar</Button>
+                  <Button type="submit" disabled={!movProductId}>
+                    Registrar
+                  </Button>
                 </div>
               </form>
             </CardContent>
@@ -240,16 +436,46 @@ export default function InventoryMovementsPage() {
               <CardTitle>Filtros</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-5">
-              <Input
-                placeholder="Producto ID"
-                value={productoId}
-                onChange={(event) => setProductoId(event.target.value)}
-              />
-              <Input
-                placeholder="Talla ID"
-                value={tallaId}
-                onChange={(event) => setTallaId(event.target.value)}
-              />
+              <div className="md:col-span-2">
+                <EntityPicker
+                  label="Producto"
+                  searchLabel="Buscar por nombre, clave o descripción"
+                  selectLabel="Filtrar por producto"
+                  query={filterProductQuery}
+                  value={filterProductId}
+                  options={productOptions}
+                  onQueryChange={setFilterProductQuery}
+                  onValueChange={setFilterProductId}
+                  allowEmpty
+                  disabled={catalogLoading}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Talla</p>
+                <Select
+                  value={filterTallaId || "__all__"}
+                  onValueChange={(value) =>
+                    setFilterTallaId(value === "__all__" ? "" : value)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">Todas</SelectItem>
+                    {filterTallas.map((id) => (
+                      <SelectItem key={id} value={id}>
+                        {formatTallaOption(tallas, id)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {filterTallaId ? `ID talla: ${filterTallaId}` : "Sin filtro de talla"}
+                </p>
+              </div>
+
               <Select
                 value={tipo}
                 onValueChange={(value) =>
@@ -288,8 +514,9 @@ export default function InventoryMovementsPage() {
                 <Button
                   variant="outline"
                   onClick={() => {
-                    setProductoId("");
-                    setTallaId("");
+                    setFilterProductId("");
+                    setFilterProductQuery("");
+                    setFilterTallaId("");
                     setTipo("all");
                     setFechaDesde("");
                     setFechaHasta("");
@@ -332,8 +559,14 @@ export default function InventoryMovementsPage() {
                       <TableRow key={row.id}>
                         <TableCell>{row.id}</TableCell>
                         <TableCell>{row.tipo}</TableCell>
-                        <TableCell>{row.productoId}</TableCell>
-                        <TableCell>{row.tallaId ?? "-"}</TableCell>
+                        <TableCell>
+                          {productNameById.get(row.productoId) ?? row.productoId}
+                        </TableCell>
+                        <TableCell>
+                          {row.tallaId
+                            ? formatTallaOption(tallas, row.tallaId)
+                            : "-"}
+                        </TableCell>
                         <TableCell>{row.cantidad}</TableCell>
                         <TableCell>{row.createdAt ?? "-"}</TableCell>
                       </TableRow>

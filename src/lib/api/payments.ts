@@ -96,4 +96,73 @@ export const paymentsApi = {
       { local: true },
     );
   },
+
+  async getConfig() {
+    const raw = await apiFetch<unknown>(
+      "/api/stripe/config",
+      { method: "GET" },
+      { local: true },
+    );
+    const data = unwrapData<unknown>(raw);
+    const record =
+      data && typeof data === "object" ? (data as UnknownRecord) : {};
+    return {
+      publishableKey: toStringValue(record.publishableKey),
+    };
+  },
+
+  async createCheckoutSession(
+    ordenId: string,
+    successUrl: string,
+    cancelUrl: string,
+  ) {
+    const raw = await apiFetch<unknown>(
+      "/api/stripe/checkout-sessions",
+      {
+        method: "POST",
+        body: JSON.stringify({ orderId: ordenId, successUrl, cancelUrl }),
+      },
+      { local: true },
+    );
+    const data = unwrapData<unknown>(raw);
+    const record =
+      data && typeof data === "object" ? (data as UnknownRecord) : {};
+    return {
+      url: toStringValue(record.url),
+    };
+  },
+
+  async createSetupIntent(customerId?: string) {
+    const raw = await apiFetch<unknown>(
+      "/api/stripe/setup-intents",
+      {
+        method: "POST",
+        body: JSON.stringify({ customerId }),
+      },
+      { local: true },
+    );
+    const data = unwrapData<unknown>(raw);
+    const record =
+      data && typeof data === "object" ? (data as UnknownRecord) : {};
+    return {
+      clientSecret: toStringValue(record.clientSecret),
+    };
+  },
+
+  async createBillingPortalSession(returnUrl: string) {
+    const raw = await apiFetch<unknown>(
+      "/api/stripe/billing-portal",
+      {
+        method: "POST",
+        body: JSON.stringify({ returnUrl }),
+      },
+      { local: true },
+    );
+    const data = unwrapData<unknown>(raw);
+    const record =
+      data && typeof data === "object" ? (data as UnknownRecord) : {};
+    return {
+      url: toStringValue(record.url),
+    };
+  },
 };

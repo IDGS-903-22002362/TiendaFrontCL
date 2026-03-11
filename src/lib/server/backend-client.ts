@@ -75,19 +75,23 @@ export async function proxyToBackend({
 
   const nextMethod = method ?? (request.method as ProxyOptions["method"]);
   const url = joinUrl(resolveBackendBase(), backendPath);
+  const hasBody = nextMethod !== "GET";
+  const rawBody = hasBody ? await request.arrayBuffer() : undefined;
+  const body = rawBody && rawBody.byteLength > 0 ? rawBody : undefined;
 
   try {
     const response = await fetch(url, {
       method: nextMethod,
       headers,
-      body:
-        nextMethod === "GET" || nextMethod === "DELETE"
-          ? undefined
-          : await request.text(),
+      body,
       cache: "no-store",
     });
 
     const payload = await parseResponsePayload(response);
+    if (!response.ok) {
+      console.error(`Backend returned ${response.status} for ${url}`);
+      console.error("Backend Error Payload:", JSON.stringify(payload, null, 2));
+    }
     return NextResponse.json(payload, { status: response.status });
   } catch {
     return NextResponse.json(

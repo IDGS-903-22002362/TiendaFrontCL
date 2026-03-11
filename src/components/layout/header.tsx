@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Menu, Search, ShoppingCart } from "lucide-react";
+import { Menu, Search, ShoppingCart, User } from "lucide-react";
 import { useCart } from "@/hooks/use-cart";
 import { useAuth } from "@/hooks/use-auth";
 import { fetchProducts } from "@/lib/api/storefront";
@@ -11,15 +11,23 @@ import type { Product } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Logo } from "@/components/icons";
-import { Badge } from "../ui/badge";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "../ui/dialog";
-import { Input } from "../ui/input";
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const baseNavLinks = [
   { href: "/products", label: "Todos los Productos" },
@@ -32,7 +40,7 @@ const baseNavLinks = [
 export function Header() {
   const router = useRouter();
   const { totalItems } = useCart();
-  const { role } = useAuth();
+  const { role, isAuthenticated, clearSession, user } = useAuth();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
@@ -132,15 +140,19 @@ export function Header() {
                   </span>
                 </Link>
                 <nav className="flex flex-col gap-4">
-                  {navLinks.map((link) => (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      className="text-lg font-medium text-foreground/80 hover:text-foreground"
-                    >
-                      {link.label}
-                    </Link>
-                  ))}
+                  {/* For mobile, we leave Mis Pedidos in the sidebar for easy access if they are authenticated, or we can just use the base links */}
+                  {navLinks.map((link) => {
+                    // Hide Mis Pedidos from mobile menu if they are going to use the dropdown, but it's okay to leave it for now
+                    return (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        className="text-lg font-medium text-foreground/80 hover:text-foreground"
+                      >
+                        {link.label}
+                      </Link>
+                    );
+                  })}
                 </nav>
               </div>
             </SheetContent>
@@ -166,6 +178,50 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-2">
+          {isAuthenticated ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="rounded-full">
+                  <Avatar className="h-8 w-8 bg-primary/10">
+                    <AvatarFallback>
+                      <User className="h-4 w-4" />
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <div className="flex items-center justify-start gap-2 p-2">
+                  <div className="flex flex-col space-y-1 leading-none">
+                    {user?.email && (
+                      <p className="font-medium">{user.email}</p>
+                    )}
+                    <p className="w-[200px] truncate text-sm text-muted-foreground">
+                      {role}
+                    </p>
+                  </div>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/profile" className="cursor-pointer w-full">Mi Perfil</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/order-history" className="cursor-pointer w-full">Mis Pedidos</Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="cursor-pointer text-destructive focus:text-destructive"
+                  onClick={() => void clearSession()}
+                >
+                  Cerrar sesión
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button asChild variant="ghost" className="hidden sm:inline-flex">
+              <Link href="/login">Iniciar sesión</Link>
+            </Button>
+          )}
+
           <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
             <DialogTrigger asChild>
               <Button variant="ghost" size="icon">

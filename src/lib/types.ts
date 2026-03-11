@@ -1,5 +1,6 @@
 export type Product = {
   id: string;
+  clave?: string;
   name: string;
   description: string;
   price: number;
@@ -12,6 +13,10 @@ export type Product = {
   sizes?: string[];
   colors?: string[];
   stock: number;
+  stockTotal?: number;
+  tallaIds?: string[];
+  inventarioPorTalla?: ProductSizeStock[];
+  hasSizeInventory?: boolean;
 };
 
 export type Category = {
@@ -26,6 +31,7 @@ export type CartItem = {
   image: string;
   price: number;
   quantity: number;
+  tallaId?: string;
   size?: string;
   color?: string;
 };
@@ -60,6 +66,77 @@ export type InventoryMovementType =
   | "ajuste"
   | "venta"
   | "devolucion";
+
+export type ProductSizeStock = {
+  tallaId: string;
+  cantidad: number;
+};
+
+export type ProductStockSnapshot = {
+  productoId: string;
+  tallaIds: string[];
+  existencias: number;
+  inventarioPorTalla: ProductSizeStock[];
+};
+
+export type ProductStockUpdatePayload = {
+  cantidadNueva: number;
+  tallaId?: string;
+  tipo?: "ajuste" | "entrada" | "salida" | "venta" | "devolucion";
+  motivo?: string;
+  referencia?: string;
+};
+
+export type ProductStockUpdateResult = {
+  productoId: string;
+  tallaId?: string;
+  cantidadAnterior: number;
+  cantidadNueva: number;
+  diferencia: number;
+  existencias: number;
+  inventarioPorTalla: ProductSizeStock[];
+  movimientoId?: string;
+  createdAt?: string;
+};
+
+export type ProductSizeInventoryReplacePayload = {
+  inventarioPorTalla: ProductSizeStock[];
+  motivo?: string;
+  referencia?: string;
+};
+
+export type ProductSizeInventoryReplaceResult = {
+  productoId: string;
+  tallaIds: string[];
+  inventarioPorTalla: ProductSizeStock[];
+  existencias: number;
+  cambios: Array<{
+    tallaId: string;
+    cantidadAnterior: number;
+    cantidadNueva: number;
+    diferencia: number;
+    movimientoId?: string;
+  }>;
+};
+
+export type TallaInventoryProduct = {
+  productoId: string;
+  clave?: string;
+  descripcion?: string;
+  cantidad: number;
+  existencias: number;
+};
+
+export type TallaInventorySummary = {
+  totalProductos: number;
+  totalUnidades: number;
+};
+
+export type TallaInventorySnapshot = {
+  talla: Talla;
+  resumen: TallaInventorySummary;
+  productos: TallaInventoryProduct[];
+};
 
 export type InventoryMovement = {
   id: string;

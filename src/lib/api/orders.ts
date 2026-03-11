@@ -6,6 +6,10 @@ type UnknownRecord = Record<string, unknown>;
 function toStringValue(value: unknown, fallback = "") {
   if (typeof value === "string") return value;
   if (typeof value === "number") return String(value);
+  // Handle Firebase Timestamps that might be returned un-serialized
+  if (value && typeof value === "object" && "_seconds" in value) {
+    return new Date((value as { _seconds: number })._seconds * 1000).toISOString();
+  }
   return fallback;
 }
 

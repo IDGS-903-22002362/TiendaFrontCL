@@ -1,8 +1,22 @@
 import Link from "next/link";
-import { AuthSessionPanel } from "@/components/admin/auth-session-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const sections = [
+  {
+    href: "/admin/ordenes",
+    title: "Órdenes",
+    description: "Seguimiento logístico, cancelaciones y estatus de los pedidos.",
+  },
+  {
+    href: "/admin/productos",
+    title: "Productos",
+    description: "Alta de productos, edición de catálogo, tallas e imágenes.",
+  },
+  {
+    href: "/admin/inventario",
+    title: "Inventario",
+    description: "Movimientos, ajustes y alertas de stock.",
+  },
   {
     href: "/admin/lineas",
     title: "Líneas",
@@ -18,11 +32,6 @@ const sections = [
     title: "Proveedores",
     description: "CRUD de proveedores para operación administrativa.",
   },
-  {
-    href: "/admin/inventario",
-    title: "Inventario",
-    description: "Movimientos, ajustes y alertas de stock.",
-  },
 ];
 
 export default function AdminHomePage() {
@@ -34,8 +43,16 @@ export default function AdminHomePage() {
           Sección operativa para líneas, tallas e inventario.
         </p>
       </header>
-
-      <AuthSessionPanel />
+      <Card>
+        <CardContent className="py-4 text-sm text-muted-foreground">
+          El acceso admin depende de tu sesión autenticada. Si aún no iniciaste
+          sesión, entra desde{" "}
+          <Link href="/login" className="font-medium text-primary">
+            /login
+          </Link>
+          .
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         {sections.map((section) => (

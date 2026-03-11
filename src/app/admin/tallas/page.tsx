@@ -1,9 +1,11 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { tallasApi } from "@/lib/api/tallas";
 import { getApiErrorMessage } from "@/lib/api/errors";
-import type { Talla } from "@/lib/types";
+import type { Talla, TallaInventorySnapshot } from "@/lib/types";
+import { ApiError } from "@/lib/api/client";
+import { EntityPicker, type EntityOption } from "@/components/admin/entity-picker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,10 +26,23 @@ const EMPTY_FORM = {
   orden: "0",
 };
 
+function normalizeSearch(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
+}
+
 export default function AdminTallasPage() {
   const [tallas, setTallas] = useState<Talla[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTallaId, setSelectedTallaId] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [inventoryLoadingId, setInventoryLoadingId] = useState("");
+  const [selectedInventory, setSelectedInventory] =
+    useState<TallaInventorySnapshot | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const { toast } = useToast();
 
@@ -36,6 +51,9 @@ export default function AdminTallasPage() {
     try {
       const data = await tallasApi.getAll();
       setTallas(data);
+      setSelectedTallaId((current) =>
+        current && !data.some((talla) => talla.id === current) ? "" : current,
+      );
     } catch (error) {
       toast({
         variant: "destructive",
@@ -51,7 +69,53 @@ export default function AdminTallasPage() {
     void loadTallas();
   }, [loadTallas]);
 
-  const resetForm = () => setForm(EMPTY_FORM);
+  const tallaOptions: EntityOption[] = useMemo(
+    () =>
+      tallas.map((talla) => ({
+        id: talla.id,
+        label: talla.codigo,
+        subtitle: talla.descripcion,
+      })),
+    [tallas],
+  );
+
+  const filteredTallas = useMemo(() => {
+    const query = normalizeSearch(searchQuery);
+
+    return tallas.filter((talla) => {
+      if (selectedTallaId && talla.id !== selectedTallaId) {
+        return false;
+      }
+
+      if (!query) {
+        return true;
+      }
+
+      return normalizeSearch(`${talla.codigo} ${talla.descripcion}`).includes(
+        query,
+      );
+    });
+  }, [searchQuery, selectedTallaId, tallas]);
+
+  const resetForm = () => {
+    setForm(EMPTY_FORM);
+    setSelectedTallaId("");
+  };
+
+  const selectTallaForEdit = (tallaId: string) => {
+    setSelectedTallaId(tallaId);
+    const selected = tallas.find((talla) => talla.id === tallaId);
+    if (!selected) {
+      return;
+    }
+
+    setForm({
+      id: selected.id,
+      codigo: selected.codigo,
+      descripcion: selected.descripcion,
+      orden: String(selected.orden ?? 0),
+    });
+  };
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -88,13 +152,44 @@ export default function AdminTallasPage() {
     try {
       await tallasApi.remove(id);
       toast({ title: "Talla eliminada" });
+      if (selectedTallaId === id) {
+        resetForm();
+      }
+      if (selectedInventory?.talla.id === id) {
+        setSelectedInventory(null);
+      }
       await loadTallas();
     } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        toast({
+          variant: "destructive",
+          title: "No se puede eliminar",
+          description: getApiErrorMessage(error),
+        });
+        return;
+      }
+
       toast({
         variant: "destructive",
         title: "No se pudo eliminar",
         description: getApiErrorMessage(error),
       });
+    }
+  };
+
+  const onLoadInventory = async (id: string) => {
+    setInventoryLoadingId(id);
+    try {
+      const snapshot = await tallasApi.getInventoryById(id);
+      setSelectedInventory(snapshot);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "No se pudo consultar inventario",
+        description: getApiErrorMessage(error),
+      });
+    } finally {
+      setInventoryLoadingId("");
     }
   };
 
@@ -104,6 +199,33 @@ export default function AdminTallasPage() {
         <h1 className="font-headline text-3xl font-bold">Tallas</h1>
         <p className="text-sm text-muted-foreground">CRUD parcial de tallas.</p>
       </header>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Búsqueda inteligente</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <EntityPicker
+            label="Buscar talla"
+            searchLabel="Buscar por código o descripción"
+            selectLabel="Selecciona talla para editar"
+            query={searchQuery}
+            value={selectedTallaId}
+            options={tallaOptions}
+            onQueryChange={setSearchQuery}
+            onValueChange={(value) => {
+              if (!value) {
+                resetForm();
+                return;
+              }
+              selectTallaForEdit(value);
+            }}
+            allowEmpty
+            emptyLabel="Sin selección"
+            disabled={isLoading}
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -171,12 +293,14 @@ export default function AdminTallasPage() {
                 <TableRow>
                   <TableCell colSpan={4}>Cargando...</TableCell>
                 </TableRow>
-              ) : tallas.length === 0 ? (
+              ) : filteredTallas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4}>Sin tallas disponibles.</TableCell>
+                  <TableCell colSpan={4}>
+                    Sin tallas disponibles para el filtro actual.
+                  </TableCell>
                 </TableRow>
               ) : (
-                tallas.map((talla) => (
+                filteredTallas.map((talla) => (
                   <TableRow key={talla.id}>
                     <TableCell>{talla.codigo}</TableCell>
                     <TableCell>{talla.descripcion}</TableCell>
@@ -186,14 +310,7 @@ export default function AdminTallasPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() =>
-                            setForm({
-                              id: talla.id,
-                              codigo: talla.codigo,
-                              descripcion: talla.descripcion,
-                              orden: String(talla.orden ?? 0),
-                            })
-                          }
+                          onClick={() => selectTallaForEdit(talla.id)}
                         >
                           Editar
                         </Button>
@@ -204,6 +321,16 @@ export default function AdminTallasPage() {
                         >
                           Eliminar
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => void onLoadInventory(talla.id)}
+                          disabled={inventoryLoadingId === talla.id}
+                        >
+                          {inventoryLoadingId === talla.id
+                            ? "Cargando..."
+                            : "Inventario"}
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -213,6 +340,51 @@ export default function AdminTallasPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {selectedInventory && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{`Inventario talla ${selectedInventory.talla.codigo}`}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-2 text-sm md:grid-cols-2">
+              <p>{`Total productos: ${selectedInventory.resumen.totalProductos}`}</p>
+              <p>{`Total unidades: ${selectedInventory.resumen.totalUnidades}`}</p>
+            </div>
+
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Producto ID</TableHead>
+                  <TableHead>Clave</TableHead>
+                  <TableHead>Descripción</TableHead>
+                  <TableHead>Cantidad talla</TableHead>
+                  <TableHead>Existencias totales</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {selectedInventory.productos.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5}>
+                      Sin productos para esta talla.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  selectedInventory.productos.map((product) => (
+                    <TableRow key={product.productoId}>
+                      <TableCell>{product.productoId}</TableCell>
+                      <TableCell>{product.clave ?? "-"}</TableCell>
+                      <TableCell>{product.descripcion ?? "-"}</TableCell>
+                      <TableCell>{product.cantidad}</TableCell>
+                      <TableCell>{product.existencias}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

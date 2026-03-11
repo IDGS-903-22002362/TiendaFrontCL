@@ -1,7 +1,16 @@
-import type { Category, Product } from "@/lib/types";
+import type {
+  Category,
+  Product,
+  ProductSizeStock,
+  ProductStockSnapshot,
+} from "@/lib/types";
 import { apiFetch, unwrapData } from "./client";
 
 type UnknownRecord = Record<string, unknown>;
+
+function getProductReadOptions() {
+  return typeof window !== "undefined" ? { local: true as const } : undefined;
+}
 
 function toNumber(value: unknown, fallback = 0): number {
   const parsed = Number(value);
@@ -147,6 +156,25 @@ function mapProductTagList(
   return Array.from(new Set(rawTags));
 }
 
+function mapSizeInventory(input: unknown): ProductSizeStock[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  return input
+    .map((entry) => {
+      const item = (
+        entry && typeof entry === "object" ? entry : {}
+      ) as UnknownRecord;
+      const tallaId = toStringValue(item.tallaId ?? item.id ?? item.codigo);
+      return {
+        tallaId,
+        cantidad: toNumber(item.cantidad),
+      };
+    })
+    .filter((entry) => Boolean(entry.tallaId));
+}
+
 function mapProduct(input: unknown): Product {
   const product = (
     input && typeof input === "object" ? input : {}
@@ -155,6 +183,7 @@ function mapProduct(input: unknown): Product {
   const id = toStringValue(
     product.id ?? product._id ?? product.productoId ?? product.uid,
   );
+  const clave = toStringValue(product.clave ?? product.sku) || undefined;
   const name = toStringValue(
     product.nombre ??
       product.name ??
@@ -212,16 +241,39 @@ function mapProduct(input: unknown): Product {
     .flatMap((candidate) => toStringArray(candidate))
     .filter(Boolean);
 
-  const stock = toNumber(
+  const tallaIds = toStringArray(product.tallaIds ?? product.tallasIds);
+  const hasSizeInventory = tallaIds.length > 0;
+  const mappedInventoryBySize = mapSizeInventory(
+    product.inventarioPorTalla ?? product.stockPorTalla ?? product.tallasStock,
+  );
+  const normalizedInventoryBySize = hasSizeInventory
+    ? tallaIds.map((tallaId) => {
+        const matched = mappedInventoryBySize.find(
+          (entry) => entry.tallaId === tallaId,
+        );
+        return {
+          tallaId,
+          cantidad: matched?.cantidad ?? 0,
+        };
+      })
+    : [];
+  const stockTotalFromBackend = toNumber(
     product.existencias ??
       product.stock ??
       product.inventario ??
       product.existencia,
     0,
   );
+  const stockTotal = hasSizeInventory
+    ? normalizedInventoryBySize.reduce((total, item) => total + item.cantidad, 0)
+    : stockTotalFromBackend;
+  const visibleSizes = toStringArray(
+    product.tallas ?? product.sizes ?? product.tallaIds ?? tallaIds,
+  );
 
   return {
     id,
+    clave,
     name,
     description,
     price,
@@ -234,9 +286,13 @@ function mapProduct(input: unknown): Product {
     lineId: lineId || undefined,
     lineName: lineName || undefined,
     tags: mapProductTagList(product, price, salePrice),
-    sizes: toStringArray(product.tallas ?? product.sizes ?? product.tallaIds),
+    sizes: visibleSizes.length > 0 ? visibleSizes : tallaIds,
     colors: toStringArray(product.colores ?? product.colors),
-    stock,
+    stock: stockTotal,
+    stockTotal,
+    tallaIds,
+    inventarioPorTalla: normalizedInventoryBySize,
+    hasSizeInventory,
   };
 }
 
@@ -256,33 +312,111 @@ function mapCategory(input: unknown): Category {
   };
 }
 
-export async function fetchProducts(): Promise<Product[]> {
+async function fetchProductsFromEndpoint(path: string): Promise<Product[]> {
   try {
-    const payload = await apiFetch<unknown>("/api/productos", {
-      method: "GET",
-    });
+    const payload = await apiFetch<unknown>(
+      path,
+      { method: "GET" },
+      getProductReadOptions(),
+    );
     return normalizeProductsArray(payload)
       .map(mapProduct)
       .filter((product) => Boolean(product.id));
   } catch (error) {
-    console.error("fetchProducts failed", error);
+    console.error(`fetchProductsFromEndpoint failed for ${path}`, error);
     return [];
   }
 }
 
+export async function fetchProducts(): Promise<Product[]> {
+  return fetchProductsFromEndpoint("/api/productos");
+}
+
+export async function searchProducts(term: string): Promise<Product[]> {
+  if (!term.trim()) {
+    return fetchProducts();
+  }
+
+  return fetchProductsFromEndpoint(
+    `/api/productos/buscar/${encodeURIComponent(term.trim())}`,
+  );
+}
+
+export async function fetchProductsByCategory(
+  categoriaId: string,
+): Promise<Product[]> {
+  if (!categoriaId.trim()) {
+    return [];
+  }
+
+  return fetchProductsFromEndpoint(
+    `/api/productos/categoria/${encodeURIComponent(categoriaId.trim())}`,
+  );
+}
+
+export async function fetchProductsByLine(lineaId: string): Promise<Product[]> {
+  if (!lineaId.trim()) {
+    return [];
+  }
+
+  return fetchProductsFromEndpoint(
+    `/api/productos/linea/${encodeURIComponent(lineaId.trim())}`,
+  );
+}
+
 export async function fetchProductById(id: string): Promise<Product | null> {
   try {
-    const payload = await apiFetch<unknown>(`/api/productos/${id}`, {
-      method: "GET",
-    });
-    const data = unwrapData<unknown>(payload);
+    const [productPayload, stockPayload] = await Promise.all([
+      apiFetch<unknown>(
+        `/api/productos/${id}`,
+        {
+          method: "GET",
+        },
+        getProductReadOptions(),
+      ),
+      apiFetch<{ success?: boolean; data?: ProductStockSnapshot }>(
+        `/api/productos/${id}/stock`,
+        {
+          method: "GET",
+        },
+        getProductReadOptions(),
+      ).catch(() => null),
+    ]);
+
+    const data = unwrapData<unknown>(productPayload);
 
     if (!data || typeof data !== "object") {
       return null;
     }
 
     const product = mapProduct(data);
-    return product.id ? product : null;
+
+    if (!product.id) {
+      return null;
+    }
+
+    const stockData = stockPayload?.data;
+    if (!stockData) {
+      return product;
+    }
+
+    const normalizedInventory = mapSizeInventory(stockData.inventarioPorTalla);
+    const tallaIds = toStringArray(stockData.tallaIds);
+    const hasSizeInventory = tallaIds.length > 0;
+    const stockTotal = toNumber(
+      stockData.existencias,
+      product.stockTotal ?? product.stock,
+    );
+
+    return {
+      ...product,
+      stock: stockTotal,
+      stockTotal,
+      tallaIds,
+      sizes: hasSizeInventory ? tallaIds : product.sizes,
+      inventarioPorTalla: normalizedInventory,
+      hasSizeInventory,
+    };
   } catch (error) {
     console.error("fetchProductById failed", error);
     return null;

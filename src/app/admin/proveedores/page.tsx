@@ -1,9 +1,10 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { providersApi } from "@/lib/api/providers";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import type { Proveedor } from "@/lib/types";
+import { EntityPicker, type EntityOption } from "@/components/admin/entity-picker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -20,7 +21,6 @@ import { useToast } from "@/hooks/use-toast";
 
 const EMPTY_FORM = {
   id: "",
-  codigo: "",
   nombre: "",
   email: "",
   telefono: "",
@@ -28,22 +28,34 @@ const EMPTY_FORM = {
   activo: true,
 };
 
+function normalizeSearch(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
+}
+
 export default function AdminProveedoresPage() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [search, setSearch] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedProveedorId, setSelectedProveedorId] = useState("");
   const [form, setForm] = useState(EMPTY_FORM);
   const { toast } = useToast();
 
   const loadProveedores = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = search.trim()
-        ? await providersApi.search(search.trim())
-        : await providersApi.getAll();
+      const data = await providersApi.getAll();
 
       setProveedores(data);
+      setSelectedProveedorId((current) =>
+        current && !data.some((proveedor) => proveedor.id === current)
+          ? ""
+          : current,
+      );
     } catch (error) {
       toast({
         variant: "destructive",
@@ -53,19 +65,66 @@ export default function AdminProveedoresPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [search, toast]);
+  }, [toast]);
 
   useEffect(() => {
     void loadProveedores();
   }, [loadProveedores]);
 
-  const resetForm = () => setForm(EMPTY_FORM);
+  const providerOptions: EntityOption[] = useMemo(
+    () =>
+      proveedores.map((proveedor) => ({
+        id: proveedor.id,
+        label: proveedor.nombre,
+        subtitle: `${proveedor.codigo ?? ""} ${proveedor.contacto ?? ""}`.trim(),
+      })),
+    [proveedores],
+  );
+
+  const filteredProveedores = useMemo(() => {
+    const query = normalizeSearch(searchQuery);
+
+    return proveedores.filter((proveedor) => {
+      if (selectedProveedorId && proveedor.id !== selectedProveedorId) {
+        return false;
+      }
+
+      if (!query) {
+        return true;
+      }
+
+      return normalizeSearch(
+        `${proveedor.nombre} ${proveedor.codigo ?? ""} ${proveedor.contacto ?? ""} ${proveedor.email ?? ""}`,
+      ).includes(query);
+    });
+  }, [proveedores, searchQuery, selectedProveedorId]);
+
+  const resetForm = () => {
+    setForm(EMPTY_FORM);
+    setSelectedProveedorId("");
+  };
+
+  const selectProveedorForEdit = (proveedorId: string) => {
+    setSelectedProveedorId(proveedorId);
+    const selected = proveedores.find((proveedor) => proveedor.id === proveedorId);
+    if (!selected) {
+      return;
+    }
+
+    setForm({
+      id: selected.id,
+      nombre: selected.nombre,
+      email: selected.email ?? "",
+      telefono: selected.telefono ?? "",
+      contacto: selected.contacto ?? "",
+      activo: selected.activo,
+    });
+  };
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const payload = {
-      codigo: form.codigo.trim() || undefined,
       nombre: form.nombre.trim(),
       email: form.email.trim() || undefined,
       telefono: form.telefono.trim() || undefined,
@@ -102,6 +161,9 @@ export default function AdminProveedoresPage() {
     try {
       await providersApi.remove(id);
       toast({ title: "Proveedor inactivado" });
+      if (selectedProveedorId === id) {
+        resetForm();
+      }
       await loadProveedores();
     } catch (error) {
       toast({
@@ -123,19 +185,39 @@ export default function AdminProveedoresPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Búsqueda inteligente</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <EntityPicker
+            label="Buscar proveedor"
+            searchLabel="Buscar por nombre, contacto, email o código"
+            selectLabel="Selecciona proveedor para editar"
+            query={searchQuery}
+            value={selectedProveedorId}
+            options={providerOptions}
+            onQueryChange={setSearchQuery}
+            onValueChange={(value) => {
+              if (!value) {
+                resetForm();
+                return;
+              }
+              selectProveedorForEdit(value);
+            }}
+            allowEmpty
+            emptyLabel="Sin selección"
+            disabled={isLoading}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>
             {form.id ? "Editar proveedor" : "Crear proveedor"}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <form className="grid gap-3 md:grid-cols-2" onSubmit={onSubmit}>
-            <Input
-              placeholder="Código"
-              value={form.codigo}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, codigo: event.target.value }))
-              }
-            />
             <Input
               required
               placeholder="Nombre"
@@ -195,21 +277,7 @@ export default function AdminProveedoresPage() {
         <CardHeader>
           <CardTitle>Listado</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex gap-2">
-            <Input
-              placeholder="Buscar por término"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => void loadProveedores()}
-            >
-              Buscar
-            </Button>
-          </div>
+        <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
@@ -225,14 +293,14 @@ export default function AdminProveedoresPage() {
                 <TableRow>
                   <TableCell colSpan={5}>Cargando...</TableCell>
                 </TableRow>
-              ) : proveedores.length === 0 ? (
+              ) : filteredProveedores.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5}>
-                    Sin proveedores disponibles.
+                    Sin proveedores disponibles para el filtro actual.
                   </TableCell>
                 </TableRow>
               ) : (
-                proveedores.map((proveedor) => (
+                filteredProveedores.map((proveedor) => (
                   <TableRow key={proveedor.id}>
                     <TableCell>{proveedor.nombre}</TableCell>
                     <TableCell>{proveedor.contacto ?? "-"}</TableCell>
@@ -243,17 +311,7 @@ export default function AdminProveedoresPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() =>
-                            setForm({
-                              id: proveedor.id,
-                              codigo: proveedor.codigo ?? "",
-                              nombre: proveedor.nombre,
-                              email: proveedor.email ?? "",
-                              telefono: proveedor.telefono ?? "",
-                              contacto: proveedor.contacto ?? "",
-                              activo: proveedor.activo,
-                            })
-                          }
+                          onClick={() => selectProveedorForEdit(proveedor.id)}
                         >
                           Editar
                         </Button>

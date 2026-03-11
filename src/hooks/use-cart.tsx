@@ -19,14 +19,15 @@ import {
   updateCartItem,
 } from "@/lib/api/cart";
 import { useAuth } from "@/hooks/use-auth";
+import { getApiErrorMessage } from "@/lib/api/errors";
 
 type CartContextType = {
   state: { items: CartItem[] };
   addToCart: (item: Omit<CartItem, "quantity">) => Promise<void>;
-  removeItem: (id: string, size?: string) => Promise<void>;
+  removeItem: (id: string, tallaId?: string) => Promise<void>;
   setItemQuantity: (
     id: string,
-    size: string | undefined,
+    tallaId: string | undefined,
     quantity: number,
   ) => Promise<void>;
   clearAllItems: () => Promise<void>;
@@ -46,6 +47,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
   const { token, isAuthenticated } = useAuth();
+  const authToken = token && token !== "cookie-session" ? token : undefined;
 
   useEffect(() => {
     const loadCart = async () => {
@@ -55,7 +57,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
       try {
         const cart = await fetchCart(
           activeSessionId,
-          isAuthenticated ? token : undefined,
+          isAuthenticated ? authToken : undefined,
         );
         setItems(cart.items);
       } catch (error) {
@@ -71,17 +73,17 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     void loadCart();
-  }, [toast, isAuthenticated, token]);
+  }, [toast, isAuthenticated, authToken]);
 
   useEffect(() => {
-    if (!isAuthenticated || !token || !sessionId || mergedToken === token) {
+    if (!isAuthenticated || !sessionId || mergedToken === token) {
       return;
     }
 
     const mergeAndReload = async () => {
       try {
         await mergeCartSession(sessionId);
-        const cart = await fetchCart(sessionId, token);
+        const cart = await fetchCart(sessionId, authToken);
         setItems(cart.items);
         setMergedToken(token);
       } catch (error) {
@@ -95,7 +97,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     void mergeAndReload();
-  }, [isAuthenticated, mergedToken, sessionId, toast, token]);
+  }, [isAuthenticated, mergedToken, sessionId, toast, token, authToken]);
 
   const addToCart = async (item: Omit<CartItem, "quantity">) => {
     if (!sessionId) {
@@ -108,10 +110,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         {
           id: item.id,
           quantity: 1,
-          size: item.size,
+          tallaId: item.tallaId ?? item.size,
           color: item.color,
         },
-        isAuthenticated ? token : undefined,
+        isAuthenticated ? authToken : undefined,
       );
 
       setItems(cart.items);
@@ -124,12 +126,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
       toast({
         variant: "destructive",
         title: "No se pudo agregar al carrito",
-        description: "Revisa tu conexión e inténtalo nuevamente.",
+        description: getApiErrorMessage(error),
       });
     }
   };
 
-  const removeItem = async (id: string, size?: string) => {
+  const removeItem = async (id: string, tallaId?: string) => {
     if (!sessionId) {
       return;
     }
@@ -137,8 +139,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       const cart = await removeCartItem(
         sessionId,
-        { id, size },
-        isAuthenticated ? token : undefined,
+        { id, tallaId },
+        isAuthenticated ? authToken : undefined,
       );
       setItems(cart.items);
     } catch (error) {
@@ -153,7 +155,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const setItemQuantity = async (
     id: string,
-    size: string | undefined,
+    tallaId: string | undefined,
     quantity: number,
   ) => {
     if (!sessionId) {
@@ -163,8 +165,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       const cart = await updateCartItem(
         sessionId,
-        { id, size, quantity },
-        isAuthenticated ? token : undefined,
+        { id, tallaId, quantity },
+        isAuthenticated ? authToken : undefined,
       );
       setItems(cart.items);
     } catch (error) {
@@ -185,7 +187,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       const cart = await clearCart(
         sessionId,
-        isAuthenticated ? token : undefined,
+        isAuthenticated ? authToken : undefined,
       );
       setItems(cart.items);
     } catch (error) {

@@ -5,3 +5,11 @@ runConfig:
   # Increase this value if you'd like to automatically spin up
   # more instances in response to increased traffic.
   maxInstances: 1
+
+# Environment variables for frontend + server runtime.
+env:
+  - variable: NEXT_PUBLIC_API_BASE_URL
+    value: https://us-central1-e-comerce-leon.cloudfunctions.net/api
+
+  - variable: API_BASE_URL
+    value: https://us-central1-e-comerce-leon.cloudfunctions.net/api

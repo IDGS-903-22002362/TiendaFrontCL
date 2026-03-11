@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { AuthSessionPanel } from "@/components/admin/auth-session-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const sections = [
@@ -11,7 +10,8 @@ const sections = [
   {
     href: "/admin/inventario/ajustes",
     title: "Ajustes",
-    description: "Registro de ajustes físicos con soporte Idempotency-Key.",
+    description:
+      "Ajuste puntual de stock y reemplazo masivo de inventario por talla.",
   },
   {
     href: "/admin/inventario/alertas-stock",
@@ -29,8 +29,16 @@ export default function AdminInventoryHomePage() {
           Módulo operativo de inventario para admin y empleados.
         </p>
       </header>
-
-      <AuthSessionPanel />
+      <Card>
+        <CardContent className="py-4 text-sm text-muted-foreground">
+          Este módulo requiere sesión activa con rol ADMIN o EMPLEADO. Si aún no
+          has iniciado sesión, entra desde{" "}
+          <Link href="/login" className="font-medium text-primary">
+            /login
+          </Link>
+          .
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {sections.map((section) => (

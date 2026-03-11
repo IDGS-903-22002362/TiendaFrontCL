@@ -21,9 +21,12 @@ type BackendAuthResponse = {
   success?: boolean;
   token?: string;
   usuario?: {
+    id?: string;
     rol?: UserRole;
     uid?: string;
     email?: string;
+    nombre?: string;
+    perfilCompleto?: boolean;
   };
   message?: string;
 };
@@ -36,6 +39,7 @@ export async function GET(request: NextRequest) {
     success: true,
     data: {
       isAuthenticated: Boolean(token),
+      token,
       role,
     },
   });
@@ -44,15 +48,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => ({}))) as {
     firebaseIdToken?: string;
-    token?: string;
-    role?: UserRole;
   };
-
-  if (body.token) {
-    const response = NextResponse.json({ success: true });
-    setSessionCookies(response, { token: body.token, role: body.role ?? "" });
-    return response;
-  }
 
   if (!body.firebaseIdToken) {
     return NextResponse.json(
@@ -91,7 +87,16 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json({
       success: true,
       data: {
+        token: payload.token,
         role: payload.usuario?.rol ?? "",
+        user: {
+          id: payload.usuario?.id ?? payload.usuario?.uid,
+          uid: payload.usuario?.uid,
+          email: payload.usuario?.email,
+          nombre: payload.usuario?.nombre,
+          perfilCompleto: payload.usuario?.perfilCompleto,
+          rol: payload.usuario?.rol,
+        },
       },
     });
 

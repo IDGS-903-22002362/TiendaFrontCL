@@ -33,6 +33,14 @@ function toStringArray(value: unknown): string[] {
   return [];
 }
 
+function resolveTallaId(item: Pick<CartItem, "tallaId" | "size">): string | undefined {
+  return toStringValue(item.tallaId ?? item.size) || undefined;
+}
+
+export function getCartVariantKey(item: Pick<CartItem, "id" | "tallaId" | "size">): string {
+  return `${item.id}::${resolveTallaId(item) ?? "no-size"}`;
+}
+
 function mapCartItem(input: unknown): CartItem {
   const item = (
     input && typeof input === "object" ? input : {}
@@ -77,7 +85,9 @@ function mapCartItem(input: unknown): CartItem {
       0,
     ),
     quantity: Math.max(1, toNumber(item.cantidad ?? item.quantity, 1)),
-    size: toStringValue(item.talla ?? item.size) || undefined,
+    tallaId:
+      toStringValue(item.tallaId ?? item.talla ?? item.size) || undefined,
+    size: toStringValue(item.tallaId ?? item.talla ?? item.size) || undefined,
     color: toStringValue(item.color ?? item.colour) || undefined,
   };
 }
@@ -234,9 +244,10 @@ export async function fetchCart(
 
 export async function addCartItem(
   sessionId: string,
-  item: Pick<CartItem, "id" | "quantity" | "size" | "color">,
+  item: Pick<CartItem, "id" | "quantity" | "size" | "tallaId" | "color">,
   token?: string,
 ): Promise<Cart> {
+  const tallaId = resolveTallaId(item);
   const payload = await apiFetch<unknown>(
     "/api/carrito/items",
     {
@@ -244,8 +255,7 @@ export async function addCartItem(
       body: JSON.stringify({
         productoId: item.id,
         cantidad: item.quantity,
-        talla: item.size,
-        color: item.color,
+        ...(tallaId ? { tallaId } : {}),
       }),
     },
     { sessionId, token, local: true },
@@ -256,17 +266,17 @@ export async function addCartItem(
 
 export async function updateCartItem(
   sessionId: string,
-  item: Pick<CartItem, "id" | "quantity" | "size" | "color">,
+  item: Pick<CartItem, "id" | "quantity" | "size" | "tallaId" | "color">,
   token?: string,
 ): Promise<Cart> {
+  const tallaId = resolveTallaId(item);
   const payload = await apiFetch<unknown>(
     `/api/carrito/items/${item.id}`,
     {
       method: "PUT",
       body: JSON.stringify({
         cantidad: item.quantity,
-        talla: item.size,
-        color: item.color,
+        ...(tallaId ? { tallaId } : {}),
       }),
     },
     { sessionId, token, local: true },
@@ -277,14 +287,17 @@ export async function updateCartItem(
 
 export async function removeCartItem(
   sessionId: string,
-  item: Pick<CartItem, "id" | "size">,
+  item: Pick<CartItem, "id" | "size" | "tallaId">,
   token?: string,
 ): Promise<Cart> {
+  const tallaId = resolveTallaId(item);
   const payload = await apiFetch<unknown>(
     `/api/carrito/items/${item.id}`,
     {
       method: "DELETE",
-      body: JSON.stringify({ talla: item.size }),
+      body: JSON.stringify({
+        ...(tallaId ? { tallaId } : {}),
+      }),
     },
     { sessionId, token, local: true },
   );
@@ -308,10 +321,13 @@ export async function clearCart(
 export async function checkoutCart(payload: {
   direccionEnvio: {
     nombre: string;
-    direccion: string;
+    calle: string;
+    numero: string;
+    colonia: string;
     ciudad: string;
+    estado: string;
     codigoPostal: string;
-    email: string;
+    telefono: string;
   };
   metodoPago: "TARJETA";
   costoEnvio: number;
