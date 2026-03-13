@@ -79,7 +79,10 @@ export function ProductQnA({ product }: { product: Product }) {
     : "/ai";
 
   return (
-    <ProductAssistantPanel variant="product-premium" className="mt-8 border-none bg-transparent">
+    <ProductAssistantPanel
+      variant="product-premium"
+      className="mt-8 border-none bg-transparent"
+    >
       <AssistantHeader
         variant="product-premium"
         title="Asistente Inteligente"
@@ -127,9 +130,12 @@ export function ProductQnA({ product }: { product: Product }) {
             <LockKeyhole className="h-10 w-10" />
           </div>
           <div className="max-w-xs space-y-2">
-            <h3 className="font-headline text-xl font-bold text-foreground">Acceso Restringido</h3>
+            <h3 className="font-headline text-xl font-bold text-foreground">
+              Acceso Restringido
+            </h3>
             <p className="text-sm text-muted-foreground">
-              Inicia sesión para desbloquear el Asistente y el Probador Virtual personalizado.
+              Inicia sesión para desbloquear el Asistente y el Probador Virtual
+              personalizado.
             </p>
           </div>
           <Button
@@ -145,7 +151,10 @@ export function ProductQnA({ product }: { product: Product }) {
           </Button>
         </div>
       ) : (
-        <Tabs defaultValue="chat" className="flex min-h-0 flex-1 flex-col bg-background">
+        <Tabs
+          defaultValue="chat"
+          className="flex min-h-0 flex-1 flex-col bg-background"
+        >
           <div className="border-b bg-background/50 px-6 py-2 backdrop-blur-sm">
             <AssistantTabs
               variant="product-premium"
@@ -164,11 +173,17 @@ export function ProductQnA({ product }: { product: Product }) {
             <div className="flex min-h-0 flex-1 flex-col">
               {conversation.syncState === "degraded_missing_index" && (
                 <div className="px-6 pt-4">
-                  <Alert variant="destructive" className="rounded-2xl border-amber-200 bg-amber-50 text-amber-900">
+                  <Alert
+                    variant="destructive"
+                    className="rounded-2xl border-amber-200 bg-amber-50 text-amber-900"
+                  >
                     <TriangleAlert className="h-4 w-4 text-amber-600" />
-                    <AlertTitle className="text-xs font-bold uppercase tracking-tighter">Historial no disponible</AlertTitle>
+                    <AlertTitle className="text-xs font-bold uppercase tracking-tighter">
+                      Historial no disponible
+                    </AlertTitle>
                     <AlertDescription className="text-xs opacity-80">
-                      Estamos optimizando la base de datos. El chat funciona, pero no verás mensajes antiguos hoy.
+                      Estamos optimizando la base de datos. El chat funciona,
+                      pero no verás mensajes antiguos hoy.
                     </AlertDescription>
                   </Alert>
                 </div>
@@ -197,6 +212,7 @@ export function ProductQnA({ product }: { product: Product }) {
               <AssistantComposer
                 isSending={conversation.isSending}
                 disabled={conversation.isLoadingSession}
+                hasMessages={conversation.messages.length > 0}
                 placeholder={`¿Qué te gustaría saber sobre ${product.name}?`}
                 quickPrompts={quickPrompts}
                 onSubmit={handleSendMessage}

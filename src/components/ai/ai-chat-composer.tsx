@@ -16,6 +16,7 @@ export type AiChatComposerProps = {
   isSending?: boolean;
   placeholder?: string;
   quickPrompts?: QuickPrompt[];
+  hasMessages?: boolean;
   onSubmit: (message: string) => Promise<void> | void;
   variant?: "default" | "product-premium";
 };
@@ -25,6 +26,7 @@ export function AiChatComposer({
   isSending = false,
   placeholder = "Haz una pregunta...",
   quickPrompts = [],
+  hasMessages = false,
   onSubmit,
   variant = "default",
 }: AiChatComposerProps) {
@@ -43,12 +45,14 @@ export function AiChatComposer({
   const isPremium = variant === "product-premium";
 
   return (
-    <div className={cn(
-      "border-t p-4 sm:p-6 transition-all",
-      isPremium ? "bg-muted/10" : "bg-card"
-    )}>
+    <div
+      className={cn(
+        "border-t p-4 sm:p-6 transition-all",
+        isPremium ? "bg-muted/10" : "bg-card",
+      )}
+    >
       <div className="mx-auto max-w-3xl space-y-4">
-        {quickPrompts.length > 0 && messages.length === 0 ? (
+        {quickPrompts.length > 0 && !hasMessages ? (
           <div className="flex flex-wrap gap-2 justify-center">
             {quickPrompts.map((quickPrompt) => (
               <button
@@ -72,7 +76,7 @@ export function AiChatComposer({
           }}
           className={cn(
             "relative flex items-center rounded-2xl border bg-background p-1.5 transition-all focus-within:ring-2 focus-within:ring-primary/20",
-            isSending ? "opacity-70" : "opacity-100"
+            isSending ? "opacity-70" : "opacity-100",
           )}
         >
           <Textarea
@@ -103,7 +107,7 @@ export function AiChatComposer({
             <span className="sr-only">Enviar mensaje</span>
           </Button>
         </form>
-        
+
         <p className="text-center text-[10px] uppercase tracking-widest font-bold text-muted-foreground/40">
           Inteligencia Artificial Dungeon v2.0
         </p>

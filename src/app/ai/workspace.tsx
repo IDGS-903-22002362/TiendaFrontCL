@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Bot, History, Loader2, Plus, Sparkles, TriangleAlert } from "lucide-react";
+import {
+  Bot,
+  History,
+  Loader2,
+  Plus,
+  Sparkles,
+  TriangleAlert,
+} from "lucide-react";
 import {
   getTryOnDownloadLink,
   listAiSessions,
@@ -21,7 +28,13 @@ import { AiMessageThread } from "@/components/ai/ai-message-thread";
 import { AiTryOnPanel } from "@/components/ai/ai-try-on-panel";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 function formatDateTime(value?: string | null) {
@@ -102,7 +115,9 @@ export function AiWorkspace() {
 
     void refreshSessions();
     void refreshTryOnJobs();
-    void fetchProducts().then(setProducts).catch(() => setProducts([]));
+    void fetchProducts()
+      .then(setProducts)
+      .catch(() => setProducts([]));
   }, [isAuthenticated, refreshSessions, refreshTryOnJobs]);
 
   useEffect(() => {
@@ -200,7 +215,9 @@ export function AiWorkspace() {
           </p>
         </div>
         <Button
-          onClick={() => void conversation.startNewSession("Nueva conversacion AI")}
+          onClick={() =>
+            void conversation.startNewSession("Nueva conversacion AI")
+          }
           disabled={conversation.isLoadingSession}
         >
           <Plus className="mr-2 h-4 w-4" />
@@ -227,7 +244,8 @@ export function AiWorkspace() {
               </div>
             ) : sessions.length === 0 ? (
               <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                Aún no tienes sesiones. Crea una nueva conversación para empezar.
+                Aún no tienes sesiones. Crea una nueva conversación para
+                empezar.
               </div>
             ) : (
               sessions.map((session) => (
@@ -279,7 +297,9 @@ export function AiWorkspace() {
                 {conversation.syncState === "degraded_missing_index" ? (
                   <Alert>
                     <TriangleAlert className="h-4 w-4" />
-                    <AlertTitle>Historial temporalmente no disponible</AlertTitle>
+                    <AlertTitle>
+                      Historial temporalmente no disponible
+                    </AlertTitle>
                     <AlertDescription>
                       La conversación activa sigue funcionando, pero el backend
                       aún no puede reconstruir mensajes previos porque falta un
@@ -299,12 +319,15 @@ export function AiWorkspace() {
                 />
 
                 {conversation.error ? (
-                  <p className="text-sm text-destructive">{conversation.error}</p>
+                  <p className="text-sm text-destructive">
+                    {conversation.error}
+                  </p>
                 ) : null}
 
                 <AiChatComposer
                   isSending={conversation.isSending}
                   disabled={conversation.isLoadingSession}
+                  hasMessages={conversation.messages.length > 0}
                   quickPrompts={[
                     {
                       label: "Jerseys negros",
