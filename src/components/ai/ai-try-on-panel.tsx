@@ -148,7 +148,7 @@ export function AiTryOnPanel({
       toast({
         variant: "destructive",
         title: "Imagen requerida",
-        description: "Selecciona una imagen para iniciar el try-on.",
+        description: "Selecciona una imagen.",
       });
       return;
     }
@@ -157,7 +157,7 @@ export function AiTryOnPanel({
       toast({
         variant: "destructive",
         title: "Producto requerido",
-        description: "Selecciona un producto antes de continuar.",
+        description: "Selecciona un producto.",
       });
       return;
     }
@@ -165,56 +165,15 @@ export function AiTryOnPanel({
     if (!consentAccepted) {
       toast({
         variant: "destructive",
-        title: "Consentimiento requerido",
-        description: "Debes aceptar el consentimiento para usar virtual try-on.",
-      });
-      return;
-    }
-
-    if (!["image/jpeg", "image/png", "image/webp"].includes(selectedFile.type)) {
-      toast({
-        variant: "destructive",
-        title: "Formato no permitido",
-        description: "Usa archivos JPG, PNG o WEBP.",
-      });
-      return;
-    }
-
-    if (selectedFile.size > 10 * 1024 * 1024) {
-      toast({
-        variant: "destructive",
-        title: "Archivo demasiado grande",
-        description: "El archivo no puede superar 10 MB.",
-      });
-      return;
-    }
-
-    try {
-      const dimensions = await readImageDimensions(selectedFile);
-      if (dimensions.width < 512 || dimensions.height < 512) {
-        toast({
-          variant: "destructive",
-          title: "Imagen demasiado pequeña",
-          description: "La imagen debe medir al menos 512x512 px.",
-        });
-        return;
-      }
-    } catch (caughtError) {
-      toast({
-        variant: "destructive",
-        title: "No se pudo validar la imagen",
-        description: getApiErrorMessage(caughtError),
+        title: "Consentimiento",
+        description: "Acepta los términos.",
       });
       return;
     }
 
     const activeSessionId = sessionId || (await ensureSession());
     if (!activeSessionId) {
-      toast({
-        variant: "destructive",
-        title: "Sesión no disponible",
-        description: "No se pudo crear una sesión AI.",
-      });
+      toast({ variant: "destructive", title: "Error", description: "No hay sesión activa." });
       return;
     }
 
@@ -228,7 +187,7 @@ export function AiTryOnPanel({
         id: userMessageId,
         sessionId: activeSessionId,
         role: "user",
-        content: `Quiero probar ${selectedProduct.name} con esta foto.`,
+        content: `Probando ${selectedProduct.name}`,
         imageUrl: selectedFilePreview,
       }),
     ]);
@@ -251,39 +210,23 @@ export function AiTryOnPanel({
       await onJobCompleted?.(completedJob);
 
       if (completedJob.status === "completed") {
-        let nextImageUrl = completedJob.outputImageUrl ?? "";
-        let nextDownloadUrl = "";
-
-        if (!nextImageUrl) {
-          const link = await getTryOnDownloadLink(completedJob.id);
-          nextImageUrl = link.url;
-          nextDownloadUrl = link.url;
-        } else {
-          const link = await getTryOnDownloadLink(completedJob.id).catch(() => null);
-          nextDownloadUrl = link?.url ?? nextImageUrl;
-        }
-
-        setDownloadUrl(nextDownloadUrl || nextImageUrl);
+        const link = await getTryOnDownloadLink(completedJob.id).catch(() => null);
+        const url = link?.url || completedJob.outputImageUrl || "";
+        
+        setDownloadUrl(url);
         setThreadMessages((currentMessages) => [
           ...currentMessages,
           buildLocalMessage({
             id: `tryon_result_${completedJob.id}`,
             sessionId: activeSessionId,
             role: "assistant",
-            content: `Aquí tienes el try-on de ${selectedProduct.name}.`,
-            imageUrl: nextImageUrl,
+            content: `Resultado listo.`,
+            imageUrl: url,
           }),
         ]);
-        await onResultReady?.({ imageUrl: nextImageUrl, job: completedJob });
-
-        toast({
-          title: "Try-on listo",
-          description: "La imagen ya está disponible en el chat.",
-        });
+        await onResultReady?.({ imageUrl: url, job: completedJob });
       } else {
-        throw new Error(
-          completedJob.errorMessage || "El try-on no pudo completarse",
-        );
+        throw new Error(completedJob.errorMessage || "Error al generar");
       }
     } catch (caughtError) {
       const message = getApiErrorMessage(caughtError);
@@ -293,184 +236,136 @@ export function AiTryOnPanel({
           id: `tryon_error_${Date.now()}`,
           sessionId: activeSessionId,
           role: "assistant",
-          content: `No pude generar la imagen en este momento. ${message}`,
+          content: `Fallo: ${message}`,
         }),
       ]);
-      toast({
-        variant: "destructive",
-        title: "No se pudo completar el try-on",
-        description: message,
-      });
+      toast({ variant: "destructive", title: "Fallo", description: message });
     } finally {
       setIsRunning(false);
     }
   }
 
-  const isPremium = variant === "product-premium";
+  const hasContent = threadMessages.length > 0 || isRunning;
 
   return (
-    <div
-      className={cn(
-        "flex h-full min-h-0 flex-1 flex-col",
-        isPremium ? "bg-white" : "rounded-3xl border border-border bg-card",
-      )}
-    >
-      <div className="border-b border-[#E6ECE6] bg-[#FBFCFB] px-4 py-4 sm:px-5">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-[#1C241F]">
-            <Sparkles className="h-4 w-4 text-[#0B7A43]" />
-            <h3 className="text-lg font-semibold">Virtual Try-On</h3>
-          </div>
-          <p className="text-sm leading-6 text-[#5F6B63]">
-            Sube tu foto, genera el resultado y revisa ambas imágenes dentro del hilo.
-          </p>
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-col border-b bg-muted/5 p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-3.5 w-3.5 text-primary" />
+          <h3 className="text-xs font-bold uppercase tracking-tight">Probador Virtual</h3>
         </div>
 
-        {selectedProduct ? (
-          <div className="mt-4 flex items-center gap-3 rounded-[20px] border border-[#E6ECE6] bg-white p-3">
-            <div className="relative h-14 w-14 overflow-hidden rounded-2xl border border-[#E6ECE6] bg-[#F6F8F6]">
-              <Image
-                src={selectedProduct.images[0]}
-                alt={selectedProduct.name}
-                fill
-                className="object-cover"
-              />
+        {selectedProduct && !allowProductSelection && (
+          <div className="flex items-center gap-3 rounded-xl border bg-background p-2">
+            <div className="relative h-10 w-10 overflow-hidden rounded-lg bg-muted">
+              <Image src={selectedProduct.images[0]} alt={selectedProduct.name} fill className="object-cover" />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-[#1C241F]">
-                {selectedProduct.name}
-              </p>
-              <p className="text-xs text-[#5F6B63]">{selectedProduct.category}</p>
+              <p className="truncate text-[11px] font-bold">{selectedProduct.name}</p>
+              <p className="text-[10px] text-muted-foreground uppercase">{selectedProduct.category}</p>
             </div>
           </div>
-        ) : null}
+        )}
 
-        {allowProductSelection ? (
-          <div className="mt-4 space-y-3">
-            <Label htmlFor="ai-product-search" className="text-[#1C241F]">
-              Producto
-            </Label>
+        {allowProductSelection && (
+          <div className="space-y-2">
             <Input
-              id="ai-product-search"
               value={productQuery}
-              onChange={(event) => setProductQuery(event.target.value)}
-              placeholder="Buscar producto por nombre..."
-              className="h-11 rounded-2xl border-[#E6ECE6] bg-white px-4 text-[#1C241F] placeholder:text-[#7B857E] focus-visible:ring-[#0B7A43]"
+              onChange={(e) => setProductQuery(e.target.value)}
+              placeholder="Buscar producto..."
+              className="h-8 text-xs rounded-lg"
             />
-            <div className="grid gap-2 sm:grid-cols-2">
-              {visibleProducts.map((product) => (
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              {visibleProducts.map((p) => (
                 <button
-                  key={product.id}
+                  key={p.id}
                   type="button"
+                  onClick={() => setSelectedProductId(p.id)}
                   className={cn(
-                    "rounded-2xl border p-3 text-left transition",
-                    product.id === selectedProductId
-                      ? "border-[#BFD2C4] bg-[#F6F8F6]"
-                      : "border-[#E6ECE6] bg-white hover:border-[#CAD5CB] hover:bg-[#FBFCFB]",
+                    "rounded-lg border p-2 text-left text-[10px] transition",
+                    p.id === selectedProductId ? "border-primary bg-primary/5" : "bg-background hover:border-primary/30"
                   )}
-                  onClick={() => setSelectedProductId(product.id)}
                 >
-                  <p className="font-medium text-[#1C241F]">{product.name}</p>
-                  <p className="text-xs text-[#5F6B63]">{product.category}</p>
+                  <p className="truncate font-bold">{p.name}</p>
                 </button>
               ))}
             </div>
           </div>
-        ) : null}
+        )}
       </div>
 
-      <AiMessageThread
-        messages={threadMessages}
-        isLoading={false}
-        streamStatus={isRunning ? "Generando imagen..." : ""}
-        emptyTitle="Carga una imagen para comenzar"
-        emptyDescription="El try-on se mostrará como una conversación visual: tu foto entra al hilo y la imagen generada responde en el mismo chat."
-        className="h-full min-h-0 flex-1 px-4 py-4 sm:px-5"
-        variant="product-premium"
-      />
+      <div className={cn("flex-1 overflow-hidden", !hasContent && "hidden")}>
+        <AiMessageThread
+          messages={threadMessages}
+          isLoading={false}
+          streamStatus={isRunning ? "Generando..." : ""}
+          emptyTitle=""
+          emptyDescription=""
+          className="h-full"
+        />
+      </div>
 
-      <div className="border-t border-[#E6ECE6] bg-[#FBFCFB] px-4 py-4 sm:px-5">
-        <div className="space-y-3 rounded-[24px] border border-[#E6ECE6] bg-white p-3 sm:p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex min-w-0 items-center gap-3">
-              <label
-                htmlFor="ai-tryon-file"
-                className="inline-flex h-11 cursor-pointer items-center justify-center rounded-2xl border border-[#E6ECE6] bg-[#F6F8F6] px-4 text-sm font-medium text-[#1C241F] transition hover:bg-[#EEF3EE]"
-              >
-                <UploadCloud className="mr-2 h-4 w-4 text-[#0B7A43]" />
-                Seleccionar imagen
-              </label>
-              <Input
-                id="ai-tryon-file"
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                onChange={(event) => {
-                  setSelectedFile(event.target.files?.[0] ?? null);
-                }}
-                disabled={isRunning}
-                className="sr-only"
-              />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-[#1C241F]">
-                  {selectedFile ? selectedFile.name : "Ningún archivo seleccionado"}
-                </p>
-                <p className="text-xs text-[#5F6B63]">
-                  JPG, PNG o WEBP. Mínimo 512x512 px, máximo 10 MB.
-                </p>
-              </div>
-            </div>
+      {!hasContent && (
+        <div className="flex flex-1 flex-col items-center justify-center p-8 text-center space-y-2 opacity-60">
+          <UploadCloud className="h-8 w-8 text-muted-foreground" />
+          <div className="space-y-1">
+            <p className="text-xs font-bold">Sube tu foto</p>
+            <p className="text-[10px] max-w-[200px]">Te mostraremos cómo te queda este producto usando IA.</p>
+          </div>
+        </div>
+      )}
 
-            {downloadUrl ? (
-              <Button
-                asChild
-                variant="ghost"
-                className="h-10 rounded-2xl text-[#5F6B63] hover:bg-[#F6F8F6] hover:text-[#1C241F]"
-              >
-                <a href={downloadUrl} target="_blank" rel="noreferrer">
-                  <Download className="h-4 w-4" />
-                  Descargar
-                </a>
-              </Button>
-            ) : null}
+      <div className="mt-auto border-t bg-muted/5 p-4 space-y-3">
+        <div className="space-y-3">
+          <div className="flex flex-col gap-2">
+            <label
+              htmlFor="ai-tryon-file"
+              className="flex h-10 cursor-pointer items-center justify-center rounded-xl border border-dashed border-primary/30 bg-background px-4 text-xs font-bold transition hover:bg-primary/5"
+            >
+              <UploadCloud className="mr-2 h-4 w-4 text-primary" />
+              {selectedFile ? "Cambiar imagen" : "Seleccionar mi foto"}
+            </label>
+            <Input
+              id="ai-tryon-file"
+              type="file"
+              accept="image/*"
+              onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+              disabled={isRunning}
+              className="sr-only"
+            />
+            {selectedFile && (
+              <p className="text-[10px] text-center text-primary font-medium truncate">
+                {selectedFile.name}
+              </p>
+            )}
           </div>
 
-          <label className="flex items-start gap-3 rounded-[20px] border border-[#E6ECE6] bg-[#FBFCFB] p-3 text-sm text-[#5F6B63]">
+          <label className="flex items-start gap-2.5 rounded-xl border bg-background/50 p-2.5">
             <Checkbox
               checked={consentAccepted}
               onCheckedChange={(checked) => setConsentAccepted(checked === true)}
               disabled={isRunning}
-              className="mt-0.5 border-[#9DB6A4] data-[state=checked]:border-[#0B7A43] data-[state=checked]:bg-[#0B7A43]"
+              className="mt-0.5"
             />
-            <span className="leading-6">
-              Confirmo que tengo permiso para usar esta imagen y acepto generar
-              una vista previa temporal mediante el servicio AI.
+            <span className="text-[9px] leading-tight text-muted-foreground">
+              Acepto procesar mi imagen temporalmente con IA para generar la vista previa.
             </span>
           </label>
 
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-xs text-[#5F6B63]">
-              <Paperclip className="h-3.5 w-3.5" />
-              {latestJob?.status === "completed"
-                ? "Último try-on completado"
-                : isRunning
-                  ? "Generando respuesta visual"
-                  : "Listo para generar"}
-            </div>
-            <Button
-              className="h-11 rounded-2xl bg-[#0B7A43] px-5 text-white hover:bg-[#096738]"
-              disabled={isRunning}
-              onClick={() => void handleRunTryOn()}
-            >
-              {isRunning ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Generando...
-                </>
-              ) : (
-                "Generar try-on"
-              )}
-            </Button>
-          </div>
+          <Button
+            className="h-10 w-full rounded-xl text-xs font-bold shadow-lg"
+            disabled={isRunning || !selectedFile || !consentAccepted}
+            onClick={() => void handleRunTryOn()}
+          >
+            {isRunning ? (
+              <>
+                <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                Generando...
+              </>
+            ) : (
+              "Ver cómo me queda"
+            )}
+          </Button>
         </div>
       </div>
     </div>
