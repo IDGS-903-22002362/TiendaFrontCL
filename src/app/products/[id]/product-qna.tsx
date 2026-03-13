@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import {
   Bot,
@@ -7,7 +8,8 @@ import {
   LockKeyhole,
   MessageSquarePlus,
   TriangleAlert,
-  Sparkles,
+  MessageCircle,
+  ChevronDown,
 } from "lucide-react";
 import type { TryOnJob } from "@/lib/ai/types";
 import type { Product } from "@/lib/types";
@@ -24,10 +26,14 @@ import { ProductAssistantPanel } from "@/components/ai/product-assistant-panel";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { cn } from "@/lib/utils";
 
 export function ProductQnA({ product }: { product: Product }) {
+  const [isOpen, setIsOpen] = useState(false);
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
+  
   const conversation = useAiConversation({
     defaultTitle: `Consulta sobre ${product.name}`,
     storageKey: isAuthenticated
@@ -36,18 +42,9 @@ export function ProductQnA({ product }: { product: Product }) {
   });
 
   const quickPrompts = [
-    {
-      label: "Disponibilidad",
-      prompt: `¿Qué disponibilidad y tallas tiene ${product.name}?`,
-    },
-    {
-      label: "Materiales",
-      prompt: `¿De qué materiales está hecho ${product.name}?`,
-    },
-    {
-      label: "Combínalo",
-      prompt: `Recomiéndame cómo combinar ${product.name} para un día de partido.`,
-    },
+    { label: "Stock", prompt: `¿Qué disponibilidad tiene ${product.name}?` },
+    { label: "Material", prompt: `¿De qué está hecho?` },
+    { label: "Tallas", prompt: `¿Qué tallas me recomiendas?` },
   ];
 
   async function handleSendMessage(message: string) {
@@ -62,179 +59,125 @@ export function ProductQnA({ product }: { product: Product }) {
     }
   }
 
-  async function handleTryOnResult({
-    job,
-  }: {
-    imageUrl: string;
-    job: TryOnJob;
-  }) {
-    toast({
-      title: "¡Virtual Try-On listo!",
-      description: "Desliza a la pestaña de Try-On para ver el resultado.",
-    });
-  }
-
   const aiWorkspaceHref = conversation.currentSessionId
     ? `/ai?sessionId=${encodeURIComponent(conversation.currentSessionId)}`
     : "/ai";
 
   return (
-    <ProductAssistantPanel
-      variant="product-premium"
-      className="mt-8 border-none bg-transparent"
-    >
-      <AssistantHeader
-        variant="product-premium"
-        title="Asistente Inteligente"
-        description={`Todo sobre ${product.name} en segundos.`}
-        icon={<Bot className="h-6 w-6" />}
-        actions={
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void conversation.startNewSession(
-                  `Consulta sobre ${product.name}`,
-                )
-              }
-              disabled={!isAuthenticated || conversation.isLoadingSession}
-              className="h-10 rounded-xl px-4 text-xs font-bold uppercase tracking-wider"
-            >
-              <MessageSquarePlus className="mr-2 h-4 w-4" />
-              Reiniciar
-            </Button>
-            <Button
-              asChild
-              variant="secondary"
-              size="sm"
-              className="h-10 rounded-xl px-4 text-xs font-bold uppercase tracking-wider"
-            >
-              <Link href={aiWorkspaceHref}>
-                <History className="mr-2 h-4 w-4" />
-                Historial
-              </Link>
-            </Button>
-          </div>
-        }
-      />
-
-      {isLoading ? (
-        <div className="flex flex-1 items-center justify-center p-12 text-sm text-muted-foreground animate-pulse">
-          Sincronizando con La Dungeon AI...
-        </div>
-      ) : !isAuthenticated ? (
-        <div className="flex flex-1 flex-col items-center justify-center p-8 text-center space-y-6">
-          <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-muted text-muted-foreground">
-            <LockKeyhole className="h-10 w-10" />
-          </div>
-          <div className="max-w-xs space-y-2">
-            <h3 className="font-headline text-xl font-bold text-foreground">
-              Acceso Restringido
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Inicia sesión para desbloquear el Asistente y el Probador Virtual
-              personalizado.
-            </p>
-          </div>
-          <Button
-            asChild
-            size="lg"
-            className="rounded-2xl px-8 font-bold shadow-lg shadow-primary/20"
-          >
-            <Link
-              href={`/login?redirect=${encodeURIComponent(`/products/${product.id}`)}`}
-            >
-              Iniciar Sesión Ahora
-            </Link>
-          </Button>
-        </div>
-      ) : (
-        <Tabs
-          defaultValue="chat"
-          className="flex min-h-0 flex-1 flex-col bg-background"
-        >
-          <div className="border-b bg-background/50 px-6 py-2 backdrop-blur-sm">
-            <AssistantTabs
+    <div className="fixed bottom-24 right-6 z-50 md:bottom-10 md:right-10 flex flex-col items-end gap-4">
+      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+        <CollapsibleContent className="mb-4 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 origin-bottom-right">
+          <ProductAssistantPanel variant="product-premium">
+            <AssistantHeader
               variant="product-premium"
-              className="border-none bg-transparent p-0"
-              tabs={[
-                { value: "chat", label: "Consulta de Producto" },
-                { value: "tryon", label: "Probador Virtual (Try-On)" },
-              ]}
-            />
-          </div>
-
-          <TabsContent
-            value="chat"
-            className="m-0 flex min-h-0 flex-1 flex-col overflow-hidden"
-          >
-            <div className="flex min-h-0 flex-1 flex-col">
-              {conversation.syncState === "degraded_missing_index" && (
-                <div className="px-6 pt-4">
-                  <Alert
-                    variant="destructive"
-                    className="rounded-2xl border-amber-200 bg-amber-50 text-amber-900"
+              title="Dungeon AI"
+              description={`Asistente para ${product.name}`}
+              icon={<Bot className="h-5 w-5" />}
+              onClose={() => setIsOpen(false)}
+              actions={
+                <div className="flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-full"
+                    onClick={() => void conversation.startNewSession(`Consulta: ${product.name}`)}
+                    title="Reiniciar chat"
                   >
-                    <TriangleAlert className="h-4 w-4 text-amber-600" />
-                    <AlertTitle className="text-xs font-bold uppercase tracking-tighter">
-                      Historial no disponible
-                    </AlertTitle>
-                    <AlertDescription className="text-xs opacity-80">
-                      Estamos optimizando la base de datos. El chat funciona,
-                      pero no verás mensajes antiguos hoy.
-                    </AlertDescription>
-                  </Alert>
+                    <MessageSquarePlus className="h-4 w-4" />
+                  </Button>
+                  <Button asChild variant="ghost" size="icon" className="h-8 w-8 rounded-full">
+                    <Link href={aiWorkspaceHref} title="Ver historial">
+                      <History className="h-4 w-4" />
+                    </Link>
+                  </Button>
                 </div>
-              )}
-
-              <AssistantMessages
-                messages={conversation.messages}
-                toolCalls={conversation.toolCalls}
-                isLoading={conversation.isLoadingSession}
-                streamStatus={conversation.streamStatus}
-                className="flex-1"
-                emptyTitle="¡Hola! Soy tu asistente de La Dungeon"
-                emptyDescription={`Pregúntame sobre la tela, el ajuste o cómo se ve ${product.name}.`}
-                variant="product-premium"
-                toolCallDisplay="collapsible"
-              />
-
-              {conversation.error && (
-                <div className="px-6 pb-2">
-                  <p className="rounded-xl bg-destructive/10 px-4 py-2 text-xs font-medium text-destructive">
-                    {conversation.error}
-                  </p>
-                </div>
-              )}
-
-              <AssistantComposer
-                isSending={conversation.isSending}
-                disabled={conversation.isLoadingSession}
-                hasMessages={conversation.messages.length > 0}
-                placeholder={`¿Qué te gustaría saber sobre ${product.name}?`}
-                quickPrompts={quickPrompts}
-                onSubmit={handleSendMessage}
-                variant="product-premium"
-              />
-            </div>
-          </TabsContent>
-
-          <TabsContent
-            value="tryon"
-            className="m-0 flex min-h-0 flex-1 flex-col overflow-hidden"
-          >
-            <AiTryOnPanel
-              sessionId={conversation.currentSessionId || undefined}
-              ensureSession={conversation.ensureSession}
-              defaultProduct={product}
-              variant="product-premium"
-              onResultReady={handleTryOnResult}
+              }
             />
-          </TabsContent>
-        </Tabs>
-      )}
-    </ProductAssistantPanel>
+
+            {isLoading ? (
+              <div className="h-[400px] flex items-center justify-center p-8 text-xs text-muted-foreground animate-pulse">
+                Sincronizando Dungeon AI...
+              </div>
+            ) : !isAuthenticated ? (
+              <div className="h-[400px] flex flex-col items-center justify-center p-8 text-center space-y-4">
+                <LockKeyhole className="h-10 w-10 text-muted-foreground opacity-50" />
+                <p className="text-sm font-medium">Inicia sesión para usar la IA</p>
+                <Button asChild size="sm">
+                  <Link href={`/login?redirect=${encodeURIComponent(`/products/${product.id}`)}`}>Entrar</Link>
+                </Button>
+              </div>
+            ) : (
+              <Tabs defaultValue="chat" className="flex h-[450px] flex-col bg-background">
+                <div className="border-b bg-background/50 px-4 py-1 backdrop-blur-sm">
+                  <AssistantTabs
+                    variant="product-premium"
+                    className="border-none bg-transparent"
+                    tabs={[
+                      { value: "chat", label: "Consulta" },
+                      { value: "tryon", label: "Try-On" },
+                    ]}
+                  />
+                </div>
+
+                <TabsContent value="chat" className="m-0 flex flex-1 flex-col overflow-hidden">
+                  {conversation.syncState === "degraded_missing_index" && (
+                    <div className="px-4 pt-2">
+                      <Alert className="py-2 rounded-xl border-amber-200 bg-amber-50">
+                        <AlertDescription className="text-[10px] text-amber-900 leading-tight">
+                          Historial temporalmente limitado por mantenimiento.
+                        </AlertDescription>
+                      </Alert>
+                    </div>
+                  )}
+
+                  <AssistantMessages
+                    messages={conversation.messages}
+                    toolCalls={conversation.toolCalls}
+                    isLoading={conversation.isLoadingSession}
+                    streamStatus={conversation.streamStatus}
+                    className="flex-1"
+                    emptyTitle="¡Hola! ¿En qué te ayudo?"
+                    emptyDescription={`Pregúntame sobre ${product.name}.`}
+                    variant="product-premium"
+                    toolCallDisplay="collapsible"
+                  />
+
+                  <AssistantComposer
+                    isSending={conversation.isSending}
+                    disabled={conversation.isLoadingSession}
+                    hasMessages={conversation.messages.length > 0}
+                    placeholder="Escribe aquí..."
+                    quickPrompts={quickPrompts}
+                    onSubmit={handleSendMessage}
+                    variant="product-premium"
+                  />
+                </TabsContent>
+
+                <TabsContent value="tryon" className="m-0 flex flex-1 flex-col overflow-hidden">
+                  <AiTryOnPanel
+                    sessionId={conversation.currentSessionId || undefined}
+                    ensureSession={conversation.ensureSession}
+                    defaultProduct={product}
+                    variant="product-premium"
+                  />
+                </TabsContent>
+              </Tabs>
+            )}
+          </ProductAssistantPanel>
+        </CollapsibleContent>
+        
+        <CollapsibleTrigger asChild>
+          <Button 
+            size="lg" 
+            className={cn(
+              "h-14 w-14 rounded-full shadow-2xl transition-all duration-300",
+              isOpen ? "rotate-180 bg-muted text-muted-foreground" : "bg-primary text-white scale-110"
+            )}
+          >
+            {isOpen ? <ChevronDown className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
+          </Button>
+        </CollapsibleTrigger>
+      </Collapsible>
+    </div>
   );
 }

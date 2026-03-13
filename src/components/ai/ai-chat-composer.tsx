@@ -42,25 +42,18 @@ export function AiChatComposer({
     await onSubmit(trimmed);
   }
 
-  const isPremium = variant === "product-premium";
-
   return (
-    <div
-      className={cn(
-        "border-t p-4 sm:p-6 transition-all",
-        isPremium ? "bg-muted/10" : "bg-card",
-      )}
-    >
-      <div className="mx-auto max-w-3xl space-y-4">
+    <div className="border-t p-3 bg-muted/5">
+      <div className="space-y-3">
         {quickPrompts.length > 0 && !hasMessages ? (
-          <div className="flex flex-wrap gap-2 justify-center">
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide no-scrollbar">
             {quickPrompts.map((quickPrompt) => (
               <button
                 key={quickPrompt.label}
                 type="button"
                 disabled={disabled || isSending}
                 onClick={() => void submitMessage(quickPrompt.prompt)}
-                className="flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-xs font-bold text-muted-foreground transition-all hover:border-primary/50 hover:text-primary hover:shadow-sm disabled:opacity-50"
+                className="whitespace-nowrap flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-[10px] font-bold text-muted-foreground transition-all hover:border-primary/50 hover:text-primary"
               >
                 <Sparkles className="h-3 w-3" />
                 {quickPrompt.label}
@@ -74,43 +67,37 @@ export function AiChatComposer({
             event.preventDefault();
             void submitMessage(message);
           }}
-          className={cn(
-            "relative flex items-center rounded-2xl border bg-background p-1.5 transition-all focus-within:ring-2 focus-within:ring-primary/20",
-            isSending ? "opacity-70" : "opacity-100",
-          )}
+          className="relative flex items-center gap-2"
         >
-          <Textarea
-            value={message}
-            onChange={(event) => setMessage(event.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void submitMessage(message);
-              }
-            }}
-            placeholder={placeholder}
-            disabled={disabled || isSending}
-            rows={1}
-            className="min-h-[44px] flex-1 resize-none border-0 bg-transparent px-4 py-3 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
-          />
+          <div className="relative flex-1 bg-background rounded-2xl border border-border focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+            <Textarea
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void submitMessage(message);
+                }
+              }}
+              placeholder={placeholder}
+              disabled={disabled || isSending}
+              rows={1}
+              className="min-h-[40px] max-h-[100px] flex-1 resize-none border-0 bg-transparent px-4 py-2.5 text-xs focus-visible:ring-0"
+            />
+          </div>
           <Button
             type="submit"
             size="icon"
             disabled={disabled || isSending || !message.trim()}
-            className="h-10 w-10 shrink-0 rounded-xl"
+            className="h-10 w-10 shrink-0 rounded-2xl shadow-lg"
           >
             {isSending ? (
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
             ) : (
-              <SendHorizonal className="h-5 w-5" />
+              <SendHorizonal className="h-4 w-4" />
             )}
-            <span className="sr-only">Enviar mensaje</span>
           </Button>
         </form>
-
-        <p className="text-center text-[10px] uppercase tracking-widest font-bold text-muted-foreground/40">
-          Inteligencia Artificial Dungeon v2.0
-        </p>
       </div>
     </div>
   );
