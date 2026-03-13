@@ -11,9 +11,9 @@ type ProductAssistantPanelProps = {
 
 const panelVariants = {
   default:
-    "flex min-h-[560px] flex-col overflow-hidden rounded-3xl border border-border bg-card text-card-foreground",
+    "flex min-h-[500px] flex-col overflow-hidden rounded-3xl border border-border bg-card text-card-foreground shadow-sm",
   "product-premium":
-    "flex min-h-[620px] flex-col overflow-hidden rounded-[28px] border border-[#E6ECE6] bg-white text-[#1C241F]",
+    "flex min-h-[580px] flex-col overflow-hidden rounded-[32px] border border-primary/10 bg-white text-foreground shadow-xl shadow-primary/5",
 } as const;
 
 export function ProductAssistantPanel({

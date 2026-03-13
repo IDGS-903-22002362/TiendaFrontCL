@@ -24,30 +24,28 @@ export function AssistantHeader({
     return (
       <header
         className={cn(
-          "border-b border-[#E6ECE6] bg-[#FBFCFB] px-5 py-5 sm:px-6 sm:py-6",
+          "border-b border-muted bg-muted/30 px-6 py-6",
           className,
         )}
       >
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              {icon ? (
-                <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#E6ECE6] bg-white text-[#0B7A43]">
-                  {icon}
-                </span>
-              ) : null}
-              <div>
-                <h2 className="font-headline text-[1.7rem] font-semibold tracking-[-0.03em] text-[#1C241F]">
-                  {title}
-                </h2>
-                <p className="mt-1 max-w-2xl text-sm leading-6 text-[#5F6B63]">
-                  {description}
-                </p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            {icon ? (
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
+                {icon}
               </div>
+            ) : null}
+            <div className="space-y-0.5">
+              <h2 className="font-headline text-2xl font-bold tracking-tight text-foreground">
+                {title}
+              </h2>
+              <p className="text-sm text-muted-foreground line-clamp-1">
+                {description}
+              </p>
             </div>
           </div>
           {actions ? (
-            <div className="flex flex-wrap gap-2.5 lg:max-w-[18rem] lg:justify-end">
+            <div className="flex items-center gap-2">
               {actions}
             </div>
           ) : null}
@@ -57,14 +55,14 @@ export function AssistantHeader({
   }
 
   return (
-    <header className={cn("border-b px-6 py-5", className)}>
+    <header className={cn("border-b px-6 py-5 bg-card", className)}>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            {icon}
+        <div className="flex items-center gap-3">
+          {icon && <div className="text-primary">{icon}</div>}
+          <div>
             <h2 className="text-xl font-semibold">{title}</h2>
+            <p className="text-sm text-muted-foreground">{description}</p>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         </div>
         {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
       </div>

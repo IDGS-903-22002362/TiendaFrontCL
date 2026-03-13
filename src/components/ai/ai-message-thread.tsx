@@ -2,8 +2,7 @@
 "use client";
 
 import { Fragment } from "react";
-import { ChevronDown, Loader2, Sparkles, User } from "lucide-react";
-import { Logo } from "@/components/icons";
+import { ChevronDown, Loader2, Sparkles, User, Bot } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -162,7 +161,7 @@ function renderInlineContent(text: string) {
   return tokenizeInlineText(text).map((token, index) => {
     if (token.type === "bold") {
       return (
-        <strong key={`${token.value}-${index}`} className="font-semibold text-current">
+        <strong key={`${token.value}-${index}`} className="font-bold text-foreground">
           {token.value}
         </strong>
       );
@@ -175,7 +174,7 @@ function renderInlineContent(text: string) {
           href={token.href}
           target="_blank"
           rel="noreferrer"
-          className="font-medium text-[#0B7A43] underline decoration-[#0B7A43]/30 underline-offset-4 transition hover:text-[#096738] hover:decoration-[#096738]"
+          className="font-medium text-primary hover:underline underline-offset-4 transition-all"
         >
           {token.value}
         </a>
@@ -192,12 +191,11 @@ function renderMessageContent(content: string) {
       return (
         <ul
           key={`list-${blockIndex}`}
-          className="space-y-2.5 pl-0 text-[15px] leading-7 text-current"
+          className="space-y-2 pl-4 list-disc text-sm sm:text-[15px]"
         >
           {block.items.map((item, itemIndex) => (
-            <li key={`item-${itemIndex}`} className="flex gap-3">
-              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#0B7A43]/55" />
-              <span>{renderInlineContent(item)}</span>
+            <li key={`item-${itemIndex}`} className="leading-relaxed">
+              {renderInlineContent(item)}
             </li>
           ))}
         </ul>
@@ -207,7 +205,7 @@ function renderMessageContent(content: string) {
     return (
       <p
         key={`paragraph-${blockIndex}`}
-        className="text-[15px] leading-7 tracking-[-0.01em] text-current"
+        className="text-sm sm:text-[15px] leading-relaxed tracking-tight"
       >
         {renderInlineContent(block.text)}
       </p>
@@ -217,7 +215,6 @@ function renderMessageContent(content: string) {
 
 function renderImageAttachments(
   attachments: AiAttachment[] | undefined,
-  variant: "default" | "product-premium",
 ) {
   const imageAttachments = (attachments ?? []).filter(
     (attachment) => attachment.url && attachment.mimeType.startsWith("image/"),
@@ -228,65 +225,31 @@ function renderImageAttachments(
   }
 
   return (
-    <div className="mt-4 grid gap-3">
+    <div className="mt-3 grid gap-2">
       {imageAttachments.map((attachment) => (
         <a
           key={attachment.assetId}
           href={attachment.url}
           target="_blank"
           rel="noreferrer"
-          className={cn(
-            "group block overflow-hidden rounded-2xl border transition",
-            variant === "product-premium"
-              ? "border-[#E6ECE6] bg-white"
-              : "border-border bg-background",
-          )}
+          className="group block overflow-hidden rounded-xl border border-border bg-muted/50 transition-all hover:border-primary/30"
         >
-          <div className="aspect-[4/3] overflow-hidden bg-[#F6F8F6]">
+          <div className="aspect-video overflow-hidden">
             <img
               src={attachment.url}
-              alt={
-                attachment.kind === "user_upload"
-                  ? "Imagen enviada por el usuario"
-                  : "Resultado generado por AI"
-              }
-              className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.01]"
+              alt="Adjunto"
+              className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
             />
           </div>
-          <div className="flex items-center justify-between px-4 py-3 text-sm">
-            <span className="font-medium text-current">
-              {attachment.kind === "user_upload" ? "Imagen enviada" : "Vista generada"}
-            </span>
-            <span className="text-[#5F6B63]">Abrir imagen</span>
+          <div className="px-3 py-2 text-xs font-medium text-muted-foreground flex items-center justify-between">
+            <span>{attachment.kind === "user_upload" ? "Tu imagen" : "Generado por IA"}</span>
+            <span className="text-primary group-hover:underline">Ver completo</span>
           </div>
         </a>
       ))}
     </div>
   );
 }
-
-const premiumStyles = {
-  empty: "rounded-3xl border border-dashed border-[#D8E2DA] bg-[#F7FAF7] px-5 py-5 text-[#5F6B63]",
-  assistantAvatar:
-    "h-9 w-9 rounded-2xl border border-[#E6ECE6] bg-white text-[#0B7A43]",
-  userAvatar: "h-9 w-9 rounded-2xl bg-[#EEF3EE] text-[#5F6B63]",
-  assistantBubble:
-    "rounded-[24px] border border-[#E6ECE6] bg-white px-5 py-4 text-[#1C241F]",
-  userBubble:
-    "rounded-[24px] bg-[#1C241F] px-5 py-4 text-white shadow-[0_8px_20px_rgba(28,36,31,0.08)]",
-  loadingBubble:
-    "rounded-[24px] border border-[#E6ECE6] bg-[#F7FAF7] px-4 py-3 text-[#5F6B63]",
-} as const;
-
-const defaultStyles = {
-  empty: "rounded-2xl border border-dashed bg-muted/30 p-5 text-sm",
-  assistantAvatar: "h-9 w-9 rounded-full bg-primary/10 text-primary",
-  userAvatar: "h-9 w-9 rounded-full bg-muted text-foreground",
-  assistantBubble: "rounded-2xl bg-secondary px-4 py-3 text-foreground shadow-sm",
-  userBubble:
-    "rounded-2xl bg-primary px-4 py-3 text-primary-foreground shadow-sm",
-  loadingBubble: "rounded-2xl bg-secondary px-4 py-3 text-sm text-foreground",
-} as const;
 
 export function AiMessageThread({
   messages,
@@ -299,143 +262,104 @@ export function AiMessageThread({
   variant = "default",
   toolCallDisplay = "chips",
 }: AiMessageThreadProps) {
-  const styles = variant === "product-premium" ? premiumStyles : defaultStyles;
-
   return (
-    <ScrollArea className={cn("h-full min-h-0", className)}>
-      <div className={cn("space-y-4", variant === "product-premium" ? "pr-4" : "pr-4")}>
+    <ScrollArea className={cn("h-full", className)}>
+      <div className="flex flex-col gap-6 p-6">
         {messages.length === 0 && !isLoading ? (
-          <div className={styles.empty}>
-            <div className="mb-2 flex items-center gap-2 font-medium text-[#1C241F]">
-              <Sparkles className="h-4 w-4 text-[#0B7A43]" />
-              {emptyTitle}
+          <div className="flex flex-col items-center justify-center py-12 text-center space-y-4 rounded-3xl border border-dashed border-muted bg-muted/5">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Sparkles className="h-8 w-8" />
             </div>
-            <p className={variant === "product-premium" ? "text-sm leading-6" : "text-muted-foreground"}>
-              {emptyDescription}
-            </p>
+            <div className="space-y-1 px-6">
+              <h3 className="font-headline text-xl font-bold">{emptyTitle}</h3>
+              <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+                {emptyDescription}
+              </p>
+            </div>
           </div>
         ) : null}
 
         {messages.map((message) => {
           const isUser = message.role === "user";
-          const isAssistant = !isUser;
 
           return (
             <div
               key={message.id}
-              className={cn("flex items-end gap-3", isUser && "justify-end")}
+              className={cn(
+                "flex w-full items-start gap-3",
+                isUser ? "flex-row-reverse" : "flex-row"
+              )}
             >
-              {isAssistant ? (
-                <div
-                  className={cn(
-                    "flex shrink-0 items-center justify-center",
-                    styles.assistantAvatar,
-                  )}
-                >
-                  <Logo className="h-5 w-auto" />
-                </div>
-              ) : null}
-
-              <div
-                className={cn(
-                  "max-w-[min(42rem,85%)]",
-                  isUser ? "order-1" : "order-none",
-                )}
-              >
-                <div
-                  className={cn(
-                    "space-y-3",
-                    isUser ? styles.userBubble : styles.assistantBubble,
-                  )}
-                >
-                  <div className="space-y-3">{renderMessageContent(message.content)}</div>
-                  {renderImageAttachments(message.attachments, variant)}
-                  {message.model ? (
-                    <p
-                      className={cn(
-                        "text-[11px]",
-                        isUser ? "text-white/65" : "text-[#5F6B63]",
-                      )}
-                    >
-                      {message.model}
-                    </p>
-                  ) : null}
-                </div>
+              <div className={cn(
+                "flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-lg shadow-sm",
+                isUser ? "bg-muted text-muted-foreground" : "bg-primary text-primary-foreground"
+              )}>
+                {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
               </div>
 
-              {isUser ? (
-                <div
-                  className={cn(
-                    "order-2 flex shrink-0 items-center justify-center",
-                    styles.userAvatar,
-                  )}
-                >
-                  <User className="h-4 w-4" />
+              <div className={cn(
+                "flex flex-col gap-2 max-w-[85%]",
+                isUser ? "items-end" : "items-start"
+              )}>
+                <div className={cn(
+                  "rounded-2xl px-4 py-3 shadow-sm",
+                  isUser 
+                    ? "bg-primary text-primary-foreground rounded-tr-none" 
+                    : "bg-muted/50 border border-border text-foreground rounded-tl-none"
+                )}>
+                  <div className="space-y-3">{renderMessageContent(message.content)}</div>
+                  {renderImageAttachments(message.attachments)}
                 </div>
-              ) : null}
+                
+                {message.model && (
+                  <span className="text-[10px] text-muted-foreground px-1 uppercase tracking-widest font-semibold opacity-50">
+                    {message.model}
+                  </span>
+                )}
+              </div>
             </div>
           );
         })}
 
         {streamStatus ? (
-          <div className="flex items-end gap-3">
-            <div
-              className={cn(
-                "flex shrink-0 items-center justify-center",
-                styles.assistantAvatar,
-              )}
-            >
-              <Logo className="h-5 w-auto" />
+          <div className="flex items-start gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground animate-pulse">
+              <Bot className="h-4 w-4" />
             </div>
-            <div className={cn("flex items-center gap-2.5", styles.loadingBubble)}>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-sm">
-                {streamStatus === "processing"
-                  ? "Procesando tu mensaje..."
-                  : streamStatus}
+            <div className="rounded-2xl rounded-tl-none bg-muted/50 border border-border px-4 py-3 text-sm flex items-center gap-3">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span className="text-muted-foreground italic">
+                {streamStatus === "processing" ? "Generando respuesta..." : streamStatus}
               </span>
             </div>
           </div>
         ) : null}
 
-        {toolCalls.length > 0 && toolCallDisplay === "chips" ? (
-          <div className="flex flex-wrap gap-2 pt-2">
-            {toolCalls.slice(-4).map((toolCall) => (
-              <span
-                key={toolCall.id}
-                className="rounded-full border border-[#E6ECE6] bg-[#F6F8F6] px-3 py-1 text-xs text-[#5F6B63]"
-              >
-                {toolCall.toolName}: {toolCall.status}
-              </span>
-            ))}
-          </div>
-        ) : null}
-
-        {toolCalls.length > 0 && toolCallDisplay === "collapsible" ? (
-          <Collapsible className="rounded-2xl border border-[#E6ECE6] bg-[#FBFCFB]">
-            <CollapsibleTrigger className="group flex w-full items-center justify-between px-4 py-3 text-left">
-              <div>
-                <p className="text-sm font-medium text-[#1C241F]">Detalles técnicos</p>
-                <p className="text-xs text-[#5F6B63]">
-                  {toolCalls.length} acciones ejecutadas por el agente
+        {toolCalls.length > 0 && toolCallDisplay === "collapsible" && (
+          <Collapsible className="mt-4 rounded-xl border border-muted bg-muted/5 overflow-hidden transition-all hover:border-primary/20">
+            <CollapsibleTrigger className="group flex w-full items-center justify-between px-4 py-3 text-left hover:bg-muted/10">
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  Procesamiento Inteligente
                 </p>
               </div>
-              <ChevronDown className="h-4 w-4 text-[#5F6B63] transition group-data-[state=open]:rotate-180" />
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
             </CollapsibleTrigger>
-            <CollapsibleContent className="border-t border-[#E6ECE6] px-4 py-4">
+            <CollapsibleContent className="border-t border-muted/50 px-4 py-3 bg-muted/10">
               <div className="flex flex-wrap gap-2">
-                {toolCalls.slice(-6).map((toolCall) => (
+                {toolCalls.map((toolCall) => (
                   <span
                     key={toolCall.id}
-                    className="rounded-full border border-[#E1E8E1] bg-white px-3 py-1 text-xs text-[#5F6B63]"
+                    className="inline-flex items-center rounded-lg bg-background border border-border px-2.5 py-1 text-[10px] font-mono text-muted-foreground"
                   >
-                    {toolCall.toolName}: {toolCall.status}
+                    {toolCall.toolName}
                   </span>
                 ))}
               </div>
             </CollapsibleContent>
           </Collapsible>
-        ) : null}
+        )}
       </div>
     </ScrollArea>
   );
