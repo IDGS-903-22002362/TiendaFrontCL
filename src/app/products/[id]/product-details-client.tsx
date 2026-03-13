@@ -204,6 +204,28 @@ export function ProductDetailsClient({ product }: { product: Product }) {
             </div>
           )}
 
+          <div className="hidden rounded-3xl border border-border bg-card p-4 md:block">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Listo para comprar
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Selecciona tu talla antes de continuar con la compra.
+                </p>
+              </div>
+              <Button
+                className="h-11 rounded-2xl px-6"
+                size="lg"
+                onClick={handleAddToCart}
+                disabled={!canAddToCart}
+              >
+                <ShoppingCart className="mr-2 h-5 w-5" />
+                {canAddToCart ? "Agregar al Carrito" : "Agotado"}
+              </Button>
+            </div>
+          </div>
+
           <ProductQnA product={product} />
         </div>
       </div>
@@ -211,18 +233,6 @@ export function ProductDetailsClient({ product }: { product: Product }) {
       <div className="fixed bottom-0 left-0 z-30 w-full border-t bg-background/90 p-4 backdrop-blur-sm md:hidden">
         <Button
           className="w-full"
-          size="lg"
-          onClick={handleAddToCart}
-          disabled={!canAddToCart}
-        >
-          <ShoppingCart className="mr-2 h-5 w-5" />
-          {canAddToCart ? "Agregar al Carrito" : "Agotado"}
-        </Button>
-      </div>
-
-      <div className="hidden md:block md:fixed md:bottom-8 md:right-8 md:z-30">
-        <Button
-          className="w-full shadow-lg"
           size="lg"
           onClick={handleAddToCart}
           disabled={!canAddToCart}
