@@ -18,8 +18,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { PriceTag } from "@/components/product/price-tag";
 import { Separator } from "@/components/ui/separator";
-import { CheckCircle, ShoppingCart } from "lucide-react";
+import { CheckCircle, ShoppingCart, Sparkles } from "lucide-react";
 import { ProductQnA } from "./product-qna";
+import { cn } from "@/lib/utils";
 
 export function ProductDetailsClient({ product }: { product: Product }) {
   const productTallaIds = product.tallaIds ?? [];
@@ -204,42 +205,48 @@ export function ProductDetailsClient({ product }: { product: Product }) {
             </div>
           )}
 
-          <div className="hidden rounded-3xl border border-border bg-card p-4 md:block">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  Listo para comprar
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Selecciona tu talla antes de continuar con la compra.
-                </p>
-              </div>
-              <Button
-                className="h-11 rounded-2xl px-6"
-                size="lg"
-                onClick={handleAddToCart}
-                disabled={!canAddToCart}
-              >
-                <ShoppingCart className="mr-2 h-5 w-5" />
-                {canAddToCart ? "Agregar al Carrito" : "Agotado"}
-              </Button>
-            </div>
-          </div>
-
           <ProductQnA product={product} />
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 z-30 w-full border-t bg-background/90 p-4 backdrop-blur-sm md:hidden">
-        <Button
-          className="w-full"
-          size="lg"
-          onClick={handleAddToCart}
-          disabled={!canAddToCart}
-        >
-          <ShoppingCart className="mr-2 h-5 w-5" />
-          {canAddToCart ? "Agregar al Carrito" : "Agotado"}
-        </Button>
+      {/* Floating Action Bar - El botón que te "persigue" */}
+      <div className="fixed bottom-6 left-1/2 z-40 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 transition-all animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className={cn(
+          "flex items-center justify-between gap-4 rounded-[28px] border p-2 shadow-2xl backdrop-blur-xl transition-all",
+          "bg-white/80 border-primary/10 dark:bg-black/80 dark:border-white/10"
+        )}>
+          <div className="hidden pl-6 md:flex flex-col">
+             <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Precio final</span>
+             <span className="font-headline text-xl font-bold text-primary">
+               ${(product.salePrice || product.price).toFixed(2)}
+             </span>
+          </div>
+          <Button
+            className={cn(
+              "group h-14 flex-1 rounded-[22px] px-8 text-base font-bold transition-all hover:scale-[1.02] active:scale-95",
+              canAddToCart ? "shadow-lg shadow-primary/20" : "opacity-50"
+            )}
+            size="lg"
+            onClick={handleAddToCart}
+            disabled={!canAddToCart}
+          >
+            {canAddToCart ? (
+              <>
+                <ShoppingCart className="mr-2 h-5 w-5 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+                Agregar al Carrito
+              </>
+            ) : (
+              "Producto Agotado"
+            )}
+          </Button>
+          {canAddToCart && (
+            <div className="hidden lg:flex pr-4">
+              <div className="h-10 w-10 rounded-full bg-primary/5 flex items-center justify-center text-primary">
+                <Sparkles className="h-5 w-5 animate-pulse" />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </>
   );
