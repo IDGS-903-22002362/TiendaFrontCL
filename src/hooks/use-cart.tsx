@@ -34,6 +34,8 @@ type CartContextType = {
   isLoading: boolean;
   totalItems: number;
   subtotal: number;
+  isDrawerOpen: boolean;
+  setIsDrawerOpen: (open: boolean) => void;
 };
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -45,6 +47,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   const [sessionId, setSessionId] = useState("");
   const [mergedToken, setMergedToken] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  
   const { toast } = useToast();
   const { token, isAuthenticated } = useAuth();
   const authToken = token && token !== "cookie-session" ? token : undefined;
@@ -117,6 +121,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
       );
 
       setItems(cart.items);
+      setIsDrawerOpen(true); // Abrir el carrito dinámicamente al añadir
+      
       toast({
         title: "¡Agregado al carrito!",
         description: `${item.name} ha sido añadido a tu carrito.`,
@@ -220,6 +226,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         isLoading,
         totalItems,
         subtotal,
+        isDrawerOpen,
+        setIsDrawerOpen,
       }}
     >
       {children}

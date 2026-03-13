@@ -3,15 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Menu, Search, ShoppingCart, User } from "lucide-react";
-import { useCart } from "@/hooks/use-cart";
+import { Menu, Search, User } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { fetchProducts } from "@/lib/api/storefront";
 import type { Product } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Logo } from "@/components/icons";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { CartDrawer } from "@/components/cart/cart-drawer";
 
 const baseNavLinks = [
   { href: "/products", label: "Todos los Productos" },
@@ -39,7 +38,6 @@ const baseNavLinks = [
 
 export function Header() {
   const router = useRouter();
-  const { totalItems } = useCart();
   const { role, isAuthenticated, clearSession, user } = useAuth();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -140,9 +138,7 @@ export function Header() {
                   </span>
                 </Link>
                 <nav className="flex flex-col gap-4">
-                  {/* For mobile, we leave Mis Pedidos in the sidebar for easy access if they are authenticated, or we can just use the base links */}
                   {navLinks.map((link) => {
-                    // Hide Mis Pedidos from mobile menu if they are going to use the dropdown, but it's okay to leave it for now
                     return (
                       <Link
                         key={link.href}
@@ -275,22 +271,7 @@ export function Header() {
             </DialogContent>
           </Dialog>
 
-          <Button asChild variant="ghost" size="icon">
-            <Link href="/cart">
-              <div className="relative">
-                <ShoppingCart className="h-5 w-5" />
-                {totalItems > 0 && (
-                  <Badge
-                    variant="default"
-                    className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary p-0 text-xs text-primary-foreground"
-                  >
-                    {totalItems}
-                  </Badge>
-                )}
-              </div>
-              <span className="sr-only">Carrito de compras</span>
-            </Link>
-          </Button>
+          <CartDrawer />
         </div>
       </div>
     </header>
