@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  Bot,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetHeader } from "@/components/ui/sheet";
@@ -26,6 +27,7 @@ const adminNavLinks = [
   { href: "/admin/lineas", label: "Líneas", icon: Tags },
   { href: "/admin/tallas", label: "Tallas", icon: Ruler },
   { href: "/admin/proveedores", label: "Proveedores", icon: Truck },
+  { href: "/admin/ai", label: "AI", icon: Bot, adminOnly: true },
 ];
 
 export default function AdminLayout({
@@ -56,7 +58,9 @@ export default function AdminLayout({
 
   const NavLinks = () => (
     <>
-      {adminNavLinks.map((link) => {
+      {adminNavLinks
+        .filter((link) => !link.adminOnly || role === "ADMIN")
+        .map((link) => {
         const Icon = link.icon;
         const isActive = pathname === link.href || (pathname.startsWith(link.href) && link.href !== "/admin");
         

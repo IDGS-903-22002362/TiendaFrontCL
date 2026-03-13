@@ -205,6 +205,9 @@ export function Header() {
                   <Link href="/profile" className="cursor-pointer w-full">Mi Perfil</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
+                  <Link href="/ai" className="cursor-pointer w-full">Asistente AI</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
                   <Link href="/order-history" className="cursor-pointer w-full">Mis Pedidos</Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />

@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const sections = [
@@ -32,9 +35,20 @@ const sections = [
     title: "Proveedores",
     description: "CRUD de proveedores para operación administrativa.",
   },
+  {
+    href: "/admin/ai",
+    title: "AI",
+    description: "Métricas y jobs recientes del módulo AI.",
+    adminOnly: true,
+  },
 ];
 
 export default function AdminHomePage() {
+  const { role } = useAuth();
+  const visibleSections = sections.filter(
+    (section) => !section.adminOnly || role === "ADMIN",
+  );
+
   return (
     <div className="container mx-auto space-y-6 px-4 py-8">
       <header>
@@ -55,7 +69,7 @@ export default function AdminHomePage() {
       </Card>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {sections.map((section) => (
+        {visibleSections.map((section) => (
           <Link key={section.href} href={section.href} className="h-full">
             <Card className="h-full transition-colors hover:border-primary">
               <CardHeader>
