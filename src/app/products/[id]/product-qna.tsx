@@ -24,14 +24,21 @@ import { ProductAssistantPanel } from "@/components/ai/product-assistant-panel";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
+import type { AiMessage } from "@/lib/ai/types";
 
 export function ProductQnA({ product }: { product: Product }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("chat");
+  const [tryOnMessages, setTryOnMessages] = useState<AiMessage[]>([]);
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
-  
+
   const conversation = useAiConversation({
     defaultTitle: `Consulta sobre ${product.name}`,
     storageKey: isAuthenticated
@@ -60,11 +67,22 @@ export function ProductQnA({ product }: { product: Product }) {
     ? `/ai?sessionId=${encodeURIComponent(conversation.currentSessionId)}`
     : "/ai";
 
+  const chatMessages = [...conversation.messages, ...tryOnMessages].sort(
+    (a, b) => {
+      const left = a.createdAt ? Date.parse(a.createdAt) : 0;
+      const right = b.createdAt ? Date.parse(b.createdAt) : 0;
+      return left - right;
+    },
+  );
+
   return (
-    <div className="fixed bottom-24 right-6 z-50 md:bottom-8 md:right-8 flex flex-col items-end gap-3">
+    <div className="fixed bottom-4 left-2 right-2 z-50 flex flex-col items-stretch gap-3 sm:left-auto sm:right-6 sm:items-end md:bottom-8 md:right-8">
       <Collapsible open={isOpen} onOpenChange={setIsOpen}>
         <CollapsibleContent className="mb-3 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 origin-bottom-right">
-          <ProductAssistantPanel variant="product-premium" className="max-h-[min(580px,80vh)] w-[360px] md:w-[400px]">
+          <ProductAssistantPanel
+            variant="product-premium"
+            className="h-[min(760px,calc(100dvh-5.5rem))] max-h-[calc(100dvh-5.5rem)] w-full sm:w-[360px] md:w-[400px]"
+          >
             <AssistantHeader
               variant="product-premium"
               title="Dungeon AI"
@@ -72,18 +90,27 @@ export function ProductQnA({ product }: { product: Product }) {
               icon={<Bot className="h-4 w-4" />}
               onClose={() => setIsOpen(false)}
               actions={
-                <div className="flex gap-0.5">
+                <div className="flex gap-1.5">
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 rounded-full"
-                    onClick={() => void conversation.startNewSession(`Consulta: ${product.name}`)}
+                    className="h-9 w-9 rounded-full"
+                    onClick={() =>
+                      void conversation.startNewSession(
+                        `Consulta: ${product.name}`,
+                      )
+                    }
                   >
-                    <MessageSquarePlus className="h-3.5 w-3.5" />
+                    <MessageSquarePlus className="h-4 w-4" />
                   </Button>
-                  <Button asChild variant="ghost" size="icon" className="h-7 w-7 rounded-full">
+                  <Button
+                    asChild
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 rounded-full"
+                  >
                     <Link href={aiWorkspaceHref}>
-                      <History className="h-3.5 w-3.5" />
+                      <History className="h-4 w-4" />
                     </Link>
                   </Button>
                 </div>
@@ -97,17 +124,27 @@ export function ProductQnA({ product }: { product: Product }) {
             ) : !isAuthenticated ? (
               <div className="h-[300px] flex flex-col items-center justify-center p-8 text-center space-y-4">
                 <LockKeyhole className="h-8 w-8 text-muted-foreground opacity-40" />
-                <p className="text-xs font-medium text-muted-foreground">Inicia sesión para usar la IA</p>
+                <p className="text-xs font-medium text-muted-foreground">
+                  Inicia sesión para usar la IA
+                </p>
                 <Button asChild size="sm" className="rounded-xl px-6">
-                  <Link href={`/login?redirect=${encodeURIComponent(`/products/${product.id}`)}`}>Entrar</Link>
+                  <Link
+                    href={`/login?redirect=${encodeURIComponent(`/products/${product.id}`)}`}
+                  >
+                    Entrar
+                  </Link>
                 </Button>
               </div>
             ) : (
-              <Tabs defaultValue="chat" className="flex flex-1 flex-col overflow-hidden">
+              <Tabs
+                value={activeTab}
+                onValueChange={setActiveTab}
+                className="flex min-h-0 flex-1 flex-col overflow-hidden"
+              >
                 <div className="bg-muted/30 px-4 py-2">
                   <AssistantTabs
                     variant="default"
-                    className="h-9 w-full max-w-none"
+                    className="h-10 w-full max-w-none"
                     tabs={[
                       { value: "chat", label: "Consulta" },
                       { value: "tryon", label: "Try-On" },
@@ -115,7 +152,10 @@ export function ProductQnA({ product }: { product: Product }) {
                   />
                 </div>
 
-                <TabsContent value="chat" className="m-0 flex flex-1 flex-col overflow-hidden bg-background">
+                <TabsContent
+                  value="chat"
+                  className="m-0 overflow-hidden bg-background data-[state=active]:flex data-[state=active]:min-h-0 data-[state=active]:flex-1 data-[state=active]:flex-col data-[state=inactive]:hidden"
+                >
                   {conversation.syncState === "degraded_missing_index" && (
                     <div className="px-4 pt-2">
                       <Alert className="py-1.5 rounded-xl border-amber-200 bg-amber-50">
@@ -127,11 +167,11 @@ export function ProductQnA({ product }: { product: Product }) {
                   )}
 
                   <AssistantMessages
-                    messages={conversation.messages}
+                    messages={chatMessages}
                     toolCalls={conversation.toolCalls}
                     isLoading={conversation.isLoadingSession}
                     streamStatus={conversation.streamStatus}
-                    className="flex-1"
+                    className="flex-1 min-h-0"
                     emptyTitle="¡Hola!"
                     emptyDescription={`Pregúntame sobre este producto.`}
                     variant="product-premium"
@@ -140,7 +180,7 @@ export function ProductQnA({ product }: { product: Product }) {
                   <AssistantComposer
                     isSending={conversation.isSending}
                     disabled={conversation.isLoadingSession}
-                    hasMessages={conversation.messages.length > 0}
+                    hasMessages={chatMessages.length > 0}
                     placeholder="Escribe tu duda..."
                     quickPrompts={quickPrompts}
                     onSubmit={handleSendMessage}
@@ -148,11 +188,27 @@ export function ProductQnA({ product }: { product: Product }) {
                   />
                 </TabsContent>
 
-                <TabsContent value="tryon" className="m-0 flex flex-1 flex-col overflow-hidden bg-background">
+                <TabsContent
+                  value="tryon"
+                  className="m-0 overflow-hidden bg-background data-[state=active]:flex data-[state=active]:min-h-0 data-[state=active]:flex-1 data-[state=active]:flex-col data-[state=inactive]:hidden"
+                >
                   <AiTryOnPanel
                     sessionId={conversation.currentSessionId || undefined}
                     ensureSession={conversation.ensureSession}
                     defaultProduct={product}
+                    onResultReady={({ message }) => {
+                      setTryOnMessages((currentMessages) => {
+                        const exists = currentMessages.some(
+                          (entry) => entry.id === message.id,
+                        );
+                        if (exists) {
+                          return currentMessages;
+                        }
+
+                        return [...currentMessages, message];
+                      });
+                      setActiveTab("chat");
+                    }}
                     variant="product-premium"
                   />
                 </TabsContent>
@@ -160,16 +216,22 @@ export function ProductQnA({ product }: { product: Product }) {
             )}
           </ProductAssistantPanel>
         </CollapsibleContent>
-        
+
         <CollapsibleTrigger asChild>
-          <Button 
-            size="lg" 
+          <Button
+            size="lg"
             className={cn(
               "h-12 w-12 rounded-full shadow-xl transition-all duration-300",
-              isOpen ? "rotate-180 bg-muted text-muted-foreground" : "bg-primary text-white"
+              isOpen
+                ? "rotate-180 bg-muted text-muted-foreground"
+                : "bg-primary text-white",
             )}
           >
-            {isOpen ? <ChevronDown className="h-5 w-5" /> : <MessageCircle className="h-5 w-5" />}
+            {isOpen ? (
+              <ChevronDown className="h-5 w-5" />
+            ) : (
+              <MessageCircle className="h-5 w-5" />
+            )}
           </Button>
         </CollapsibleTrigger>
       </Collapsible>

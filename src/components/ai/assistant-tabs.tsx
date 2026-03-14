@@ -19,17 +19,21 @@ type AssistantTabsProps = {
 export function AssistantTabs({
   tabs,
   className,
-  variant = "default",
   rightSlot,
 }: AssistantTabsProps) {
+  const gridColumns = `repeat(${Math.max(tabs.length, 1)}, minmax(0, 1fr))`;
+
   return (
     <div className={cn("flex items-center justify-between gap-2", className)}>
-      <TabsList className="grid w-full grid-cols-2 h-8 p-1 rounded-lg bg-muted/50">
+      <TabsList
+        className="grid h-9 w-full rounded-lg bg-muted/50 p-1"
+        style={{ gridTemplateColumns: gridColumns }}
+      >
         {tabs.map((tab) => (
-          <TabsTrigger 
-            key={tab.value} 
+          <TabsTrigger
+            key={tab.value}
             value={tab.value}
-            className="text-[11px] font-bold rounded-md data-[state=active]:shadow-sm"
+            className="rounded-md px-2 text-xs font-bold data-[state=active]:shadow-sm"
           >
             {tab.label}
           </TabsTrigger>

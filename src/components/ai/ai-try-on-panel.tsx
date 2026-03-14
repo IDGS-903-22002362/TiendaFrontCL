@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { Download, Loader2, Sparkles, UploadCloud } from "lucide-react";
+import { Loader2, Sparkles, UploadCloud } from "lucide-react";
 import {
   createTryOnJob,
   getTryOnDownloadLink,
@@ -32,6 +32,7 @@ type AiTryOnPanelProps = {
   onResultReady?: (payload: {
     imageUrl: string;
     job: TryOnJob;
+    message: AiMessage;
   }) => void | Promise<void>;
   variant?: "default" | "product-premium";
 };
@@ -77,7 +78,9 @@ export function AiTryOnPanel({
   onResultReady,
 }: AiTryOnPanelProps) {
   const { toast } = useToast();
-  const [selectedProductId, setSelectedProductId] = useState(defaultProduct?.id ?? "");
+  const [selectedProductId, setSelectedProductId] = useState(
+    defaultProduct?.id ?? "",
+  );
   const [productQuery, setProductQuery] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedFilePreview, setSelectedFilePreview] = useState("");
@@ -150,7 +153,11 @@ export function AiTryOnPanel({
 
     const activeSessionId = sessionId || (await ensureSession());
     if (!activeSessionId) {
-      toast({ variant: "destructive", title: "Error", description: "No hay sesión activa." });
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No hay sesión activa.",
+      });
       return;
     }
 
@@ -184,20 +191,34 @@ export function AiTryOnPanel({
       await onJobCompleted?.(completedJob);
 
       if (completedJob.status === "completed") {
-        const link = await getTryOnDownloadLink(completedJob.id).catch(() => null);
+        const link = await getTryOnDownloadLink(completedJob.id).catch(
+          () => null,
+        );
         const url = link?.url || completedJob.outputImageUrl || "";
-        
+
+        if (!url) {
+          throw new Error(
+            "Se generó el try-on, pero no se recibió la imagen final.",
+          );
+        }
+
+        const assistantMessage = buildLocalMessage({
+          id: `tryon_result_${completedJob.id}`,
+          sessionId: activeSessionId,
+          role: "assistant",
+          content: "¡Listo! Aquí tienes tu vista previa.",
+          imageUrl: url,
+        });
+
         setThreadMessages((currentMessages) => [
           ...currentMessages,
-          buildLocalMessage({
-            id: `tryon_result_${completedJob.id}`,
-            sessionId: activeSessionId,
-            role: "assistant",
-            content: `¡Listo! Aquí tienes tu vista previa.`,
-            imageUrl: url,
-          }),
+          assistantMessage,
         ]);
-        await onResultReady?.({ imageUrl: url, job: completedJob });
+        await onResultReady?.({
+          imageUrl: url,
+          job: completedJob,
+          message: assistantMessage,
+        });
       } else {
         throw new Error(completedJob.errorMessage || "Error al generar");
       }
@@ -221,22 +242,33 @@ export function AiTryOnPanel({
   const hasThread = threadMessages.length > 0 || isRunning;
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden h-full">
-      <ScrollArea className="flex-1">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+      <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col p-4 space-y-4">
           <div className="flex items-center gap-2">
             <Sparkles className="h-3.5 w-3.5 text-primary" />
-            <h3 className="text-xs font-bold uppercase tracking-tight">Probador Virtual</h3>
+            <h3 className="text-xs font-bold uppercase tracking-tight">
+              Probador Virtual
+            </h3>
           </div>
 
           {selectedProduct && !allowProductSelection && (
             <div className="flex items-center gap-3 rounded-xl border bg-background/50 p-2">
               <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-muted border">
-                <Image src={selectedProduct.images[0]} alt={selectedProduct.name} fill className="object-cover" />
+                <Image
+                  src={selectedProduct.images[0]}
+                  alt={selectedProduct.name}
+                  fill
+                  className="object-cover"
+                />
               </div>
               <div className="min-w-0">
-                <p className="truncate text-[11px] font-bold">{selectedProduct.name}</p>
-                <p className="text-[10px] text-muted-foreground uppercase">{selectedProduct.category}</p>
+                <p className="truncate text-[11px] font-bold">
+                  {selectedProduct.name}
+                </p>
+                <p className="text-[10px] text-muted-foreground uppercase">
+                  {selectedProduct.category}
+                </p>
               </div>
             </div>
           )}
@@ -257,7 +289,9 @@ export function AiTryOnPanel({
                     onClick={() => setSelectedProductId(p.id)}
                     className={cn(
                       "rounded-lg border p-2 text-left text-[10px] transition",
-                      p.id === selectedProductId ? "border-primary bg-primary/5 shadow-sm" : "bg-background hover:border-primary/30"
+                      p.id === selectedProductId
+                        ? "border-primary bg-primary/5 shadow-sm"
+                        : "bg-background hover:border-primary/30",
                     )}
                   >
                     <p className="truncate font-bold">{p.name}</p>
@@ -275,7 +309,7 @@ export function AiTryOnPanel({
                 streamStatus={isRunning ? "Generando tu estilo..." : ""}
                 emptyTitle=""
                 emptyDescription=""
-                className="max-h-[200px]"
+                className="h-[min(45vh,360px)]"
               />
             </div>
           ) : (
@@ -286,7 +320,8 @@ export function AiTryOnPanel({
               <div className="space-y-1">
                 <p className="text-xs font-bold">Sube tu foto</p>
                 <p className="text-[10px] max-w-[200px] leading-tight">
-                  Procesaremos tu imagen para mostrarte cómo te queda el producto.
+                  Procesaremos tu imagen para mostrarte cómo te queda el
+                  producto.
                 </p>
               </div>
             </div>
@@ -301,9 +336,9 @@ export function AiTryOnPanel({
               htmlFor="ai-tryon-file"
               className={cn(
                 "flex h-9 cursor-pointer items-center justify-center rounded-xl border border-dashed text-xs font-bold transition-all",
-                selectedFile 
-                  ? "border-primary/50 bg-primary/5 text-primary" 
-                  : "border-border bg-background hover:border-primary/30"
+                selectedFile
+                  ? "border-primary/50 bg-primary/5 text-primary"
+                  : "border-border bg-background hover:border-primary/30",
               )}
             >
               <UploadCloud className="mr-2 h-4 w-4" />
@@ -327,12 +362,15 @@ export function AiTryOnPanel({
           <label className="flex items-start gap-2.5 rounded-xl border bg-background/80 p-2.5 shadow-sm">
             <Checkbox
               checked={consentAccepted}
-              onCheckedChange={(checked) => setConsentAccepted(checked === true)}
+              onCheckedChange={(checked) =>
+                setConsentAccepted(checked === true)
+              }
               disabled={isRunning}
               className="mt-0.5"
             />
             <span className="text-[9px] leading-tight text-muted-foreground font-medium">
-              Acepto procesar mi imagen con IA. Se eliminará automáticamente después de generar la vista previa.
+              Acepto procesar mi imagen con IA. Se eliminará automáticamente
+              después de generar la vista previa.
             </span>
           </label>
 

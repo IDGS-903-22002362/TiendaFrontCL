@@ -4,7 +4,6 @@ import { useState } from "react";
 import { SendHorizonal, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 
 type QuickPrompt = {
   label: string;
@@ -28,7 +27,6 @@ export function AiChatComposer({
   quickPrompts = [],
   hasMessages = false,
   onSubmit,
-  variant = "default",
 }: AiChatComposerProps) {
   const [message, setMessage] = useState("");
 
@@ -43,10 +41,10 @@ export function AiChatComposer({
   }
 
   return (
-    <div className="border-t p-3 bg-muted/5">
-      <div className="space-y-3">
+    <div className="border-t bg-muted/5 p-2.5 sm:p-3">
+      <div className="space-y-2.5">
         {quickPrompts.length > 0 && !hasMessages ? (
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide no-scrollbar">
+          <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-hide no-scrollbar">
             {quickPrompts.map((quickPrompt) => (
               <button
                 key={quickPrompt.label}
@@ -82,14 +80,14 @@ export function AiChatComposer({
               placeholder={placeholder}
               disabled={disabled || isSending}
               rows={1}
-              className="min-h-[40px] max-h-[100px] flex-1 resize-none border-0 bg-transparent px-4 py-2.5 text-xs focus-visible:ring-0"
+              className="min-h-[38px] max-h-[96px] flex-1 resize-none border-0 bg-transparent px-3.5 py-2 text-xs focus-visible:ring-0"
             />
           </div>
           <Button
             type="submit"
             size="icon"
             disabled={disabled || isSending || !message.trim()}
-            className="h-10 w-10 shrink-0 rounded-2xl shadow-lg"
+            className="h-10 w-10 shrink-0 rounded-xl shadow-lg"
           >
             {isSending ? (
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />

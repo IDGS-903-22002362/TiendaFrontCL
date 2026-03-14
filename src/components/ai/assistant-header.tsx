@@ -21,17 +21,17 @@ export function AssistantHeader({
   actions,
   icon,
   className,
-  variant = "default",
   onClose,
 }: AssistantHeaderProps) {
   return (
     <header
       className={cn(
-        "border-b px-5 py-4 bg-muted/30 flex items-center justify-between",
+        "border-b bg-muted/30 px-4 py-3.5 sm:px-5 sm:py-4",
+        "flex items-center justify-between gap-2",
         className,
       )}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 flex-1 items-center gap-3 pr-2">
         {icon && (
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md">
             {icon}
@@ -46,12 +46,17 @@ export function AssistantHeader({
           </p>
         </div>
       </div>
-      
-      <div className="flex items-center gap-2">
+
+      <div className="flex shrink-0 items-center gap-1.5">
         {actions}
         {onClose && (
-          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={onClose}>
-            <X className="h-4 w-4" />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 rounded-full"
+            onClick={onClose}
+          >
+            <X className="h-4.5 w-4.5" />
           </Button>
         )}
       </div>
