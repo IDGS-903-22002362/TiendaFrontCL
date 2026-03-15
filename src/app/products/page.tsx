@@ -19,13 +19,17 @@ export default async function ProductsPage({
   ]);
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <header className="mb-8">
-        <h1 className="font-headline text-4xl font-bold tracking-tight">
+    <div className="container py-5 md:py-8">
+      <header className="mb-6 rounded-[26px] border border-border bg-card/90 p-5 shadow-[var(--shadow-card)] md:mb-10 md:rounded-[30px] md:p-6">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-secondary">
+          Catálogo
+        </p>
+        <h1 className="mt-2 font-headline text-3xl font-bold tracking-tight md:text-4xl">
           Todos los Productos
         </h1>
-        <p className="mt-2 text-lg text-muted-foreground">
-          Encuentra todo lo que necesitas para tu próxima aventura.
+        <p className="mt-3 max-w-2xl text-sm leading-6 text-text-secondary md:text-lg">
+          Selección oficial con superficies oscuras, filtros rápidos y una
+          navegación pensada para explorar por línea, talla y promociones.
         </p>
       </header>
       <Suspense fallback={<div>Cargando filtros...</div>}>

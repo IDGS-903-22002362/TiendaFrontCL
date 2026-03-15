@@ -13,7 +13,7 @@ const panelVariants = {
   default:
     "flex flex-col overflow-hidden rounded-3xl border border-border bg-card text-card-foreground shadow-xl",
   "product-premium":
-    "flex flex-col overflow-hidden rounded-[24px] border border-primary/10 bg-white/95 backdrop-blur-xl text-foreground shadow-2xl",
+    "flex flex-col overflow-hidden rounded-[24px] border border-primary/15 bg-card/95 backdrop-blur-xl text-foreground shadow-[var(--shadow-elevated)]",
 } as const;
 
 export function ProductAssistantPanel({

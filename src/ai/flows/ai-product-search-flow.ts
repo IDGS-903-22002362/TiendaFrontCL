@@ -67,7 +67,7 @@ const productSearchPrompt = ai.definePrompt({
   name: 'productSearchPrompt',
   input: {schema: AiProductSearchInputSchema},
   output: {schema: AiProductSearchOutputSchema},
-  prompt: `Eres un asistente inteligente para el buscador de una tienda e-commerce de La Dungeon.
+  prompt: `Eres un asistente inteligente para el buscador de la Tienda Oficial del Club León La Guarida del León.
 Tu tarea es analizar la consulta del usuario en lenguaje natural y extraer los parámetros de búsqueda relevantes en formato JSON.
 
 Aquí tienes los posibles atributos de los productos y sus valores:

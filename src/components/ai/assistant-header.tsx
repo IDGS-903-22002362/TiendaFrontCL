@@ -26,14 +26,14 @@ export function AssistantHeader({
   return (
     <header
       className={cn(
-        "border-b bg-muted/30 px-4 py-3.5 sm:px-5 sm:py-4",
+        "border-b border-border bg-background-deep/65 px-4 py-3.5 backdrop-blur-sm sm:px-5 sm:py-4",
         "flex items-center justify-between gap-2",
         className,
       )}
     >
       <div className="flex min-w-0 flex-1 items-center gap-3 pr-2">
         {icon && (
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary shadow-[var(--shadow-card)]">
             {icon}
           </div>
         )}
@@ -41,7 +41,7 @@ export function AssistantHeader({
           <h2 className="font-headline text-lg font-bold tracking-tight text-foreground truncate">
             {title}
           </h2>
-          <p className="text-[11px] text-muted-foreground truncate uppercase tracking-wider font-semibold opacity-70">
+          <p className="truncate text-[11px] font-semibold uppercase tracking-wider text-text-muted">
             {description}
           </p>
         </div>

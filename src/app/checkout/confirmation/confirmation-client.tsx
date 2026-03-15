@@ -54,18 +54,18 @@ export function ConfirmationClient() {
   }, [orderId, paymentId]);
 
   return (
-    <div className="container mx-auto flex min-h-[60vh] flex-col items-center justify-center px-4 py-8 text-center">
+    <div className="container flex min-h-[60vh] flex-col items-center justify-center py-8 text-center">
       <Card className="w-full max-w-lg">
         <CardHeader>
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-            <CheckCircle className="h-10 w-10 text-green-600" />
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-success/30 bg-success/15">
+            <CheckCircle className="h-10 w-10 text-success" />
           </div>
           <CardTitle className="pt-4 text-center font-headline text-3xl font-bold">
             ¡Gracias por tu compra!
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-muted-foreground">
+          <p className="text-text-secondary">
             Hemos recibido tu pedido y estamos validando el estado final del
             pago.
           </p>

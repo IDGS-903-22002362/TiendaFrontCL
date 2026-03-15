@@ -32,6 +32,7 @@ export type AiMessage = {
   userId: string;
   role: AiMessageRole;
   content: string;
+  displayContent?: string;
   model?: string;
   attachments?: AiAttachment[];
   toolCallIds?: string[];
@@ -140,6 +141,13 @@ export type SendAiMessageInput = {
   sessionId: string;
   message: string;
 };
+
+export type SendAiMessagePayload =
+  | string
+  | {
+      text: string;
+      displayText?: string;
+    };
 
 export type CreateTryOnJobInput = {
   sessionId: string;

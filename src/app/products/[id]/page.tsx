@@ -29,12 +29,15 @@ export default async function ProductPage({
     .slice(0, 8);
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container py-8">
       <ProductDetailsClient product={product} />
 
       {relatedProducts.length > 0 && (
-        <section className="mt-16 border-t pt-12">
-          <h2 className="mb-8 font-headline text-3xl font-bold tracking-tight">
+        <section className="mt-16 border-t border-border pt-12">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-secondary">
+            Más para ti
+          </p>
+          <h2 className="mb-8 mt-2 font-headline text-3xl font-bold tracking-tight">
             Productos Relacionados
           </h2>
           <Carousel

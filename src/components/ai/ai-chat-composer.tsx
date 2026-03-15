@@ -41,7 +41,7 @@ export function AiChatComposer({
   }
 
   return (
-    <div className="border-t bg-muted/5 p-2.5 sm:p-3">
+    <div className="border-t bg-muted/5 p-3 sm:p-3">
       <div className="space-y-2.5">
         {quickPrompts.length > 0 && !hasMessages ? (
           <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-hide no-scrollbar">
@@ -51,7 +51,7 @@ export function AiChatComposer({
                 type="button"
                 disabled={disabled || isSending}
                 onClick={() => void submitMessage(quickPrompt.prompt)}
-                className="whitespace-nowrap flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-[10px] font-bold text-muted-foreground transition-all hover:border-primary/50 hover:text-primary"
+                className="whitespace-nowrap flex min-h-9 items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-[10px] font-bold text-muted-foreground transition-all hover:border-primary/50 hover:text-primary"
               >
                 <Sparkles className="h-3 w-3" />
                 {quickPrompt.label}
@@ -80,14 +80,14 @@ export function AiChatComposer({
               placeholder={placeholder}
               disabled={disabled || isSending}
               rows={1}
-              className="min-h-[38px] max-h-[96px] flex-1 resize-none border-0 bg-transparent px-3.5 py-2 text-xs focus-visible:ring-0"
+              className="min-h-[44px] max-h-[120px] flex-1 resize-none border-0 bg-transparent px-3.5 py-2.5 text-sm focus-visible:ring-0"
             />
           </div>
           <Button
             type="submit"
             size="icon"
             disabled={disabled || isSending || !message.trim()}
-            className="h-10 w-10 shrink-0 rounded-xl shadow-lg"
+            className="h-11 w-11 shrink-0 rounded-2xl shadow-lg"
           >
             {isSending ? (
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />

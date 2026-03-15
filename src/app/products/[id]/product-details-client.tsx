@@ -70,7 +70,7 @@ export function ProductDetailsClient({ product }: { product: Product }) {
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-8 md:grid-cols-2 md:gap-12">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-12">
         <div className="md:sticky md:top-24 md:h-[calc(100vh-8rem)]">
           <Carousel className="w-full">
             <CarouselContent>
@@ -81,7 +81,7 @@ export function ProductDetailsClient({ product }: { product: Product }) {
                 );
                 return (
                   <CarouselItem key={index}>
-                    <div className="relative aspect-square w-full overflow-hidden rounded-lg border">
+                    <div className="relative aspect-square w-full overflow-hidden rounded-[24px] border border-border bg-card shadow-[var(--shadow-card)] md:rounded-[30px]">
                       <Image
                         src={img}
                         alt={`${product.name} - image ${index + 1}`}
@@ -103,10 +103,12 @@ export function ProductDetailsClient({ product }: { product: Product }) {
           </Carousel>
         </div>
 
-        <div className="flex flex-col gap-6 md:pb-32">
+        <div className="flex flex-col gap-5 md:pb-32">
           <div>
-            <p className="text-sm font-medium text-primary">{product.category}</p>
-            <h1 className="font-headline text-3xl font-bold tracking-tight md:text-4xl">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-secondary">
+              {product.category}
+            </p>
+            <h1 className="font-headline text-2xl font-bold tracking-tight md:text-4xl">
               {product.name}
             </h1>
           </div>
@@ -115,8 +117,8 @@ export function ProductDetailsClient({ product }: { product: Product }) {
 
           {canAddToCart ? (
             <div className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              <span className="font-medium text-green-600">
+              <CheckCircle className="h-5 w-5 text-success" />
+              <span className="font-medium text-success">
                 {hasSizeInventory
                   ? `Stock talla ${selectedSize ?? "-"}: ${selectedSizeStock}`
                   : "En Stock"}
@@ -126,7 +128,9 @@ export function ProductDetailsClient({ product }: { product: Product }) {
             <Badge variant="destructive">Agotado</Badge>
           )}
 
-          <p className="text-muted-foreground">{product.description}</p>
+          <p className="text-sm leading-6 text-text-secondary md:text-base">
+            {product.description}
+          </p>
 
           <Separator />
 
@@ -136,7 +140,7 @@ export function ProductDetailsClient({ product }: { product: Product }) {
               <RadioGroup
                 value={selectedSize}
                 onValueChange={setSelectedSize}
-                className="flex flex-wrap gap-2"
+                className="flex flex-wrap gap-2.5"
               >
                 {product.sizes.map((size) => {
                   const isSoldOut = getSizeStock(size) <= 0;
@@ -150,10 +154,10 @@ export function ProductDetailsClient({ product }: { product: Product }) {
                       />
                       <Label
                         htmlFor={`size-${size}`}
-                        className={`flex h-10 w-16 cursor-pointer items-center justify-center rounded-md border text-sm transition-colors ${
+                        className={`flex h-11 min-w-16 cursor-pointer items-center justify-center rounded-xl border px-3 text-sm font-semibold transition-colors ${
                           isSoldOut
                             ? "cursor-not-allowed opacity-40"
-                            : "hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground"
+                            : "border-border bg-muted/55 text-text-secondary hover:bg-muted hover:text-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground"
                         }`}
                       >
                         {size}
@@ -176,7 +180,7 @@ export function ProductDetailsClient({ product }: { product: Product }) {
               <RadioGroup
                 value={selectedColor}
                 onValueChange={setSelectedColor}
-                className="flex flex-wrap gap-2"
+                className="flex flex-wrap gap-3"
               >
                 {product.colors.map((color) => (
                   <div key={color}>
@@ -187,7 +191,7 @@ export function ProductDetailsClient({ product }: { product: Product }) {
                     />
                     <Label
                       htmlFor={`color-${color}`}
-                      className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-2 peer-data-[state=checked]:border-primary"
+                      className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border-2 peer-data-[state=checked]:border-primary"
                       style={{
                         backgroundColor:
                           color.toLowerCase() === "verde"
@@ -210,20 +214,19 @@ export function ProductDetailsClient({ product }: { product: Product }) {
       </div>
 
       {/* Floating Action Bar - El botón que te "persigue" */}
-      <div className="fixed bottom-6 left-1/2 z-40 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 transition-all animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-40 transition-all animate-in fade-in slide-in-from-bottom-4 duration-500 md:bottom-6 md:left-1/2 md:w-[calc(100%-2rem)] md:max-w-lg md:-translate-x-1/2">
         <div className={cn(
-          "flex items-center justify-between gap-4 rounded-[28px] border p-2 shadow-2xl backdrop-blur-xl transition-all",
-          "bg-white/80 border-primary/10 dark:bg-black/80 dark:border-white/10"
+          "flex items-center justify-between gap-3 rounded-[24px] border border-border bg-card/95 p-2 shadow-[var(--shadow-elevated)] backdrop-blur-xl transition-all md:rounded-[28px]"
         )}>
           <div className="hidden pl-6 md:flex flex-col">
-             <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Precio final</span>
-             <span className="font-headline text-xl font-bold text-primary">
+             <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-text-muted">Precio final</span>
+             <span className="font-headline text-xl font-bold text-secondary">
                ${(product.salePrice || product.price).toFixed(2)}
              </span>
           </div>
           <Button
             className={cn(
-              "group h-14 flex-1 rounded-[22px] px-8 text-base font-bold transition-all hover:scale-[1.02] active:scale-95",
+              "group h-14 flex-1 rounded-[20px] px-5 text-sm font-bold transition-all hover:scale-[1.02] active:scale-95 md:rounded-[22px] md:px-8 md:text-base",
               canAddToCart ? "shadow-lg shadow-primary/20" : "opacity-50"
             )}
             size="lg"
@@ -241,7 +244,7 @@ export function ProductDetailsClient({ product }: { product: Product }) {
           </Button>
           {canAddToCart && (
             <div className="hidden lg:flex pr-4">
-              <div className="h-10 w-10 rounded-full bg-primary/5 flex items-center justify-center text-primary">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/8 text-primary">
                 <Sparkles className="h-5 w-5 animate-pulse" />
               </div>
             </div>

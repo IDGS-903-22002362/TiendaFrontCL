@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCart } from "@/hooks/use-cart";
 import { ShoppingCart, Trash2, ShoppingBag, Plus, Minus, ArrowRight } from "lucide-react";
 import Image from "next/image";
@@ -19,7 +20,17 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { getCartVariantKey } from "@/lib/api/cart";
 
 export function CartDrawer() {
+  const router = useRouter();
   const { state, totalItems, subtotal, removeItem, setItemQuantity, isDrawerOpen, setIsDrawerOpen } = useCart();
+
+  const handleCheckout = () => {
+    if (state.items.length === 0) {
+      return;
+    }
+
+    setIsDrawerOpen(false);
+    router.push("/checkout");
+  };
 
   return (
     <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
@@ -30,7 +41,7 @@ export function CartDrawer() {
             {totalItems > 0 && (
               <Badge
                 variant="default"
-                className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary p-0 text-[10px] font-bold text-primary-foreground shadow-sm"
+                className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary p-0 text-[10px] font-bold text-primary-foreground shadow-xs"
               >
                 {totalItems}
               </Badge>
@@ -84,7 +95,7 @@ export function CartDrawer() {
                     const variantKey = getCartVariantKey(item);
                     return (
                       <div key={variantKey} className="group relative flex gap-4 transition-all">
-                        <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl border border-border bg-muted/30 shadow-sm">
+                        <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl border border-border bg-muted/30 shadow-xs">
                           <Image
                             src={item.image}
                             alt={item.name}
@@ -116,7 +127,7 @@ export function CartDrawer() {
                           </div>
                           
                           <div className="flex items-center justify-between mt-2">
-                            <div className="flex items-center gap-1 rounded-xl border border-border bg-background p-1 shadow-sm">
+                            <div className="flex items-center gap-1 rounded-xl border border-border bg-background p-1 shadow-xs">
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -187,16 +198,15 @@ export function CartDrawer() {
 
         <SheetFooter className="mt-auto flex-col gap-3 p-0 pt-8 sm:flex-col">
           <Button
-            asChild
             className="group h-14 w-full rounded-2xl font-headline text-base font-bold shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] active:scale-95"
             size="lg"
             disabled={state.items.length === 0}
-            onClick={() => setIsDrawerOpen(false)}
+            onClick={handleCheckout}
           >
-            <Link href="/checkout" className="flex items-center justify-center gap-2">
+            <span className="flex items-center justify-center gap-2">
               PROCESAR COMPRA
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-            </Link>
+            </span>
           </Button>
           <Button
             variant="ghost"
@@ -211,3 +221,4 @@ export function CartDrawer() {
     </Sheet>
   );
 }
+

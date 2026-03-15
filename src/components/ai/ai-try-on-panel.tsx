@@ -290,7 +290,7 @@ export function AiTryOnPanel({
                     className={cn(
                       "rounded-lg border p-2 text-left text-[10px] transition",
                       p.id === selectedProductId
-                        ? "border-primary bg-primary/5 shadow-sm"
+                        ? "border-primary bg-primary/5 shadow-xs"
                         : "bg-background hover:border-primary/30",
                     )}
                   >
@@ -359,7 +359,7 @@ export function AiTryOnPanel({
             )}
           </div>
 
-          <label className="flex items-start gap-2.5 rounded-xl border bg-background/80 p-2.5 shadow-sm">
+          <label className="flex items-start gap-2.5 rounded-xl border bg-background/80 p-2.5 shadow-xs">
             <Checkbox
               checked={consentAccepted}
               onCheckedChange={(checked) =>
@@ -393,3 +393,4 @@ export function AiTryOnPanel({
     </div>
   );
 }
+

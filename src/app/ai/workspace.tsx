@@ -7,6 +7,7 @@ import {
   Bot,
   History,
   Loader2,
+  MessageSquareText,
   Plus,
   Sparkles,
   TriangleAlert,
@@ -35,6 +36,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 function formatDateTime(value?: string | null) {
@@ -56,6 +64,7 @@ export function AiWorkspace() {
   const [jobs, setJobs] = useState<TryOnJob[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoadingSidebar, setIsLoadingSidebar] = useState(false);
+  const [isMobileSessionsOpen, setIsMobileSessionsOpen] = useState(false);
   const conversation = useAiConversation({
     defaultTitle: "Nueva conversacion AI",
     storageKey: isAuthenticated ? "ai-global-session" : undefined,
@@ -164,6 +173,43 @@ export function AiWorkspace() {
     }
   }
 
+  const sessionsList = isLoadingSidebar ? (
+    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <Loader2 className="h-4 w-4 animate-spin" />
+      Cargando sesiones...
+    </div>
+  ) : sessions.length === 0 ? (
+    <div className="rounded-[22px] border border-dashed border-border p-4 text-sm text-text-secondary">
+      Aún no tienes sesiones. Crea una nueva conversación para empezar.
+    </div>
+  ) : (
+    sessions.map((session) => (
+      <button
+        key={session.id}
+        type="button"
+        onClick={() => {
+          setIsMobileSessionsOpen(false);
+          void conversation.openSession(session.id);
+        }}
+        className={`w-full rounded-[24px] border p-4 text-left transition-colors ${
+          session.id === conversation.currentSessionId
+            ? "border-primary/35 bg-primary/10"
+            : "hover:border-primary/30 hover:bg-muted/45"
+        }`}
+      >
+        <p className="font-medium">{session.title}</p>
+        {session.summary ? (
+          <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+            {session.summary}
+          </p>
+        ) : null}
+        <p className="mt-2 text-xs text-muted-foreground">
+          Actualizada {formatDateTime(session.updatedAt)}
+        </p>
+      </button>
+    ))
+  );
+
   if (isLoading) {
     return (
       <div className="container mx-auto px-4 py-10 text-sm text-muted-foreground">
@@ -174,8 +220,8 @@ export function AiWorkspace() {
 
   if (!isAuthenticated) {
     return (
-      <div className="container mx-auto max-w-3xl px-4 py-10">
-        <Card className="border-primary/10 bg-gradient-to-br from-background to-primary/5">
+      <div className="container max-w-3xl py-10">
+        <Card className="border-primary/15 bg-[linear-gradient(135deg,rgba(20,20,20,0.96),rgba(10,130,66,0.14))]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Bot className="h-5 w-5 text-primary" />
@@ -200,13 +246,13 @@ export function AiWorkspace() {
   }
 
   return (
-    <div className="container mx-auto space-y-6 px-4 py-8">
+    <div className="container space-y-5 py-5 md:space-y-6 md:py-8">
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm font-medium uppercase tracking-[0.2em] text-primary">
+          <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-primary">
             AI Workspace
           </p>
-          <h1 className="font-headline text-3xl font-bold tracking-tight">
+          <h1 className="font-headline text-2xl font-bold tracking-tight md:text-3xl">
             Asistente y Virtual Try-On
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
@@ -214,19 +260,45 @@ export function AiWorkspace() {
             try-on desde un solo lugar.
           </p>
         </div>
-        <Button
-          onClick={() =>
-            void conversation.startNewSession("Nueva conversacion AI")
-          }
-          disabled={conversation.isLoadingSession}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Nueva sesión
-        </Button>
+        <div className="flex gap-2">
+          <Sheet
+            open={isMobileSessionsOpen}
+            onOpenChange={setIsMobileSessionsOpen}
+          >
+            <SheetTrigger asChild>
+              <Button variant="outline" className="h-11 flex-1 lg:hidden">
+                <MessageSquareText className="mr-2 h-4 w-4" />
+                Sesiones
+              </Button>
+            </SheetTrigger>
+            <SheetContent
+              side="bottom"
+              className="mobile-panel-height rounded-t-[28px] border-t border-border bg-background-deep px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]"
+            >
+              <SheetHeader className="text-left">
+                <SheetTitle>Sesiones</SheetTitle>
+              </SheetHeader>
+              <div className="mt-4 max-h-[68dvh] space-y-3 overflow-y-auto">
+                {sessionsList}
+              </div>
+            </SheetContent>
+          </Sheet>
+
+          <Button
+            className="h-11 flex-1 lg:flex-none"
+            onClick={() =>
+              void conversation.startNewSession("Nueva conversacion AI")
+            }
+            disabled={conversation.isLoadingSession}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Nueva sesión
+          </Button>
+        </div>
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <Card className="h-fit border-primary/10">
+      <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-6">
+        <Card className="hidden h-fit border-primary/15 lg:block">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <History className="h-4 w-4 text-primary" />
@@ -236,52 +308,17 @@ export function AiWorkspace() {
               Historial reciente del chat AI persistido en backend.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {isLoadingSidebar ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Cargando sesiones...
-              </div>
-            ) : sessions.length === 0 ? (
-              <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                Aún no tienes sesiones. Crea una nueva conversación para
-                empezar.
-              </div>
-            ) : (
-              sessions.map((session) => (
-                <button
-                  key={session.id}
-                  type="button"
-                  onClick={() => void conversation.openSession(session.id)}
-                  className={`w-full rounded-2xl border p-4 text-left transition-colors ${
-                    session.id === conversation.currentSessionId
-                      ? "border-primary bg-primary/5"
-                      : "hover:border-primary/40"
-                  }`}
-                >
-                  <p className="font-medium">{session.title}</p>
-                  {session.summary ? (
-                    <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                      {session.summary}
-                    </p>
-                  ) : null}
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Actualizada {formatDateTime(session.updatedAt)}
-                  </p>
-                </button>
-              ))
-            )}
-          </CardContent>
+          <CardContent className="space-y-3">{sessionsList}</CardContent>
         </Card>
 
         <Tabs defaultValue="chat" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsList className="grid w-full grid-cols-2 lg:max-w-md">
             <TabsTrigger value="chat">Chat</TabsTrigger>
             <TabsTrigger value="tryon">Try-On</TabsTrigger>
           </TabsList>
 
           <TabsContent value="chat">
-            <Card className="border-primary/10">
+            <Card className="border-primary/15">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-xl">
                   <Sparkles className="h-5 w-5 text-primary" />
@@ -293,7 +330,7 @@ export function AiWorkspace() {
                     : "Selecciona una sesión o inicia una nueva."}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 px-4 pb-4 sm:px-6">
                 {conversation.syncState === "degraded_missing_index" ? (
                   <Alert>
                     <TriangleAlert className="h-4 w-4" />
@@ -313,7 +350,7 @@ export function AiWorkspace() {
                   toolCalls={conversation.toolCalls}
                   isLoading={conversation.isLoadingSession}
                   streamStatus={conversation.streamStatus}
-                  className="h-[420px]"
+                  className="h-[56dvh] min-h-[420px] lg:h-[420px]"
                   emptyTitle="Asistente listo"
                   emptyDescription="Haz preguntas sobre catálogo, recomendaciones, disponibilidad o estilo."
                 />
@@ -368,14 +405,14 @@ export function AiWorkspace() {
               </CardHeader>
               <CardContent className="space-y-3">
                 {jobs.length === 0 ? (
-                  <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                  <div className="rounded-[22px] border border-dashed border-border p-4 text-sm text-text-secondary">
                     Aún no tienes jobs de try-on.
                   </div>
                 ) : (
                   jobs.map((job) => (
                     <div
                       key={job.id}
-                      className="rounded-2xl border bg-background/70 p-4"
+                      className="rounded-[24px] border border-border bg-muted/45 p-4"
                     >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>

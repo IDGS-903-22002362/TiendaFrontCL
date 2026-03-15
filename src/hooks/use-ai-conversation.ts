@@ -13,6 +13,7 @@ import {
 import type {
   AiConversationSyncState,
   AiMessage,
+  SendAiMessagePayload,
   AiSession,
   AiToolCall,
 } from "@/lib/ai/types";
@@ -54,6 +55,7 @@ function buildTemporaryMessage(
   role: AiMessage["role"],
   content: string,
   sessionId: string,
+  displayContent?: string,
 ): AiMessage {
   return {
     id: `temp_${role}_${Date.now()}`,
@@ -61,6 +63,7 @@ function buildTemporaryMessage(
     userId: "local",
     role,
     content,
+    ...(displayContent ? { displayContent } : {}),
     createdAt: new Date().toISOString(),
   };
 }
@@ -222,8 +225,14 @@ export function useAiConversation(options: UseAiConversationOptions = {}) {
   }, [currentSessionId, startNewSession]);
 
   const sendMessage = useCallback(
-    async (message: string) => {
-      const trimmed = message.trim();
+    async (messageInput: SendAiMessagePayload) => {
+      const text =
+        typeof messageInput === "string" ? messageInput : messageInput.text;
+      const displayText =
+        typeof messageInput === "string"
+          ? undefined
+          : messageInput.displayText?.trim();
+      const trimmed = text.trim();
       if (!trimmed || sendInFlightRef.current) {
         return null;
       }
@@ -240,6 +249,7 @@ export function useAiConversation(options: UseAiConversationOptions = {}) {
         "user",
         trimmed,
         sessionId,
+        displayText,
       );
       setMessages((currentMessages) => [...currentMessages, optimisticMessage]);
       logConversationDebug("sendMessage-start", {

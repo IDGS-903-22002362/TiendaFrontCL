@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  Bot,
   History,
   LockKeyhole,
   MessageSquarePlus,
@@ -19,6 +18,7 @@ import { AssistantComposer } from "@/components/ai/assistant-composer";
 import { AssistantHeader } from "@/components/ai/assistant-header";
 import { AssistantMessages } from "@/components/ai/assistant-messages";
 import { AssistantTabs } from "@/components/ai/assistant-tabs";
+import { AiBotAvatar } from "@/components/ai/ai-bot-avatar";
 import { AiTryOnPanel } from "@/components/ai/ai-try-on-panel";
 import { ProductAssistantPanel } from "@/components/ai/product-assistant-panel";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -29,6 +29,10 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  buildProductContextMessage,
+  messageContainsProductContext,
+} from "@/lib/ai/message-content";
 import { cn } from "@/lib/utils";
 import type { AiMessage } from "@/lib/ai/types";
 
@@ -50,10 +54,20 @@ export function ProductQnA({ product }: { product: Product }) {
     { label: "Stock", prompt: `¿Qué disponibilidad tiene ${product.name}?` },
     { label: "Tallas", prompt: `¿Qué tallas me recomiendas?` },
   ];
+  const sessionHasActiveProductContext = conversation.messages.some((message) =>
+    messageContainsProductContext(message.content, product.id),
+  );
 
   async function handleSendMessage(message: string) {
     try {
-      await conversation.sendMessage(message);
+      await conversation.sendMessage(
+        sessionHasActiveProductContext
+          ? message
+          : {
+              text: buildProductContextMessage(product, message),
+              displayText: message,
+            },
+      );
     } catch (caughtError) {
       toast({
         variant: "destructive",
@@ -76,18 +90,18 @@ export function ProductQnA({ product }: { product: Product }) {
   );
 
   return (
-    <div className="fixed bottom-4 left-2 right-2 z-50 flex flex-col items-stretch gap-3 sm:left-auto sm:right-6 sm:items-end md:bottom-8 md:right-8">
+    <div className="fixed left-auto right-4 z-50 flex flex-col items-end gap-3 bottom-[calc(var(--product-mobile-cta-height)+1rem)] md:bottom-8 md:right-8">
       <Collapsible open={isOpen} onOpenChange={setIsOpen}>
         <CollapsibleContent className="mb-3 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 origin-bottom-right">
           <ProductAssistantPanel
             variant="product-premium"
-            className="h-[min(760px,calc(100dvh-5.5rem))] max-h-[calc(100dvh-5.5rem)] w-full sm:w-[360px] md:w-[400px]"
+            className="h-[min(78dvh,760px)] max-h-[calc(100dvh-6rem)] w-[min(calc(100vw-1.5rem),400px)] max-w-[calc(100vw-1.5rem)] md:w-[400px]"
           >
             <AssistantHeader
               variant="product-premium"
-              title="Dungeon AI"
+              title="Asistente León"
               description={`${product.name}`}
-              icon={<Bot className="h-4 w-4" />}
+              icon={<AiBotAvatar imageClassName="object-contain p-1" />}
               onClose={() => setIsOpen(false)}
               actions={
                 <div className="flex gap-1.5">
@@ -141,7 +155,7 @@ export function ProductQnA({ product }: { product: Product }) {
                 onValueChange={setActiveTab}
                 className="flex min-h-0 flex-1 flex-col overflow-hidden"
               >
-                <div className="bg-muted/30 px-4 py-2">
+                <div className="border-b border-border bg-background-deep/55 px-4 py-2">
                   <AssistantTabs
                     variant="default"
                     className="h-10 w-full max-w-none"
@@ -158,8 +172,8 @@ export function ProductQnA({ product }: { product: Product }) {
                 >
                   {conversation.syncState === "degraded_missing_index" && (
                     <div className="px-4 pt-2">
-                      <Alert className="py-1.5 rounded-xl border-amber-200 bg-amber-50">
-                        <AlertDescription className="text-[10px] text-amber-900 leading-tight">
+                      <Alert className="rounded-xl border-warning/30 bg-warning/10 py-1.5">
+                        <AlertDescription className="text-[10px] leading-tight text-warning">
                           Historial limitado por mantenimiento.
                         </AlertDescription>
                       </Alert>
@@ -223,8 +237,8 @@ export function ProductQnA({ product }: { product: Product }) {
             className={cn(
               "h-12 w-12 rounded-full shadow-xl transition-all duration-300",
               isOpen
-                ? "rotate-180 bg-muted text-muted-foreground"
-                : "bg-primary text-white",
+                ? "rotate-180 bg-muted text-text-secondary"
+                : "bg-primary text-primary-foreground",
             )}
           >
             {isOpen ? (

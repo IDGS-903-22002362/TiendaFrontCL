@@ -1,16 +1,23 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
+import type { ReactNode } from "react";
 import { useState } from "react";
-import { Loader2, Sparkles, Bot } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import type { AiAttachment, AiMessage, AiToolCall } from "@/lib/ai/types";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { AiBotAvatar } from "@/components/ai/ai-bot-avatar";
+import { stripProductContextFromMessage } from "@/lib/ai/message-content";
 
 type MessageBlock =
   | { type: "paragraph"; text: string }
   | { type: "list"; items: string[] };
+
+type InlineToken =
+  | { type: "text"; value: string }
+  | { type: "link"; href: string; label: string };
 
 export type AiMessageThreadProps = {
   messages: AiMessage[];
@@ -24,8 +31,146 @@ export type AiMessageThreadProps = {
   toolCallDisplay?: "chips" | "collapsible";
 };
 
+function isSafeHttpUrl(value: string) {
+  try {
+    const parsedUrl = new URL(value);
+    return (
+      parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function splitTrailingUrlPunctuation(value: string) {
+  const match = value.match(/^(.*?)([),.;:!?]+)?$/);
+  return {
+    url: match?.[1] ?? value,
+    trailing: match?.[2] ?? "",
+  };
+}
+
+function parseInlineTokens(text: string): InlineToken[] {
+  const tokens: InlineToken[] = [];
+  const pattern =
+    /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s]+)/g;
+  let lastIndex = 0;
+
+  for (const match of text.matchAll(pattern)) {
+    const matchIndex = match.index ?? 0;
+    if (matchIndex > lastIndex) {
+      tokens.push({
+        type: "text",
+        value: text.slice(lastIndex, matchIndex),
+      });
+    }
+
+    const markdownLabel = match[1];
+    const markdownHref = match[2];
+    const bareHref = match[3];
+
+    if (markdownLabel && markdownHref && isSafeHttpUrl(markdownHref)) {
+      tokens.push({
+        type: "link",
+        href: markdownHref,
+        label: markdownLabel,
+      });
+      lastIndex = matchIndex + match[0].length;
+      continue;
+    }
+
+    if (bareHref) {
+      const { url, trailing } = splitTrailingUrlPunctuation(bareHref);
+      if (isSafeHttpUrl(url)) {
+        tokens.push({
+          type: "link",
+          href: url,
+          label: url,
+        });
+        if (trailing) {
+          tokens.push({ type: "text", value: trailing });
+        }
+      } else {
+        tokens.push({ type: "text", value: match[0] });
+      }
+    } else {
+      tokens.push({ type: "text", value: match[0] });
+    }
+
+    lastIndex = matchIndex + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    tokens.push({
+      type: "text",
+      value: text.slice(lastIndex),
+    });
+  }
+
+  return tokens;
+}
+
+function renderTextWithStrong(text: string, keyPrefix: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const pattern = /\*\*(.+?)\*\*/g;
+  let lastIndex = 0;
+
+  for (const match of text.matchAll(pattern)) {
+    const matchIndex = match.index ?? 0;
+    if (matchIndex > lastIndex) {
+      nodes.push(
+        <span key={`${keyPrefix}-text-${lastIndex}`}>
+          {text.slice(lastIndex, matchIndex)}
+        </span>,
+      );
+    }
+
+    nodes.push(
+      <strong key={`${keyPrefix}-strong-${matchIndex}`} className="font-bold">
+        {match[1]}
+      </strong>,
+    );
+    lastIndex = matchIndex + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(
+      <span key={`${keyPrefix}-text-${lastIndex}`}>{text.slice(lastIndex)}</span>,
+    );
+  }
+
+  return nodes.length > 0
+    ? nodes
+    : [<span key={`${keyPrefix}-text-0`}>{text}</span>];
+}
+
+function renderInlineContent(text: string): ReactNode[] {
+  return parseInlineTokens(text).map((token, index) => {
+    if (token.type === "text") {
+      return (
+        <span key={`text-${index}`}>
+          {renderTextWithStrong(token.value, `text-${index}`)}
+        </span>
+      );
+    }
+
+    return (
+      <a
+        key={`link-${index}`}
+        href={token.href}
+        target="_blank"
+        rel="noreferrer noopener"
+        className="break-all underline underline-offset-2"
+      >
+        {renderTextWithStrong(token.label, `link-${index}`)}
+      </a>
+    );
+  });
+}
+
 function parseMessageBlocks(content: string): MessageBlock[] {
-  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const normalizedContent = stripProductContextFromMessage(content);
+  const lines = normalizedContent.replace(/\r\n/g, "\n").split("\n");
   const blocks: MessageBlock[] = [];
   let paragraphLines: string[] = [];
   let listItems: string[] = [];
@@ -75,7 +220,7 @@ function renderMessageContent(content: string) {
           className="space-y-1.5 pl-4 list-disc text-[13px] leading-relaxed"
         >
           {block.items.map((item, itemIndex) => (
-            <li key={`item-${itemIndex}`}>{item}</li>
+            <li key={`item-${itemIndex}`}>{renderInlineContent(item)}</li>
           ))}
         </ul>
       );
@@ -85,7 +230,7 @@ function renderMessageContent(content: string) {
         key={`paragraph-${blockIndex}`}
         className="text-[13px] leading-relaxed tracking-tight"
       >
-        {block.text}
+        {renderInlineContent(block.text)}
       </p>
     );
   });
@@ -199,17 +344,17 @@ export function AiMessageThread({
               >
                 <div
                   className={cn(
-                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold shadow-sm",
+                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold shadow-xs",
                     isUser
                       ? "bg-muted text-muted-foreground"
-                      : "bg-primary text-primary-foreground",
+                      : "bg-primary text-primary-foreground overflow-hidden p-0",
                   )}
                 >
-                  {isUser ? "TÚ" : <Bot className="h-3 w-3" />}
+                  {isUser ? "TÚ" : <AiBotAvatar imageClassName="object-cover" />}
                 </div>
                 <div
                   className={cn(
-                    "rounded-2xl px-3 py-2 shadow-sm",
+                    "rounded-2xl px-3 py-2 shadow-xs",
                     hasImageAttachments ? "max-w-[94%]" : "max-w-[85%]",
                     isUser
                       ? "bg-primary text-primary-foreground rounded-br-none"
@@ -218,7 +363,9 @@ export function AiMessageThread({
                 >
                   <div className="space-y-2">
                     {message.content
-                      ? renderMessageContent(message.content)
+                      ? renderMessageContent(
+                          message.displayContent ?? message.content,
+                        )
                       : null}
                     {renderImageAttachments(
                       message.attachments,
@@ -235,7 +382,7 @@ export function AiMessageThread({
               <Loader2 className="h-3 w-3 animate-spin" />
               <span>
                 {streamStatus === "processing"
-                  ? "Dungeon AI pensando..."
+                  ? "Asistente León pensando..."
                   : streamStatus}
               </span>
             </div>
@@ -268,3 +415,4 @@ export function AiMessageThread({
     </>
   );
 }
+

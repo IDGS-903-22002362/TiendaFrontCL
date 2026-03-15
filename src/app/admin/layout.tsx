@@ -17,7 +17,13 @@ import {
   Bot,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetHeader } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetTitle,
+  SheetHeader,
+} from "@/components/ui/sheet";
 
 const adminNavLinks = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
@@ -48,10 +54,15 @@ export default function AdminLayout({
     }
   }, [isAuthenticated, isLoading, role, router]);
 
-  if (isLoading || (!isAuthenticated && role !== "ADMIN" && role !== "EMPLEADO")) {
+  if (
+    isLoading ||
+    (!isAuthenticated && role !== "ADMIN" && role !== "EMPLEADO")
+  ) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-muted-foreground">Verificando accesos administrativos...</p>
+        <p className="text-text-secondary">
+          Verificando accesos administrativos...
+        </p>
       </div>
     );
   }
@@ -61,32 +72,33 @@ export default function AdminLayout({
       {adminNavLinks
         .filter((link) => !link.adminOnly || role === "ADMIN")
         .map((link) => {
-        const Icon = link.icon;
-        const isActive = pathname === link.href || (pathname.startsWith(link.href) && link.href !== "/admin");
-        
-        return (
-          <Link
-            key={link.href}
-            href={link.href}
-            onClick={() => setIsMobileMenuOpen(false)}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-all ${
-              isActive
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            }`}
-          >
-            <Icon className="h-5 w-5" />
-            {link.label}
-          </Link>
-        );
-      })}
+          const Icon = link.icon;
+          const isActive =
+            pathname === link.href ||
+            (pathname.startsWith(link.href) && link.href !== "/admin");
+
+          return (
+            <Link
+              key={link.href}
+              href={link.href}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className={`flex items-center gap-3 rounded-2xl px-3 py-2.5 transition-all ${
+                isActive
+                  ? "bg-primary text-primary-foreground shadow-[var(--shadow-glow)]"
+                  : "text-text-secondary hover:bg-muted hover:text-foreground"
+              }`}
+            >
+              <Icon className="h-5 w-5" />
+              {link.label}
+            </Link>
+          );
+        })}
     </>
   );
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-muted/40 md:flex-row">
-      {/* Mobile Header & Nav */}
-      <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6 md:hidden">
+    <div className="flex min-h-screen w-full flex-col bg-background md:flex-row">
+      <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-border bg-background-deep px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6 md:hidden">
         <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
           <SheetTrigger asChild>
             <Button size="icon" variant="outline" className="sm:hidden">
@@ -96,15 +108,17 @@ export default function AdminLayout({
           </SheetTrigger>
           <SheetContent side="left" className="sm:max-w-xs">
             <SheetHeader className="mb-6 text-left">
-              <SheetTitle className="font-headline text-2xl font-bold">Admin Tienda</SheetTitle>
+              <SheetTitle className="font-headline text-2xl font-bold">
+                Admin Tienda
+              </SheetTitle>
             </SheetHeader>
             <nav className="grid gap-2 text-lg font-medium">
               <NavLinks />
             </nav>
             <div className="absolute bottom-4 left-4 right-4">
-              <Button 
-                variant="outline" 
-                className="w-full justify-start gap-3" 
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-3"
                 onClick={() => {
                   void clearSession();
                   router.push("/");
@@ -116,38 +130,39 @@ export default function AdminLayout({
           </SheetContent>
         </Sheet>
         <div className="flex flex-1 items-center justify-between">
-          <span className="font-headline font-bold text-lg">Panel de Administración</span>
-          <span className="text-xs text-muted-foreground uppercase">{role}</span>
+          <span className="font-headline text-lg font-bold">
+            Panel de Administración
+          </span>
+          <span className="text-xs uppercase text-text-muted">{role}</span>
         </div>
       </header>
 
-      {/* Desktop Sidebar */}
-      <aside className="hidden border-r bg-background md:block md:w-64 lg:w-72">
+      <aside className="hidden border-r border-border bg-background-deep md:block md:w-64 lg:w-72">
         <div className="flex h-full max-h-screen flex-col gap-2">
-          <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
+          <div className="flex h-14 items-center border-b border-border px-4 lg:h-[60px] lg:px-6">
             <Link href="/" className="flex items-center gap-2 font-semibold">
-              <Package className="h-6 w-6" />
+              <Package className="h-6 w-6 text-secondary" />
               <span className="font-headline text-xl">Admin Tienda</span>
             </Link>
           </div>
           <div className="flex-1 overflow-auto py-2">
-            <nav className="grid items-start px-2 text-sm font-medium lg:px-4 gap-1">
+            <nav className="grid items-start gap-1 px-2 text-sm font-medium lg:px-4">
               <NavLinks />
             </nav>
           </div>
-          <div className="mt-auto p-4 border-t">
-             <div className="flex items-center gap-2 mb-4 px-2">
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
-                  {role?.charAt(0) || "U"}
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">Personal</span>
-                  <span className="text-xs text-muted-foreground uppercase">{role}</span>
-                </div>
-             </div>
-             <Button 
-              variant="ghost" 
-              className="w-full justify-start gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+          <div className="mt-auto border-t border-border p-4">
+            <div className="mb-4 flex items-center gap-2 px-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-primary/20 bg-primary/10 font-bold text-primary">
+                {role?.charAt(0) || "U"}
+              </div>
+              <div className="flex flex-col">
+                <span className="text-sm font-medium">Personal</span>
+                <span className="text-xs uppercase text-text-muted">{role}</span>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              className="w-full justify-start gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
               onClick={() => {
                 void clearSession();
                 router.push("/");
@@ -160,8 +175,7 @@ export default function AdminLayout({
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6 w-full max-w-full overflow-hidden">
+      <main className="flex w-full max-w-full flex-1 flex-col gap-4 overflow-hidden p-4 lg:gap-6 lg:p-6">
         {children}
       </main>
     </div>

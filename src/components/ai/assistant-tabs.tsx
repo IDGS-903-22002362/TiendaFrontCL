@@ -26,14 +26,14 @@ export function AssistantTabs({
   return (
     <div className={cn("flex items-center justify-between gap-2", className)}>
       <TabsList
-        className="grid h-9 w-full rounded-lg bg-muted/50 p-1"
+        className="grid h-10 w-full rounded-2xl border border-border bg-muted/70 p-1"
         style={{ gridTemplateColumns: gridColumns }}
       >
         {tabs.map((tab) => (
           <TabsTrigger
             key={tab.value}
             value={tab.value}
-            className="rounded-md px-2 text-xs font-bold data-[state=active]:shadow-sm"
+            className="rounded-xl px-2 text-xs font-bold data-[state=active]:border data-[state=active]:border-primary/25 data-[state=active]:bg-card data-[state=active]:shadow-[var(--shadow-card)]"
           >
             {tab.label}
           </TabsTrigger>
@@ -43,3 +43,4 @@ export function AssistantTabs({
     </div>
   );
 }
+
