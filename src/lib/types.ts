@@ -181,7 +181,81 @@ export type InventoryAdjustmentPayload = {
   referencia?: string;
 };
 
-export type UserRole = "ADMIN" | "EMPLEADO" | "CLIENTE";
+export type UserRole = "ADMIN" | "EMPLEADO" | "CLIENTE" | "EMPLEADO_CLUB" | "SUPER_ADMIN";
+
+export type Provider = "google" | "apple" | "email";
+
+export type Usuario = {
+  id?: string;
+  uid: string;
+  email: string;
+  nombre: string;
+  rol: UserRole;
+  provider?: Provider;
+  telefono?: string;
+  stripeCustomerId?: string;
+  puntosActuales: number;
+  nivel?: string;
+  fechaNacimiento?: string;
+  perfilCompleto?: boolean;
+  edad?: number;
+  genero?: string;
+  activo?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export interface Galeria {
+  id: string;
+  descripcion: string;
+  imagenes: string[];
+  videos: string[];
+  usuarioId?: string;
+  autorNombre?: string;
+  estatus: boolean;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+export type TipoMovimientoPuntos =
+  | "ACUMULACION"
+  | "CANJE"
+  | "AJUSTE"
+  | "EXPIRACION"
+  | "BONIFICACION"
+  | "DEVOLUCION";
+
+export type OrigenPuntos =
+  | "tienda"
+  | "comedor"
+  | "promo"
+  | "admin"
+  | "referido"
+  | "cumpleaños"
+  | "evento";
+
+export type MovimientoPuntos = {
+  id?: string;
+  usuarioId: string;
+  tipo: TipoMovimientoPuntos;
+  puntos: number;
+  saldoAnterior: number;
+  saldoNuevo: number;
+  origen: OrigenPuntos;
+  referencia?: string;
+  descripcion?: string;
+  createdAt?: string;
+};
+
+export type NivelLealtad = {
+  id?: string;
+  nombre: string;
+  puntosMinimos: number;
+  beneficios: string[];
+  multiplicador?: number;
+  color?: string;
+  orden: number;
+};
 
 export type Proveedor = {
   id: string;

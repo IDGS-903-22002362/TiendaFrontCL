@@ -39,17 +39,15 @@ function LoginPageContent() {
   const missingFirebaseVars = getMissingFirebaseEnvVars();
 
   const getTargetRedirect = (currentRole: string | undefined) => {
-    if (currentRole === "ADMIN" || currentRole === "EMPLEADO") {
-      return "/admin";
-    }
-    return redirectTo;
+    // Redirigir a /dashboard que luego redirige según el rol
+    return "/dashboard";
   };
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
       router.replace(getTargetRedirect(role));
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, isLoading, redirectTo, router, role]);
 
   const onEmailPasswordLogin = async (isWorkerLogin: boolean = false) => {
@@ -144,10 +142,10 @@ function LoginPageContent() {
             <Tabs defaultValue="cliente" className="w-full">
               <TabsList className="grid w-full grid-cols-2 mb-6">
                 <TabsTrigger value="cliente" className="flex items-center gap-2">
-                  <User className="h-4 w-4"/> Cliente
+                  <User className="h-4 w-4" /> Cliente
                 </TabsTrigger>
                 <TabsTrigger value="trabajador" className="flex items-center gap-2">
-                  <BriefcaseBusiness className="h-4 w-4"/> Soy Trabajador
+                  <BriefcaseBusiness className="h-4 w-4" /> Soy Trabajador
                 </TabsTrigger>
               </TabsList>
 

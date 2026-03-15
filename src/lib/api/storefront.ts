@@ -186,24 +186,24 @@ function mapProduct(input: unknown): Product {
   const clave = toStringValue(product.clave ?? product.sku) || undefined;
   const name = toStringValue(
     product.nombre ??
-      product.name ??
-      product.titulo ??
-      product.descripcion ??
-      product.clave,
+    product.name ??
+    product.titulo ??
+    product.descripcion ??
+    product.clave,
     "Producto",
   );
   const description = toStringValue(
     product.description ??
-      product.detalle ??
-      product.descripcion ??
-      product.clave,
+    product.detalle ??
+    product.descripcion ??
+    product.clave,
     "Sin descripción disponible.",
   );
   const price = toNumber(
     product.precioPublico ??
-      product.precio ??
-      product.price ??
-      product.precioBase,
+    product.precio ??
+    product.price ??
+    product.precioBase,
   );
   const salePriceRaw = toNumber(
     product.precioOferta ?? product.salePrice ?? product.precioDescuento,
@@ -212,20 +212,20 @@ function mapProduct(input: unknown): Product {
   const salePrice = salePriceRaw > 0 ? salePriceRaw : undefined;
   const categoryName = toStringValue(
     (product.categoria as UnknownRecord | undefined)?.nombre ??
-      product.categoriaNombre ??
-      product.categoriaId ??
-      product.category,
+    product.categoriaNombre ??
+    product.categoriaId ??
+    product.category,
     "General",
   );
   const lineId = toStringValue(
     (product.linea as UnknownRecord | undefined)?.id ??
-      product.lineaId ??
-      product.idLinea,
+    product.lineaId ??
+    product.idLinea,
   );
   const lineName = toStringValue(
     (product.linea as UnknownRecord | undefined)?.nombre ??
-      product.lineaNombre ??
-      product.line,
+    product.lineaNombre ??
+    product.line,
   );
 
   const imageCandidates = [
@@ -248,20 +248,20 @@ function mapProduct(input: unknown): Product {
   );
   const normalizedInventoryBySize = hasSizeInventory
     ? tallaIds.map((tallaId) => {
-        const matched = mappedInventoryBySize.find(
-          (entry) => entry.tallaId === tallaId,
-        );
-        return {
-          tallaId,
-          cantidad: matched?.cantidad ?? 0,
-        };
-      })
+      const matched = mappedInventoryBySize.find(
+        (entry) => entry.tallaId === tallaId,
+      );
+      return {
+        tallaId,
+        cantidad: matched?.cantidad ?? 0,
+      };
+    })
     : [];
   const stockTotalFromBackend = toNumber(
     product.existencias ??
-      product.stock ??
-      product.inventario ??
-      product.existencia,
+    product.stock ??
+    product.inventario ??
+    product.existencia,
     0,
   );
   const stockTotal = hasSizeInventory

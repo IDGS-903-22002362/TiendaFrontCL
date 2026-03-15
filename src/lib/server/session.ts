@@ -16,7 +16,7 @@ export function getApiTokenFromRequest(request: NextRequest): string {
 
 export function getUserRoleFromRequest(request: NextRequest): UserRole | "" {
   const role = request.cookies.get(USER_ROLE_COOKIE)?.value;
-  if (role === "ADMIN" || role === "EMPLEADO" || role === "CLIENTE") {
+  if (role === "ADMIN" || role === "EMPLEADO" || role === "CLIENTE" || role === "EMPLEADO_CLUB" || role === "SUPER_ADMIN") {
     return role;
   }
   return "";
