@@ -39,9 +39,14 @@ function LoginPageContent() {
   const missingFirebaseVars = getMissingFirebaseEnvVars();
 
   const getTargetRedirect = (currentRole: string | undefined) => {
-    if (currentRole === "ADMIN" || currentRole === "EMPLEADO") {
+    if (currentRole === "ADMIN") {
       return "/admin";
     }
+
+    if (redirectTo.startsWith("/admin")) {
+      return "/";
+    }
+
     return redirectTo;
   };
 

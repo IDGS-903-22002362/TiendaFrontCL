@@ -54,7 +54,7 @@ export function Header() {
   const navLinks = useMemo(() => {
     const links = [...baseNavLinks];
 
-    if (role === "ADMIN" || role === "EMPLEADO") {
+    if (role === "ADMIN") {
       links.push({ href: "/admin", label: "Admin" });
     }
 
@@ -63,7 +63,7 @@ export function Header() {
 
   const desktopNavLinks = useMemo(() => {
     const primary = navLinks.filter((link) => link.href !== "/order-history");
-    return primary.slice(0, role === "ADMIN" || role === "EMPLEADO" ? 5 : 4);
+    return primary.slice(0, role === "ADMIN" ? 5 : 4);
   }, [navLinks, role]);
 
   const normalizeText = (value: string) =>
@@ -188,14 +188,14 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border/80 bg-background/82 backdrop-blur-xl">
-      <div className="container flex h-[var(--mobile-header-height)] items-center justify-between gap-2 md:h-[76px]">
-        <div className="flex items-center gap-2 md:gap-4">
+      <div className="container flex min-h-[var(--mobile-header-height)] items-center justify-between gap-3 py-2 md:h-[76px] md:py-0">
+        <div className="flex items-center gap-2.5 md:gap-4">
           <Sheet>
             <SheetTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-11 w-11 rounded-2xl md:hidden"
+                className="h-12 w-12 rounded-[20px] md:hidden"
               >
                 <Menu className="h-5 w-5" />
                 <span className="sr-only">Abrir menú</span>
@@ -270,8 +270,8 @@ export function Header() {
             </SheetContent>
           </Sheet>
 
-          <Link href="/" className="flex items-center">
-            <Logo className="h-10 w-auto md:h-16" />
+          <Link href="/" className="flex items-center py-1">
+            <Logo className="h-11 w-auto md:h-16" />
           </Link>
         </div>
 
@@ -287,7 +287,7 @@ export function Header() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-1 md:gap-2">
+        <div className="flex items-center gap-2 md:gap-2">
           {isAuthenticated ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -381,7 +381,7 @@ export function Header() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-11 w-11 rounded-2xl md:hidden"
+                  className="h-12 w-12 rounded-[20px] md:hidden"
                 >
                   <Search className="h-5 w-5" />
                   <span className="sr-only">Buscar</span>

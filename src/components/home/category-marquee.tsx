@@ -30,7 +30,9 @@ const normalizeCategoryValue = (value: string) =>
     .trim();
 
 function getCategoryPresentation(category: Category): CategoryPresentation {
-  const normalized = normalizeCategoryValue(`${category.name} ${category.slug}`);
+  const normalized = normalizeCategoryValue(
+    `${category.name} ${category.slug}`,
+  );
 
   if (normalized.includes("chamarra")) {
     return {
@@ -39,20 +41,14 @@ function getCategoryPresentation(category: Category): CategoryPresentation {
     };
   }
 
-  if (
-    normalized.includes("jersey") ||
-    normalized.includes("playera")
-  ) {
+  if (normalized.includes("jersey") || normalized.includes("playera")) {
     return {
       Icon: Shirt,
       description: "Uniformes y prendas oficiales para cada partido.",
     };
   }
 
-  if (
-    normalized.includes("pantalon") ||
-    normalized.includes("short")
-  ) {
+  if (normalized.includes("pantalon") || normalized.includes("short")) {
     return {
       Icon: Shirt,
       description: "Movimiento ligero para entrenamiento y uso diario.",
@@ -217,8 +213,7 @@ export function CategoryMarquee({ categories }: CategoryMarqueeProps) {
           Nuestras Categorias
         </h2>
         <p className="mt-3 text-sm leading-6 text-text-secondary md:text-base">
-          Dos franjas continuas para descubrir prendas, accesorios y piezas
-          oficiales sin saturar la portada.
+          Todos lo que necesitas para tu equipo favorito.
         </p>
       </div>
 

@@ -64,7 +64,7 @@ export default function InventoryAdjustmentsPage() {
   const [isSaving, setIsSaving] = useState(false);
 
   const canUseInventory = useMemo(
-    () => Boolean(token) && (role === "ADMIN" || role === "EMPLEADO"),
+    () => Boolean(token) && role === "ADMIN",
     [role, token],
   );
 
@@ -297,7 +297,7 @@ export default function InventoryAdjustmentsPage() {
       {!canUseInventory ? (
         <Card>
           <CardContent className="py-6 text-sm text-muted-foreground">
-            Configura token y rol ADMIN/EMPLEADO desde el panel admin para registrar ajustes.
+            Configura token y rol ADMIN desde el panel admin para registrar ajustes.
           </CardContent>
         </Card>
       ) : (

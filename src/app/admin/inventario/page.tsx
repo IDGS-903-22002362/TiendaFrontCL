@@ -26,12 +26,12 @@ export default function AdminInventoryHomePage() {
       <header>
         <h1 className="font-headline text-3xl font-bold">Inventario</h1>
         <p className="text-sm text-muted-foreground">
-          Módulo operativo de inventario para admin y empleados.
+          Módulo operativo de inventario exclusivo para administradores.
         </p>
       </header>
       <Card>
         <CardContent className="py-4 text-sm text-muted-foreground">
-          Este módulo requiere sesión activa con rol ADMIN o EMPLEADO. Si aún no
+          Este módulo requiere sesión activa con rol ADMIN. Si aún no
           has iniciado sesión, entra desde{" "}
           <Link href="/login" className="font-medium text-primary">
             /login

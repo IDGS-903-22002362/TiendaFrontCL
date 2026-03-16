@@ -45,19 +45,22 @@ export default function AdminLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const hasAdminAccess = isAuthenticated && role === "ADMIN";
 
   useEffect(() => {
     if (!isLoading) {
-      if (!isAuthenticated || (role !== "ADMIN" && role !== "EMPLEADO")) {
+      if (!isAuthenticated) {
         router.replace("/login?redirect=/admin");
+        return;
+      }
+
+      if (role !== "ADMIN") {
+        router.replace("/");
       }
     }
   }, [isAuthenticated, isLoading, role, router]);
 
-  if (
-    isLoading ||
-    (!isAuthenticated && role !== "ADMIN" && role !== "EMPLEADO")
-  ) {
+  if (isLoading || !hasAdminAccess) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <p className="text-text-secondary">

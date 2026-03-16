@@ -46,7 +46,7 @@ export default function InventoryLowStockAlertsPage() {
   const [soloCriticas, setSoloCriticas] = useState(false);
 
   const canUseInventory = useMemo(
-    () => Boolean(token) && (role === "ADMIN" || role === "EMPLEADO"),
+    () => Boolean(token) && role === "ADMIN",
     [role, token],
   );
 
@@ -145,7 +145,7 @@ export default function InventoryLowStockAlertsPage() {
       {!canUseInventory ? (
         <Card>
           <CardContent className="py-6 text-sm text-muted-foreground">
-            Configura token y rol ADMIN/EMPLEADO desde el panel admin para
+            Configura token y rol ADMIN desde el panel admin para
             consultar alertas.
           </CardContent>
         </Card>

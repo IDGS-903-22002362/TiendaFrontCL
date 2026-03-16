@@ -1,53 +1,46 @@
-import Image from 'next/image';
-import Link from 'next/link';
-import type { Product } from '@/lib/types';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-} from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { PriceTag } from './price-tag';
+import Link from "next/link";
+import type { Product } from "@/lib/types";
+import { PlaceHolderImages } from "@/lib/placeholder-images";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { FocusCard } from "@/components/ui/focus-cards";
+import { PriceTag } from "./price-tag";
 
 type ProductCardProps = {
   product: Product;
 };
 
 export function ProductCard({ product }: ProductCardProps) {
-  const productImageId = product.images[0].split('/').slice(-3, -2)[0];
-  const placeholder = PlaceHolderImages.find(p =>
-    p.imageUrl.includes(productImageId)
+  const productImageId = product.images[0].split("/").slice(-3, -2)[0];
+  const placeholder = PlaceHolderImages.find((p) =>
+    p.imageUrl.includes(productImageId),
   );
 
   return (
-    <Card className="group flex h-full flex-col overflow-hidden rounded-[24px] border-border/80 bg-[linear-gradient(180deg,rgba(28,28,28,0.92),rgba(20,20,20,0.98))] transition-all duration-300 hover:-translate-y-1 hover:border-primary/35 hover:shadow-[var(--shadow-elevated)] md:rounded-[28px]">
-      <CardHeader className="p-0">
-        <Link href={`/products/${product.id}`} className="block">
-          <div className="relative aspect-square w-full overflow-hidden">
-            {product.tags.length > 0 && (
-              <Badge
-                className="absolute right-2.5 top-2.5 z-10 capitalize md:right-3 md:top-3"
-                variant={product.tags[0] === 'sale' ? 'secondary' : 'default'}
-              >
-                {product.tags[0] === 'new' ? 'Nuevo' : 'Oferta'}
-              </Badge>
-            )}
-            <div className="absolute inset-0 z-[1] bg-[linear-gradient(180deg,transparent_42%,rgba(5,5,5,0.72))]" />
-            <Image
-              src={product.images[0]}
-              alt={product.name}
-              fill
-              sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
-              className="object-cover transition-transform duration-500 group-hover:scale-105"
-              data-ai-hint={placeholder?.imageHint}
-            />
-          </div>
-        </Link>
-      </CardHeader>
-      <CardContent className="flex-grow p-4 md:p-5">
+    <article className="focus-card-item group flex h-full flex-col rounded-[24px] border border-border/80 bg-[linear-gradient(180deg,rgba(28,28,28,0.92),rgba(20,20,20,0.98))] transition-all duration-300 hover:-translate-y-1 hover:border-primary/35 hover:shadow-[var(--shadow-elevated)] md:rounded-[28px]">
+      <Link href={`/products/${product.id}`} className="block">
+        <div className="relative">
+          <FocusCard
+            card={{
+              title: product.name,
+              src: product.images[0],
+              imageHint: placeholder?.imageHint,
+            }}
+            showTitleOverlay={false}
+            className="rounded-b-none border-0"
+          />
+          {product.tags.length > 0 && (
+            <Badge
+              className="absolute right-2.5 top-2.5 z-20 capitalize md:right-3 md:top-3"
+              variant={product.tags[0] === "sale" ? "secondary" : "default"}
+            >
+              {product.tags[0] === "new" ? "Nuevo" : "Oferta"}
+            </Badge>
+          )}
+        </div>
+      </Link>
+
+      <div className="flex flex-grow flex-col p-4 md:p-5">
         <Link href={`/products/${product.id}`} className="block">
           <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-secondary">
             {product.category}
@@ -59,13 +52,14 @@ export function ProductCard({ product }: ProductCardProps) {
             Pieza oficial con acabado premium para colección y matchday.
           </p>
         </Link>
-      </CardContent>
-      <CardFooter className="mt-auto flex-col items-start gap-3 p-4 pt-0 md:gap-4 md:p-5 md:pt-0">
-        <PriceTag price={product.price} salePrice={product.salePrice} />
-        <Button asChild className="h-11 w-full">
-          <Link href={`/products/${product.id}`}>Ver detalles</Link>
-        </Button>
-      </CardFooter>
-    </Card>
+
+        <div className="mt-auto flex flex-col items-start gap-3 pt-4 md:gap-4">
+          <PriceTag price={product.price} salePrice={product.salePrice} />
+          <Button asChild className="h-11 w-full">
+            <Link href={`/products/${product.id}`}>Ver detalles</Link>
+          </Button>
+        </div>
+      </div>
+    </article>
   );
 }

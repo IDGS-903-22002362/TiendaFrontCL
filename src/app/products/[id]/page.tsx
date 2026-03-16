@@ -44,7 +44,7 @@ export default async function ProductPage({
             opts={{
               align: "start",
             }}
-            className="w-full"
+            className="w-full [&:has(.focus-card-item:hover)_.focus-card-item:not(:hover)]:scale-[0.985] [&:has(.focus-card-item:hover)_.focus-card-item:not(:hover)]:blur-[1px] [&:has(.focus-card-item:hover)_.focus-card-item:not(:hover)]:opacity-80"
           >
             <CarouselContent>
               {relatedProducts.map((relatedProduct) => (

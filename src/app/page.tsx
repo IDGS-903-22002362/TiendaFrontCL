@@ -77,7 +77,12 @@ export default async function Home() {
                     Comprar ahora <ArrowRight className="ml-2" />
                   </Link>
                 </Button>
-                <Button asChild size="lg" variant="outline" className="h-12 md:inline-flex">
+                <Button
+                  asChild
+                  size="lg"
+                  variant="outline"
+                  className="h-12 md:inline-flex"
+                >
                   <Link href="/products?tag=new">Ver novedades</Link>
                 </Button>
               </div>
@@ -85,9 +90,15 @@ export default async function Home() {
 
             <div className="flex snap-x gap-3 overflow-x-auto pb-1 text-left md:grid md:gap-3 md:overflow-visible md:pb-0">
               {[
-                ["Drop oficial", "Jerseys y accesorios con identidad de alto contraste"],
+                [
+                  "Drop oficial",
+                  "Jerseys y accesorios con identidad de alto contraste",
+                ],
                 ["Promos clave", "Acentos dorados para ofertas y lanzamientos"],
-                ["Experiencia premium", "Superficies oscuras, limpias y enfocadas en producto"],
+                [
+                  "Experiencia premium",
+                  "Superficies oscuras, limpias y enfocadas en producto",
+                ],
               ].map(([title, text]) => (
                 <div
                   key={title}
@@ -122,7 +133,7 @@ export default async function Home() {
             align: "start",
             loop: true,
           }}
-          className="w-full"
+          className="w-full [&:has(.focus-card-item:hover)_.focus-card-item:not(:hover)]:scale-[0.985] [&:has(.focus-card-item:hover)_.focus-card-item:not(:hover)]:blur-[1px] [&:has(.focus-card-item:hover)_.focus-card-item:not(:hover)]:opacity-80"
         >
           <CarouselContent>
             {featuredProducts.map((product) => (
@@ -152,7 +163,7 @@ export default async function Home() {
               Novedades
             </h2>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-4 md:gap-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-4 md:gap-6 [&:has(.focus-card-item:hover)_.focus-card-item:not(:hover)]:scale-[0.985] [&:has(.focus-card-item:hover)_.focus-card-item:not(:hover)]:blur-[1px] [&:has(.focus-card-item:hover)_.focus-card-item:not(:hover)]:opacity-80">
             {newArrivals.slice(0, 4).map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}
@@ -190,4 +201,3 @@ export default async function Home() {
     </div>
   );
 }
-

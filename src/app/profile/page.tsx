@@ -101,7 +101,7 @@ export default function ProfilePage() {
             </CardContent>
           </Card>
           
-          {(role === "ADMIN" || role === "EMPLEADO") && (
+          {role === "ADMIN" && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
