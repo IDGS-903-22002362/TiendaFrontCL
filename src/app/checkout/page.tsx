@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -80,7 +80,15 @@ function getOrderIdFromCheckoutResult(payload: unknown): string {
   return "";
 }
 
-function PaymentForm({
+function MobileCheckoutActions({ children }: { children: ReactNode }) {
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background-deep/95 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-xl md:hidden">
+      <div className="container flex items-center gap-3">{children}</div>
+    </div>
+  );
+}
+
+function PaymentStep({
   values,
   total,
   onBack,
@@ -193,52 +201,79 @@ function PaymentForm({
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Información de Pago</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="rounded-[24px] border border-border bg-muted/55 p-4">
-          <CardElement
-            options={{
-              style: {
-                base: {
-                  fontSize: "16px",
-                  color: "#F5F5F5",
-                  iconColor: "#EDCD12",
-                  "::placeholder": {
-                    color: "#8E8E8E",
+    <>
+      <div className="space-y-4 pb-24 md:pb-0">
+        <Card className="border-primary/15">
+          <CardHeader className="pb-4">
+            <CardTitle>Información de Pago</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5 pb-6">
+            <div className="rounded-[24px] border border-border bg-muted/55 p-4">
+              <CardElement
+                options={{
+                  style: {
+                    base: {
+                      fontSize: "16px",
+                      color: "#F5F5F5",
+                      iconColor: "#EDCD12",
+                      "::placeholder": {
+                        color: "#8E8E8E",
+                      },
+                    },
+                    invalid: {
+                      color: "#DC2626",
+                      iconColor: "#DC2626",
+                    },
                   },
-                },
-                invalid: {
-                  color: "#DC2626",
-                  iconColor: "#DC2626",
-                },
-              },
-            }}
-          />
-        </div>
+                }}
+              />
+            </div>
+            <p className="text-sm leading-6 text-text-secondary">
+              El pago se procesa de forma segura con Stripe. Revisa tus datos
+              antes de confirmar el cobro de ${total.toFixed(2)}.
+            </p>
+          </CardContent>
+        </Card>
 
-        <div className="fixed inset-x-0 bottom-0 z-20 flex gap-2 border-t border-border bg-background-deep/95 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-xl md:relative md:border-0 md:bg-transparent md:p-0 md:shadow-none">
+        <div className="hidden items-center gap-3 md:flex">
           <Button
             type="button"
             variant="outline"
-            className="flex-1 h-12 md:h-10"
+            className="h-12 flex-1"
             onClick={onBack}
           >
             Volver
           </Button>
           <Button
             type="button"
-            className="flex-1 h-12 md:h-10"
+            className="h-12 flex-1"
             onClick={() => void handlePay()}
             disabled={isProcessing || !stripe}
           >
             {isProcessing ? "Procesando..." : "Pagar ahora"}
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      <MobileCheckoutActions>
+        <Button
+          type="button"
+          variant="outline"
+          className="h-12 flex-1"
+          onClick={onBack}
+        >
+          Volver
+        </Button>
+        <Button
+          type="button"
+          className="h-12 flex-1"
+          onClick={() => void handlePay()}
+          disabled={isProcessing || !stripe}
+        >
+          {isProcessing ? "Procesando..." : "Pagar ahora"}
+        </Button>
+      </MobileCheckoutActions>
+    </>
   );
 }
 
@@ -368,37 +403,65 @@ export default function CheckoutPage() {
           </Card>
 
           {currentStep === 0 ? (
-            <Card className="border-primary/15">
-              <CardHeader>
-                <CardTitle>Información de Envío</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Form {...shippingForm}>
-                  <form className="space-y-4 pb-24 md:pb-0">
-                    <FormField
-                      control={shippingForm.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Nombre Completo</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              className="h-12 md:h-10"
-                              autoComplete="name"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <div className="flex flex-col gap-4 md:flex-row">
+            <div className="space-y-4 pb-24 md:pb-0">
+              <Card className="border-primary/15">
+                <CardHeader className="pb-4">
+                  <CardTitle>Información de Envío</CardTitle>
+                </CardHeader>
+                <CardContent className="pb-6">
+                  <Form {...shippingForm}>
+                    <form className="space-y-4">
                       <FormField
                         control={shippingForm.control}
-                        name="calle"
+                        name="name"
                         render={({ field }) => (
-                          <FormItem className="flex-1">
-                            <FormLabel>Calle</FormLabel>
+                          <FormItem>
+                            <FormLabel>Nombre Completo</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                className="h-12 md:h-10"
+                                autoComplete="name"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <div className="flex flex-col gap-4 md:flex-row">
+                        <FormField
+                          control={shippingForm.control}
+                          name="calle"
+                          render={({ field }) => (
+                            <FormItem className="flex-1">
+                              <FormLabel>Calle</FormLabel>
+                              <FormControl>
+                                <Input {...field} className="h-12 md:h-10" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={shippingForm.control}
+                          name="numero"
+                          render={({ field }) => (
+                            <FormItem className="md:w-1/3">
+                              <FormLabel>Num. Ext/Int</FormLabel>
+                              <FormControl>
+                                <Input {...field} className="h-12 md:h-10" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      <FormField
+                        control={shippingForm.control}
+                        name="colonia"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Colonia</FormLabel>
                             <FormControl>
                               <Input {...field} className="h-12 md:h-10" />
                             </FormControl>
@@ -406,115 +469,117 @@ export default function CheckoutPage() {
                           </FormItem>
                         )}
                       />
+                      <div className="flex flex-col gap-4 md:flex-row">
+                        <FormField
+                          control={shippingForm.control}
+                          name="city"
+                          render={({ field }) => (
+                            <FormItem className="flex-1">
+                              <FormLabel>Ciudad</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  className="h-12 md:h-10"
+                                  autoComplete="address-level2"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={shippingForm.control}
+                          name="estado"
+                          render={({ field }) => (
+                            <FormItem className="flex-1">
+                              <FormLabel>Estado</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  className="h-12 md:h-10"
+                                  autoComplete="address-level1"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-4 md:flex-row">
+                        <FormField
+                          control={shippingForm.control}
+                          name="zip"
+                          render={({ field }) => (
+                            <FormItem className="md:w-1/3">
+                              <FormLabel>C.P.</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  inputMode="numeric"
+                                  className="h-12 md:h-10"
+                                  autoComplete="postal-code"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={shippingForm.control}
+                          name="telefono"
+                          render={({ field }) => (
+                            <FormItem className="flex-1">
+                              <FormLabel>Teléfono</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  type="tel"
+                                  className="h-12 md:h-10"
+                                  autoComplete="tel"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
                       <FormField
                         control={shippingForm.control}
-                        name="numero"
+                        name="email"
                         render={({ field }) => (
-                          <FormItem className="md:w-1/3">
-                            <FormLabel>Num. Ext/Int</FormLabel>
+                          <FormItem>
+                            <FormLabel>Email</FormLabel>
                             <FormControl>
-                              <Input {...field} className="h-12 md:h-10" />
+                              <Input
+                                type="email"
+                                inputMode="email"
+                                className="h-12 md:h-10"
+                                autoComplete="email"
+                                {...field}
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                    </div>
-                    <FormField
-                      control={shippingForm.control}
-                      name="colonia"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Colonia</FormLabel>
-                          <FormControl>
-                            <Input {...field} className="h-12 md:h-10" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <div className="flex flex-col gap-4 md:flex-row">
-                      <FormField
-                        control={shippingForm.control}
-                        name="city"
-                        render={({ field }) => (
-                          <FormItem className="flex-1">
-                            <FormLabel>Ciudad</FormLabel>
-                            <FormControl>
-                              <Input {...field} className="h-12 md:h-10" autoComplete="address-level2" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={shippingForm.control}
-                        name="estado"
-                        render={({ field }) => (
-                          <FormItem className="flex-1">
-                            <FormLabel>Estado</FormLabel>
-                            <FormControl>
-                              <Input {...field} className="h-12 md:h-10" autoComplete="address-level1" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-4 md:flex-row">
-                      <FormField
-                        control={shippingForm.control}
-                        name="zip"
-                        render={({ field }) => (
-                          <FormItem className="md:w-1/3">
-                            <FormLabel>C.P.</FormLabel>
-                            <FormControl>
-                              <Input {...field} inputMode="numeric" className="h-12 md:h-10" autoComplete="postal-code" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={shippingForm.control}
-                        name="telefono"
-                        render={({ field }) => (
-                          <FormItem className="flex-1">
-                            <FormLabel>Teléfono</FormLabel>
-                            <FormControl>
-                              <Input {...field} type="tel" className="h-12 md:h-10" autoComplete="tel" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    <FormField
-                      control={shippingForm.control}
-                      name="email"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Email</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="email"
-                              inputMode="email"
-                              className="h-12 md:h-10"
-                              autoComplete="email"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </form>
-                </Form>
-              </CardContent>
-            </Card>
+                    </form>
+                  </Form>
+                </CardContent>
+              </Card>
+
+              <div className="hidden md:flex md:justify-end">
+                <Button
+                  onClick={() => void onContinueToPayment()}
+                  className="h-12 min-w-52"
+                  size="lg"
+                >
+                  Continuar a Pago
+                </Button>
+              </div>
+            </div>
           ) : stripePromise ? (
             <Elements stripe={stripePromise}>
-              <PaymentForm
+              <PaymentStep
                 values={shippingForm.getValues()}
                 total={total}
                 onBack={() => setCurrentStep(0)}
@@ -555,8 +620,8 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      {currentStep === 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-20 w-full border-t border-border bg-background-deep/95 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-xl lg:hidden">
+      {currentStep === 0 ? (
+        <MobileCheckoutActions>
           <Button
             onClick={() => void onContinueToPayment()}
             className="h-12 w-full"
@@ -564,8 +629,8 @@ export default function CheckoutPage() {
           >
             Continuar a Pago
           </Button>
-        </div>
-      )}
+        </MobileCheckoutActions>
+      ) : null}
     </div>
   );
 }

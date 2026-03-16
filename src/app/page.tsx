@@ -1,8 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Shirt, ShoppingBag, Ticket, Trophy } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 import { fetchCategories, fetchProducts } from "@/lib/api/storefront";
+import { CategoryMarquee } from "@/components/home/category-marquee";
 import { ProductCard } from "@/components/product/product-card";
 import {
   Carousel,
@@ -40,13 +41,6 @@ export default async function Home() {
     .filter((p) => p.tags.includes("new"))
     .slice(0, 8);
   const heroImage = PlaceHolderImages.find((img) => img.id === "hero-banner-1");
-
-  const categoryIcons: { [key: string]: React.ReactNode } = {
-    Jerseys: <Shirt className="h-8 w-8" />,
-    Accesorios: <ShoppingBag className="h-8 w-8" />,
-    Coleccionables: <Trophy className="h-8 w-8" />,
-    Boletos: <Ticket className="h-8 w-8" />,
-  };
 
   return (
     <div className="space-y-10 pb-6 md:space-y-18 lg:space-y-24">
@@ -111,39 +105,7 @@ export default async function Home() {
       </section>
 
       {/* Categories Section */}
-      <section className="container">
-        <div className="mb-8">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-secondary">
-            Categorías
-          </p>
-          <h2 className="mt-2 font-headline text-3xl font-bold tracking-tight">
-            Nuestras Categorías
-          </h2>
-        </div>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:gap-6">
-          {visibleCategories.map((category) => (
-            <Link
-              href={`/products?category=${category.slug}`}
-              key={category.id}
-              className="group rounded-[24px] border border-border bg-card/90 p-4 text-card-foreground shadow-[var(--shadow-card)] transition-all hover:-translate-y-1 hover:border-primary/35 hover:bg-muted md:rounded-[28px] md:p-6"
-            >
-              <div className="flex flex-col items-start gap-4 md:gap-6">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary md:h-14 md:w-14">
-                  {categoryIcons[category.name] || <Shirt className="h-8 w-8" />}
-                </div>
-                <div>
-                  <span className="font-headline text-base font-semibold md:text-lg">
-                    {category.name}
-                  </span>
-                  <p className="mt-1 text-xs text-text-secondary md:mt-2 md:text-sm">
-                    Explora selección curada de la tienda oficial.
-                  </p>
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
+      <CategoryMarquee categories={visibleCategories} />
 
       {/* Featured Products Section */}
       <section className="container">

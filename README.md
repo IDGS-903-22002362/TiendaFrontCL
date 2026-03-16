@@ -55,7 +55,31 @@ Configurar variables de entorno en el host de despliegue:
 
 - `NEXT_PUBLIC_API_BASE_URL=https://us-central1-e-comerce-leon.cloudfunctions.net/api`
 - `API_BASE_URL=https://us-central1-e-comerce-leon.cloudfunctions.net/api`
-- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...` (o `pk_test_...` en entorno de pruebas)
+- `NEXT_PUBLIC_AUTH_FIREBASE_API_KEY=<Firebase Web API key de app-oficial-leon>`
+- `NEXT_PUBLIC_AUTH_FIREBASE_AUTH_DOMAIN=app-oficial-leon.firebaseapp.com`
+- `NEXT_PUBLIC_AUTH_FIREBASE_PROJECT_ID=app-oficial-leon`
+- `NEXT_PUBLIC_AUTH_FIREBASE_APP_ID=1:795182473270:web:c1c8f15ead939e2d6a7897`
+- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...` (temporal en pruebas; migrar a `pk_live_...` en ventana controlada)
+
+Obtención guiada de variables Firebase Web SDK (CLI):
+
+```bash
+firebase apps:list WEB --project e-comerce-leon
+firebase apps:list WEB --project app-oficial-leon
+firebase apps:sdkconfig WEB 1:795182473270:web:c1c8f15ead939e2d6a7897 --project app-oficial-leon
+```
+
+Despliegue de App Hosting (backend existente `ecomerce-next-front`):
+
+```bash
+firebase deploy --only apphosting --project e-comerce-leon --message "release: frontend storefront"
+```
+
+Rollback rápido al release anterior (desde consola Firebase):
+
+1. App Hosting -> backend `ecomerce-next-front`.
+2. Rollouts/Releases.
+3. Promover el release estable anterior.
 
 Si el backend entrega imágenes en Firebase Storage, esta app ya tiene dominios permitidos en `next.config.ts`.
 
