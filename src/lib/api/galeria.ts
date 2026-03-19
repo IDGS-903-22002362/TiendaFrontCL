@@ -103,4 +103,28 @@ export const galeriaApi = {
             { local: true }
         );
     },
+
+    async deleteGallery(id: string) {
+        const response = await apiFetch<ApiSuccess<{ success: boolean }>>(
+            `/api/galeria/${id}`,
+            {
+                method: "DELETE",
+            },
+            { local: true }
+        );
+        return response.data;
+    },
+
+    async reactivate(id: string) {
+        const response = await apiFetch<ApiSuccess<Galeria>>(
+            `/api/galeria/${id}/reactivar`,
+            {
+                method: "PUT",
+            },
+            { local: true },
+        );
+        return response.data;
+    },
+
+
 };

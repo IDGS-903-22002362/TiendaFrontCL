@@ -30,11 +30,44 @@ async function parseResponsePayload(response: Response) {
   }
 }
 
+function copyPassthroughHeaders(
+  source: Headers,
+  extra?: Record<string, string | null | undefined>,
+) {
+  const headers = new Headers();
+  const passthroughNames = [
+    "content-type",
+    "cache-control",
+    "content-disposition",
+    "retry-after",
+    "x-request-id",
+    "vary",
+  ];
+
+  passthroughNames.forEach((name) => {
+    const value = source.get(name);
+    if (value) {
+      headers.set(name, value);
+    }
+  });
+
+  if (extra) {
+    Object.entries(extra).forEach(([name, value]) => {
+      if (value) {
+        headers.set(name, value);
+      }
+    });
+  }
+
+  return headers;
+}
+
 type ProxyOptions = {
   request: NextRequest;
   backendPath: string;
   requireAuth?: boolean;
   method?: "GET" | "POST" | "PUT" | "DELETE";
+  rawResponse?: boolean;
 };
 
 export async function proxyToBackend({
@@ -42,6 +75,7 @@ export async function proxyToBackend({
   backendPath,
   requireAuth = false,
   method,
+  rawResponse = false,
 }: ProxyOptions) {
   const tokenFromCookie = getApiTokenFromRequest(request);
   const authorization =
@@ -59,6 +93,8 @@ export async function proxyToBackend({
   const contentType = request.headers.get("content-type");
   const sessionId = request.headers.get("x-session-id");
   const idempotencyKey = request.headers.get("idempotency-key");
+  const requestId = request.headers.get("x-request-id");
+  const accept = request.headers.get("accept");
 
   if (authorization) {
     headers.set("Authorization", authorization);
@@ -72,9 +108,15 @@ export async function proxyToBackend({
   if (idempotencyKey) {
     headers.set("Idempotency-Key", idempotencyKey);
   }
+  if (requestId) {
+    headers.set("x-request-id", requestId);
+  }
+  if (accept) {
+    headers.set("Accept", accept);
+  }
 
   const nextMethod = method ?? (request.method as ProxyOptions["method"]);
-  const url = joinUrl(resolveBackendBase(), backendPath);
+  const url = `${joinUrl(resolveBackendBase(), backendPath)}${request.nextUrl.search}`;
   const hasBody = nextMethod !== "GET";
   const rawBody = hasBody ? await request.arrayBuffer() : undefined;
   const body = rawBody && rawBody.byteLength > 0 ? rawBody : undefined;
@@ -87,12 +129,27 @@ export async function proxyToBackend({
       cache: "no-store",
     });
 
+    const responseHeaders = copyPassthroughHeaders(response.headers);
+    const isSseResponse =
+      rawResponse ||
+      response.headers.get("content-type")?.includes("text/event-stream");
+
+    if (isSseResponse) {
+      return new Response(response.body, {
+        status: response.status,
+        headers: responseHeaders,
+      });
+    }
+
     const payload = await parseResponsePayload(response);
     if (!response.ok) {
       console.error(`Backend returned ${response.status} for ${url}`);
       console.error("Backend Error Payload:", JSON.stringify(payload, null, 2));
     }
-    return NextResponse.json(payload, { status: response.status });
+    return NextResponse.json(payload, {
+      status: response.status,
+      headers: responseHeaders,
+    });
   } catch {
     return NextResponse.json(
       { success: false, message: "No se pudo conectar con el backend" },

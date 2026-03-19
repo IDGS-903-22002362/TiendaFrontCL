@@ -784,72 +784,72 @@ export default function AdminProductsPage() {
                   const hasSizeInventory = Boolean(product.hasSizeInventory);
 
                   return (
-                  <TableRow key={product.id}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-3">
-                        {product.images[0] ? (
-                          <img
-                            src={product.images[0]}
-                            alt={product.name}
-                            className="w-10 h-10 rounded object-cover border"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 rounded bg-muted flex flex-col items-center justify-center">
-                            <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                    <TableRow key={product.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-3">
+                          {product.images[0] ? (
+                            <img
+                              src={product.images[0]}
+                              alt={product.name}
+                              className="w-10 h-10 rounded-sm object-cover border"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-sm bg-muted flex flex-col items-center justify-center">
+                              <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                            </div>
+                          )}
+                          <div className="flex flex-col">
+                            <span>{product.name}</span>
+                            <span className="text-xs text-muted-foreground truncate max-w-[150px]">
+                              {product.description}
+                            </span>
                           </div>
-                        )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
                         <div className="flex flex-col">
-                          <span>{product.name}</span>
-                          <span className="text-xs text-muted-foreground truncate max-w-[150px]">
-                            {product.description}
+                          <span className="text-sm">{product.category}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {product.lineName || "-"}
                           </span>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="text-sm">{product.category}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {product.lineName || "-"}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-semibold text-primary">
-                      ${product.price.toFixed(2)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span
-                          className={`text-sm ${stockTotal <= 5 ? "text-destructive font-bold" : ""}`}
-                        >
-                          {stockTotal}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {hasSizeInventory ? "Por talla" : "General"}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 px-2"
-                          onClick={() => openForm(product)}
-                        >
-                          <Edit className="h-4 w-4 mr-1" /> Editar
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => void handleDelete(product.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                      </TableCell>
+                      <TableCell className="font-semibold text-primary">
+                        ${product.price.toFixed(2)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span
+                            className={`text-sm ${stockTotal <= 5 ? "text-destructive font-bold" : ""}`}
+                          >
+                            {stockTotal}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {hasSizeInventory ? "Por talla" : "General"}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-2"
+                            onClick={() => openForm(product)}
+                          >
+                            <Edit className="h-4 w-4 mr-1" /> Editar
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => void handleDelete(product.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
                   );
                 })
               )}
@@ -1050,10 +1050,10 @@ export default function AdminProductsPage() {
                   />
                   {(pendingImageUploads.length > 0 ||
                     pendingDeletedImages.length > 0) && (
-                    <p className="text-xs text-muted-foreground">
-                      Cambios de imágenes pendientes. Se aplican al guardar.
-                    </p>
-                  )}
+                      <p className="text-xs text-muted-foreground">
+                        Cambios de imágenes pendientes. Se aplican al guardar.
+                      </p>
+                    )}
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {formData.imagenes.map((imageUrl) => (
                       <div
@@ -1137,3 +1137,4 @@ export default function AdminProductsPage() {
     </div>
   );
 }
+

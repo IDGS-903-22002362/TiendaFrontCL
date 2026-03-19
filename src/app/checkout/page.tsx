@@ -30,6 +30,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import Link from "next/link";
 
 const shippingSchema = z.object({
   name: z.string().min(2, "Nombre es requerido"),
@@ -197,19 +198,28 @@ function PaymentForm({
         <CardTitle>Información de Pago</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="rounded-md border p-3">
+        <div className="rounded-[24px] border border-border bg-muted/55 p-4">
           <CardElement
             options={{
               style: {
                 base: {
                   fontSize: "16px",
+                  color: "#F5F5F5",
+                  iconColor: "#EDCD12",
+                  "::placeholder": {
+                    color: "#8E8E8E",
+                  },
+                },
+                invalid: {
+                  color: "#DC2626",
+                  iconColor: "#DC2626",
                 },
               },
             }}
           />
         </div>
 
-        <div className="fixed bottom-0 left-0 w-full bg-background p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] md:relative md:bg-transparent md:p-0 md:shadow-none flex gap-2">
+        <div className="fixed inset-x-0 bottom-0 z-20 flex gap-2 border-t border-border bg-background-deep/95 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-xl md:relative md:border-0 md:bg-transparent md:p-0 md:shadow-none">
           <Button
             type="button"
             variant="outline"
@@ -235,7 +245,7 @@ function PaymentForm({
 export default function CheckoutPage() {
   const [currentStep, setCurrentStep] = useState(0);
   const router = useRouter();
-  const { subtotal, isLoading } = useCart();
+  const { subtotal, totalItems, isLoading } = useCart();
   const { isAuthenticated } = useAuth();
   const stripePromise = useStripeConfig();
   const { toast } = useToast();
@@ -270,35 +280,62 @@ export default function CheckoutPage() {
     );
   }
 
+  if (totalItems === 0) {
+    return (
+      <div className="container flex min-h-[60vh] max-w-3xl flex-col items-center justify-center py-8 text-center">
+        <Card className="w-full max-w-xl border-border/90">
+          <CardHeader>
+            <CardTitle>Tu carrito está vacío</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm text-text-secondary">
+            <p>
+              Necesitas agregar al menos un producto antes de continuar con la
+              compra.
+            </p>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button asChild className="h-12 flex-1">
+                <Link href="/products">Explorar productos</Link>
+              </Button>
+              <Button asChild variant="outline" className="h-12 flex-1">
+                <Link href="/cart">Ir al carrito</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
-    <div className="container mx-auto max-w-4xl px-4 py-8">
-      <div className="mb-8 flex items-center gap-4">
+    <div className="container max-w-5xl py-5 md:py-8">
+      <div className="mb-6 flex items-center gap-3 md:mb-8 md:gap-4">
         <Button
           variant="ghost"
           size="icon"
+          className="h-11 w-11 rounded-2xl"
           onClick={() =>
             currentStep > 0 ? setCurrentStep(currentStep - 1) : router.back()
           }
         >
           <ArrowLeft />
         </Button>
-        <h1 className="font-headline text-3xl font-bold md:text-4xl">
+        <h1 className="font-headline text-2xl font-bold md:text-4xl">
           Checkout
         </h1>
       </div>
 
-      <div className="mb-8">
+      <div className="mb-6 rounded-[24px] border border-border bg-card/90 p-4 shadow-[var(--shadow-card)] md:mb-8 md:rounded-[30px] md:p-5">
         <ol className="flex items-center justify-between">
           {steps.map((step, stepIdx) => (
             <li key={step.name} className="relative flex-1">
               <div className="flex items-center text-sm font-medium">
                 <span
-                  className={`flex h-10 w-10 items-center justify-center rounded-full ${stepIdx <= currentStep ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}
+                  className={`flex h-10 w-10 items-center justify-center rounded-full border ${stepIdx <= currentStep ? "border-primary/40 bg-primary text-primary-foreground" : "border-border bg-muted text-text-secondary"}`}
                 >
                   <step.icon className="h-5 w-5" />
                 </span>
                 <span
-                  className={`ml-3 hidden sm:block ${stepIdx <= currentStep ? "text-primary" : "text-muted-foreground"}`}
+                  className={`ml-3 hidden sm:block ${stepIdx <= currentStep ? "text-foreground" : "text-text-muted"}`}
                 >
                   {step.name}
                 </span>
@@ -308,16 +345,36 @@ export default function CheckoutPage() {
         </ol>
       </div>
 
-      <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-8">
         <div>
+          <Card className="mb-4 border-secondary/15 lg:hidden">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Resumen del Pedido</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span>Subtotal</span>
+                <span>${subtotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Envío</span>
+                <span>$99.00</span>
+              </div>
+              <div className="flex justify-between font-headline text-lg font-bold">
+                <span>Total</span>
+                <span className="text-secondary">${total.toFixed(2)}</span>
+              </div>
+            </CardContent>
+          </Card>
+
           {currentStep === 0 ? (
-            <Card>
+            <Card className="border-primary/15">
               <CardHeader>
                 <CardTitle>Información de Envío</CardTitle>
               </CardHeader>
               <CardContent>
                 <Form {...shippingForm}>
-                  <form className="space-y-4 pb-20 md:pb-0">
+                  <form className="space-y-4 pb-24 md:pb-0">
                     <FormField
                       control={shippingForm.control}
                       name="name"
@@ -335,7 +392,7 @@ export default function CheckoutPage() {
                         </FormItem>
                       )}
                     />
-                    <div className="flex gap-4">
+                    <div className="flex flex-col gap-4 md:flex-row">
                       <FormField
                         control={shippingForm.control}
                         name="calle"
@@ -353,7 +410,7 @@ export default function CheckoutPage() {
                         control={shippingForm.control}
                         name="numero"
                         render={({ field }) => (
-                          <FormItem className="w-1/3">
+                          <FormItem className="md:w-1/3">
                             <FormLabel>Num. Ext/Int</FormLabel>
                             <FormControl>
                               <Input {...field} className="h-12 md:h-10" />
@@ -376,7 +433,7 @@ export default function CheckoutPage() {
                         </FormItem>
                       )}
                     />
-                    <div className="flex gap-4">
+                    <div className="flex flex-col gap-4 md:flex-row">
                       <FormField
                         control={shippingForm.control}
                         name="city"
@@ -404,12 +461,12 @@ export default function CheckoutPage() {
                         )}
                       />
                     </div>
-                    <div className="flex gap-4">
+                    <div className="flex flex-col gap-4 md:flex-row">
                       <FormField
                         control={shippingForm.control}
                         name="zip"
                         render={({ field }) => (
-                          <FormItem className="w-1/3">
+                          <FormItem className="md:w-1/3">
                             <FormLabel>C.P.</FormLabel>
                             <FormControl>
                               <Input {...field} inputMode="numeric" className="h-12 md:h-10" autoComplete="postal-code" />
@@ -468,15 +525,15 @@ export default function CheckoutPage() {
               <CardHeader>
                 <CardTitle>Configuración faltante</CardTitle>
               </CardHeader>
-              <CardContent className="text-sm text-muted-foreground pb-20 md:pb-6">
+              <CardContent className="pb-20 text-sm text-text-secondary md:pb-6">
                 No se pudo inicializar Stripe.
               </CardContent>
             </Card>
           )}
         </div>
 
-        <div>
-          <Card className="sticky top-24">
+        <div className="hidden lg:block">
+          <Card className="sticky top-24 border-secondary/15">
             <CardHeader>
               <CardTitle>Resumen del Pedido</CardTitle>
             </CardHeader>
@@ -489,26 +546,26 @@ export default function CheckoutPage() {
                 <span>Envío</span>
                 <span>$99.00</span>
               </div>
-              <div className="flex justify-between text-lg font-bold">
+              <div className="flex justify-between font-headline text-lg font-bold">
                 <span>Total</span>
-                <span>${total.toFixed(2)}</span>
+                <span className="text-secondary">${total.toFixed(2)}</span>
               </div>
             </CardContent>
           </Card>
-
-          {currentStep === 0 && (
-            <div className="fixed bottom-0 left-0 w-full bg-background p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] md:relative md:bg-transparent md:p-0 md:shadow-none">
-              <Button
-                onClick={() => void onContinueToPayment()}
-                className="w-full h-12 md:h-10"
-                size="lg"
-              >
-                Continuar a Pago
-              </Button>
-            </div>
-          )}
         </div>
       </div>
+
+      {currentStep === 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-20 w-full border-t border-border bg-background-deep/95 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-xl lg:hidden">
+          <Button
+            onClick={() => void onContinueToPayment()}
+            className="h-12 w-full"
+            size="lg"
+          >
+            Continuar a Pago
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

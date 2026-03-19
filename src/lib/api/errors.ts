@@ -45,6 +45,14 @@ export function getApiErrorMessage(error: unknown): string {
         .join(" | ");
     }
 
+    if (
+      error.payload?.error &&
+      typeof error.payload.error === "object" &&
+      typeof error.payload.error.message === "string"
+    ) {
+      return error.payload.error.message;
+    }
+
     return error.message;
   }
 

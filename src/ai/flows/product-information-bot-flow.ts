@@ -53,7 +53,7 @@ const productInformationPrompt = ai.definePrompt({
   name: 'productInformationPrompt',
   input: {schema: ProductInformationBotInputSchema},
   output: {schema: ProductInformationBotOutputSchema},
-  prompt: `Eres un asistente útil y experto en productos de La Dungeon. Tu objetivo es responder las preguntas del usuario de manera concisa y precisa basándote estrictamente en la información del producto proporcionada.
+  prompt: `Eres un asistente útil y experto en productos de la Tienda Oficial del Club León La Guarida del León. Tu objetivo es responder las preguntas del usuario de manera concisa y precisa basándote estrictamente en la información del producto proporcionada.
 
 --- INFORMACIÓN DEL PRODUCTO ---
 Nombre del producto: {{{productName}}}

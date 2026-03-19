@@ -97,10 +97,9 @@ export function EntityPicker({
           ))}
         </SelectContent>
       </Select>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-text-muted">
         {selectedOption ? `ID seleccionado: ${selectedOption.id}` : "Sin selección"}
       </p>
     </div>
   );
 }
-

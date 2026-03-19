@@ -107,6 +107,17 @@ export const noticiasApi = {
         return response.data;
     },
 
+    async reactivate(id: string) {
+        const response = await apiFetch<ApiSuccess<Noticia>>(
+            `/api/noticias/${id}/reactivar`,
+            {
+                method: "PUT",
+            },
+            { local: true },
+        );
+        return response.data;
+    },
+
     async delete(id: string) {
         const response = await apiFetch<ApiSuccess<{ success: boolean }>>(
             `/api/noticias/${id}`,

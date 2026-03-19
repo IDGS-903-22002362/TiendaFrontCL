@@ -20,9 +20,9 @@ export default function ProfilePage() {
 
   if (!isAuthenticated || !user) {
     return (
-      <div className="container mx-auto flex min-h-[60vh] flex-col items-center justify-center px-4 py-8 text-center">
+      <div className="container flex min-h-[60vh] flex-col items-center justify-center py-8 text-center">
         <h2 className="mb-4 text-2xl font-bold">No has iniciado sesión</h2>
-        <p className="mb-8 text-muted-foreground">
+        <p className="mb-8 text-text-secondary">
           Por favor inicia sesión para ver tu perfil y tus pedidos.
         </p>
         <Button asChild>
@@ -33,15 +33,15 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="container mx-auto max-w-4xl px-4 py-8">
-      <h1 className="mb-8 font-headline text-3xl font-bold md:text-4xl">Mi Perfil</h1>
+    <div className="container max-w-4xl py-5 md:py-8">
+      <h1 className="mb-6 font-headline text-3xl font-bold md:mb-8 md:text-4xl">Mi Perfil</h1>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-6">
         {/* User Info Card */}
         <Card className="md:col-span-1">
           <CardHeader className="text-center pb-2">
-            <div className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-primary/10">
-              <User className="h-12 w-12 text-primary" />
+            <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full border border-primary/20 bg-primary/10 md:h-24 md:w-24">
+              <User className="h-10 w-10 text-primary md:h-12 md:w-12" />
             </div>
             <CardTitle className="text-xl">Datos Personales</CardTitle>
           </CardHeader>
@@ -78,22 +78,22 @@ export default function ProfilePage() {
                 Accede rápidamente a tu historial y da seguimiento a tus pedidos
               </CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              <Link href="/order-history" className="group rounded-lg border p-4 transition-colors hover:bg-muted/50">
+            <CardContent className="grid gap-3 sm:grid-cols-2 md:gap-4">
+              <Link href="/order-history" className="group rounded-[20px] border border-border p-4 transition-colors hover:bg-muted/50 md:rounded-[22px]">
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
                     <p className="font-medium">Historial de Pedidos</p>
-                    <p className="text-sm text-muted-foreground">Revisa todas tus compras anteriores</p>
+                    <p className="text-sm text-text-secondary">Revisa todas tus compras anteriores</p>
                   </div>
                   <ChevronRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1" />
                 </div>
               </Link>
               
-              <Link href="/order-history" className="group rounded-lg border p-4 transition-colors hover:bg-muted/50">
+              <Link href="/order-history" className="group rounded-[20px] border border-border p-4 transition-colors hover:bg-muted/50 md:rounded-[22px]">
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
                     <p className="font-medium">Seguimiento</p>
-                    <p className="text-sm text-muted-foreground">Revisa el estatus de pedidos recientes</p>
+                    <p className="text-sm text-text-secondary">Revisa el estatus de pedidos recientes</p>
                   </div>
                   <Clock className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1" />
                 </div>
@@ -110,10 +110,10 @@ export default function ProfilePage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Link href="/admin" className="group flex items-center justify-between rounded-lg border p-4 transition-colors hover:bg-muted/50">
+                <Link href="/admin" className="group flex items-center justify-between rounded-[20px] border border-border p-4 transition-colors hover:bg-muted/50 md:rounded-[22px]">
                   <div className="space-y-1">
                     <p className="font-medium font-headline">Panel de Administración</p>
-                    <p className="text-sm text-muted-foreground">Gestionar productos, inventario y órdenes de clientes</p>
+                    <p className="text-sm text-text-secondary">Gestionar productos, inventario y órdenes de clientes</p>
                   </div>
                   <ChevronRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1" />
                 </Link>

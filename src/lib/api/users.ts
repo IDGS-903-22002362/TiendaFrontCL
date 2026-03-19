@@ -146,6 +146,17 @@ export const usuariosApi = {
     return response.data;
   },
 
+  async reactivate(id: string) {
+    const response = await apiFetch<ApiSuccess<Usuario>>(
+      `/api/usuarios/${id}/reactivar`,
+      {
+        method: "PUT",
+      },
+      { local: true },
+    );
+    return response.data;
+  },
+
   async delete(id: string) {
     const response = await apiFetch<ApiSuccess<{ success: boolean }>>(
       `/api/usuarios/${id}`,

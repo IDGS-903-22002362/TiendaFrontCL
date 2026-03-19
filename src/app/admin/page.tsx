@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const sections = [
@@ -32,19 +35,33 @@ const sections = [
     title: "Proveedores",
     description: "CRUD de proveedores para operación administrativa.",
   },
+  {
+    href: "/admin/ai",
+    title: "AI",
+    description: "Métricas y jobs recientes del módulo AI.",
+    adminOnly: true,
+  },
 ];
 
 export default function AdminHomePage() {
+  const { role } = useAuth();
+  const visibleSections = sections.filter(
+    (section) => !section.adminOnly || role === "ADMIN",
+  );
+
   return (
-    <div className="container mx-auto space-y-6 px-4 py-8">
+    <div className="container space-y-6 py-8">
       <header>
-        <h1 className="font-headline text-3xl font-bold">Panel admin</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-secondary">
+          Operación interna
+        </p>
+        <h1 className="mt-2 font-headline text-3xl font-bold">Panel admin</h1>
+        <p className="text-sm text-text-secondary">
           Sección operativa para líneas, tallas e inventario.
         </p>
       </header>
       <Card>
-        <CardContent className="py-4 text-sm text-muted-foreground">
+        <CardContent className="py-4 text-sm text-text-secondary">
           El acceso admin depende de tu sesión autenticada. Si aún no iniciaste
           sesión, entra desde{" "}
           <Link href="/login" className="font-medium text-primary">
@@ -55,14 +72,14 @@ export default function AdminHomePage() {
       </Card>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {sections.map((section) => (
+        {visibleSections.map((section) => (
           <Link key={section.href} href={section.href} className="h-full">
-            <Card className="h-full transition-colors hover:border-primary">
+            <Card className="h-full transition-all hover:border-primary/35 hover:bg-muted/40">
               <CardHeader>
                 <CardTitle>{section.title}</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-text-secondary">
                   {section.description}
                 </p>
               </CardContent>

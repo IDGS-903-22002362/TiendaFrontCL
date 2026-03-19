@@ -3,10 +3,8 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { galeriaApi } from "@/lib/api/galeria";
 import { getApiErrorMessage } from "@/lib/api/errors";
+import { Plus, RefreshCw, X, RotateCcw, Image as ImageIcon, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
     Table,
     TableBody,
@@ -20,9 +18,24 @@ import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Trash2, Upload, Image, Video } from "lucide-react";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { EntityPicker, type EntityOption } from "@/components/admin/entity-picker";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
-// Interfaz local de galería (puedes importar la global)
+// Interfaz local de galería (ajusta según tu API)
 export interface Galeria {
     id: string;
     descripcion: string;
@@ -35,12 +48,12 @@ export interface Galeria {
     updatedAt: string | Date;
 }
 
-// Estado inicial del formulario (solo descripción)
+// Estado inicial del formulario
 const EMPTY_FORM = {
     descripcion: "",
 };
 
-// Utilidades de formato (adaptadas de noticias)
+// Utilidades
 function parseDate(value: any): Date | null {
     if (!value) return null;
     if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
@@ -68,21 +81,40 @@ function normalizeSearch(value: string): string {
         .trim();
 }
 
+// Tipos para archivos pendientes
+type PendingImageUpload = {
+    id: string;
+    file: File;
+    previewUrl: string;
+};
+
+type PendingVideoUpload = {
+    id: string;
+    file: File;
+    name: string;
+};
+
 export default function EmpleadoClubGaleriaPage() {
     const [galerias, setGalerias] = useState<Galeria[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedGaleriaId, setSelectedGaleriaId] = useState("");
     const [isLoading, setIsLoading] = useState(true);
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [editingGaleriaId, setEditingGaleriaId] = useState<string | null>(null);
+    const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+    const [formData, setFormData] = useState(EMPTY_FORM);
     const [isSaving, setIsSaving] = useState(false);
-    const [form, setForm] = useState(EMPTY_FORM);
 
-    // Estado para subida de imágenes
-    const [selectedImageFiles, setSelectedImageFiles] = useState<File[]>([]);
-    const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+    // Estados para imágenes
+    const [existingImages, setExistingImages] = useState<string[]>([]);
+    const [pendingImageUploads, setPendingImageUploads] = useState<PendingImageUpload[]>([]);
+    const [pendingDeletedImages, setPendingDeletedImages] = useState<string[]>([]);
 
-    // Estado para subida de videos
-    const [selectedVideoFiles, setSelectedVideoFiles] = useState<File[]>([]);
-    const [videoPreviews, setVideoPreviews] = useState<string[]>([]); // solo nombres
+    // Estados para videos
+    const [existingVideos, setExistingVideos] = useState<string[]>([]);
+    const [pendingVideoUploads, setPendingVideoUploads] = useState<PendingVideoUpload[]>([]);
+    const [pendingDeletedVideos, setPendingDeletedVideos] = useState<string[]>([]);
+    const [statusFilter, setStatusFilter] = useState<"todos" | "activo" | "inactivo">("todos");
 
     const { toast } = useToast();
 
@@ -92,7 +124,6 @@ export default function EmpleadoClubGaleriaPage() {
         try {
             const data = await galeriaApi.getAll();
             setGalerias(data);
-            // Si la galería seleccionada ya no existe, limpiar
             setSelectedGaleriaId((current) =>
                 current && !data.some((g) => g.id === current) ? "" : current
             );
@@ -111,625 +142,664 @@ export default function EmpleadoClubGaleriaPage() {
         void loadGalerias();
     }, [loadGalerias]);
 
-    // Galería seleccionada
-    const selectedGaleria = galerias.find((g) => g.id === selectedGaleriaId);
-
-    // Seleccionar una galería y cargar sus datos en el formulario
-    const handleSelectGaleria = useCallback(
-        (id: string) => {
-            setSelectedGaleriaId(id);
-            const gal = galerias.find((g) => g.id === id);
-            if (gal) {
-                setForm({ descripcion: gal.descripcion });
-                // Limpiar archivos pendientes de subida
-                setSelectedImageFiles([]);
-                setImagePreviews([]);
-                setSelectedVideoFiles([]);
-                setVideoPreviews([]);
-            }
-        },
+    // Opciones para el EntityPicker
+    const galeriaOptions: EntityOption[] = useMemo(
+        () =>
+            galerias.map((g) => ({
+                id: g.id,
+                label: g.descripcion || "Sin descripción",
+                subtitle: `${g.imagenes.length} img · ${g.videos.length} vid`,
+            })),
         [galerias]
     );
 
-    // Limpiar selección y formulario (para crear nuevo)
-    const handleClear = useCallback(() => {
-        setSelectedGaleriaId("");
-        setForm(EMPTY_FORM);
-        setSelectedImageFiles([]);
-        setImagePreviews([]);
-        setSelectedVideoFiles([]);
-        setVideoPreviews([]);
-    }, []);
-
-    // Filtro de búsqueda por descripción
+    // Filtrar galerías para la tabla (cuando hay selección, mostrar solo esa)
     const filteredGalerias = useMemo(() => {
-        if (!searchQuery.trim()) return galerias;
-        const normalized = normalizeSearch(searchQuery);
-        return galerias.filter((g) =>
-            normalizeSearch(g.descripcion).includes(normalized)
-        );
-    }, [searchQuery, galerias]);
+        const query = normalizeSearch(searchQuery);
+        return galerias.filter((g) => {
+            if (selectedGaleriaId && g.id !== selectedGaleriaId) return false;
+            if (query && !normalizeSearch(g.descripcion).includes(query)) return false;
+            if (statusFilter === "activo" && !g.estatus) return false;
+            if (statusFilter === "inactivo" && g.estatus) return false;
+            return true;
+        });
+    }, [searchQuery, galerias, selectedGaleriaId, statusFilter]);
 
-    // Manejo de selección de imágenes
-    const handleImageSelect = useCallback(
-        (e: React.ChangeEvent<HTMLInputElement>) => {
-            const files = Array.from(e.target.files || []);
-            if (files.length === 0) return;
+    // Limpiar cambios de archivos
+    const clearPendingChanges = () => {
+        pendingImageUploads.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+        setPendingImageUploads([]);
+        setPendingDeletedImages([]);
+        pendingVideoUploads.forEach((item) => URL.revokeObjectURL(item.name)); // No es necesario, pero por consistencia
+        setPendingVideoUploads([]);
+        setPendingDeletedVideos([]);
+    };
 
-            // Validar tipo
-            const invalid = files.filter((f) => !f.type.startsWith("image/"));
-            if (invalid.length > 0) {
-                toast({
-                    variant: "destructive",
-                    title: "Archivos inválidos",
-                    description: "Solo se permiten archivos de imagen",
-                });
-                return;
-            }
+    // Abrir formulario para crear o editar
+    const openForm = async (galeria?: Galeria) => {
+        if (galeria) {
+            setEditingGaleriaId(galeria.id);
+            setIsDialogOpen(true);
+            setIsLoadingDetail(true);
 
-            // Limitar cantidad (opcional, el backend también tiene límites)
-            if (selectedImageFiles.length + files.length > 10) {
-                toast({
-                    variant: "destructive",
-                    title: "Demasiadas imágenes",
-                    description: "Máximo 10 imágenes por lote",
-                });
-                return;
-            }
-
-            // Generar previsualizaciones
-            files.forEach((file) => {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    if (typeof event.target?.result === "string") {
-                        setImagePreviews((prev) => [...prev, event.target!.result as string]);
-                    }
-                };
-                reader.readAsDataURL(file);
-            });
-
-            setSelectedImageFiles((prev) => [...prev, ...files]);
-        },
-        [selectedImageFiles.length, toast]
-    );
-
-    const handleRemoveImagePreview = useCallback((index: number) => {
-        setImagePreviews((prev) => prev.filter((_, i) => i !== index));
-        setSelectedImageFiles((prev) => prev.filter((_, i) => i !== index));
-    }, []);
-
-    // Manejo de selección de videos
-    const handleVideoSelect = useCallback(
-        (e: React.ChangeEvent<HTMLInputElement>) => {
-            const files = Array.from(e.target.files || []);
-            if (files.length === 0) return;
-
-            // Validar tipo de video (ampliar según necesidades)
-            const invalid = files.filter((f) => !f.type.startsWith("video/"));
-            if (invalid.length > 0) {
-                toast({
-                    variant: "destructive",
-                    title: "Archivos inválidos",
-                    description: "Solo se permiten archivos de video",
-                });
-                return;
-            }
-
-            if (selectedVideoFiles.length + files.length > 5) {
-                toast({
-                    variant: "destructive",
-                    title: "Demasiados videos",
-                    description: "Máximo 5 videos por lote",
-                });
-                return;
-            }
-
-            // Para videos solo guardamos los nombres como preview
-            const newPreviews = files.map((f) => f.name);
-            setVideoPreviews((prev) => [...prev, ...newPreviews]);
-            setSelectedVideoFiles((prev) => [...prev, ...files]);
-        },
-        [selectedVideoFiles.length, toast]
-    );
-
-    const handleRemoveVideoPreview = useCallback((index: number) => {
-        setVideoPreviews((prev) => prev.filter((_, i) => i !== index));
-        setSelectedVideoFiles((prev) => prev.filter((_, i) => i !== index));
-    }, []);
-
-    // Guardar (crear o actualizar descripción)
-    const handleSave = useCallback(
-        async (e: FormEvent) => {
-            e.preventDefault();
-            if (!form.descripcion.trim()) {
-                toast({
-                    variant: "destructive",
-                    title: "Campo requerido",
-                    description: "La descripción no puede estar vacía",
-                });
-                return;
-            }
-
-            setIsSaving(true);
             try {
-                if (selectedGaleria) {
-                    // Actualizar descripción de galería existente
-                    // NOTA: El backend no tiene endpoint PUT para actualizar descripción.
-                    // Por ahora solo se puede cambiar descripción al crear.
-                    // Si necesitas actualizar, deberías implementar un endpoint en el backend.
-                    toast({
-                        title: "Información",
-                        description: "La descripción solo se puede modificar creando una nueva galería.",
-                    });
-                    // Opcional: podrías implementar una función en el backend para actualizar.
+                // Si la API tiene un método getById, úsalo; si no, usa los datos de la lista
+                // Asumimos que galeriaApi.getById existe (ajusta según tu implementación)
+                let detail: Galeria;
+                if (galeriaApi.getById) {
+                    detail = await galeriaApi.getById(galeria.id);
                 } else {
-                    // Crear nueva galería
-                    const nueva = await galeriaApi.create({ descripcion: form.descripcion });
-                    setGalerias((prev) => [...prev, nueva]);
-                    toast({
-                        title: "Galería creada",
-                        description: `"${form.descripcion}" ha sido creada.`,
-                    });
-                    handleClear();
+                    detail = galeria; // usar datos de la lista
                 }
+
+                setFormData({ descripcion: detail.descripcion });
+                setExistingImages(detail.imagenes || []);
+                setExistingVideos(detail.videos || []);
+                clearPendingChanges();
             } catch (error) {
                 toast({
                     variant: "destructive",
-                    title: "Error al guardar",
+                    title: "Error al cargar detalle",
                     description: getApiErrorMessage(error),
                 });
             } finally {
-                setIsSaving(false);
+                setIsLoadingDetail(false);
             }
-        },
-        [form.descripcion, selectedGaleria, toast, handleClear]
-    );
+        } else {
+            // Nueva galería
+            setEditingGaleriaId(null);
+            setFormData(EMPTY_FORM);
+            setExistingImages([]);
+            setExistingVideos([]);
+            clearPendingChanges();
+            setIsDialogOpen(true);
+        }
+    };
 
-    // Subir imágenes a la galería seleccionada
-    const handleUploadImages = useCallback(async () => {
-        if (!selectedGaleria) return;
-        if (selectedImageFiles.length === 0) {
-            toast({ title: "Selecciona al menos una imagen" });
+    // Guardar (crear o actualizar descripción y archivos)
+    const handleSave = async () => {
+        if (!formData.descripcion.trim()) {
+            toast({
+                variant: "destructive",
+                title: "Campo requerido",
+                description: "La descripción no puede estar vacía",
+            });
             return;
         }
 
         setIsSaving(true);
+
         try {
-            const urls = await galeriaApi.uploadImages(selectedGaleria.id, selectedImageFiles);
-            // Actualizar la galería local
-            setGalerias((prev) =>
-                prev.map((g) =>
-                    g.id === selectedGaleria.id
-                        ? { ...g, imagenes: [...g.imagenes, ...urls] }
-                        : g
-                )
-            );
-            setSelectedImageFiles([]);
-            setImagePreviews([]);
+            let targetId = editingGaleriaId;
+
+            // =========================
+            // CREAR
+            // =========================
+            if (!editingGaleriaId) {
+                const nueva = await galeriaApi.create({
+                    descripcion: formData.descripcion,
+                });
+
+                if (!nueva?.id) {
+                    throw new Error("No se recibió el ID de la galería");
+                }
+
+                targetId = nueva.id;
+            }
+
+            // =========================
+            // VALIDACIÓN
+            // =========================
+            if (!targetId) {
+                throw new Error("ID inválido");
+            }
+
+            // =========================
+            // SUBIR IMÁGENES
+            // =========================
+            if (pendingImageUploads.length > 0) {
+                try {
+                    await galeriaApi.uploadImages(
+                        targetId,
+                        pendingImageUploads.map((p) => p.file)
+                    );
+                } catch (e) {
+                    console.error("Error subiendo imágenes", e);
+                }
+            }
+
+            // =========================
+            // SUBIR VIDEOS
+            // =========================
+            if (pendingVideoUploads.length > 0) {
+                try {
+                    await galeriaApi.uploadVideos(
+                        targetId,
+                        pendingVideoUploads.map((p) => p.file)
+                    );
+                } catch (e) {
+                    console.error("Error subiendo videos", e);
+                }
+            }
+
+            // =========================
+            // ELIMINAR IMÁGENES
+            // =========================
+            for (const url of pendingDeletedImages) {
+                try {
+                    await galeriaApi.deleteImage(targetId, url);
+                } catch (e) {
+                    console.error("Error eliminando imagen", e);
+                }
+            }
+
+            // =========================
+            // ELIMINAR VIDEOS
+            // =========================
+            for (const url of pendingDeletedVideos) {
+                try {
+                    await galeriaApi.deleteVideo(targetId, url);
+                } catch (e) {
+                    console.error("Error eliminando video", e);
+                }
+            }
+
+            // =========================
+            // SUCCESS
+            // =========================
             toast({
-                title: "Imágenes subidas",
-                description: `${urls.length} imagen(es) agregada(s) correctamente.`,
+                title: editingGaleriaId
+                    ? "Galería actualizada"
+                    : "Galería creada",
+                description: `"${formData.descripcion}" guardada correctamente.`,
             });
+
+            // reset UI
+            setIsDialogOpen(false);
+            setEditingGaleriaId(null);
+            setFormData(EMPTY_FORM);
+            clearPendingChanges();
+
+            // recargar tabla
+            await loadGalerias();
+
+            // seleccionar nueva galería automáticamente
+            if (!editingGaleriaId && targetId) {
+                setSelectedGaleriaId(targetId);
+            }
+
         } catch (error) {
             toast({
                 variant: "destructive",
-                title: "Error al subir imágenes",
+                title: "Error al guardar",
                 description: getApiErrorMessage(error),
             });
         } finally {
             setIsSaving(false);
         }
-    }, [selectedGaleria, selectedImageFiles, toast]);
+    };
 
-    // Subir videos a la galería seleccionada
-    const handleUploadVideos = useCallback(async () => {
-        if (!selectedGaleria) return;
-        if (selectedVideoFiles.length === 0) {
-            toast({ title: "Selecciona al menos un video" });
+    // Manejar selección de imágenes
+    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+
+        const invalid = files.filter((f) => !f.type.startsWith("image/"));
+        if (invalid.length > 0) {
+            toast({
+                variant: "destructive",
+                title: "Archivos inválidos",
+                description: "Solo se permiten imágenes",
+            });
             return;
         }
 
-        setIsSaving(true);
-        try {
-            const urls = await galeriaApi.uploadVideos(selectedGaleria.id, selectedVideoFiles);
-            setGalerias((prev) =>
-                prev.map((g) =>
-                    g.id === selectedGaleria.id
-                        ? { ...g, videos: [...g.videos, ...urls] }
-                        : g
-                )
-            );
-            setSelectedVideoFiles([]);
-            setVideoPreviews([]);
-            toast({
-                title: "Videos subidos",
-                description: `${urls.length} video(s) agregado(s) correctamente.`,
+        const newPending = files.map((file) => ({
+            id: `${file.name}-${file.size}-${Date.now()}-${Math.random()}`,
+            file,
+            previewUrl: URL.createObjectURL(file),
+        }));
+
+        setPendingImageUploads((prev) => [...prev, ...newPending]);
+        e.target.value = "";
+    };
+
+    // Manejar eliminación de imagen (existente o pendiente)
+    const handleDeleteImage = async (imageUrl: string) => {
+        const isPending = imageUrl.startsWith("blob:");
+        if (isPending) {
+            setPendingImageUploads((prev) => {
+                const toRemove = prev.find((item) => item.previewUrl === imageUrl);
+                if (toRemove) URL.revokeObjectURL(toRemove.previewUrl);
+                return prev.filter((item) => item.previewUrl !== imageUrl);
             });
+        } else {
+            setExistingImages((prev) => prev.filter((url) => url !== imageUrl));
+            setPendingDeletedImages((prev) => (prev.includes(imageUrl) ? prev : [...prev, imageUrl]));
+        }
+    };
+
+    // Manejar selección de videos
+    const handleVideoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+
+        const invalid = files.filter((f) => !f.type.startsWith("video/"));
+        if (invalid.length > 0) {
+            toast({
+                variant: "destructive",
+                title: "Archivos inválidos",
+                description: "Solo se permiten videos",
+            });
+            return;
+        }
+
+        const newPending = files.map((file) => ({
+            id: `${file.name}-${file.size}-${Date.now()}-${Math.random()}`,
+            file,
+            name: file.name,
+        }));
+
+        setPendingVideoUploads((prev) => [...prev, ...newPending]);
+        e.target.value = "";
+    };
+
+    // Manejar eliminación de video (existente o pendiente)
+    const handleDeleteVideo = (videoUrl: string) => {
+        const isPending = !videoUrl.startsWith("http"); // heuristic, adjust if needed
+        if (isPending) {
+            setPendingVideoUploads((prev) => prev.filter((item) => item.name !== videoUrl));
+        } else {
+            setExistingVideos((prev) => prev.filter((url) => url !== videoUrl));
+            setPendingDeletedVideos((prev) => (prev.includes(videoUrl) ? prev : [...prev, videoUrl]));
+        }
+    };
+
+    // Eliminar galería
+    const handleDelete = async (id: string) => {
+        if (!confirm("¿Eliminar esta galería? Esta acción no se puede deshacer.")) return;
+        try {
+            await galeriaApi.deleteGallery(id);
+            if (selectedGaleriaId === id) setSelectedGaleriaId("");
+            toast({ title: "Galería eliminada" });
+            void loadGalerias();
         } catch (error) {
             toast({
                 variant: "destructive",
-                title: "Error al subir videos",
+                title: "Error al eliminar",
                 description: getApiErrorMessage(error),
             });
-        } finally {
-            setIsSaving(false);
         }
-    }, [selectedGaleria, selectedVideoFiles, toast]);
+    };
 
-    // Eliminar una imagen
-    const handleDeleteImage = useCallback(
-        async (imageUrl: string) => {
-            if (!selectedGaleria) return;
-            if (!confirm("¿Eliminar esta imagen?")) return;
+    const handleReactivate = async (id: string) => {
+        if (!confirm("¿Reactivar esta galería?")) return;
+        try {
+            const updated = await galeriaApi.reactivate(id); // Asegúrate de tener este método
+            // Actualización optimista: reemplazamos la galería en el estado
+            setGalerias(prev => prev.map(n => n.id === updated.id ? updated : n));
+            toast({ title: "Galería reactivada" });
+        } catch (error) {
+            toast({
+                variant: "destructive",
+                title: "Error al reactivar",
+                description: getApiErrorMessage(error),
+            });
+        }
+    };
 
-            setIsSaving(true);
-            try {
-                await galeriaApi.deleteImage(selectedGaleria.id, imageUrl);
-                setGalerias((prev) =>
-                    prev.map((g) =>
-                        g.id === selectedGaleria.id
-                            ? { ...g, imagenes: g.imagenes.filter((url) => url !== imageUrl) }
-                            : g
-                    )
-                );
-                toast({ title: "Imagen eliminada" });
-            } catch (error) {
-                toast({
-                    variant: "destructive",
-                    title: "Error al eliminar imagen",
-                    description: getApiErrorMessage(error),
-                });
-            } finally {
-                setIsSaving(false);
-            }
-        },
-        [selectedGaleria, toast]
-    );
-
-    // Eliminar un video
-    const handleDeleteVideo = useCallback(
-        async (videoUrl: string) => {
-            if (!selectedGaleria) return;
-            if (!confirm("¿Eliminar este video?")) return;
-
-            setIsSaving(true);
-            try {
-                await galeriaApi.deleteVideo(selectedGaleria.id, videoUrl);
-                setGalerias((prev) =>
-                    prev.map((g) =>
-                        g.id === selectedGaleria.id
-                            ? { ...g, videos: g.videos.filter((url) => url !== videoUrl) }
-                            : g
-                    )
-                );
-                toast({ title: "Video eliminado" });
-            } catch (error) {
-                toast({
-                    variant: "destructive",
-                    title: "Error al eliminar video",
-                    description: getApiErrorMessage(error),
-                });
-            } finally {
-                setIsSaving(false);
-            }
-        },
-        [selectedGaleria, toast]
-    );
+    // Editar el seleccionado desde el EntityPicker
+    const handleEditSelected = async () => {
+        if (!selectedGaleriaId) return;
+        const gal = galerias.find((g) => g.id === selectedGaleriaId);
+        if (!gal) {
+            toast({
+                variant: "destructive",
+                title: "Selección inválida",
+                description: "La galería seleccionada ya no existe.",
+            });
+            setSelectedGaleriaId("");
+            return;
+        }
+        await openForm(gal);
+    };
 
     return (
-        <div className="p-4 md:p-6 space-y-6">
-            <div className="flex items-center justify-between">
-                <h1 className="text-3xl font-bold">Gestión de Galería</h1>
+        <div className="space-y-6">
+            {/* Cabecera */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                    <h1 className="font-headline text-3xl font-bold">Gestión de Galerías</h1>
+                    <p className="text-sm text-muted-foreground">
+                        Administra las galerías de imágenes y videos.
+                    </p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" size="icon" onClick={() => void loadGalerias()}>
+                        <RefreshCw className="h-4 w-4" />
+                    </Button>
+                    <Button onClick={() => openForm()}>
+                        <Plus className="mr-2 h-4 w-4" /> Agregar Galería
+                    </Button>
+                </div>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-4">
-                {/* Panel izquierdo: lista de galerías */}
-                <div className="lg:col-span-1">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Galerías</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <Input
-                                placeholder="Buscar por descripción..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                disabled={isLoading}
-                            />
+            {/* Selector y búsqueda */}
+            <div className="rounded-md border bg-card p-4">
+                <div className="grid gap-3 md:grid-cols-[1fr_auto_auto] items-end">
+                    <EntityPicker
+                        label="Búsqueda de galerías"
+                        searchLabel="Buscar por descripción"
+                        selectLabel="Selecciona una galería"
+                        query={searchQuery}
+                        value={selectedGaleriaId}
+                        options={galeriaOptions}
+                        onQueryChange={setSearchQuery}
+                        onValueChange={setSelectedGaleriaId}
+                        allowEmpty
+                        emptyLabel="Todas las galerías"
+                        disabled={isLoading}
+                    />
+
+                    {/* SELECT separado como columna propia */}
+                    <div className="flex items-end gap-2">
+                        <div className="space-y-1 min-w-[140px]">
+                            <Label htmlFor="statusFilter" className="text-xs">
+                                Estado
+                            </Label>
+                            <Select
+                                value={statusFilter}
+                                onValueChange={(value: "todos" | "activo" | "inactivo") =>
+                                    setStatusFilter(value)
+                                }
+                            >
+                                <SelectTrigger id="statusFilter">
+                                    <SelectValue placeholder="Filtrar por estado" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="todos">Todas</SelectItem>
+                                    <SelectItem value="activo">Activas</SelectItem>
+                                    <SelectItem value="inactivo">Inactivas</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* BOTONES */}
+                        <div className="flex items-end gap-1">
                             <Button
                                 variant="outline"
-                                onClick={handleClear}
-                                disabled={!selectedGaleriaId}
-                                className="w-full"
+                                size="sm"
+                                onClick={() => void handleEditSelected()}
+                                disabled={!selectedGaleriaId || isLoading}
                             >
-                                Nueva Galería
+                                Editar seleccionado
                             </Button>
-                            <div className="space-y-2 max-h-96 overflow-y-auto">
-                                {filteredGalerias.map((gal) => (
-                                    <Button
-                                        key={gal.id}
-                                        variant={selectedGaleriaId === gal.id ? "default" : "outline"}
-                                        className="w-full justify-start h-auto py-2 truncate"
-                                        onClick={() => handleSelectGaleria(gal.id)}
-                                    >
-                                        <div className="flex flex-col items-start w-full overflow-hidden">
-                                            <span className="font-semibold truncate w-full">
-                                                {gal.descripcion || "Sin descripción"}
-                                            </span>
-                                            <span className="text-xs text-gray-500">
-                                                {formatDate(gal.createdAt)} · {gal.imagenes.length} img · {gal.videos.length} vid
-                                            </span>
-                                        </div>
-                                    </Button>
-                                ))}
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
 
-                {/* Panel derecho: detalles y edición */}
-                <div className="lg:col-span-3 space-y-6">
-                    {/* Formulario de descripción */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>
-                                {selectedGaleria ? "Editar Descripción" : "Crear Nueva Galería"}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <form onSubmit={handleSave} className="space-y-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="descripcion">Descripción *</Label>
-                                    <Textarea
-                                        id="descripcion"
-                                        placeholder="Descripción de la galería"
-                                        value={form.descripcion}
-                                        onChange={(e) => setForm({ descripcion: e.target.value })}
-                                        required
-                                        disabled={isSaving}
-                                        rows={3}
-                                    />
-                                </div>
-                                <Button type="submit" disabled={isSaving || !form.descripcion.trim()}>
-                                    {isSaving ? "Guardando..." : selectedGaleria ? "Actualizar" : "Crear"}
-                                </Button>
-                            </form>
-                        </CardContent>
-                    </Card>
-
-                    {/* Solo si hay una galería seleccionada mostramos las secciones de archivos */}
-                    {selectedGaleria && (
-                        <>
-                            {/* Subir imágenes */}
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2">
-                                        <Image className="h-5 w-5" /> Imágenes
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    {/* Grid de imágenes existentes */}
-                                    {selectedGaleria.imagenes.length > 0 && (
-                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                                            {selectedGaleria.imagenes.map((url, idx) => (
-                                                <div key={idx} className="relative group rounded-lg overflow-hidden bg-gray-100 aspect-square">
-                                                    <img
-                                                        src={url}
-                                                        alt={`Imagen ${idx + 1}`}
-                                                        className="w-full h-full object-cover"
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDeleteImage(url)}
-                                                        className="absolute top-1 right-1 bg-black/70 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        disabled={isSaving}
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {/* Subir nuevas imágenes */}
-                                    <div className="border-t pt-4">
-                                        <Label htmlFor="imagenes">Agregar imágenes</Label>
-                                        <div className="flex flex-wrap gap-2 items-center mt-2">
-                                            <Input
-                                                id="imagenes"
-                                                type="file"
-                                                accept="image/*"
-                                                multiple
-                                                onChange={handleImageSelect}
-                                                disabled={isSaving}
-                                                className="flex-1"
-                                            />
-                                            <Button
-                                                type="button"
-                                                onClick={handleUploadImages}
-                                                disabled={isSaving || selectedImageFiles.length === 0}
-                                            >
-                                                <Upload className="h-4 w-4 mr-2" />
-                                                Subir
-                                            </Button>
-                                        </div>
-
-                                        {/* Previsualización de imágenes a subir */}
-                                        {imagePreviews.length > 0 && (
-                                            <div className="mt-4">
-                                                <p className="text-sm text-gray-500 mb-2">
-                                                    {imagePreviews.length} imagen(es) pendiente(s)
-                                                </p>
-                                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                                                    {imagePreviews.map((preview, index) => (
-                                                        <div
-                                                            key={index}
-                                                            className="relative group rounded-lg overflow-hidden bg-gray-100 aspect-square"
-                                                        >
-                                                            <img
-                                                                src={preview}
-                                                                alt={`Preview ${index + 1}`}
-                                                                className="w-full h-full object-cover"
-                                                            />
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleRemoveImagePreview(index)}
-                                                                className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
-                                                            >
-                                                                <span className="text-white text-sm">Eliminar</span>
-                                                            </button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            {/* Subir videos */}
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2">
-                                        <Video className="h-5 w-5" /> Videos
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    {/* Lista de videos existentes */}
-                                    {selectedGaleria.videos.length > 0 && (
-                                        <div className="space-y-2">
-                                            {selectedGaleria.videos.map((url, idx) => (
-                                                <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                                                    <a
-                                                        href={url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-blue-600 hover:underline truncate flex-1"
-                                                    >
-                                                        Video {idx + 1}
-                                                    </a>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDeleteVideo(url)}
-                                                        className="text-red-600 hover:text-red-800 p-1"
-                                                        disabled={isSaving}
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {/* Subir nuevos videos */}
-                                    <div className="border-t pt-4">
-                                        <Label htmlFor="videos">Agregar videos</Label>
-                                        <div className="flex flex-wrap gap-2 items-center mt-2">
-                                            <Input
-                                                id="videos"
-                                                type="file"
-                                                accept="video/*"
-                                                multiple
-                                                onChange={handleVideoSelect}
-                                                disabled={isSaving}
-                                                className="flex-1"
-                                            />
-                                            <Button
-                                                type="button"
-                                                onClick={handleUploadVideos}
-                                                disabled={isSaving || selectedVideoFiles.length === 0}
-                                            >
-                                                <Upload className="h-4 w-4 mr-2" />
-                                                Subir
-                                            </Button>
-                                        </div>
-
-                                        {/* Lista de videos pendientes */}
-                                        {videoPreviews.length > 0 && (
-                                            <div className="mt-4 space-y-1">
-                                                <p className="text-sm text-gray-500">Videos a subir:</p>
-                                                {videoPreviews.map((name, index) => (
-                                                    <div key={index} className="flex items-center justify-between p-1 bg-gray-50 rounded">
-                                                        <span className="text-sm truncate flex-1">{name}</span>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleRemoveVideoPreview(index)}
-                                                            className="text-red-600 text-xs ml-2"
-                                                        >
-                                                            Eliminar
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </>
-                    )}
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                    setSearchQuery("");
+                                    setSelectedGaleriaId("");
+                                    setStatusFilter("todos");
+                                }}
+                                disabled={isLoading}
+                            >
+                                Limpiar filtros
+                            </Button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            {/* Tabla resumen de galerías */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Listado General</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
+            {/* Tabla de galerías */}
+            <div className="rounded-md border bg-card">
+                <div className="overflow-x-auto">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Descripción</TableHead>
+                                <TableHead>Imágenes</TableHead>
+                                <TableHead>Videos</TableHead>
+                                <TableHead>Estado</TableHead>
+                                <TableHead>Fecha</TableHead>
+                                <TableHead className="text-right">Acciones</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {isLoading ? (
                                 <TableRow>
-                                    <TableHead>Descripción</TableHead>
-                                    <TableHead>Imágenes</TableHead>
-                                    <TableHead>Videos</TableHead>
-                                    <TableHead>Estado</TableHead>
-                                    <TableHead>Fecha</TableHead>
+                                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                                        Cargando galerías...
+                                    </TableCell>
                                 </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {isLoading ? (
-                                    <TableRow>
-                                        <TableCell colSpan={5} className="text-center text-gray-500">
-                                            Cargando galerías...
+                            ) : filteredGalerias.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                                        No hay galerías disponibles.
+                                    </TableCell>
+                                </TableRow>
+                            ) : (
+                                filteredGalerias.map((gal) => (
+                                    <TableRow key={gal.id}>
+                                        <TableCell className="font-medium max-w-xs truncate">
+                                            {gal.descripcion || "Sin descripción"}
                                         </TableCell>
-                                    </TableRow>
-                                ) : filteredGalerias.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={5} className="text-center text-gray-500">
-                                            No hay galerías disponibles
+                                        <TableCell>{gal.imagenes.length}</TableCell>
+                                        <TableCell>{gal.videos.length}</TableCell>
+                                        <TableCell>
+                                            {gal.estatus ? (
+                                                <Badge className="bg-green-100 text-green-800">Activa</Badge>
+                                            ) : (
+                                                <Badge className="bg-gray-100 text-gray-800">Inactiva</Badge>
+                                            )}
                                         </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    filteredGalerias.map((gal) => (
-                                        <TableRow
-                                            key={gal.id}
-                                            className="cursor-pointer hover:bg-gray-50"
-                                            onClick={() => handleSelectGaleria(gal.id)}
-                                        >
-                                            <TableCell className="font-medium max-w-xs truncate">
-                                                {gal.descripcion}
-                                            </TableCell>
-                                            <TableCell>{gal.imagenes.length}</TableCell>
-                                            <TableCell>{gal.videos.length}</TableCell>
-                                            <TableCell>
+                                        <TableCell className="text-sm text-gray-500">
+                                            {formatDate(gal.createdAt)}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-8 px-2"
+                                                    onClick={() => openForm(gal)}
+                                                >
+                                                    Editar
+                                                </Button>
+
                                                 {gal.estatus ? (
-                                                    <Badge className="bg-green-100 text-green-800">Activa</Badge>
+                                                    // Si está activa → botón de eliminar (rojo)
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                        onClick={() => void handleDelete(gal.id)}
+                                                    >
+                                                        <X className="h-4 w-4" />
+                                                    </Button>
                                                 ) : (
-                                                    <Badge className="bg-gray-100 text-gray-800">Inactiva</Badge>
+                                                    // Si está inactiva → botón de reactivar (verde)
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-8 px-2 text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
+                                                        onClick={() => void handleReactivate(gal.id)}
+                                                    >
+                                                        <RotateCcw className="h-4 w-4 mr-1" />
+                                                        Reactivar
+                                                    </Button>
                                                 )}
-                                            </TableCell>
-                                            <TableCell className="text-sm text-gray-500">
-                                                {formatDate(gal.createdAt)}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
+            </div>
+
+            {/* Diálogo de creación/edición */}
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>
+                            {editingGaleriaId ? "Editar Galería" : "Nueva Galería"}
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        {isLoadingDetail && (
+                            <p className="text-sm text-muted-foreground">Cargando datos...</p>
+                        )}
+
+                        {/* Campo descripción */}
+                        <div className="space-y-2">
+                            <Label htmlFor="descripcion">Descripción *</Label>
+                            <Textarea
+                                id="descripcion"
+                                placeholder="Descripción de la galería"
+                                value={formData.descripcion}
+                                onChange={(e) => setFormData({ descripcion: e.target.value })}
+                                disabled={isLoadingDetail || isSaving}
+                                rows={3}
+                            />
+                        </div>
+
+                        {/* Sección de imágenes */}
+                        <div className="space-y-2 border-t pt-4">
+                            <Label>Imágenes</Label>
+                            {editingGaleriaId ? (
+                                <>
+                                    <Input
+                                        type="file"
+                                        accept="image/*"
+                                        multiple
+                                        onChange={handleImageSelect}
+                                        disabled={isSaving}
+                                    />
+                                    {(pendingImageUploads.length > 0 || pendingDeletedImages.length > 0) && (
+                                        <p className="text-xs text-muted-foreground">
+                                            Cambios pendientes de imágenes. Se aplican al guardar.
+                                        </p>
+                                    )}
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                        {/* Imágenes existentes */}
+                                        {existingImages.map((url) => (
+                                            <div key={url} className="relative border rounded-md overflow-hidden">
+                                                <img src={url} alt="Imagen" className="h-24 w-full object-cover" />
+                                                <Button
+                                                    type="button"
+                                                    size="icon"
+                                                    variant="destructive"
+                                                    className="absolute top-1 right-1 h-7 w-7"
+                                                    onClick={() => void handleDeleteImage(url)}
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                        {/* Previsualizaciones de nuevas imágenes */}
+                                        {pendingImageUploads.map((item) => (
+                                            <div key={item.id} className="relative border rounded-md overflow-hidden">
+                                                <img src={item.previewUrl} alt="Preview" className="h-24 w-full object-cover" />
+                                                <Button
+                                                    type="button"
+                                                    size="icon"
+                                                    variant="destructive"
+                                                    className="absolute top-1 right-1 h-7 w-7"
+                                                    onClick={() => void handleDeleteImage(item.previewUrl)}
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            ) : (
+                                <p className="text-sm text-muted-foreground">
+                                    Guarda la galería primero para gestionar imágenes.
+                                </p>
+                            )}
+                        </div>
+
+                        {/* Sección de videos */}
+                        <div className="space-y-2 border-t pt-4">
+                            <Label>Videos</Label>
+                            {editingGaleriaId ? (
+                                <>
+                                    <Input
+                                        type="file"
+                                        accept="video/*"
+                                        multiple
+                                        onChange={handleVideoSelect}
+                                        disabled={isSaving}
+                                    />
+                                    {(pendingVideoUploads.length > 0 || pendingDeletedVideos.length > 0) && (
+                                        <p className="text-xs text-muted-foreground">
+                                            Cambios pendientes de videos. Se aplican al guardar.
+                                        </p>
+                                    )}
+                                    <div className="space-y-2">
+                                        {existingVideos.map((url, idx) => (
+                                            <div key={url} className="flex items-center justify-between p-2 bg-muted rounded">
+                                                <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 truncate">
+                                                    Video {idx + 1}
+                                                </a>
+                                                <Button
+                                                    type="button"
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    className="h-7 w-7 text-destructive"
+                                                    onClick={() => handleDeleteVideo(url)}
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                        {pendingVideoUploads.map((item) => (
+                                            <div key={item.id} className="flex items-center justify-between p-2 bg-muted rounded">
+                                                <span className="text-sm truncate">{item.name}</span>
+                                                <Button
+                                                    type="button"
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    className="h-7 w-7 text-destructive"
+                                                    onClick={() => handleDeleteVideo(item.name)}
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            ) : (
+                                <p className="text-sm text-muted-foreground">
+                                    Guarda la galería primero para gestionar videos.
+                                </p>
+                            )}
+                        </div>
                     </div>
-                </CardContent>
-            </Card>
+
+                    <div className="flex justify-end gap-3 pt-4 border-t">
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setIsDialogOpen(false);
+                                setEditingGaleriaId(null);
+                                setFormData(EMPTY_FORM);
+                                clearPendingChanges();
+                            }}
+                            disabled={isSaving}
+                        >
+                            Cancelar
+                        </Button>
+                        <Button onClick={() => void handleSave()} disabled={isSaving || isLoadingDetail}>
+                            {isSaving ? "Guardando..." : "Guardar Galería"}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

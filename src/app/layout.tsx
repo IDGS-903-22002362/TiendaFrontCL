@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Header } from "@/components/layout/header";
-import { Footer } from "@/components/layout/footer";
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from "@/hooks/use-auth";
 import { CartProvider } from "@/hooks/use-cart";
+import { StorefrontShell } from "@/components/layout/storefront-shell";
 
 export const metadata: Metadata = {
-  title: "La Dungeon",
-  description: "Tu tienda de confianza",
+  title: "Tienda Oficial del Club León La Guarida del León",
+  description: "Tienda oficial del Club León",
 };
 
 export default function RootLayout({
@@ -17,7 +16,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="es" className="dark">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
@@ -33,11 +32,7 @@ export default function RootLayout({
       <body className="font-body antialiased">
         <AuthProvider>
           <CartProvider>
-            <div className="flex min-h-screen flex-col">
-              <Header />
-              <main className="flex-grow">{children}</main>
-              <Footer />
-            </div>
+            <StorefrontShell>{children}</StorefrontShell>
             <Toaster />
           </CartProvider>
         </AuthProvider>

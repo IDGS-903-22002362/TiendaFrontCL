@@ -8,20 +8,27 @@ const API_BASE =
 type ApiErrorPayload = {
   success?: false;
   message?: string;
-  error?: string;
+  error?: string | { code?: string; message?: string };
   errors?: Array<{ campo?: string; mensaje?: string; codigo?: string }>;
   [key: string]: unknown;
 };
 
 export class ApiError extends Error {
   status: number;
+  code?: string;
   payload?: ApiErrorPayload;
 
-  constructor(status: number, message: string, payload?: ApiErrorPayload) {
+  constructor(
+    status: number,
+    message: string,
+    payload?: ApiErrorPayload,
+    code?: string,
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.payload = payload;
+    this.code = code;
   }
 }
 
@@ -71,17 +78,41 @@ function shouldTryAuthRecovery(
     return true;
   }
 
-  const payloadMessage =
-    typeof payload.message === "string"
-      ? payload.message
-      : typeof payload.error === "string"
-        ? payload.error
-        : "";
+  const payloadMessage = getPayloadMessage(payload);
 
   return (
     payload.success === false &&
     /token|autorizad|sesi[oó]n|session/i.test(payloadMessage)
   );
+}
+
+function getPayloadErrorObject(payload?: ApiErrorPayload) {
+  const errorValue = payload?.error;
+  return errorValue && typeof errorValue === "object"
+    ? (errorValue as { code?: string; message?: string })
+    : undefined;
+}
+
+function getPayloadMessage(payload?: ApiErrorPayload, fallback = "") {
+  if (typeof payload?.message === "string" && payload.message) {
+    return payload.message;
+  }
+
+  if (typeof payload?.error === "string" && payload.error) {
+    return payload.error;
+  }
+
+  const nestedError = getPayloadErrorObject(payload);
+  if (typeof nestedError?.message === "string" && nestedError.message) {
+    return nestedError.message;
+  }
+
+  return fallback;
+}
+
+function getPayloadCode(payload?: ApiErrorPayload) {
+  const nestedError = getPayloadErrorObject(payload);
+  return typeof nestedError?.code === "string" ? nestedError.code : undefined;
 }
 
 async function refreshBackendSessionFromFirebase(): Promise<SessionRefreshResult> {
@@ -214,9 +245,8 @@ export async function apiFetch<T>(
   }
 
   if (!response.ok || payload?.success === false) {
-    const message =
-      payload?.message || payload?.error || `Error HTTP ${response.status}`;
-    throw new ApiError(response.status, message, payload);
+    const message = getPayloadMessage(payload, `Error HTTP ${response.status}`);
+    throw new ApiError(response.status, message, payload, getPayloadCode(payload));
   }
 
   return payload as T;

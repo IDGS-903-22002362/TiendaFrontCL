@@ -108,7 +108,7 @@ function LoginPageContent() {
   }
 
   return (
-    <div className="container mx-auto max-w-md px-4 py-8">
+    <div className="container max-w-md py-10">
       <div className="mb-4">
         <Button asChild variant="ghost" className="-ml-3">
           <Link href="/">
@@ -118,7 +118,7 @@ function LoginPageContent() {
         </Button>
       </div>
 
-      <Card>
+      <Card className="border-primary/15">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <LogIn className="h-5 w-5" />
@@ -130,7 +130,7 @@ function LoginPageContent() {
         </CardHeader>
         <CardContent className="space-y-4">
           {!firebaseReady ? (
-            <div className="space-y-2 text-sm text-muted-foreground">
+            <div className="space-y-2 text-sm text-text-secondary">
               <p>Falta configuración Firebase para iniciar sesión.</p>
               <p>Variables faltantes: {missingFirebaseVars.join(", ")}.</p>
               <p>
@@ -198,7 +198,7 @@ function LoginPageContent() {
               </TabsContent>
 
               <TabsContent value="trabajador" className="space-y-4">
-                <div className="rounded-lg bg-muted p-3 text-sm text-muted-foreground mb-4">
+                <div className="mb-4 rounded-[22px] border border-secondary/20 bg-secondary/10 p-3 text-sm text-text-secondary">
                   <strong>Acceso restringido:</strong> Exclusivo para personal administrativo y de almacén.
                 </div>
                 <div className="space-y-2">
@@ -218,7 +218,7 @@ function LoginPageContent() {
                 </div>
 
                 <Button
-                  className="h-12 w-full bg-slate-900 hover:bg-slate-800"
+                  className="h-12 w-full"
                   onClick={() => void onEmailPasswordLogin(true)}
                   disabled={isSubmitting}
                 >
