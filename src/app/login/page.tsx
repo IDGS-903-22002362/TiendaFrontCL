@@ -39,8 +39,15 @@ function LoginPageContent() {
   const missingFirebaseVars = getMissingFirebaseEnvVars();
 
   const getTargetRedirect = (currentRole: string | undefined) => {
-    // Redirigir a /dashboard que luego redirige según el rol
-    return "/dashboard";
+    if (currentRole === "ADMIN") {
+      return "/admin";
+    }
+
+    if (redirectTo.startsWith("/admin")) {
+      return "/";
+    }
+
+    return redirectTo;
   };
 
   useEffect(() => {

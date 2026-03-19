@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import type { Product } from "@/lib/types";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
@@ -18,6 +18,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { PriceTag } from "@/components/product/price-tag";
 import { Separator } from "@/components/ui/separator";
+import { Lens } from "@/components/ui/lens";
 import { CheckCircle, ShoppingCart, Sparkles } from "lucide-react";
 import { ProductQnA } from "./product-qna";
 import { cn } from "@/lib/utils";
@@ -26,18 +27,55 @@ export function ProductDetailsClient({ product }: { product: Product }) {
   const productTallaIds = product.tallaIds ?? [];
   const inventoryBySize = product.inventarioPorTalla ?? [];
   const stockTotal = product.stockTotal ?? product.stock;
+  const renderableSizes = useMemo(
+    () =>
+      (product.sizes ?? []).filter(
+        (size) => typeof size === "string" && size.trim().length > 0,
+      ),
+    [product.sizes],
+  );
 
   const [selectedSize, setSelectedSize] = useState<string | undefined>(
-    product.sizes ? product.sizes[0] : undefined,
+    renderableSizes[0],
   );
   const [selectedColor, setSelectedColor] = useState<string | undefined>(
     product.colors ? product.colors[0] : undefined,
   );
+  const [isDesktopLensEnabled, setIsDesktopLensEnabled] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(
+      "(min-width: 768px) and (hover: hover) and (pointer: fine)",
+    );
+
+    const handleChange = () => {
+      setIsDesktopLensEnabled(mediaQuery.matches);
+    };
+
+    handleChange();
+    mediaQuery.addEventListener("change", handleChange);
+
+    return () => {
+      mediaQuery.removeEventListener("change", handleChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    setSelectedSize((currentSize) => {
+      if (currentSize && renderableSizes.includes(currentSize)) {
+        return currentSize;
+      }
+
+      return renderableSizes[0];
+    });
+  }, [renderableSizes]);
 
   const { addToCart } = useCart();
 
   const hasSizeInventory =
-    Boolean(product.hasSizeInventory) && productTallaIds.length > 0;
+    Boolean(product.hasSizeInventory) &&
+    productTallaIds.length > 0 &&
+    renderableSizes.length > 0;
 
   const getSizeStock = (size: string) => {
     if (!hasSizeInventory) {
@@ -82,13 +120,25 @@ export function ProductDetailsClient({ product }: { product: Product }) {
                 return (
                   <CarouselItem key={index}>
                     <div className="relative aspect-square w-full overflow-hidden rounded-[24px] border border-border bg-card shadow-[var(--shadow-card)] md:rounded-[30px]">
-                      <Image
-                        src={img}
-                        alt={`${product.name} - image ${index + 1}`}
-                        fill
-                        className="object-cover"
-                        data-ai-hint={placeholder?.imageHint}
-                      />
+                      {isDesktopLensEnabled ? (
+                        <Lens lensSize={190} zoomFactor={1.8}>
+                          <Image
+                            src={img}
+                            alt={`${product.name} - image ${index + 1}`}
+                            fill
+                            className="object-cover"
+                            data-ai-hint={placeholder?.imageHint}
+                          />
+                        </Lens>
+                      ) : (
+                        <Image
+                          src={img}
+                          alt={`${product.name} - image ${index + 1}`}
+                          fill
+                          className="object-cover"
+                          data-ai-hint={placeholder?.imageHint}
+                        />
+                      )}
                     </div>
                   </CarouselItem>
                 );
@@ -134,7 +184,7 @@ export function ProductDetailsClient({ product }: { product: Product }) {
 
           <Separator />
 
-          {product.sizes && (
+          {renderableSizes.length > 0 && (
             <div className="space-y-3">
               <h3 className="font-headline text-lg font-semibold">Talla</h3>
               <RadioGroup
@@ -142,7 +192,7 @@ export function ProductDetailsClient({ product }: { product: Product }) {
                 onValueChange={setSelectedSize}
                 className="flex flex-wrap gap-2.5"
               >
-                {product.sizes.map((size) => {
+                {renderableSizes.map((size) => {
                   const isSoldOut = getSizeStock(size) <= 0;
                   return (
                     <div key={size}>
@@ -215,19 +265,23 @@ export function ProductDetailsClient({ product }: { product: Product }) {
 
       {/* Floating Action Bar - El botón que te "persigue" */}
       <div className="fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-40 transition-all animate-in fade-in slide-in-from-bottom-4 duration-500 md:bottom-6 md:left-1/2 md:w-[calc(100%-2rem)] md:max-w-lg md:-translate-x-1/2">
-        <div className={cn(
-          "flex items-center justify-between gap-3 rounded-[24px] border border-border bg-card/95 p-2 shadow-[var(--shadow-elevated)] backdrop-blur-xl transition-all md:rounded-[28px]"
-        )}>
+        <div
+          className={cn(
+            "flex items-center justify-between gap-3 rounded-[24px] border border-border bg-card/95 p-2 shadow-[var(--shadow-elevated)] backdrop-blur-xl transition-all md:rounded-[28px]",
+          )}
+        >
           <div className="hidden pl-6 md:flex flex-col">
-             <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-text-muted">Precio final</span>
-             <span className="font-headline text-xl font-bold text-secondary">
-               ${(product.salePrice || product.price).toFixed(2)}
-             </span>
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-text-muted">
+              Precio final
+            </span>
+            <span className="font-headline text-xl font-bold text-secondary">
+              ${(product.salePrice || product.price).toFixed(2)}
+            </span>
           </div>
           <Button
             className={cn(
               "group h-14 flex-1 rounded-[20px] px-5 text-sm font-bold transition-all hover:scale-[1.02] active:scale-95 md:rounded-[22px] md:px-8 md:text-base",
-              canAddToCart ? "shadow-lg shadow-primary/20" : "opacity-50"
+              canAddToCart ? "shadow-lg shadow-primary/20" : "opacity-50",
             )}
             size="lg"
             onClick={handleAddToCart}

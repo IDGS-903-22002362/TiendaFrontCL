@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { SendHorizonal, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { PlaceholdersAndVanishInput } from "@/components/ui/placeholders-and-vanish-input";
 
 type QuickPrompt = {
   label: string;
@@ -27,8 +27,28 @@ export function AiChatComposer({
   quickPrompts = [],
   hasMessages = false,
   onSubmit,
+  variant = "default",
 }: AiChatComposerProps) {
   const [message, setMessage] = useState("");
+  const inputFormRef = useRef<HTMLFormElement>(null);
+  const isProductPremium = variant === "product-premium";
+
+  const contextualPlaceholders =
+    variant === "product-premium"
+      ? [
+          "¿Este producto tiene stock en mi talla?",
+          "¿Qué talla me recomiendas según este modelo?",
+          "¿Con qué otros productos combina este artículo?",
+          "¿Qué tiempo de entrega tiene este producto?",
+        ]
+      : [
+          "Buscame jerseys negros en talla M",
+          "¿Qué productos en oferta me recomiendas hoy?",
+          "Arma un outfit completo para el estadio",
+          "¿Qué novedades llegaron esta semana?",
+        ];
+
+  const placeholders = [placeholder, ...contextualPlaceholders].filter(Boolean);
 
   async function submitMessage(nextMessage: string) {
     const trimmed = nextMessage.trim();
@@ -36,7 +56,12 @@ export function AiChatComposer({
       return;
     }
 
-    setMessage("");
+    window.setTimeout(() => {
+      setMessage((currentValue) =>
+        currentValue.trim() === trimmed ? "" : currentValue,
+      );
+    }, 220);
+
     await onSubmit(trimmed);
   }
 
@@ -60,34 +85,50 @@ export function AiChatComposer({
           </div>
         ) : null}
 
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submitMessage(message);
-          }}
-          className="relative flex items-center gap-2"
-        >
-          <div className="relative flex-1 bg-background rounded-2xl border border-border focus-within:ring-2 focus-within:ring-primary/20 transition-all">
-            <Textarea
+        <div className="relative flex items-center gap-2">
+          <div
+            className={`relative flex-1 rounded-2xl border transition-all focus-within:ring-2 focus-within:ring-primary/20 ${
+              isProductPremium
+                ? "border-primary/20 focus-within:border-primary/40 bg-[linear-gradient(90deg,rgba(10,130,66,0.035),rgba(18,18,18,0.94),rgba(10,130,66,0.02))]"
+                : "border-border bg-background"
+            }`}
+          >
+            <PlaceholdersAndVanishInput
+              placeholders={placeholders}
               value={message}
+              formRef={inputFormRef}
               onChange={(event) => setMessage(event.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  void submitMessage(message);
-                }
+              onSubmit={(event) => {
+                event.preventDefault();
+                void submitMessage(message);
               }}
-              placeholder={placeholder}
               disabled={disabled || isSending}
-              rows={1}
-              className="min-h-[44px] max-h-[120px] flex-1 resize-none border-0 bg-transparent px-3.5 py-2.5 text-sm focus-visible:ring-0"
+              hideSubmitButton
+              className={`h-11 max-w-none rounded-2xl border-0 bg-transparent px-0 shadow-none ${
+                isProductPremium ? "[&_input]:font-medium" : ""
+              }`}
+              inputClassName={`min-h-[44px] border-0 bg-transparent px-3.5 py-2.5 text-sm text-foreground focus-visible:ring-0 sm:pl-3.5 sm:pr-3.5 ${
+                isProductPremium
+                  ? "placeholder:text-muted-foreground/85"
+                  : "placeholder:text-text-muted"
+              }`}
+              placeholderClassName={`pl-3.5 text-sm sm:pl-3.5 ${
+                isProductPremium
+                  ? "text-muted-foreground/95 font-medium tracking-[0.01em]"
+                  : "text-text-muted"
+              }`}
             />
           </div>
           <Button
-            type="submit"
+            type="button"
             size="icon"
+            onClick={() => inputFormRef.current?.requestSubmit()}
             disabled={disabled || isSending || !message.trim()}
-            className="h-11 w-11 shrink-0 rounded-2xl shadow-lg"
+            className={`h-11 w-11 shrink-0 rounded-2xl shadow-lg ${
+              isProductPremium
+                ? "bg-primary hover:bg-primary/90 shadow-primary/20"
+                : ""
+            }`}
           >
             {isSending ? (
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -95,7 +136,7 @@ export function AiChatComposer({
               <SendHorizonal className="h-4 w-4" />
             )}
           </Button>
-        </form>
+        </div>
       </div>
     </div>
   );

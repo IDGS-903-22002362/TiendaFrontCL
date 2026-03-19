@@ -1,6 +1,6 @@
-import { ProductCard } from '@/components/product/product-card';
-import type { Product } from '@/lib/types';
-import { Frown } from 'lucide-react';
+import { ProductCard } from "@/components/product/product-card";
+import type { Product } from "@/lib/types";
+import { Frown } from "lucide-react";
 
 type ProductGridProps = {
   products: Product[];
@@ -24,8 +24,8 @@ export function ProductGrid({ products }: ProductGridProps) {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-6">
-      {products.map(product => (
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-6 [&:has(.focus-card-item:hover)_.focus-card-item:not(:hover)]:scale-[0.985] [&:has(.focus-card-item:hover)_.focus-card-item:not(:hover)]:blur-[1px] [&:has(.focus-card-item:hover)_.focus-card-item:not(:hover)]:opacity-80">
+      {products.map((product) => (
         <ProductCard key={product.id} product={product} />
       ))}
     </div>

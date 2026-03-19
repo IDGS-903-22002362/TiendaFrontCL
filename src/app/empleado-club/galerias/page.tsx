@@ -48,7 +48,7 @@ export interface Galeria {
     updatedAt: string | Date;
 }
 
-// Estado inicial del formulario
+// Estado inicial del formulario de galeria
 const EMPTY_FORM = {
     descripcion: "",
 };
