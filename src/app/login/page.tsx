@@ -39,15 +39,19 @@ function LoginPageContent() {
   const missingFirebaseVars = getMissingFirebaseEnvVars();
 
   const getTargetRedirect = (currentRole: string | undefined) => {
-    if (currentRole === "ADMIN") {
-      return "/admin";
-    }
+    switch (currentRole) {
+      case "SUPER_ADMIN":
+        return "/super-admin/usuarios";
 
-    if (redirectTo.startsWith("/admin")) {
-      return "/";
-    }
+      case "ADMIN":
+        return "/admin";
 
-    return redirectTo;
+      case "EMPLEADO_CLUB":
+        return "/empleado-club/noticias";
+
+      default:
+        return "/";
+    }
   };
 
   useEffect(() => {
