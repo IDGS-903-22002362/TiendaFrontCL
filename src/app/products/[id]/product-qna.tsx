@@ -155,7 +155,7 @@ export function ProductQnA({ product }: { product: Product }) {
                 onValueChange={setActiveTab}
                 className="flex min-h-0 flex-1 flex-col overflow-hidden"
               >
-                <div className="border-b border-border bg-background-deep/55 px-4 py-2">
+                <div className="border-b border-border bg-muted/55 px-4 py-2">
                   <AssistantTabs
                     variant="default"
                     className="h-10 w-full max-w-none"

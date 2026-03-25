@@ -1,7 +1,6 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Minus, Plus } from 'lucide-react';
 
 type QuantitySelectorProps = {
@@ -24,27 +23,24 @@ export function QuantitySelector({
   };
 
   return (
-    <div className="flex items-center">
+    <div className="inline-flex items-center rounded-full border border-border bg-muted/45 p-1">
       <Button
-        variant="outline"
+        variant="ghost"
         size="icon"
-        className="h-8 w-8 rounded-r-none"
+        className="h-9 w-9 rounded-full"
         onClick={handleDecrement}
         disabled={quantity <= 1}
       >
         <Minus className="h-4 w-4" />
         <span className="sr-only">Reducir cantidad</span>
       </Button>
-      <Input
-        type="number"
-        className="h-8 w-12 rounded-none border-x-0 text-center"
-        value={quantity}
-        readOnly
-      />
+      <span className="w-10 text-center text-sm font-semibold text-foreground">
+        {quantity}
+      </span>
       <Button
-        variant="outline"
+        variant="ghost"
         size="icon"
-        className="h-8 w-8 rounded-l-none"
+        className="h-9 w-9 rounded-full"
         onClick={handleIncrement}
         disabled={quantity >= maxQuantity}
       >

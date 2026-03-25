@@ -1,14 +1,13 @@
 import { fetchProductById, fetchProducts } from "@/lib/api/storefront";
 import { notFound } from "next/navigation";
 import { ProductDetailsClient } from "./product-details-client";
-import { ProductCard } from "@/components/product/product-card";
+import { Breadcrumbs } from "@/components/storefront/shared/breadcrumbs";
+import { RecommendationCarousel } from "@/components/storefront/product/recommendation-carousel";
 import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from "@/components/ui/carousel";
+  getProductRecommendationTitle,
+  getRelatedProducts,
+  isProductVisible,
+} from "@/lib/storefront";
 
 export default async function ProductPage({
   params,
@@ -23,46 +22,32 @@ export default async function ProductPage({
   }
 
   const allProducts = await fetchProducts();
-
-  const relatedProducts = allProducts
-    .filter((p) => p.category === product.category && p.id !== product.id)
-    .slice(0, 8);
+  const relatedProducts = getRelatedProducts(allProducts.filter(isProductVisible), product);
 
   return (
-    <div className="container py-8">
-      <ProductDetailsClient product={product} />
+    <div className="storefront-frame py-5 md:py-8">
+      <div className="mb-6">
+        <Breadcrumbs
+          items={[
+            { label: "Inicio", href: "/" },
+            { label: "Productos", href: "/products" },
+            { label: product.category },
+            { label: product.name },
+          ]}
+        />
+      </div>
 
-      {relatedProducts.length > 0 && (
-        <section className="mt-16 border-t border-border pt-12">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-secondary">
-            Más para ti
-          </p>
-          <h2 className="mb-8 mt-2 font-headline text-3xl font-bold tracking-tight">
-            Productos Relacionados
-          </h2>
-          <Carousel
-            opts={{
-              align: "start",
-            }}
-            className="w-full [&:has(.focus-card-item:hover)_.focus-card-item:not(:hover)]:scale-[0.985] [&:has(.focus-card-item:hover)_.focus-card-item:not(:hover)]:blur-[1px] [&:has(.focus-card-item:hover)_.focus-card-item:not(:hover)]:opacity-80"
-          >
-            <CarouselContent>
-              {relatedProducts.map((relatedProduct) => (
-                <CarouselItem
-                  key={relatedProduct.id}
-                  className="md:basis-1/2 lg:basis-1/3 xl:basis-1/4"
-                >
-                  <div className="p-1">
-                    <ProductCard product={relatedProduct} />
-                  </div>
-                </CarouselItem>
-              ))}
-            </CarouselContent>
-            <CarouselPrevious className="hidden sm:flex" />
-            <CarouselNext className="hidden sm:flex" />
-          </Carousel>
-        </section>
-      )}
+      <ProductDetailsClient product={product}>
+        {relatedProducts.length > 0 ? (
+          <div className="pt-12 md:pt-16">
+            <RecommendationCarousel
+              title={getProductRecommendationTitle(product)}
+              products={relatedProducts}
+              contained={false}
+            />
+          </div>
+        ) : null}
+      </ProductDetailsClient>
     </div>
   );
 }

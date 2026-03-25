@@ -394,13 +394,13 @@ export function AiMessageThread({
         open={Boolean(previewImage)}
         onOpenChange={(open) => !open && setPreviewImage(null)}
       >
-        <DialogContent className="max-h-[92dvh] w-[94vw] max-w-4xl border-0 bg-black/90 p-2 text-white sm:p-3">
+        <DialogContent className="max-h-[92dvh] w-[94vw] max-w-4xl border border-border bg-[rgb(255_253_248_/_0.98)] p-2 text-foreground sm:p-3">
           <DialogTitle className="sr-only">
             Vista previa completa de imagen
           </DialogTitle>
           {previewImage ? (
             <div className="flex max-h-[86dvh] flex-col gap-2">
-              <p className="px-2 text-center text-xs font-medium text-white/80">
+              <p className="px-2 text-center text-xs font-medium text-text-secondary">
                 {previewImage.label}
               </p>
               <img

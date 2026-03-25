@@ -18,6 +18,7 @@ export type EntityOption = {
 };
 
 type EntityPickerProps = {
+  className?: string;
   label: string;
   searchLabel: string;
   selectLabel: string;
@@ -40,6 +41,7 @@ function normalize(value: string) {
 }
 
 export function EntityPicker({
+  className,
   label,
   searchLabel,
   selectLabel,
@@ -68,7 +70,7 @@ export function EntityPicker({
   const selectedOption = options.find((option) => option.id === value);
 
   return (
-    <div className="space-y-2">
+    <div className={className ? `space-y-2 ${className}` : "space-y-2"}>
       <Label>{label}</Label>
       <Input
         placeholder={searchLabel}

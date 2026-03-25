@@ -23,7 +23,7 @@ import { getApiErrorMessage } from "@/lib/api/errors";
 
 type CartContextType = {
   state: { items: CartItem[] };
-  addToCart: (item: Omit<CartItem, "quantity">) => Promise<void>;
+  addToCart: (item: Omit<CartItem, "quantity"> & { quantity?: number }) => Promise<void>;
   removeItem: (id: string, tallaId?: string) => Promise<void>;
   setItemQuantity: (
     id: string,
@@ -103,7 +103,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     void mergeAndReload();
   }, [isAuthenticated, mergedToken, sessionId, toast, token, authToken]);
 
-  const addToCart = async (item: Omit<CartItem, "quantity">) => {
+  const addToCart = async (
+    item: Omit<CartItem, "quantity"> & { quantity?: number },
+  ) => {
     if (!sessionId) {
       return;
     }
@@ -113,7 +115,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         sessionId,
         {
           id: item.id,
-          quantity: 1,
+          quantity: item.quantity ?? 1,
           tallaId: item.tallaId ?? item.size,
           color: item.color,
         },
@@ -125,7 +127,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
       
       toast({
         title: "¡Agregado al carrito!",
-        description: `${item.name} ha sido añadido a tu carrito.`,
+        description: `${item.name} ${item.quantity && item.quantity > 1 ? `(${item.quantity})` : ""} ha sido añadido a tu carrito.`.trim(),
       });
     } catch (error) {
       console.error("Failed to add item to cart", error);

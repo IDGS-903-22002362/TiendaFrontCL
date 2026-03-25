@@ -34,10 +34,10 @@ export const FocusCard = React.memo(
           className="object-cover transition-transform duration-500 group-hover:scale-105"
           data-ai-hint={card.imageHint}
         />
-        <div className="absolute inset-0 z-[1] bg-[linear-gradient(180deg,transparent_38%,rgba(5,5,5,0.78))]" />
+        <div className="absolute inset-0 z-[1] bg-[linear-gradient(180deg,transparent_34%,rgba(247,244,235,0.92))]" />
         {showTitleOverlay ? (
           <div className="absolute inset-x-0 bottom-0 z-[2] p-4 opacity-0 transition-opacity duration-300 group-hover/focus-card:opacity-100 md:p-5">
-            <p className="line-clamp-2 font-headline text-base font-semibold text-white md:text-lg">
+            <p className="line-clamp-2 font-headline text-base font-semibold text-foreground md:text-lg">
               {card.title}
             </p>
           </div>

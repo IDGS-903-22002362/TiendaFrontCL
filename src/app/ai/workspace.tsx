@@ -221,7 +221,7 @@ export function AiWorkspace() {
   if (!isAuthenticated) {
     return (
       <div className="container max-w-3xl py-10">
-        <Card className="border-primary/15 bg-[linear-gradient(135deg,rgba(20,20,20,0.96),rgba(10,130,66,0.14))]">
+        <Card className="border-primary/15 bg-[linear-gradient(135deg,rgba(255,253,248,0.98),rgba(0,122,83,0.08))]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Bot className="h-5 w-5 text-primary" />
@@ -273,7 +273,7 @@ export function AiWorkspace() {
             </SheetTrigger>
             <SheetContent
               side="bottom"
-              className="mobile-panel-height rounded-t-[28px] border-t border-border bg-background-deep px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]"
+              className="mobile-panel-height rounded-t-[28px] border-t border-border bg-[rgb(255_253_248_/_0.98)] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]"
             >
               <SheetHeader className="text-left">
                 <SheetTitle>Sesiones</SheetTitle>

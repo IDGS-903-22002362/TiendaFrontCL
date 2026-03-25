@@ -54,7 +54,9 @@ const EMPTY_FORM = {
 };
 
 // Utilidades
-function parseDate(value: any): Date | null {
+type DateValue = Date | string | { toDate: () => Date } | null | undefined;
+
+function parseDate(value: DateValue): Date | null {
     if (!value) return null;
     if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
     if (typeof value === "string") {
@@ -67,7 +69,7 @@ function parseDate(value: any): Date | null {
     return null;
 }
 
-function formatDate(value: any): string {
+function formatDate(value: DateValue): string {
     const date = parseDate(value);
     if (!date) return "Fecha desconocida";
     return format(date, "dd MMM yyyy", { locale: es });

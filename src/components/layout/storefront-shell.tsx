@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
@@ -18,8 +19,11 @@ function isProductDetailRoute(pathname: string) {
 export function StorefrontShell({ children }: StorefrontShellProps) {
   const pathname = usePathname();
   const isAdminRoute = pathname.startsWith("/admin");
+  const isEmployeeRoute = pathname.startsWith("/empleado-club");
+  const isSuperAdminRoute = pathname.startsWith("/super-admin");
   const isCheckoutRoute = pathname.startsWith("/checkout");
   const isLoginRoute = pathname === "/login";
+  const isPublicStorefront = !isAdminRoute && !isEmployeeRoute && !isSuperAdminRoute;
   const showBottomNav =
     pathname === "/" ||
     pathname === "/products" ||
@@ -28,7 +32,19 @@ export function StorefrontShell({ children }: StorefrontShellProps) {
     pathname === "/profile" ||
     pathname === "/ai";
 
-  if (isAdminRoute) {
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    document.body.dataset.storefront = isPublicStorefront ? "true" : "false";
+
+    return () => {
+      document.body.dataset.storefront = "false";
+    };
+  }, [isPublicStorefront]);
+
+  if (!isPublicStorefront) {
     return <div className="relative flex min-h-screen flex-col overflow-x-clip">{children}</div>;
   }
 
@@ -37,7 +53,7 @@ export function StorefrontShell({ children }: StorefrontShellProps) {
       <Header />
       <main
         className={cn(
-          "relative flex-grow",
+          "relative flex-grow pt-[var(--storefront-header-reserved-height,var(--storefront-header-mobile-height))] lg:pt-[var(--storefront-header-reserved-height,var(--storefront-header-desktop-height))]",
           showBottomNav
             ? "pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+1rem)] md:pb-12"
             : "pb-10 md:pb-12",
@@ -45,8 +61,6 @@ export function StorefrontShell({ children }: StorefrontShellProps) {
             "pb-[calc(var(--product-mobile-cta-height)+8rem)] md:pb-12",
           isCheckoutRoute &&
             "pb-[calc(var(--checkout-mobile-cta-height)+1.5rem)] md:pb-12",
-          pathname === "/cart" &&
-            "pb-[calc(var(--mobile-bottom-nav-height)+var(--cart-mobile-summary-height)+2rem)] md:pb-12",
           pathname === "/ai" &&
             "pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+1.25rem)] md:pb-12",
           isLoginRoute && "pb-10",

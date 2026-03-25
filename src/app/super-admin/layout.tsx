@@ -76,7 +76,7 @@ export default function SuperAdminLayout({
     return (
         <div className="flex min-h-screen w-full flex-col bg-background md:flex-row">
             {/* Mobile header */}
-            <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-border bg-background-deep px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6 md:hidden">
+            <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-border bg-[rgb(255_253_248_/_0.96)] px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6 md:hidden">
                 <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
                     <SheetTrigger asChild>
                         <Button size="icon" variant="outline" className="sm:hidden">
@@ -116,7 +116,7 @@ export default function SuperAdminLayout({
             </header>
 
             {/* Desktop sidebar */}
-            <aside className="hidden border-r border-border bg-background-deep md:block md:w-64 lg:w-72">
+            <aside className="hidden border-r border-border bg-sidebar md:block md:w-64 lg:w-72">
                 <div className="flex h-full max-h-screen flex-col gap-2">
                     <div className="flex h-14 items-center border-b border-border px-4 lg:h-[60px] lg:px-6">
                         <Link href="/super-admin" className="flex items-center gap-2 font-semibold">

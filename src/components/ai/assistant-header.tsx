@@ -26,7 +26,7 @@ export function AssistantHeader({
   return (
     <header
       className={cn(
-        "border-b border-border bg-background-deep/65 px-4 py-3.5 backdrop-blur-sm sm:px-5 sm:py-4",
+        "border-b border-border bg-[rgb(255_253_248_/_0.85)] px-4 py-3.5 backdrop-blur-sm sm:px-5 sm:py-4",
         "flex items-center justify-between gap-2",
         className,
       )}

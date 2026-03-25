@@ -217,7 +217,7 @@ export function CategoryMarquee({ categories }: CategoryMarqueeProps) {
         </p>
       </div>
 
-      <div className="category-marquee category-marquee-mask rounded-[30px] border border-border/80 bg-[linear-gradient(180deg,rgba(20,20,20,0.96),rgba(10,10,10,0.96))] px-0 py-5 shadow-[var(--shadow-elevated)] md:rounded-[36px] md:py-6">
+      <div className="category-marquee category-marquee-mask rounded-[30px] border border-border/80 bg-[linear-gradient(180deg,rgba(255,253,248,0.98),rgba(238,243,232,0.98))] px-0 py-5 shadow-[var(--shadow-elevated)] md:rounded-[36px] md:py-6">
         <CategoryRow categories={topRow} direction="left" />
         <CategoryRow categories={bottomRow} direction="right" />
       </div>

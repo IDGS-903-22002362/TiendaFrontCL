@@ -61,7 +61,9 @@ function normalizeSearch(value: string): string {
         .trim();
 }
 
-function parseDate(value: any): Date | null {
+type DateValue = Date | string | { toDate: () => Date } | null | undefined;
+
+function parseDate(value: DateValue): Date | null {
     if (!value) return null;
     if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
     if (typeof value === "string") {
@@ -74,13 +76,13 @@ function parseDate(value: any): Date | null {
     return null;
 }
 
-function formatDate(value: any): string {
+function formatDate(value: DateValue): string {
     const date = parseDate(value);
     if (!date) return "Fecha desconocida";
     return format(date, "dd MMM yyyy", { locale: es });
 }
 
-function formatCategoria(categoria: any): string {
+function formatCategoria(categoria: unknown): string {
     if (!categoria || typeof categoria !== "string") return "Sin categoría";
     return categoria.charAt(0).toUpperCase() + categoria.slice(1);
 }
@@ -92,9 +94,9 @@ type PendingImageUpload = {
 };
 
 // Extendemos el tipo Noticia para incluir 'origen' (si no está definido en la API)
-interface NoticiaConOrigen extends Noticia {
-    origen?: string;
-}
+type NoticiaConOrigen = Omit<Noticia, "origen"> & {
+    origen?: Noticia["origen"];
+};
 
 export default function EmpleadoClubNoticiasPage() {
     const [noticias, setNoticias] = useState<NoticiaConOrigen[]>([]);

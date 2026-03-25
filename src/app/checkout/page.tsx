@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { type ReactNode, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -11,9 +12,10 @@ import {
   useElements,
   useStripe,
 } from "@stripe/react-stripe-js";
-import { ArrowLeft, CreditCard, Home, CheckCircle } from "lucide-react";
+import { ArrowLeft, CreditCard, Home, ShieldCheck } from "lucide-react";
 import { useCart } from "@/hooks/use-cart";
 import { useAuth } from "@/hooks/use-auth";
+import { useStorefront } from "@/hooks/use-storefront";
 import { checkoutCart } from "@/lib/api/cart";
 import { paymentsApi } from "@/lib/api/payments";
 import { getApiErrorMessage } from "@/lib/api/errors";
@@ -30,7 +32,10 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import Link from "next/link";
+import { EmptyState } from "@/components/storefront/shared/empty-state";
+import { Breadcrumbs } from "@/components/storefront/shared/breadcrumbs";
+import { formatCurrency } from "@/lib/storefront";
+import { getCartVariantKey } from "@/lib/api/cart";
 
 const shippingSchema = z.object({
   name: z.string().min(2, "Nombre es requerido"),
@@ -46,14 +51,6 @@ const shippingSchema = z.object({
 
 type ShippingValues = z.infer<typeof shippingSchema>;
 
-const steps = [
-  { id: "shipping", name: "Envío", icon: Home },
-  { id: "payment", name: "Pago", icon: CreditCard },
-  { id: "confirmation", name: "Confirmación", icon: CheckCircle },
-];
-
-// stripe config now loaded dynamically using useStripeConfig hook
-
 function getOrderIdFromCheckoutResult(payload: unknown): string {
   if (!payload || typeof payload !== "object") {
     return "";
@@ -64,27 +61,98 @@ function getOrderIdFromCheckoutResult(payload: unknown): string {
     record.data && typeof record.data === "object"
       ? (record.data as Record<string, unknown>)
       : record;
-
   const nestedOrder =
     maybeData.orden && typeof maybeData.orden === "object"
       ? (maybeData.orden as Record<string, unknown>)
       : {};
-
   const orderId =
     maybeData.ordenId ?? maybeData.id ?? maybeData.orderId ?? nestedOrder._id;
 
-  if (typeof orderId === "string") {
-    return orderId;
-  }
-
-  return "";
+  return typeof orderId === "string" ? orderId : "";
 }
 
 function MobileCheckoutActions({ children }: { children: ReactNode }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background-deep/95 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-xl md:hidden">
+    <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-[rgb(251_249_243_/_0.96)] py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-xl md:hidden">
       <div className="container flex items-center gap-3">{children}</div>
     </div>
+  );
+}
+
+function OrderSummaryPanel() {
+  const { state, subtotal, totalItems } = useCart();
+  const { getPersonalization } = useStorefront();
+
+  return (
+    <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
+      <CardHeader className="pb-4">
+        <CardTitle>Resumen del pedido</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-3">
+          {state.items.map((item) => {
+            const variantKey = getCartVariantKey(item);
+            const personalization = getPersonalization(variantKey);
+
+            return (
+              <div key={variantKey} className="flex gap-3 rounded-[1.25rem] border border-border bg-muted/45 p-3">
+                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-[1rem] border border-border bg-card">
+                  <Image src={item.image} alt={item.name} fill className="object-cover" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="line-clamp-2 text-sm font-medium text-foreground">{item.name}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {item.quantity} × {formatCurrency(item.price)}
+                    {item.tallaId || item.size ? ` · ${item.tallaId ?? item.size}` : ""}
+                  </p>
+                  {personalization ? (
+                    <p className="mt-1 text-xs text-primary/78">
+                      Personalización UI: {personalization.name} · {personalization.number}
+                    </p>
+                  ) : null}
+                </div>
+                <p className="text-sm font-medium text-foreground">
+                  {formatCurrency(item.price * item.quantity)}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="space-y-2 text-sm text-muted-foreground">
+          <div className="flex items-center justify-between">
+            <span>Subtotal</span>
+            <span>{formatCurrency(subtotal)}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span>Envío</span>
+            <span>{formatCurrency(99)}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span>Artículos</span>
+            <span>{totalItems}</span>
+          </div>
+        </div>
+
+        <div className="rounded-[1.4rem] border border-border bg-muted/45 px-4 py-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary/74">
+            Total
+          </p>
+          <p className="mt-2 font-headline text-4xl font-semibold uppercase leading-none tracking-[0.03em]">
+            {formatCurrency(subtotal + 99)}
+          </p>
+        </div>
+
+        <div className="rounded-[1.4rem] border border-border bg-muted/45 px-4 py-3">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="mt-0.5 h-5 w-5 text-primary" />
+            <p className="text-xs leading-5 text-muted-foreground">
+              La personalización de jersey se muestra en la UI y no modifica el total backend en esta versión.
+            </p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -157,25 +225,22 @@ function PaymentStep({
         throw new Error("No se recibió clientSecret para confirmar el pago");
       }
 
-      const confirmation = await stripe.confirmCardPayment(
-        paymentInit.clientSecret,
-        {
-          payment_method: {
-            card: cardElement,
-            billing_details: {
-              name: values.name,
-              email: values.email,
-              address: {
-                city: values.city,
-                state: values.estado,
-                line1: `${values.calle} ${values.numero}`,
-                line2: values.colonia,
-                postal_code: values.zip,
-              },
+      const confirmation = await stripe.confirmCardPayment(paymentInit.clientSecret, {
+        payment_method: {
+          card: cardElement,
+          billing_details: {
+            name: values.name,
+            email: values.email,
+            address: {
+              city: values.city,
+              state: values.estado,
+              line1: `${values.calle} ${values.numero}`,
+              line2: values.colonia,
+              postal_code: values.zip,
             },
           },
         },
-      );
+      });
 
       if (confirmation.error) {
         throw new Error(
@@ -202,71 +267,55 @@ function PaymentStep({
 
   return (
     <>
-      <div className="space-y-4 pb-24 md:pb-0">
-        <Card className="border-primary/15">
-          <CardHeader className="pb-4">
-            <CardTitle>Información de Pago</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5 pb-6">
-            <div className="rounded-[24px] border border-border bg-muted/55 p-4">
-              <CardElement
-                options={{
-                  style: {
-                    base: {
-                      fontSize: "16px",
-                      color: "#F5F5F5",
-                      iconColor: "#EDCD12",
-                      "::placeholder": {
-                        color: "#8E8E8E",
-                      },
-                    },
-                    invalid: {
-                      color: "#DC2626",
-                      iconColor: "#DC2626",
-                    },
+      <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
+        <CardHeader className="pb-4">
+          <CardTitle>Pago</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="rounded-[1.5rem] border border-border bg-muted/45 p-4">
+            <CardElement
+              options={{
+                style: {
+                  base: {
+                    fontSize: "16px",
+                    color: "#171815",
+                    iconColor: "#0f6c49",
+                    "::placeholder": { color: "#817b71" },
                   },
-                }}
-              />
-            </div>
-            <p className="text-sm leading-6 text-text-secondary">
-              El pago se procesa de forma segura con Stripe. Revisa tus datos
-              antes de confirmar el cobro de ${total.toFixed(2)}.
-            </p>
-          </CardContent>
-        </Card>
-
-        <div className="hidden items-center gap-3 md:flex">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-12 flex-1"
-            onClick={onBack}
-          >
-            Volver
-          </Button>
-          <Button
-            type="button"
-            className="h-12 flex-1"
-            onClick={() => void handlePay()}
-            disabled={isProcessing || !stripe}
-          >
-            {isProcessing ? "Procesando..." : "Pagar ahora"}
-          </Button>
-        </div>
-      </div>
+                  invalid: {
+                    color: "#dc2626",
+                    iconColor: "#dc2626",
+                  },
+                },
+              }}
+            />
+          </div>
+          <p className="text-sm leading-6 text-muted-foreground">
+            El pago se procesa con Stripe. El total a cobrar es {formatCurrency(total)}.
+          </p>
+          <div className="hidden gap-3 md:flex">
+            <Button type="button" variant="outline" className="h-12 flex-1 rounded-full" onClick={onBack}>
+              Volver
+            </Button>
+            <Button
+              type="button"
+              className="h-12 flex-1 rounded-full"
+              onClick={() => void handlePay()}
+              disabled={isProcessing || !stripe}
+            >
+              {isProcessing ? "Procesando..." : "Pagar ahora"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <MobileCheckoutActions>
-        <Button
-          type="button"
-          variant="outline"
-          className="h-12 flex-1"
-          onClick={onBack}
-        >
+        <Button type="button" variant="outline" className="h-12 flex-1 rounded-full" onClick={onBack}>
           Volver
         </Button>
         <Button
           type="button"
-          className="h-12 flex-1"
+          className="h-12 flex-1 rounded-full"
           onClick={() => void handlePay()}
           disabled={isProcessing || !stripe}
         >
@@ -308,107 +357,81 @@ export default function CheckoutPage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="container mx-auto flex min-h-[60vh] items-center justify-center px-4 py-8 text-center text-muted-foreground">
-        Cargando checkout...
-      </div>
-    );
+    return <div className="container py-14 text-center text-muted-foreground">Cargando checkout...</div>;
   }
 
   if (totalItems === 0) {
     return (
-      <div className="container flex min-h-[60vh] max-w-3xl flex-col items-center justify-center py-8 text-center">
-        <Card className="w-full max-w-xl border-border/90">
-          <CardHeader>
-            <CardTitle>Tu carrito está vacío</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 text-sm text-text-secondary">
-            <p>
-              Necesitas agregar al menos un producto antes de continuar con la
-              compra.
-            </p>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button asChild className="h-12 flex-1">
-                <Link href="/products">Explorar productos</Link>
-              </Button>
-              <Button asChild variant="outline" className="h-12 flex-1">
-                <Link href="/cart">Ir al carrito</Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="container py-10">
+        <EmptyState
+          title="Carrito vacío"
+          description="Necesitas al menos un producto antes de continuar a checkout."
+          ctaLabel="Ir al catálogo"
+        />
       </div>
     );
   }
 
   return (
-    <div className="container max-w-5xl py-5 md:py-8">
-      <div className="mb-6 flex items-center gap-3 md:mb-8 md:gap-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-11 w-11 rounded-2xl"
-          onClick={() =>
-            currentStep > 0 ? setCurrentStep(currentStep - 1) : router.back()
-          }
-        >
-          <ArrowLeft />
-        </Button>
-        <h1 className="font-headline text-2xl font-bold md:text-4xl">
-          Checkout
-        </h1>
+    <div className="container py-5 md:py-8">
+      <div className="mb-6 space-y-3">
+        <Breadcrumbs
+          items={[
+            { label: "Inicio", href: "/" },
+            { label: "Carrito", href: "/cart" },
+            { label: "Checkout" },
+          ]}
+        />
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 rounded-full border border-border"
+            onClick={() => (currentStep > 0 ? setCurrentStep(currentStep - 1) : router.back())}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary/74">
+              Checkout
+            </p>
+            <h1 className="mt-1 font-headline text-4xl font-semibold uppercase leading-none tracking-[0.04em] md:text-6xl">
+              Finaliza tu compra
+            </h1>
+          </div>
+        </div>
       </div>
 
-      <div className="mb-6 rounded-[24px] border border-border bg-card/90 p-4 shadow-[var(--shadow-card)] md:mb-8 md:rounded-[30px] md:p-5">
-        <ol className="flex items-center justify-between">
-          {steps.map((step, stepIdx) => (
-            <li key={step.name} className="relative flex-1">
-              <div className="flex items-center text-sm font-medium">
-                <span
-                  className={`flex h-10 w-10 items-center justify-center rounded-full border ${stepIdx <= currentStep ? "border-primary/40 bg-primary text-primary-foreground" : "border-border bg-muted text-text-secondary"}`}
-                >
-                  <step.icon className="h-5 w-5" />
-                </span>
-                <span
-                  className={`ml-3 hidden sm:block ${stepIdx <= currentStep ? "text-foreground" : "text-text-muted"}`}
-                >
-                  {step.name}
-                </span>
-              </div>
-            </li>
-          ))}
-        </ol>
+      <div className="mb-6 grid gap-3 md:grid-cols-2">
+        <div className={`rounded-[1.4rem] border px-4 py-3 ${currentStep === 0 ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-foreground"}`}>
+          <div className="flex items-center gap-3">
+            <Home className="h-4 w-4" />
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em]">Paso 1</p>
+              <p className="font-medium">Información de envío</p>
+            </div>
+          </div>
+        </div>
+        <div className={`rounded-[1.4rem] border px-4 py-3 ${currentStep === 1 ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-foreground"}`}>
+          <div className="flex items-center gap-3">
+            <CreditCard className="h-4 w-4" />
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em]">Paso 2</p>
+              <p className="font-medium">Pago</p>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-8">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
         <div>
-          <Card className="mb-4 border-secondary/15 lg:hidden">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Resumen del Pedido</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span>Subtotal</span>
-                <span>${subtotal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Envío</span>
-                <span>$99.00</span>
-              </div>
-              <div className="flex justify-between font-headline text-lg font-bold">
-                <span>Total</span>
-                <span className="text-secondary">${total.toFixed(2)}</span>
-              </div>
-            </CardContent>
-          </Card>
-
           {currentStep === 0 ? (
-            <div className="space-y-4 pb-24 md:pb-0">
-              <Card className="border-primary/15">
+            <>
+              <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
                 <CardHeader className="pb-4">
-                  <CardTitle>Información de Envío</CardTitle>
+                  <CardTitle>Información de envío</CardTitle>
                 </CardHeader>
-                <CardContent className="pb-6">
+                <CardContent>
                   <Form {...shippingForm}>
                     <form className="space-y-4">
                       <FormField
@@ -416,27 +439,24 @@ export default function CheckoutPage() {
                         name="name"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Nombre Completo</FormLabel>
+                            <FormLabel>Nombre completo</FormLabel>
                             <FormControl>
-                              <Input
-                                {...field}
-                                className="h-12 md:h-10"
-                                autoComplete="name"
-                              />
+                              <Input {...field} className="h-12 rounded-[1rem]" autoComplete="name" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                      <div className="flex flex-col gap-4 md:flex-row">
+
+                      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px]">
                         <FormField
                           control={shippingForm.control}
                           name="calle"
                           render={({ field }) => (
-                            <FormItem className="flex-1">
+                            <FormItem>
                               <FormLabel>Calle</FormLabel>
                               <FormControl>
-                                <Input {...field} className="h-12 md:h-10" />
+                                <Input {...field} className="h-12 rounded-[1rem]" />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -446,16 +466,17 @@ export default function CheckoutPage() {
                           control={shippingForm.control}
                           name="numero"
                           render={({ field }) => (
-                            <FormItem className="md:w-1/3">
-                              <FormLabel>Num. Ext/Int</FormLabel>
+                            <FormItem>
+                              <FormLabel>Número</FormLabel>
                               <FormControl>
-                                <Input {...field} className="h-12 md:h-10" />
+                                <Input {...field} className="h-12 rounded-[1rem]" />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
                       </div>
+
                       <FormField
                         control={shippingForm.control}
                         name="colonia"
@@ -463,25 +484,22 @@ export default function CheckoutPage() {
                           <FormItem>
                             <FormLabel>Colonia</FormLabel>
                             <FormControl>
-                              <Input {...field} className="h-12 md:h-10" />
+                              <Input {...field} className="h-12 rounded-[1rem]" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                      <div className="flex flex-col gap-4 md:flex-row">
+
+                      <div className="grid gap-4 md:grid-cols-2">
                         <FormField
                           control={shippingForm.control}
                           name="city"
                           render={({ field }) => (
-                            <FormItem className="flex-1">
+                            <FormItem>
                               <FormLabel>Ciudad</FormLabel>
                               <FormControl>
-                                <Input
-                                  {...field}
-                                  className="h-12 md:h-10"
-                                  autoComplete="address-level2"
-                                />
+                                <Input {...field} className="h-12 rounded-[1rem]" />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -491,34 +509,26 @@ export default function CheckoutPage() {
                           control={shippingForm.control}
                           name="estado"
                           render={({ field }) => (
-                            <FormItem className="flex-1">
+                            <FormItem>
                               <FormLabel>Estado</FormLabel>
                               <FormControl>
-                                <Input
-                                  {...field}
-                                  className="h-12 md:h-10"
-                                  autoComplete="address-level1"
-                                />
+                                <Input {...field} className="h-12 rounded-[1rem]" />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
                       </div>
-                      <div className="flex flex-col gap-4 md:flex-row">
+
+                      <div className="grid gap-4 md:grid-cols-[180px_minmax(0,1fr)]">
                         <FormField
                           control={shippingForm.control}
                           name="zip"
                           render={({ field }) => (
-                            <FormItem className="md:w-1/3">
-                              <FormLabel>C.P.</FormLabel>
+                            <FormItem>
+                              <FormLabel>Código postal</FormLabel>
                               <FormControl>
-                                <Input
-                                  {...field}
-                                  inputMode="numeric"
-                                  className="h-12 md:h-10"
-                                  autoComplete="postal-code"
-                                />
+                                <Input {...field} className="h-12 rounded-[1rem]" inputMode="numeric" />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -528,21 +538,17 @@ export default function CheckoutPage() {
                           control={shippingForm.control}
                           name="telefono"
                           render={({ field }) => (
-                            <FormItem className="flex-1">
+                            <FormItem>
                               <FormLabel>Teléfono</FormLabel>
                               <FormControl>
-                                <Input
-                                  {...field}
-                                  type="tel"
-                                  className="h-12 md:h-10"
-                                  autoComplete="tel"
-                                />
+                                <Input {...field} className="h-12 rounded-[1rem]" type="tel" />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
                       </div>
+
                       <FormField
                         control={shippingForm.control}
                         name="email"
@@ -550,13 +556,7 @@ export default function CheckoutPage() {
                           <FormItem>
                             <FormLabel>Email</FormLabel>
                             <FormControl>
-                              <Input
-                                type="email"
-                                inputMode="email"
-                                className="h-12 md:h-10"
-                                autoComplete="email"
-                                {...field}
-                              />
+                              <Input {...field} className="h-12 rounded-[1rem]" type="email" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -567,16 +567,12 @@ export default function CheckoutPage() {
                 </CardContent>
               </Card>
 
-              <div className="hidden md:flex md:justify-end">
-                <Button
-                  onClick={() => void onContinueToPayment()}
-                  className="h-12 min-w-52"
-                  size="lg"
-                >
-                  Continuar a Pago
+              <div className="hidden md:mt-5 md:block">
+                <Button className="h-12 rounded-full px-6" onClick={() => void onContinueToPayment()}>
+                  Continuar a pago
                 </Button>
               </div>
-            </div>
+            </>
           ) : stripePromise ? (
             <Elements stripe={stripePromise}>
               <PaymentStep
@@ -586,48 +582,24 @@ export default function CheckoutPage() {
               />
             </Elements>
           ) : (
-            <Card>
+            <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
               <CardHeader>
                 <CardTitle>Configuración faltante</CardTitle>
               </CardHeader>
-              <CardContent className="pb-20 text-sm text-text-secondary md:pb-6">
-                No se pudo inicializar Stripe.
-              </CardContent>
+              <CardContent>No se pudo inicializar Stripe.</CardContent>
             </Card>
           )}
         </div>
 
-        <div className="hidden lg:block">
-          <Card className="sticky top-24 border-secondary/15">
-            <CardHeader>
-              <CardTitle>Resumen del Pedido</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between">
-                <span>Subtotal</span>
-                <span>${subtotal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Envío</span>
-                <span>$99.00</span>
-              </div>
-              <div className="flex justify-between font-headline text-lg font-bold">
-                <span>Total</span>
-                <span className="text-secondary">${total.toFixed(2)}</span>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="lg:sticky lg:top-[calc(var(--storefront-header-current-height,var(--storefront-header-desktop-height))+1.5rem)]">
+          <OrderSummaryPanel />
         </div>
       </div>
 
       {currentStep === 0 ? (
         <MobileCheckoutActions>
-          <Button
-            onClick={() => void onContinueToPayment()}
-            className="h-12 w-full"
-            size="lg"
-          >
-            Continuar a Pago
+          <Button className="h-12 w-full rounded-full" onClick={() => void onContinueToPayment()}>
+            Continuar a pago
           </Button>
         </MobileCheckoutActions>
       ) : null}
