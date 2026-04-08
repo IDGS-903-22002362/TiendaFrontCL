@@ -61,18 +61,47 @@ function normalizeSearch(value: string): string {
         .trim();
 }
 
-type DateValue = Date | string | { toDate: () => Date } | null | undefined;
+type DateValue =
+    | Date
+    | string
+    | { _seconds: number; _nanoseconds: number } // Ajustado con guion bajo
+    | { seconds: number; nanoseconds: number }  // Por si acaso vienen de ambas formas
+    | { toDate: () => Date }
+    | null
+    | undefined;
 
 function parseDate(value: DateValue): Date | null {
     if (!value) return null;
-    if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+
+    // 1. Si ya es una instancia de Date
+    if (value instanceof Date) {
+        return isNaN(value.getTime()) ? null : value;
+    }
+
+    // 2. Si es un objeto (Timestamp de Firebase serializado o activo)
+    if (typeof value === "object") {
+        // Caso: Tiene la función toDate()
+        if ("toDate" in value && typeof value.toDate === "function") {
+            return value.toDate();
+        }
+
+        // Caso: Estructura con guion bajo (_seconds) -> El que tú tienes
+        if ("_seconds" in value && typeof value._seconds === "number") {
+            return new Date(value._seconds * 1000);
+        }
+
+        // Caso: Estructura estándar (seconds)
+        if ("seconds" in value && typeof value.seconds === "number") {
+            return new Date(value.seconds * 1000);
+        }
+    }
+
+    // 3. Si es un string (ISO u otros formatos estándar)
     if (typeof value === "string") {
         const parsed = new Date(value);
         return isNaN(parsed.getTime()) ? null : parsed;
     }
-    if (typeof value === "object" && typeof value.toDate === "function") {
-        return value.toDate();
-    }
+
     return null;
 }
 
