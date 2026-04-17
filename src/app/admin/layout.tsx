@@ -15,6 +15,7 @@ import {
   LogOut,
   Menu,
   Bot,
+  QrCode,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +28,7 @@ import {
 
 const adminNavLinks = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/admin/aplazo", label: "Aplazo POS", icon: QrCode },
   { href: "/admin/ordenes", label: "Órdenes", icon: ShoppingCart },
   { href: "/admin/productos", label: "Productos", icon: Package },
   { href: "/admin/inventario", label: "Inventario", icon: Archive },
@@ -45,7 +47,18 @@ export default function AdminLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const hasAdminAccess = isAuthenticated && role === "ADMIN";
+  const hasAdminAccess =
+    isAuthenticated && (role === "ADMIN" || role === "EMPLEADO");
+
+  const isEmployeeAllowedPath =
+    pathname === "/admin" ||
+    pathname === "/admin/aplazo" ||
+    pathname.startsWith("/admin/aplazo/");
+  const canRenderCurrentRoute =
+    hasAdminAccess &&
+    (role !== "EMPLEADO"
+      ? true
+      : isEmployeeAllowedPath && pathname !== "/admin");
 
   useEffect(() => {
     if (!isLoading) {
@@ -54,13 +67,23 @@ export default function AdminLayout({
         return;
       }
 
-      if (role !== "ADMIN") {
+      if (role === "EMPLEADO" && pathname === "/admin") {
+        router.replace("/admin/aplazo");
+        return;
+      }
+
+      if (role === "EMPLEADO" && !isEmployeeAllowedPath) {
+        router.replace("/admin/aplazo");
+        return;
+      }
+
+      if (role !== "ADMIN" && role !== "EMPLEADO") {
         router.replace("/");
       }
     }
-  }, [isAuthenticated, isLoading, role, router]);
+  }, [isAuthenticated, isEmployeeAllowedPath, isLoading, pathname, role, router]);
 
-  if (isLoading || !hasAdminAccess) {
+  if (isLoading || !canRenderCurrentRoute) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <p className="text-text-secondary">
@@ -74,6 +97,7 @@ export default function AdminLayout({
     <>
       {adminNavLinks
         .filter((link) => !link.adminOnly || role === "ADMIN")
+        .filter((link) => role !== "EMPLEADO" || link.href === "/admin/aplazo")
         .map((link) => {
           const Icon = link.icon;
           const isActive =

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ordersApi } from "@/lib/api/orders";
 import { paymentsApi } from "@/lib/api/payments";
+import { normalizeAplazoStatus } from "@/lib/aplazo";
 
 export function ConfirmationClient() {
   const searchParams = useSearchParams();
@@ -22,7 +23,8 @@ export function ConfirmationClient() {
   const [total, setTotal] = useState(fallbackTotal);
   const [isLoading, setIsLoading] = useState(Boolean(orderId));
   const isPaid =
-    paymentStatus === "paid" || paymentStatus === "COMPLETADO";
+    normalizeAplazoStatus(paymentStatus) === "PAID" ||
+    paymentStatus === "COMPLETADO";
 
   useEffect(() => {
     if (!orderId) {
