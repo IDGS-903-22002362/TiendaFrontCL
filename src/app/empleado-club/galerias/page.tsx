@@ -34,6 +34,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { DialogDescription } from "@/components/ui/dialog";
 
 // Interfaz local de galería (ajusta según tu API)
 export interface Galeria {
@@ -106,6 +107,10 @@ export default function EmpleadoClubGaleriaPage() {
     const [isLoadingDetail, setIsLoadingDetail] = useState(false);
     const [formData, setFormData] = useState(EMPTY_FORM);
     const [isSaving, setIsSaving] = useState(false);
+
+    // Estados para el progreso
+    const [savingStage, setSavingStage] = useState<string>('idle'); // 'creating', 'uploadingImages', 'uploadingVideos', 'deletingImages', 'deletingVideos', 'finalizing'
+    const [savingProgress, setSavingProgress] = useState(0);
 
     // Estados para imágenes
     const [existingImages, setExistingImages] = useState<string[]>([]);
@@ -216,6 +221,9 @@ export default function EmpleadoClubGaleriaPage() {
             clearPendingChanges();
             setIsDialogOpen(true);
         }
+        // Resetear progreso
+        setSavingStage('idle');
+        setSavingProgress(0);
     };
 
     // Guardar (crear o actualizar descripción y archivos)
@@ -230,6 +238,8 @@ export default function EmpleadoClubGaleriaPage() {
         }
 
         setIsSaving(true);
+        setSavingStage('creating');
+        setSavingProgress(5);
 
         try {
             let targetId = editingGaleriaId;
@@ -247,6 +257,12 @@ export default function EmpleadoClubGaleriaPage() {
                 }
 
                 targetId = nueva.id;
+                setSavingProgress(15);
+            } else {
+                // Si es edición, podríamos actualizar la descripción si la API lo permite
+                // Asumiendo que existe un método update
+                // Si no existe, solo seguimos con los archivos
+                setSavingProgress(15);
             }
 
             // =========================
@@ -260,55 +276,80 @@ export default function EmpleadoClubGaleriaPage() {
             // SUBIR IMÁGENES
             // =========================
             if (pendingImageUploads.length > 0) {
-                try {
-                    await galeriaApi.uploadImages(
-                        targetId,
-                        pendingImageUploads.map((p) => p.file)
-                    );
-                } catch (e) {
-                    console.error("Error subiendo imágenes", e);
-                }
+                setSavingStage('uploadingImages');
+                setSavingProgress(25);
+                // Podríamos subir una a una para progreso granular, pero usamos el batch actual
+                await galeriaApi.uploadImages(
+                    targetId,
+                    pendingImageUploads.map((p) => p.file)
+                );
+                setSavingProgress(50);
+            } else {
+                setSavingProgress(50);
             }
 
             // =========================
             // SUBIR VIDEOS
             // =========================
             if (pendingVideoUploads.length > 0) {
-                try {
-                    await galeriaApi.uploadVideos(
-                        targetId,
-                        pendingVideoUploads.map((p) => p.file)
-                    );
-                } catch (e) {
-                    console.error("Error subiendo videos", e);
-                }
+                setSavingStage('uploadingVideos');
+                setSavingProgress(55);
+
+                await galeriaApi.uploadVideos(
+                    targetId,
+                    pendingVideoUploads.map((p) => p.file)
+                );
+                setSavingProgress(75);
+            } else {
+                setSavingProgress(75);
             }
 
             // =========================
             // ELIMINAR IMÁGENES
             // =========================
-            for (const url of pendingDeletedImages) {
-                try {
-                    await galeriaApi.deleteImage(targetId, url);
-                } catch (e) {
-                    console.error("Error eliminando imagen", e);
+            if (pendingDeletedImages.length > 0) {
+                setSavingStage('deletingImages');
+                setSavingProgress(80);
+                let deleted = 0;
+                const total = pendingDeletedImages.length;
+                for (const url of pendingDeletedImages) {
+                    try {
+                        await galeriaApi.deleteImage(targetId, url);
+                        deleted++;
+                        setSavingProgress(80 + (deleted / total) * 10);
+                    } catch (e) {
+                        console.error("Error eliminando imagen", e);
+                    }
                 }
             }
 
             // =========================
             // ELIMINAR VIDEOS
             // =========================
-            for (const url of pendingDeletedVideos) {
-                try {
-                    await galeriaApi.deleteVideo(targetId, url);
-                } catch (e) {
-                    console.error("Error eliminando video", e);
+            if (pendingDeletedVideos.length > 0) {
+                setSavingStage('deletingVideos');
+                setSavingProgress(90);
+                let deleted = 0;
+                const total = pendingDeletedVideos.length;
+                for (const url of pendingDeletedVideos) {
+                    try {
+                        await galeriaApi.deleteVideo(targetId, url);
+                        deleted++;
+                        setSavingProgress(90 + (deleted / total) * 10);
+                    } catch (e) {
+                        console.error("Error eliminando video", e);
+                    }
                 }
+            } else {
+                setSavingProgress(95);
             }
 
             // =========================
-            // SUCCESS
+            // FINALIZAR
             // =========================
+            setSavingStage('finalizing');
+            setSavingProgress(100);
+
             toast({
                 title: editingGaleriaId
                     ? "Galería actualizada"
@@ -338,6 +379,8 @@ export default function EmpleadoClubGaleriaPage() {
             });
         } finally {
             setIsSaving(false);
+            setSavingStage('idle');
+            setSavingProgress(0);
         }
     };
 
@@ -649,6 +692,9 @@ export default function EmpleadoClubGaleriaPage() {
                         <DialogTitle>
                             {editingGaleriaId ? "Editar Galería" : "Nueva Galería"}
                         </DialogTitle>
+                        <DialogDescription>
+                            Completa los campos para {editingGaleriaId ? "editar" : "crear"} la galería.
+                        </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
                         {isLoadingDetail && (
@@ -671,56 +717,53 @@ export default function EmpleadoClubGaleriaPage() {
                         {/* Sección de imágenes */}
                         <div className="space-y-2 border-t pt-4">
                             <Label>Imágenes</Label>
-                            {editingGaleriaId ? (
-                                <>
-                                    <Input
-                                        type="file"
-                                        accept="image/*"
-                                        multiple
-                                        onChange={handleImageSelect}
-                                        disabled={isSaving}
-                                    />
-                                    {(pendingImageUploads.length > 0 || pendingDeletedImages.length > 0) && (
-                                        <p className="text-xs text-muted-foreground">
-                                            Cambios pendientes de imágenes. Se aplican al guardar.
-                                        </p>
-                                    )}
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                        {/* Imágenes existentes */}
-                                        {existingImages.map((url) => (
-                                            <div key={url} className="relative border rounded-md overflow-hidden">
-                                                <img src={url} alt="Imagen" className="h-24 w-full object-cover" />
-                                                <Button
-                                                    type="button"
-                                                    size="icon"
-                                                    variant="destructive"
-                                                    className="absolute top-1 right-1 h-7 w-7"
-                                                    onClick={() => void handleDeleteImage(url)}
-                                                >
-                                                    <X className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        ))}
-                                        {/* Previsualizaciones de nuevas imágenes */}
-                                        {pendingImageUploads.map((item) => (
-                                            <div key={item.id} className="relative border rounded-md overflow-hidden">
-                                                <img src={item.previewUrl} alt="Preview" className="h-24 w-full object-cover" />
-                                                <Button
-                                                    type="button"
-                                                    size="icon"
-                                                    variant="destructive"
-                                                    className="absolute top-1 right-1 h-7 w-7"
-                                                    onClick={() => void handleDeleteImage(item.previewUrl)}
-                                                >
-                                                    <X className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        ))}
+                            <Input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={handleImageSelect}
+                                disabled={isSaving}
+                            />
+                            {(pendingImageUploads.length > 0 || pendingDeletedImages.length > 0) && (
+                                <p className="text-xs text-muted-foreground">
+                                    Cambios pendientes de imágenes. Se aplican al guardar.
+                                </p>
+                            )}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                {/* Imágenes existentes solo en edición */}
+                                {editingGaleriaId && existingImages.map((url) => (
+                                    <div key={url} className="relative border rounded-md overflow-hidden">
+                                        <img src={url} alt="Imagen" className="h-24 w-full object-cover" />
+                                        <Button
+                                            type="button"
+                                            size="icon"
+                                            variant="destructive"
+                                            className="absolute top-1 right-1 h-7 w-7"
+                                            onClick={() => void handleDeleteImage(url)}
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
                                     </div>
-                                </>
-                            ) : (
-                                <p className="text-sm text-muted-foreground">
-                                    Guarda la galería primero para gestionar imágenes.
+                                ))}
+                                {/* Previsualizaciones de nuevas imágenes (siempre se muestran) */}
+                                {pendingImageUploads.map((item) => (
+                                    <div key={item.id} className="relative border rounded-md overflow-hidden">
+                                        <img src={item.previewUrl} alt="Preview" className="h-24 w-full object-cover" />
+                                        <Button
+                                            type="button"
+                                            size="icon"
+                                            variant="destructive"
+                                            className="absolute top-1 right-1 h-7 w-7"
+                                            onClick={() => void handleDeleteImage(item.previewUrl)}
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                            {!editingGaleriaId && pendingImageUploads.length === 0 && (
+                                <p className="text-xs text-muted-foreground">
+                                    Puedes seleccionar imágenes ahora. Se subirán automáticamente al guardar la galería.
                                 </p>
                             )}
                         </div>
@@ -728,60 +771,82 @@ export default function EmpleadoClubGaleriaPage() {
                         {/* Sección de videos */}
                         <div className="space-y-2 border-t pt-4">
                             <Label>Videos</Label>
-                            {editingGaleriaId ? (
-                                <>
-                                    <Input
-                                        type="file"
-                                        accept="video/*"
-                                        multiple
-                                        onChange={handleVideoSelect}
-                                        disabled={isSaving}
-                                    />
-                                    {(pendingVideoUploads.length > 0 || pendingDeletedVideos.length > 0) && (
-                                        <p className="text-xs text-muted-foreground">
-                                            Cambios pendientes de videos. Se aplican al guardar.
-                                        </p>
-                                    )}
-                                    <div className="space-y-2">
-                                        {existingVideos.map((url, idx) => (
-                                            <div key={url} className="flex items-center justify-between p-2 bg-muted rounded">
-                                                <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 truncate">
-                                                    Video {idx + 1}
-                                                </a>
-                                                <Button
-                                                    type="button"
-                                                    size="icon"
-                                                    variant="ghost"
-                                                    className="h-7 w-7 text-destructive"
-                                                    onClick={() => handleDeleteVideo(url)}
-                                                >
-                                                    <X className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        ))}
-                                        {pendingVideoUploads.map((item) => (
-                                            <div key={item.id} className="flex items-center justify-between p-2 bg-muted rounded">
-                                                <span className="text-sm truncate">{item.name}</span>
-                                                <Button
-                                                    type="button"
-                                                    size="icon"
-                                                    variant="ghost"
-                                                    className="h-7 w-7 text-destructive"
-                                                    onClick={() => handleDeleteVideo(item.name)}
-                                                >
-                                                    <X className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        ))}
+                            <Input
+                                type="file"
+                                accept="video/*"
+                                multiple
+                                onChange={handleVideoSelect}
+                                disabled={isSaving}
+                            />
+                            {(pendingVideoUploads.length > 0 || pendingDeletedVideos.length > 0) && (
+                                <p className="text-xs text-muted-foreground">
+                                    Cambios pendientes de videos. Se aplican al guardar.
+                                </p>
+                            )}
+                            <div className="space-y-2">
+                                {/* Videos existentes solo en edición */}
+                                {editingGaleriaId && existingVideos.map((url, idx) => (
+                                    <div key={url} className="flex items-center justify-between p-2 bg-muted rounded">
+                                        <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 truncate">
+                                            Video {idx + 1}
+                                        </a>
+                                        <Button
+                                            type="button"
+                                            size="icon"
+                                            variant="ghost"
+                                            className="h-7 w-7 text-destructive"
+                                            onClick={() => handleDeleteVideo(url)}
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
                                     </div>
-                                </>
-                            ) : (
-                                <p className="text-sm text-muted-foreground">
-                                    Guarda la galería primero para gestionar videos.
+                                ))}
+                                {/* Nuevos videos pendientes (siempre se muestran) */}
+                                {pendingVideoUploads.map((item) => (
+                                    <div key={item.id} className="flex items-center justify-between p-2 bg-muted rounded">
+                                        <span className="text-sm truncate">{item.name}</span>
+                                        <Button
+                                            type="button"
+                                            size="icon"
+                                            variant="ghost"
+                                            className="h-7 w-7 text-destructive"
+                                            onClick={() => handleDeleteVideo(item.name)}
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                            {!editingGaleriaId && pendingVideoUploads.length === 0 && (
+                                <p className="text-xs text-muted-foreground">
+                                    Puedes seleccionar videos ahora. Se subirán automáticamente al guardar la galería.
                                 </p>
                             )}
                         </div>
                     </div>
+
+                    {/* Barra de progreso */}
+                    {isSaving && (
+                        <div className="space-y-2 pt-2">
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                                <span>
+                                    {savingStage === 'creating' && 'Creando galería...'}
+                                    {savingStage === 'uploadingImages' && 'Subiendo imágenes...'}
+                                    {savingStage === 'uploadingVideos' && 'Subiendo videos...'}
+                                    {savingStage === 'deletingImages' && 'Eliminando imágenes...'}
+                                    {savingStage === 'deletingVideos' && 'Eliminando videos...'}
+                                    {savingStage === 'finalizing' && 'Finalizando...'}
+                                </span>
+                                <span>{savingProgress}%</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                                <div
+                                    className="bg-primary h-2 rounded-full transition-all duration-300"
+                                    style={{ width: `${savingProgress}%` }}
+                                />
+                            </div>
+                        </div>
+                    )}
 
                     <div className="flex justify-end gap-3 pt-4 border-t">
                         <Button
@@ -791,6 +856,8 @@ export default function EmpleadoClubGaleriaPage() {
                                 setEditingGaleriaId(null);
                                 setFormData(EMPTY_FORM);
                                 clearPendingChanges();
+                                setSavingStage('idle');
+                                setSavingProgress(0);
                             }}
                             disabled={isSaving}
                         >

@@ -57,7 +57,7 @@ export const galeriaApi = {
     async uploadImages(id: string, files: File[]): Promise<string[]> {
         const formData = new FormData();
         files.forEach((file) => formData.append("imagenes", file));
-        const response = await apiFetch<ApiSuccess<{ urls: string[] }>>(
+        const response = await apiFetch<{ success: boolean; urls: string[] }>(
             `/api/galeria/${id}/imagenes`,
             {
                 method: "POST",
@@ -65,13 +65,17 @@ export const galeriaApi = {
             },
             { local: true }
         );
-        return response.data.urls;
+        // La respuesta es { success: true, urls: [...] }
+        if (response.urls && Array.isArray(response.urls)) {
+            return response.urls;
+        }
+        throw new Error('Respuesta inesperada de la API al subir imágenes');
     },
 
     async uploadVideos(id: string, files: File[]): Promise<string[]> {
         const formData = new FormData();
         files.forEach((file) => formData.append("videos", file));
-        const response = await apiFetch<ApiSuccess<{ urls: string[] }>>(
+        const response = await apiFetch<{ success: boolean; urls: string[] }>(
             `/api/galeria/${id}/videos`,
             {
                 method: "POST",
@@ -79,7 +83,10 @@ export const galeriaApi = {
             },
             { local: true }
         );
-        return response.data.urls;
+        if (response.urls && Array.isArray(response.urls)) {
+            return response.urls;
+        }
+        throw new Error('Respuesta inesperada de la API al subir videos');
     },
 
     async deleteImage(id: string, imageUrl: string): Promise<void> {
