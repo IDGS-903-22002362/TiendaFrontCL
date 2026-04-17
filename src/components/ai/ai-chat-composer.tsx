@@ -89,7 +89,7 @@ export function AiChatComposer({
           <div
             className={`relative flex-1 rounded-2xl border transition-all focus-within:ring-2 focus-within:ring-primary/20 ${
               isProductPremium
-                ? "border-primary/20 focus-within:border-primary/40 bg-[linear-gradient(90deg,rgba(10,130,66,0.035),rgba(18,18,18,0.94),rgba(10,130,66,0.02))]"
+                ? "border-primary/20 focus-within:border-primary/40 bg-background"
                 : "border-border bg-background"
             }`}
           >

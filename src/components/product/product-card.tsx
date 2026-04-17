@@ -1,89 +1,100 @@
-import Image from "next/image";
 import Link from "next/link";
 import type { Product } from "@/lib/types";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { PriceTag } from "./price-tag";
-import {
-  getEditorialProductCopy,
-  getPrimaryProductBadge,
-  getProductStockState,
-} from "@/lib/storefront";
+import { HoverImagePreview } from "@/components/product/hover-image-preview";
 import { WishlistButton } from "@/components/storefront/shared/wishlist-button";
+import {
+  formatCurrency,
+  getPrimaryProductBadge,
+  normalizeStorefrontText,
+} from "@/lib/storefront";
+import { cn } from "@/lib/utils";
 
 type ProductCardProps = {
   product: Product;
 };
 
+function getCatalogBadge(product: Product) {
+  const badge = getPrimaryProductBadge(product);
+
+  if (!badge) {
+    return null;
+  }
+
+  if (badge.label === "Nuevo") {
+    return null;
+  }
+
+  return badge;
+}
+
 export function ProductCard({ product }: ProductCardProps) {
-  const primaryBadge = getPrimaryProductBadge(product);
-  const stockState = getProductStockState(product);
-  const secondaryImage = product.images[1] ?? product.images[0];
+  const badge = getCatalogBadge(product);
+  const eyebrow = product.lineName || product.category;
+  const finalPrice = product.salePrice || product.price;
+  const imagePosition = normalizeStorefrontText(`${product.category} ${product.name}`).includes(
+    "gorra",
+  )
+    ? "object-[center_18%]"
+    : "object-center";
+  const badgeTone =
+    badge?.label === "Agotado"
+      ? "border-black bg-black text-white"
+      : badge?.label === "Oferta"
+        ? "border-black bg-white text-black"
+        : "border-black bg-black text-white";
 
   return (
-    <article className="group flex h-full flex-col overflow-hidden rounded-[1.65rem] border border-border bg-card shadow-[var(--shadow-card)] transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-[var(--shadow-elevated)]">
-      <Link href={`/products/${product.id}`} className="block">
-        <div className="relative aspect-[4/5] overflow-hidden bg-muted/35">
-          <Image
-            src={product.images[0]}
+    <article className="group flex h-full flex-col">
+      <div className="relative">
+        <Link href={`/products/${product.id}`} className="block">
+          <HoverImagePreview
+            images={product.images}
             alt={product.name}
-            fill
-            sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
-            className="object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+            sizes="(max-width: 640px) 48vw, (max-width: 1024px) 34vw, (max-width: 1440px) 25vw, 20vw"
+            className="aspect-square border border-black/12"
+            imageClassName={cn("p-3 md:p-4", imagePosition)}
+            overlay={
+              badge ? (
+                <span
+                  className={cn(
+                    "absolute left-0 top-0 z-[1] inline-flex min-h-9 items-center border px-3 text-[10px] font-semibold uppercase tracking-[0.18em]",
+                    badgeTone,
+                  )}
+                >
+                  {badge.label}
+                </span>
+              ) : null
+            }
           />
-          {secondaryImage !== product.images[0] ? (
-            <Image
-              src={secondaryImage}
-              alt={`${product.name} imagen secundaria`}
-              fill
-              sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
-              className="object-cover opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-            />
-          ) : null}
-          <div className="absolute inset-x-0 bottom-0 h-28 bg-[linear-gradient(180deg,transparent,rgba(20,22,18,0.12))]" />
-          <div className="absolute left-3 top-3 flex items-center gap-2">
-            {primaryBadge ? (
-              <Badge variant={primaryBadge.tone === "sale" ? "secondary" : primaryBadge.tone === "warning" ? "outline" : "default"}>
-                {primaryBadge.label}
-              </Badge>
-            ) : null}
-          </div>
-          <div className="absolute right-3 top-3">
-            <WishlistButton productId={product.id} />
-          </div>
-        </div>
-      </Link>
+        </Link>
 
-      <div className="flex flex-1 flex-col px-4 pb-4 pt-4 md:px-5 md:pb-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary/72">
-              {product.lineName || product.category}
+        <div className="absolute right-3 top-3 md:right-4 md:top-4">
+          <WishlistButton
+            productId={product.id}
+            className="h-10 w-10 rounded-none border-black/12 bg-white text-foreground shadow-none hover:border-black hover:bg-white md:h-11 md:w-11"
+          />
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-1 flex-col md:mt-4">
+        <div className="flex items-baseline gap-2.5">
+          <p className="text-[1.45rem] font-semibold leading-none tracking-[-0.03em] text-foreground md:text-[1.7rem]">
+            {formatCurrency(finalPrice)}
+          </p>
+          {product.salePrice ? (
+            <p className="text-[0.9rem] leading-none text-text-muted line-through md:text-[0.95rem]">
+              {formatCurrency(product.price)}
             </p>
-            <Link href={`/products/${product.id}`} className="mt-2 block">
-              <h3 className="line-clamp-2 font-headline text-2xl font-semibold uppercase leading-none tracking-[0.03em] text-foreground">
-                {product.name}
-              </h3>
-            </Link>
-          </div>
-          <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            {stockState.label}
-          </span>
+          ) : null}
         </div>
 
-        <p className="mt-3 line-clamp-2 text-sm leading-6 text-muted-foreground">
-          {getEditorialProductCopy(product)}
-        </p>
+        <Link href={`/products/${product.id}`} className="mt-3 block">
+          <h3 className="line-clamp-2 text-[1rem] font-medium leading-[1.28] text-foreground md:text-[1.08rem]">
+            {product.name}
+          </h3>
+        </Link>
 
-        <div className="mt-auto flex items-end justify-between gap-3 pt-5">
-          <div>
-            <PriceTag price={product.price} salePrice={product.salePrice} className="gap-2" />
-            <p className="mt-1 text-xs text-muted-foreground">{stockState.hint}</p>
-          </div>
-          <Button asChild className="h-10 rounded-full px-4">
-            <Link href={`/products/${product.id}`}>Ver</Link>
-          </Button>
-        </div>
+        <p className="mt-3 text-[0.95rem] leading-5 text-text-muted">{eyebrow}</p>
       </div>
     </article>
   );

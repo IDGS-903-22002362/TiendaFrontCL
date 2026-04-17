@@ -20,7 +20,7 @@ export function PriceTag({ price, salePrice, className }: PriceTagProps) {
     <div className={cn("flex items-baseline gap-3", className)}>
       <span
         className={cn(
-          "font-headline text-3xl font-semibold uppercase leading-none tracking-[0.02em]",
+          "font-headline text-lg md:text-xl font-semibold uppercase leading-none tracking-[0.015em]",
           salePrice ? "text-primary" : "text-foreground",
         )}
       >

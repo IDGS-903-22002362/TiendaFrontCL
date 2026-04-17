@@ -8,7 +8,6 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import { Button } from "@/components/ui/button";
 import { ProductCard } from "@/components/product/product-card";
 import { SectionHeading } from "@/components/storefront/shared/section-heading";
 import { cn } from "@/lib/utils";
@@ -40,39 +39,42 @@ export function ProductCarousel({
 
   return (
     <section className={cn(contained && "container", className)}>
-      <SectionHeading
-        eyebrow={eyebrow}
-        title={title}
-        description={description}
-        action={
-          href && hrefLabel ? (
-            <Button asChild variant="ghost" className="h-11 rounded-full px-4">
-              <Link href={href}>
+      <div className="rounded-[1.6rem] border border-border/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.5),rgba(255,255,255,0.22))] px-4 py-5 shadow-[var(--shadow-card)] md:px-6 md:py-7">
+        <SectionHeading
+          eyebrow={eyebrow}
+          title={title}
+          description={description}
+          action={
+            href && hrefLabel ? (
+              <Link
+                href={href}
+                className="editorial-link text-foreground/72 hover:text-primary"
+              >
                 {hrefLabel}
                 <ArrowRight className="h-4 w-4" />
               </Link>
-            </Button>
-          ) : undefined
-        }
-      />
-      <div className="mt-6">
-        <Carousel
-          opts={{ align: "start", loop: products.length > 4 }}
-          className="w-full"
-        >
-          <CarouselContent>
-            {products.map((product) => (
-              <CarouselItem
-                key={product.id}
-                className="basis-[82%] sm:basis-1/2 xl:basis-1/4"
-              >
-                <ProductCard product={product} />
-              </CarouselItem>
-            ))}
-          </CarouselContent>
-          <CarouselPrevious className="left-3 top-3 translate-y-0" />
-          <CarouselNext className="right-3 top-3 translate-y-0" />
-        </Carousel>
+            ) : undefined
+          }
+        />
+        <div className="mt-7">
+          <Carousel
+            opts={{ align: "start", loop: products.length > 4 }}
+            className="w-full"
+          >
+            <CarouselContent className="py-1">
+              {products.map((product) => (
+                <CarouselItem
+                  key={product.id}
+                  className="basis-[75%] sm:basis-[45%] md:basis-[30%] lg:basis-1/4 xl:basis-1/5"
+                >
+                  <ProductCard product={product} />
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+            <CarouselPrevious className="left-auto right-12 top-[-4.4rem] hidden translate-y-0 md:inline-flex" />
+            <CarouselNext className="right-0 top-[-4.4rem] hidden translate-y-0 md:inline-flex" />
+          </Carousel>
+        </div>
       </div>
     </section>
   );

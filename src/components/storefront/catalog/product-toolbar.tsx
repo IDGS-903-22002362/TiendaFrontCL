@@ -23,7 +23,7 @@ export function ProductToolbar({
   mobileFilters,
 }: ProductToolbarProps) {
   return (
-    <div className="rounded-[1.75rem] border border-border bg-card p-4 shadow-[var(--shadow-card)]">
+    <div className="border border-black/14 bg-white p-4 shadow-[0_20px_40px_-36px_rgb(8_12_10_/_0.16)] md:p-5">
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div className="space-y-3">
@@ -35,14 +35,14 @@ export function ProductToolbar({
               ]}
             />
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary/74">
+              <p className="editorial-label text-primary/74">
                 Catálogo premium
               </p>
-              <div className="mt-2 flex items-center gap-3">
-                <h1 className="font-headline text-3xl font-semibold uppercase leading-none tracking-[0.03em] md:text-4xl">
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <h1 className="font-headline text-[2.25rem] font-semibold uppercase leading-[0.92] tracking-[0.03em] md:text-[3.2rem]">
                   {searchLabel || "Todos los productos"}
                 </h1>
-                <span className="rounded-full border border-border bg-muted/55 px-3 py-1 text-xs font-semibold text-muted-foreground">
+                <span className="border border-black/14 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                   {count} productos
                 </span>
               </div>
@@ -57,7 +57,7 @@ export function ProductToolbar({
               {activeFilters.map((filter) => (
                 <span
                   key={filter}
-                  className="whitespace-nowrap rounded-full border border-border bg-muted px-3 py-1.5 text-xs font-medium text-foreground"
+                  className="whitespace-nowrap border border-black/14 bg-white px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-foreground"
                 >
                   {filter}
                 </span>
@@ -65,7 +65,7 @@ export function ProductToolbar({
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Filtra por categoría, línea, talla, precio y favoritos locales.
+              Filtra por categoría, línea, talla, precio y favoritos.
             </p>
           )}
 
@@ -74,7 +74,7 @@ export function ProductToolbar({
               <Button
                 type="button"
                 variant="ghost"
-                className="h-10 rounded-full px-4"
+                className="h-10 px-4"
                 onClick={onClear}
               >
                 Limpiar filtros

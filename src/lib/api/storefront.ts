@@ -1,8 +1,12 @@
 import type {
   Category,
   Product,
+  ProductExtraDetail,
+  ProductRatingEligibility,
+  ProductRatingSummary,
   ProductSizeStock,
   ProductStockSnapshot,
+  ProductUserRating,
 } from "@/lib/types";
 import { apiFetch, unwrapData } from "./client";
 
@@ -39,6 +43,19 @@ function toStringArray(value: unknown): string[] {
   }
 
   return [];
+}
+
+function uniqueStrings(values: string[]): string[] {
+  const seen = new Set<string>();
+
+  return values.filter((value) => {
+    if (seen.has(value)) {
+      return false;
+    }
+
+    seen.add(value);
+    return true;
+  });
 }
 
 function slugify(value: string): string {
@@ -175,6 +192,68 @@ function mapSizeInventory(input: unknown): ProductSizeStock[] {
     .filter((entry) => Boolean(entry.tallaId));
 }
 
+function mapRatingSummary(input: unknown): ProductRatingSummary | undefined {
+  if (!input || typeof input !== "object") {
+    return undefined;
+  }
+
+  const summary = input as UnknownRecord;
+  return {
+    average: toNumber(summary.average),
+    count: toNumber(summary.count),
+    updatedAt: toStringValue(summary.updatedAt) || undefined,
+  };
+}
+
+function mapRatingEligibility(
+  input: unknown,
+): ProductRatingEligibility | undefined {
+  if (!input || typeof input !== "object") {
+    return undefined;
+  }
+
+  const eligibility = input as UnknownRecord;
+  const reason = toStringValue(
+    eligibility.reason,
+  ) as ProductRatingEligibility["reason"];
+
+  if (
+    reason !== "eligible" &&
+    reason !== "purchase_required" &&
+    reason !== "not_delivered"
+  ) {
+    return undefined;
+  }
+
+  return {
+    canRate: Boolean(eligibility.canRate),
+    reason,
+  };
+}
+
+function mapUserRating(input: unknown): ProductUserRating | null | undefined {
+  if (input === null) {
+    return null;
+  }
+
+  if (!input || typeof input !== "object") {
+    return undefined;
+  }
+
+  const rating = input as UnknownRecord;
+  const score = toNumber(rating.score, 0);
+  const updatedAt = toStringValue(rating.updatedAt);
+
+  if (score <= 0 || !updatedAt) {
+    return undefined;
+  }
+
+  return {
+    score,
+    updatedAt,
+  };
+}
+
 function mapProduct(input: unknown): Product {
   const product = (
     input && typeof input === "object" ? input : {}
@@ -186,24 +265,24 @@ function mapProduct(input: unknown): Product {
   const clave = toStringValue(product.clave ?? product.sku) || undefined;
   const name = toStringValue(
     product.nombre ??
-    product.name ??
-    product.titulo ??
-    product.descripcion ??
-    product.clave,
+      product.name ??
+      product.titulo ??
+      product.descripcion ??
+      product.clave,
     "Producto",
   );
   const description = toStringValue(
     product.description ??
-    product.detalle ??
-    product.descripcion ??
-    product.clave,
+      product.detalle ??
+      product.descripcion ??
+      product.clave,
     "Sin descripción disponible.",
   );
   const price = toNumber(
     product.precioPublico ??
-    product.precio ??
-    product.price ??
-    product.precioBase,
+      product.precio ??
+      product.price ??
+      product.precioBase,
   );
   const salePriceRaw = toNumber(
     product.precioOferta ?? product.salePrice ?? product.precioDescuento,
@@ -212,34 +291,35 @@ function mapProduct(input: unknown): Product {
   const salePrice = salePriceRaw > 0 ? salePriceRaw : undefined;
   const categoryName = toStringValue(
     (product.categoria as UnknownRecord | undefined)?.nombre ??
-    product.categoriaNombre ??
-    product.categoriaId ??
-    product.category,
+      product.categoriaNombre ??
+      product.categoriaId ??
+      product.category,
     "General",
   );
   const lineId = toStringValue(
     (product.linea as UnknownRecord | undefined)?.id ??
-    product.lineaId ??
-    product.idLinea,
+      product.lineaId ??
+      product.idLinea,
   );
   const lineName = toStringValue(
     (product.linea as UnknownRecord | undefined)?.nombre ??
-    product.lineaNombre ??
-    product.line,
+      product.lineaNombre ??
+      product.line,
   );
 
-  const imageCandidates = [
-    product.imagenes,
-    product.images,
-    product.fotos,
-    product.image,
-    product.imagen,
-    (product.categoria as UnknownRecord | undefined)?.imagen,
-  ];
-
-  const images = imageCandidates
-    .flatMap((candidate) => toStringArray(candidate))
-    .filter(Boolean);
+  const primaryImages = uniqueStrings(toStringArray(product.imagenes));
+  const fallbackImages = uniqueStrings(
+    [
+      product.images,
+      product.fotos,
+      product.image,
+      product.imagen,
+      (product.categoria as UnknownRecord | undefined)?.imagen,
+    ]
+      .flatMap((candidate) => toStringArray(candidate))
+      .filter(Boolean),
+  );
+  const images = primaryImages.length > 0 ? primaryImages : fallbackImages;
 
   const tallaIds = toStringArray(product.tallaIds ?? product.tallasIds);
   const hasSizeInventory = tallaIds.length > 0;
@@ -248,24 +328,27 @@ function mapProduct(input: unknown): Product {
   );
   const normalizedInventoryBySize = hasSizeInventory
     ? tallaIds.map((tallaId) => {
-      const matched = mappedInventoryBySize.find(
-        (entry) => entry.tallaId === tallaId,
-      );
-      return {
-        tallaId,
-        cantidad: matched?.cantidad ?? 0,
-      };
-    })
+        const matched = mappedInventoryBySize.find(
+          (entry) => entry.tallaId === tallaId,
+        );
+        return {
+          tallaId,
+          cantidad: matched?.cantidad ?? 0,
+        };
+      })
     : [];
   const stockTotalFromBackend = toNumber(
     product.existencias ??
-    product.stock ??
-    product.inventario ??
-    product.existencia,
+      product.stock ??
+      product.inventario ??
+      product.existencia,
     0,
   );
   const stockTotal = hasSizeInventory
-    ? normalizedInventoryBySize.reduce((total, item) => total + item.cantidad, 0)
+    ? normalizedInventoryBySize.reduce(
+        (total, item) => total + item.cantidad,
+        0,
+      )
     : stockTotalFromBackend;
   const visibleSizes = toStringArray(
     product.tallas ?? product.sizes ?? product.tallaIds ?? tallaIds,
@@ -293,6 +376,22 @@ function mapProduct(input: unknown): Product {
     tallaIds,
     inventarioPorTalla: normalizedInventoryBySize,
     hasSizeInventory,
+    detailIds: toStringArray(product.detalleIds ?? product.detailIds),
+    activo:
+      typeof product.activo === "boolean"
+        ? product.activo
+        : typeof product.active === "boolean"
+          ? product.active
+          : undefined,
+    ratingSummary: mapRatingSummary(product.ratingSummary),
+    isFavorito:
+      typeof product.isFavorito === "boolean"
+        ? product.isFavorito
+        : typeof product.esFavorito === "boolean"
+          ? product.esFavorito
+          : undefined,
+    ratingEligibility: mapRatingEligibility(product.ratingEligibility),
+    myRating: mapUserRating(product.myRating),
   };
 }
 
@@ -316,7 +415,7 @@ async function fetchProductsFromEndpoint(path: string): Promise<Product[]> {
   try {
     const payload = await apiFetch<unknown>(
       path,
-      { method: "GET" },
+      { method: "GET", cache: "no-store" },
       getProductReadOptions(),
     );
     return normalizeProductsArray(payload)
@@ -371,6 +470,7 @@ export async function fetchProductById(id: string): Promise<Product | null> {
         `/api/productos/${id}`,
         {
           method: "GET",
+          cache: "no-store",
         },
         getProductReadOptions(),
       ),
@@ -378,6 +478,7 @@ export async function fetchProductById(id: string): Promise<Product | null> {
         `/api/productos/${id}/stock`,
         {
           method: "GET",
+          cache: "no-store",
         },
         getProductReadOptions(),
       ).catch(() => null),
@@ -423,10 +524,126 @@ export async function fetchProductById(id: string): Promise<Product | null> {
   }
 }
 
+export async function fetchProductDetail(
+  id: string,
+  token?: string,
+): Promise<Product | null> {
+  try {
+    const payload = await apiFetch<unknown>(
+      `/api/productos/${id}`,
+      {
+        method: "GET",
+        cache: "no-store",
+      },
+      { ...getProductReadOptions(), ...(token ? { token } : {}) },
+    );
+
+    const data = unwrapData<unknown>(payload);
+
+    if (!data || typeof data !== "object") {
+      return null;
+    }
+
+    const product = mapProduct(data);
+    return product.id ? product : null;
+  } catch (error) {
+    console.error("fetchProductDetail failed", error);
+    return null;
+  }
+}
+
+export async function fetchProductExtraDetails(
+  productId: string,
+): Promise<ProductExtraDetail[]> {
+  try {
+    const payload = await apiFetch<{
+      success?: boolean;
+      data?: unknown[];
+    }>(
+      `/api/productos/${productId}/detalles`,
+      {
+        method: "GET",
+        cache: "no-store",
+      },
+      getProductReadOptions(),
+    );
+
+    const payloadRecord =
+      payload && typeof payload === "object"
+        ? (payload as UnknownRecord)
+        : undefined;
+    const nestedData =
+      payloadRecord &&
+      payloadRecord.data &&
+      typeof payloadRecord.data === "object" &&
+      !Array.isArray(payloadRecord.data)
+        ? (payloadRecord.data as UnknownRecord).data
+        : undefined;
+    const data = Array.isArray(payload.data)
+      ? payload.data
+      : Array.isArray(nestedData)
+        ? nestedData
+        : [];
+    const details: ProductExtraDetail[] = [];
+
+    data.forEach((item) => {
+      const detail = (
+        item && typeof item === "object" ? item : {}
+      ) as UnknownRecord;
+
+      const id = toStringValue(detail.id);
+      const descripcion = toStringValue(detail.descripcion);
+      const productoIdValue = toStringValue(detail.productoId ?? productId);
+
+      if (!id || !descripcion) {
+        return;
+      }
+
+      details.push({
+        id,
+        descripcion,
+        productoId: productoIdValue,
+        createdAt: toStringValue(detail.createdAt) || undefined,
+        updatedAt: toStringValue(detail.updatedAt) || undefined,
+      });
+    });
+
+    return details;
+  } catch (error) {
+    console.error("fetchProductExtraDetails failed", error);
+    return [];
+  }
+}
+
+export async function rateProduct(productId: string, score: 1 | 2 | 3 | 4 | 5) {
+  return apiFetch<{
+    success: boolean;
+    message: string;
+    data: {
+      id: string;
+      productId: string;
+      userId: string;
+      score: number;
+      eligibleOrderId: string;
+      eligibleDeliveredAt: string;
+      createdAt: string;
+      updatedAt: string;
+    };
+  }>(
+    `/api/productos/${encodeURIComponent(productId)}/calificacion`,
+    {
+      method: "POST",
+      body: JSON.stringify({ score }),
+    },
+    { local: true },
+  );
+}
+
 export async function fetchCategories(): Promise<Category[]> {
   try {
     const payload = await apiFetch<unknown>("/api/categorias", {
       method: "GET",
+      cache: "no-store",
     });
     return normalizeCategoriesArray(payload)
       .map(mapCategory)

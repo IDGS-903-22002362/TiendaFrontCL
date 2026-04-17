@@ -18,7 +18,7 @@ export function SortSelect({
 }) {
   return (
     <Select value={value} onValueChange={onValueChange}>
-      <SelectTrigger className="h-11 w-full rounded-full bg-card md:w-[220px]">
+      <SelectTrigger className="h-11 w-full border-black/14 bg-white md:w-[220px]">
         <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
         <SelectValue placeholder="Ordenar" />
       </SelectTrigger>

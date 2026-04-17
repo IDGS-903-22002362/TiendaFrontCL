@@ -5,12 +5,32 @@ import { lineasApi } from "@/lib/api/lineas";
 import { tallasApi } from "@/lib/api/tallas";
 import { isProductVisible } from "@/lib/storefront";
 
+export const dynamic = "force-dynamic";
+
 export default async function ProductsPage({
   searchParams,
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  await searchParams;
+  const resolvedSearchParams = await searchParams;
+
+  const queryParams = new URLSearchParams();
+  Object.entries(resolvedSearchParams).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      value.forEach((entry) => {
+        if (typeof entry === "string") {
+          queryParams.append(key, entry);
+        }
+      });
+      return;
+    }
+
+    if (typeof value === "string") {
+      queryParams.set(key, value);
+    }
+  });
+
+  const queryKey = queryParams.toString() || "all";
 
   const [products, categories, lineas, tallas] = await Promise.all([
     fetchProducts(),
@@ -20,9 +40,10 @@ export default async function ProductsPage({
   ]);
 
   return (
-    <div className="container py-5 md:py-8">
+    <div className="container py-6 md:py-8 lg:py-10">
       <Suspense fallback={<div>Cargando catálogo...</div>}>
         <ProductFilters
+          key={queryKey}
           allProducts={products.filter(isProductVisible)}
           categories={categories}
           lineas={lineas}

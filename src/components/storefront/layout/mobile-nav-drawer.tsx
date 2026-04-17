@@ -39,18 +39,19 @@ export function MobileNavDrawer({
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <SheetContent
         side="left"
-        className="w-[min(90vw,360px)] border-r border-border bg-card px-0"
+        className="w-[min(90vw,360px)] border-r border-border bg-card-elevated px-0"
       >
         <SheetHeader className="border-b border-border px-5 pb-5">
-          <SheetTitle>La Guarida</SheetTitle>
+          <p className="editorial-label text-primary/70">Store oficial</p>
+          <SheetTitle className="mt-2">La Guarida</SheetTitle>
         </SheetHeader>
         <div className="flex h-full flex-col px-5 pb-6 pt-5">
-          <nav className="space-y-1.5">
+          <nav className="space-y-2">
             {links.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className="flex items-center justify-between rounded-2xl border border-transparent px-4 py-3 text-sm font-medium text-foreground transition-colors hover:border-border hover:bg-muted/55"
+                className="flex items-center justify-between border border-border/80 bg-card/76 px-4 py-3 text-sm font-medium text-foreground transition-[background-color,border-color,transform] hover:-translate-y-px hover:border-primary/18 hover:bg-card"
               >
                 <span>{link.label}</span>
                 <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -58,13 +59,13 @@ export function MobileNavDrawer({
             ))}
           </nav>
 
-          <div className="mt-8 rounded-[1.75rem] border border-border bg-muted/45 p-4">
+          <div className="mt-8 editorial-panel p-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary/75">
               Cuenta
             </p>
             {isAuthenticated ? (
               <div className="mt-3 space-y-3">
-                <div className="rounded-2xl bg-card px-4 py-3">
+                <div className="border border-border/70 bg-card px-4 py-3">
                   <p className="truncate text-sm font-medium text-foreground">{email}</p>
                   <p className="mt-1 text-xs uppercase tracking-[0.2em] text-muted-foreground">
                     {role}
@@ -72,14 +73,14 @@ export function MobileNavDrawer({
                 </div>
                 <Link
                   href="/profile"
-                  className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium text-foreground"
+                  className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-card"
                 >
                   <UserRound className="h-4 w-4 text-primary" />
                   Mi perfil
                 </Link>
                 <Link
                   href="/order-history"
-                  className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium text-foreground"
+                  className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-card"
                 >
                   <Package2 className="h-4 w-4 text-primary" />
                   Mis pedidos
@@ -87,7 +88,7 @@ export function MobileNavDrawer({
                 <Button
                   type="button"
                   variant="ghost"
-                  className="h-11 w-full justify-start rounded-2xl px-3 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  className="h-11 w-full justify-start px-3 text-destructive hover:bg-destructive/10 hover:text-destructive"
                   onClick={onLogout}
                 >
                   <LogOut className="mr-2 h-4 w-4" />

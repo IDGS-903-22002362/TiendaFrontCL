@@ -7,23 +7,23 @@ const links = [
   { href: "/products?category=gorra", label: "Contacto" },
 ];
 
-export function UtilityBar({ compact = false }: { compact?: boolean }) {
+export function UtilityBar() {
   return (
-    <div className="hidden bg-[#0d1110] text-[11px] text-white/72 lg:block">
-      <div
-        className={`storefront-frame flex items-center justify-between gap-4 transition-[height,padding] duration-300 ${
-          compact ? "h-9" : "h-10"
-        }`}
-      >
-        <p className="font-medium uppercase tracking-[0.24em] text-[#d4af37]">
-          Beneficios para la afición
-        </p>
-        <nav aria-label="Accesos de soporte" className="flex items-center gap-5">
+    <div className="hidden border-b border-black bg-black text-[10px] text-white/60 lg:block">
+      <div className="storefront-frame flex h-9 items-center justify-between gap-6">
+        <div className="flex items-center gap-3">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#b99145]" />
+          <p className="editorial-label text-[#c9a562]">Beneficios para la afición</p>
+        </div>
+        <nav
+          aria-label="Accesos de soporte"
+          className="flex items-center gap-5 text-[0.72rem] tracking-[0.08em] text-white/62"
+        >
           {links.map((link) => (
             <Link
               key={link.label}
               href={link.href}
-              className="transition-colors hover:text-white"
+              className="relative py-1 hover:text-white"
             >
               {link.label}
             </Link>

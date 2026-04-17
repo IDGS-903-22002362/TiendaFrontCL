@@ -12,13 +12,52 @@ import {
   useElements,
   useStripe,
 } from "@stripe/react-stripe-js";
-import { ArrowLeft, CreditCard, Home, ShieldCheck } from "lucide-react";
+import {
+  ArrowLeft,
+  Clock3,
+  CreditCard,
+  Home,
+  ShieldCheck,
+} from "lucide-react";
 import { useCart } from "@/hooks/use-cart";
 import { useAuth } from "@/hooks/use-auth";
 import { useStorefront } from "@/hooks/use-storefront";
-import { checkoutCart } from "@/lib/api/cart";
+import {
+  checkoutCart,
+  getCartVariantKey,
+  getOrCreateSessionId,
+} from "@/lib/api/cart";
+import { ordersApi } from "@/lib/api/orders";
 import { paymentsApi } from "@/lib/api/payments";
 import { getApiErrorMessage } from "@/lib/api/errors";
+import {
+  buildAplazoReturnUrls,
+  calculateAplazoItemsTotal,
+  clearStoredAplazoCheckoutState,
+  clearStoredAplazoRetryPayload,
+  getAplazoCartFingerprint,
+  isValidEmail,
+  isValidMxPhoneForAplazo,
+  isAplazoRetryableStatus,
+  isAplazoTerminalStatus,
+  normalizeEmail,
+  normalizeMxPhoneForAplazo,
+  normalizeWhitespace,
+  safeString,
+  readStoredAplazoCheckoutState,
+  splitFullName,
+  toAplazoMinorUnit,
+  validateAplazoProducts,
+  writeStoredAplazoRetryPayload,
+  writeStoredAplazoCheckoutState,
+} from "@/lib/aplazo";
+import { ApiError } from "@/lib/api/client";
+import type {
+  AplazoOnlineCreatePayload,
+  CartItem,
+  Orden,
+  PaymentMethod,
+} from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { useStripeConfig } from "@/hooks/use-stripe-config";
 import { Button } from "@/components/ui/button";
@@ -32,10 +71,94 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { EmptyState } from "@/components/storefront/shared/empty-state";
 import { Breadcrumbs } from "@/components/storefront/shared/breadcrumbs";
+import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/storefront";
-import { getCartVariantKey } from "@/lib/api/cart";
+
+const SHIPPING_COST = 99;
+
+function roundCurrency(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+const IS_DEVELOPMENT = process.env.NODE_ENV !== "production";
+
+function logAplazoDebug(message: string, payload?: unknown) {
+  if (!IS_DEVELOPMENT) {
+    return;
+  }
+
+  if (payload === undefined) {
+    console.info(`[aplazo] ${message}`);
+    return;
+  }
+
+  console.info(`[aplazo] ${message}`, payload);
+}
+
+function maskEmailForLog(email: string) {
+  const normalized = normalizeEmail(email);
+  const [localPart = "", domain = ""] = normalized.split("@");
+  if (!localPart || !domain) {
+    return normalized;
+  }
+
+  const visibleLocal = localPart.slice(0, 2);
+  return `${visibleLocal}${"*".repeat(Math.max(localPart.length - 2, 1))}@${domain}`;
+}
+
+function maskPhoneForLog(phone: string) {
+  if (phone.length <= 4) {
+    return phone;
+  }
+
+  return `${"*".repeat(phone.length - 4)}${phone.slice(-4)}`;
+}
+
+function sanitizeAplazoBuyerForLog(buyer: SanitizedAplazoBuyer) {
+  return {
+    ...buyer,
+    email: maskEmailForLog(buyer.email),
+    phone: maskPhoneForLog(buyer.phone),
+  };
+}
+
+function getExpectedCheckoutPricing(subtotal: number) {
+  const shipping = SHIPPING_COST;
+  const tax = 0;
+  const total = subtotal + shipping + tax;
+
+  return {
+    subtotal: roundCurrency(subtotal),
+    shipping: roundCurrency(shipping),
+    tax: roundCurrency(tax),
+    total: roundCurrency(total),
+  };
+}
+
+function validateOrderPricing(params: {
+  order: Pick<Orden, "subtotal" | "shippingCost" | "total">;
+  expectedSubtotal: number;
+}) {
+  const expected = getExpectedCheckoutPricing(params.expectedSubtotal);
+  const actualSubtotal = roundCurrency(params.order.subtotal ?? 0);
+  const actualShipping = roundCurrency(params.order.shippingCost ?? 0);
+  const actualTotal = roundCurrency(params.order.total ?? 0);
+
+  if (
+    actualSubtotal === expected.subtotal &&
+    actualShipping === expected.shipping &&
+    actualTotal === expected.total
+  ) {
+    return;
+  }
+
+  throw new Error(
+    `La orden backend devolvió subtotal ${formatCurrency(actualSubtotal)}, envío ${formatCurrency(actualShipping)} y total ${formatCurrency(actualTotal)}, pero el checkout mostraba ${formatCurrency(expected.total)}. Revisa el pricing antes de continuar con el pago.`,
+  );
+}
 
 const shippingSchema = z.object({
   name: z.string().min(2, "Nombre es requerido"),
@@ -50,6 +173,83 @@ const shippingSchema = z.object({
 });
 
 type ShippingValues = z.infer<typeof shippingSchema>;
+
+type SanitizedAplazoBuyer = {
+  addressLine: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  postalCode: string;
+};
+
+function getSanitizedCheckoutName(value: string) {
+  return normalizeWhitespace(value);
+}
+
+function getSanitizedAplazoBuyer(values: ShippingValues): SanitizedAplazoBuyer {
+  const fullName = getSanitizedCheckoutName(values.name);
+  const { firstName, lastName } = splitFullName(fullName);
+  const addressLine = normalizeWhitespace(
+    [values.calle, values.numero, values.colonia].filter(Boolean).join(" "),
+  );
+
+  return {
+    addressLine: safeString(addressLine, "Pendiente por confirmar"),
+    email: normalizeEmail(values.email),
+    firstName,
+    lastName,
+    phone: normalizeMxPhoneForAplazo(values.telefono),
+    postalCode: normalizeWhitespace(values.zip),
+  };
+}
+
+function validateAplazoSubmission(values: ShippingValues, items: CartItem[]) {
+  const buyer = getSanitizedAplazoBuyer(values);
+  const fullName = getSanitizedCheckoutName(values.name);
+
+  if (!fullName) {
+    return { ok: false as const, message: "Ingresa un nombre válido" };
+  }
+
+  if (!isValidEmail(buyer.email)) {
+    return { ok: false as const, message: "Ingresa un correo válido" };
+  }
+
+  if (!isValidMxPhoneForAplazo(values.telefono)) {
+    return {
+      ok: false as const,
+      message: "Ingresa un teléfono válido de 10 dígitos",
+    };
+  }
+
+  const productsValidation = validateAplazoProducts(items);
+  if (!productsValidation.ok) {
+    return {
+      ok: false as const,
+      message:
+        productsValidation.message ?? "No hay productos válidos en el carrito",
+    };
+  }
+
+  const estimatedTotal = productsValidation.totalPrice + toAplazoMinorUnit(SHIPPING_COST);
+
+  if (estimatedTotal <= 0) {
+    return {
+      ok: false as const,
+      message: "No fue posible preparar el pago con Aplazo",
+    };
+  }
+
+  return {
+    ok: true as const,
+    buyer,
+    fullName,
+    products: productsValidation.products,
+    validatedSubtotal: calculateAplazoItemsTotal(items),
+    estimatedTotal,
+  };
+}
 
 function getOrderIdFromCheckoutResult(payload: unknown): string {
   if (!payload || typeof payload !== "object") {
@@ -71,6 +271,115 @@ function getOrderIdFromCheckoutResult(payload: unknown): string {
   return typeof orderId === "string" ? orderId : "";
 }
 
+function buildAplazoPayload(params: {
+  orderId: string;
+  values: ShippingValues;
+  items: CartItem[];
+  order: Pick<Orden, "subtotal" | "shippingCost" | "total">;
+  origin: string;
+}): AplazoOnlineCreatePayload {
+  const { successUrl, errorUrl, cartUrl } = buildAplazoReturnUrls(params.origin);
+  const buyer = getSanitizedAplazoBuyer(params.values);
+  const productsValidation = validateAplazoProducts(params.items);
+  const orderSubtotal = roundCurrency(params.order.subtotal ?? 0);
+  const orderShipping = roundCurrency(params.order.shippingCost ?? 0);
+  const orderTaxes = 0;
+  const orderDiscount = 0;
+  const totalPrice = toAplazoMinorUnit(roundCurrency(params.order.total ?? 0));
+  const shippingPrice = toAplazoMinorUnit(orderShipping);
+  const taxesPrice = toAplazoMinorUnit(orderTaxes);
+  const discountPrice = toAplazoMinorUnit(orderDiscount);
+  const productsTotal = productsValidation.totalPrice;
+  const expectedTotal =
+    productsTotal + shippingPrice + taxesPrice - discountPrice;
+  // TODO: hacer obligatorio NEXT_PUBLIC_APLAZO_SHOP_ID por ambiente cuando
+  // backend/frontend cierren la configuración final de Aplazo.
+  const shopId =
+    safeString(process.env.NEXT_PUBLIC_APLAZO_SHOP_ID, "") ||
+    "TODO_APLAZO_SHOP_ID";
+
+  if (
+    !buyer.firstName ||
+    !isValidEmail(buyer.email) ||
+    !isValidMxPhoneForAplazo(buyer.phone)
+  ) {
+    throw new Error("No fue posible preparar el pago con Aplazo");
+  }
+
+  if (!productsValidation.ok || productsValidation.products.length === 0) {
+    throw new Error(
+      productsValidation.message ?? "No fue posible preparar el pago con Aplazo",
+    );
+  }
+
+  if (orderSubtotal <= 0 || totalPrice <= 0 || orderShipping < 0) {
+    throw new Error("No fue posible preparar el pago con Aplazo");
+  }
+
+  if (expectedTotal !== totalPrice) {
+    throw new Error("No fue posible preparar el pago con Aplazo");
+  }
+
+  return {
+    totalPrice,
+    shopId,
+    cartId: params.orderId,
+    successUrl,
+    errorUrl,
+    cartUrl,
+    buyer,
+    products: productsValidation.products,
+    discount: {
+      price: discountPrice,
+      title: "Descuento",
+    },
+    shipping: {
+      price: shippingPrice,
+      title: "Envío",
+    },
+    taxes: {
+      price: taxesPrice,
+      title: "IVA",
+    },
+  };
+}
+
+function getAplazoErrorMessage(error: unknown) {
+  if (error instanceof ApiError) {
+    if (error.code === "PAYMENT_VALIDATION_ERROR") {
+      return error.message;
+    }
+
+    if (error.code === "PAYMENT_PROVIDER_ERROR") {
+      return "No fue posible iniciar el pago con Aplazo. Revisa tus datos e inténtalo de nuevo.";
+    }
+  }
+
+  return getApiErrorMessage(error);
+}
+
+function omitAplazoUrls(payload: AplazoOnlineCreatePayload) {
+  return {
+    totalPrice: payload.totalPrice,
+    shopId: payload.shopId,
+    cartId: payload.cartId,
+    buyer: payload.buyer,
+    products: payload.products,
+    discount: payload.discount,
+    shipping: payload.shipping,
+    taxes: payload.taxes,
+  };
+}
+
+function buildAplazoReturnHref(params: {
+  paymentAttemptId: string;
+  orderId: string;
+  path?: "success" | "failure" | "cancel";
+}) {
+  const targetPath = params.path ?? "success";
+  return `/payments/aplazo/${targetPath}?paymentAttemptId=${encodeURIComponent(params.paymentAttemptId)}&ordenId=${encodeURIComponent(params.orderId)}`;
+}
+
 function MobileCheckoutActions({ children }: { children: ReactNode }) {
   return (
     <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-[rgb(251_249_243_/_0.96)] py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-xl md:hidden">
@@ -82,6 +391,7 @@ function MobileCheckoutActions({ children }: { children: ReactNode }) {
 function OrderSummaryPanel() {
   const { state, subtotal, totalItems } = useCart();
   const { getPersonalization } = useStorefront();
+  const pricing = getExpectedCheckoutPricing(subtotal);
 
   return (
     <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
@@ -122,11 +432,11 @@ function OrderSummaryPanel() {
         <div className="space-y-2 text-sm text-muted-foreground">
           <div className="flex items-center justify-between">
             <span>Subtotal</span>
-            <span>{formatCurrency(subtotal)}</span>
+            <span>{formatCurrency(pricing.subtotal)}</span>
           </div>
           <div className="flex items-center justify-between">
-            <span>Envío</span>
-            <span>{formatCurrency(99)}</span>
+            <span>Envío estimado</span>
+            <span>{formatCurrency(pricing.shipping)}</span>
           </div>
           <div className="flex items-center justify-between">
             <span>Artículos</span>
@@ -136,10 +446,10 @@ function OrderSummaryPanel() {
 
         <div className="rounded-[1.4rem] border border-border bg-muted/45 px-4 py-4">
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary/74">
-            Total
+            Total estimado
           </p>
           <p className="mt-2 font-headline text-4xl font-semibold uppercase leading-none tracking-[0.03em]">
-            {formatCurrency(subtotal + 99)}
+            {formatCurrency(pricing.total)}
           </p>
         </div>
 
@@ -147,7 +457,7 @@ function OrderSummaryPanel() {
           <div className="flex items-start gap-3">
             <ShieldCheck className="mt-0.5 h-5 w-5 text-primary" />
             <p className="text-xs leading-5 text-muted-foreground">
-              La personalización de jersey se muestra en la UI y no modifica el total backend en esta versión.
+              La orden backend confirma el total final antes de iniciar el pago. La personalización de jersey se muestra en la UI y no modifica el total backend en esta versión.
             </p>
           </div>
         </div>
@@ -156,14 +466,106 @@ function OrderSummaryPanel() {
   );
 }
 
-function PaymentStep({
+function PaymentMethodSelector({
+  value,
+  onValueChange,
+}: {
+  value: PaymentMethod;
+  onValueChange: (value: PaymentMethod) => void;
+}) {
+  const options: Array<{
+    value: PaymentMethod;
+    title: string;
+    description: string;
+    icon: typeof CreditCard;
+  }> = [
+    {
+      value: "TARJETA",
+      title: "Tarjeta",
+      description: "Pago inmediato con Stripe dentro del checkout actual.",
+      icon: CreditCard,
+    },
+    {
+      value: "APLAZO",
+      title: "Aplazo",
+      description: "Te redirigiremos para completar y validar el pago de forma asíncrona.",
+      icon: Clock3,
+    },
+  ];
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <p className="text-sm font-medium text-foreground">Método de pago</p>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+          Elige cómo quieres completar tu compra sin salir del flujo actual del checkout.
+        </p>
+      </div>
+      <RadioGroup
+        value={value}
+        onValueChange={(nextValue) => onValueChange(nextValue as PaymentMethod)}
+        className="gap-3"
+      >
+        {options.map((option) => {
+          const Icon = option.icon;
+          const isActive = value === option.value;
+
+          return (
+            <label
+              key={option.value}
+              htmlFor={`payment-method-${option.value}`}
+              className={cn(
+                "flex cursor-pointer gap-3 rounded-[1.4rem] border px-4 py-4 transition-colors",
+                isActive
+                  ? "border-primary bg-primary/8"
+                  : "border-border bg-muted/35 hover:bg-muted/55",
+              )}
+            >
+              <RadioGroupItem
+                id={`payment-method-${option.value}`}
+                value={option.value}
+                className="mt-1"
+              />
+              <div className="flex min-w-0 flex-1 items-start gap-3">
+                <div
+                  className={cn(
+                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border",
+                    isActive
+                      ? "border-primary/20 bg-primary/10 text-primary"
+                      : "border-border bg-card text-muted-foreground",
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">{option.title}</p>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                    {option.description}
+                  </p>
+                </div>
+              </div>
+            </label>
+          );
+        })}
+      </RadioGroup>
+    </div>
+  );
+}
+
+function CardPaymentStep({
   values,
+  cartItems,
   total,
   onBack,
+  paymentMethod,
+  onPaymentMethodChange,
 }: {
   values: ShippingValues;
+  cartItems: CartItem[];
   total: number;
   onBack: () => void;
+  paymentMethod: PaymentMethod;
+  onPaymentMethodChange: (value: PaymentMethod) => void;
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -173,6 +575,10 @@ function PaymentStep({
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handlePay = async () => {
+    if (isProcessing) {
+      return;
+    }
+
     if (!stripe || !elements) {
       toast({
         variant: "destructive",
@@ -195,6 +601,10 @@ function PaymentStep({
     setIsProcessing(true);
 
     try {
+      const expectedSubtotal = cartItems.reduce(
+        (sum, item) => sum + item.price * item.quantity,
+        0,
+      );
       const checkoutResult = await checkoutCart({
         direccionEnvio: {
           nombre: values.name,
@@ -207,13 +617,23 @@ function PaymentStep({
           telefono: values.telefono,
         },
         metodoPago: "TARJETA",
-        costoEnvio: 99,
+        costoEnvio: SHIPPING_COST,
       });
 
       const ordenId = getOrderIdFromCheckoutResult(checkoutResult);
       if (!ordenId) {
         throw new Error("No se recibió un ID de orden válido");
       }
+
+      const createdOrder = await ordersApi.getById(ordenId);
+      if (!createdOrder) {
+        throw new Error("No se pudo consultar la orden creada antes de procesar el pago");
+      }
+
+      validateOrderPricing({
+        order: createdOrder,
+        expectedSubtotal,
+      });
 
       const idempotencyKey = crypto.randomUUID();
       const paymentInit = await paymentsApi.iniciar(
@@ -248,6 +668,8 @@ function PaymentStep({
         );
       }
 
+      clearStoredAplazoCheckoutState();
+      clearStoredAplazoRetryPayload();
       await clearAllItems();
 
       const status = confirmation.paymentIntent?.status || paymentInit.status;
@@ -272,6 +694,11 @@ function PaymentStep({
           <CardTitle>Pago</CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
+          <PaymentMethodSelector
+            value={paymentMethod}
+            onValueChange={onPaymentMethodChange}
+          />
+
           <div className="rounded-[1.5rem] border border-border bg-muted/45 p-4">
             <CardElement
               options={{
@@ -326,10 +753,349 @@ function PaymentStep({
   );
 }
 
+function AplazoPaymentStep({
+  values,
+  cartItems,
+  onBack,
+  paymentMethod,
+  onPaymentMethodChange,
+}: {
+  values: ShippingValues;
+  cartItems: CartItem[];
+  onBack: () => void;
+  paymentMethod: PaymentMethod;
+  onPaymentMethodChange: (value: PaymentMethod) => void;
+}) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+
+  const handleContinueWithAplazo = async () => {
+    if (isProcessing || typeof window === "undefined") {
+      return;
+    }
+
+    const validation = validateAplazoSubmission(values, cartItems);
+    if (!validation.ok) {
+      setSubmissionError(validation.message);
+      logAplazoDebug("Validación Aplazo fallida antes del submit", {
+        reason: validation.message,
+      });
+      toast({
+        variant: "destructive",
+        title: "Datos inválidos",
+        description: validation.message,
+      });
+      return;
+    }
+
+    setSubmissionError(null);
+    logAplazoDebug("Teléfono Aplazo normalizado", {
+      originalPhone: values.telefono,
+      normalizedPhone: validation.buyer.phone,
+    });
+
+    setIsProcessing(true);
+
+    try {
+      const origin = window.location.origin;
+      const cartFingerprint = getAplazoCartFingerprint(cartItems);
+      const cartSessionId = getOrCreateSessionId();
+      const cartSnapshot = cartItems.map((item) => ({
+        productoId: item.id,
+        cantidad: item.quantity,
+        ...(item.tallaId ?? item.size
+          ? { tallaId: item.tallaId ?? item.size }
+          : {}),
+      }));
+      const storedState = readStoredAplazoCheckoutState();
+      const canReuseStoredOrder =
+        storedState?.paymentMethod === "APLAZO" &&
+        storedState.cartFingerprint === cartFingerprint &&
+        Boolean(storedState.orderId);
+
+      if (storedState && !canReuseStoredOrder) {
+        clearStoredAplazoCheckoutState();
+        clearStoredAplazoRetryPayload();
+      }
+
+      if (
+        canReuseStoredOrder &&
+        storedState?.paymentAttemptId &&
+        !isAplazoTerminalStatus(storedState.lastKnownStatus)
+      ) {
+        router.push(
+          buildAplazoReturnHref({
+            paymentAttemptId: storedState.paymentAttemptId,
+            orderId: storedState.orderId,
+            path: "success",
+          }),
+        );
+        return;
+      }
+
+      let orderId = canReuseStoredOrder ? storedState?.orderId ?? "" : "";
+      let idempotencyKey = canReuseStoredOrder
+        ? storedState?.idempotencyKey ?? crypto.randomUUID()
+        : crypto.randomUUID();
+      let createPayload: AplazoOnlineCreatePayload | null = null;
+      let createdOrder: Orden | null = null;
+
+      if (!canReuseStoredOrder) {
+        const checkoutResult = await checkoutCart({
+          direccionEnvio: {
+            nombre: validation.fullName,
+            calle: values.calle,
+            numero: values.numero,
+            colonia: values.colonia,
+            ciudad: values.city,
+            estado: values.estado,
+            codigoPostal: values.zip,
+            telefono: validation.buyer.phone,
+          },
+          metodoPago: "APLAZO",
+          costoEnvio: SHIPPING_COST,
+        });
+
+        orderId = getOrderIdFromCheckoutResult(checkoutResult);
+        if (!orderId) {
+          throw new Error("No se recibió un ID de orden válido");
+        }
+
+        createdOrder = await ordersApi.getById(orderId);
+        if (!createdOrder) {
+          throw new Error("No se pudo consultar la orden creada para validar montos con Aplazo");
+        }
+      } else if (storedState && isAplazoRetryableStatus(storedState.lastKnownStatus)) {
+        idempotencyKey = crypto.randomUUID();
+        writeStoredAplazoCheckoutState({
+          ...storedState,
+          paymentAttemptId: undefined,
+          idempotencyKey,
+          cartSessionId: storedState.cartSessionId ?? cartSessionId,
+          cartSnapshot: storedState.cartSnapshot ?? cartSnapshot,
+          expiresAt: null,
+          lastKnownStatus: undefined,
+          lastReturnPath: undefined,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      if (orderId) {
+        createdOrder = createdOrder ?? (await ordersApi.getById(orderId));
+      }
+
+      if (!createdOrder) {
+        throw new Error("No se pudo preparar el pago con Aplazo");
+      }
+
+      validateOrderPricing({
+        order: createdOrder,
+        expectedSubtotal: validation.validatedSubtotal,
+      });
+
+      createPayload = buildAplazoPayload({
+        orderId,
+        values: {
+          ...values,
+          name: validation.fullName,
+          email: validation.buyer.email,
+          telefono: validation.buyer.phone,
+        },
+        items: cartItems,
+        order: createdOrder,
+        origin,
+      });
+
+      logAplazoDebug(
+        "Buyer Aplazo transformado",
+        sanitizeAplazoBuyerForLog(createPayload.buyer),
+      );
+      logAplazoDebug("Products Aplazo transformados", createPayload.products);
+      logAplazoDebug("Payload Aplazo sanitizado", {
+        cartId: createPayload.cartId,
+        shopId: createPayload.shopId,
+        buyer: sanitizeAplazoBuyerForLog(createPayload.buyer),
+        products: createPayload.products,
+        totalPrice: createPayload.totalPrice,
+      });
+
+      writeStoredAplazoRetryPayload(omitAplazoUrls(createPayload));
+      writeStoredAplazoCheckoutState({
+        paymentMethod: "APLAZO",
+        flowType: "online",
+        orderId,
+        idempotencyKey,
+        cartFingerprint,
+        cartSessionId,
+        cartSnapshot,
+        expiresAt: null,
+        updatedAt: new Date().toISOString(),
+      });
+
+      if (!createPayload || !orderId) {
+        throw new Error("No se pudo preparar el intento de pago con Aplazo");
+      }
+
+      const attempt = await paymentsApi.createAplazoOnlineAttempt(
+        createPayload,
+        idempotencyKey,
+      );
+
+      logAplazoDebug("Respuesta Aplazo create online", {
+        paymentAttemptId: attempt.paymentAttemptId,
+        url: attempt.url,
+        loanId: attempt.loanId,
+        loanTokenPresent: Boolean(attempt.loanToken),
+      });
+
+      if (!attempt.paymentAttemptId) {
+        throw new Error("No se recibió paymentAttemptId para continuar con Aplazo");
+      }
+
+      writeStoredAplazoCheckoutState({
+        paymentMethod: "APLAZO",
+        flowType: "online",
+        orderId,
+        paymentAttemptId: attempt.paymentAttemptId,
+        idempotencyKey,
+        cartFingerprint,
+        cartSessionId,
+        cartSnapshot,
+        expiresAt: attempt.expiresAt ?? null,
+        lastKnownStatus: attempt.status,
+        lastReturnPath: "success",
+        updatedAt: new Date().toISOString(),
+      });
+
+      const targetUrl = attempt.url || attempt.redirectUrl || attempt.checkoutUrl;
+      if (targetUrl) {
+        window.location.assign(targetUrl);
+        return;
+      }
+
+      router.push(
+        buildAplazoReturnHref({
+          paymentAttemptId: attempt.paymentAttemptId,
+          orderId,
+          path: "success",
+        }),
+      );
+    } catch (error) {
+      const description = getAplazoErrorMessage(error);
+      setSubmissionError(description);
+      logAplazoDebug("Error al crear intento Aplazo", {
+        description,
+        code: error instanceof ApiError ? error.code : undefined,
+      });
+      toast({
+        variant: "destructive",
+        title: "No se pudo iniciar Aplazo",
+        description,
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <>
+      <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
+        <CardHeader className="pb-4">
+          <CardTitle>Pago</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <PaymentMethodSelector
+            value={paymentMethod}
+            onValueChange={onPaymentMethodChange}
+          />
+
+          <div className="rounded-[1.5rem] border border-border bg-muted/45 p-5">
+            <div className="flex items-start gap-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary">
+                <Clock3 className="h-5 w-5" />
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    Continuarás tu pago fuera del checkout
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                    Crearemos tu orden con método Aplazo y te redirigiremos para completar el pago.
+                    Cuando regreses, esta tienda validará el estado final antes de confirmar tu compra.
+                  </p>
+                </div>
+                <div className="rounded-[1.2rem] border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+                  <p>
+                    Total estimado a validar con Aplazo:{" "}
+                    <span className="font-semibold text-foreground">
+                      {formatCurrency(
+                        cartItems.reduce(
+                          (sum, item) => sum + item.price * item.quantity,
+                          0,
+                        ) + SHIPPING_COST,
+                      )}
+                    </span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-[1.4rem] border border-border bg-muted/35 px-4 py-3">
+            <div className="flex items-start gap-3">
+              <ShieldCheck className="mt-0.5 h-5 w-5 text-primary" />
+              <p className="text-xs leading-5 text-muted-foreground">
+                No mostraremos la compra como exitosa hasta que el backend confirme el estado final del intento.
+              </p>
+            </div>
+          </div>
+
+          {submissionError ? (
+            <div className="rounded-[1.2rem] border border-destructive/30 bg-destructive/8 px-4 py-3 text-sm text-destructive">
+              {submissionError}
+            </div>
+          ) : null}
+
+          <div className="hidden gap-3 md:flex">
+            <Button type="button" variant="outline" className="h-12 flex-1 rounded-full" onClick={onBack}>
+              Volver
+            </Button>
+            <Button
+              type="button"
+              className="h-12 flex-1 rounded-full"
+              onClick={() => void handleContinueWithAplazo()}
+              disabled={isProcessing}
+            >
+              {isProcessing ? "Preparando..." : "Continuar con Aplazo"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <MobileCheckoutActions>
+        <Button type="button" variant="outline" className="h-12 flex-1 rounded-full" onClick={onBack}>
+          Volver
+        </Button>
+        <Button
+          type="button"
+          className="h-12 flex-1 rounded-full"
+          onClick={() => void handleContinueWithAplazo()}
+          disabled={isProcessing}
+        >
+          {isProcessing ? "Preparando..." : "Continuar con Aplazo"}
+        </Button>
+      </MobileCheckoutActions>
+    </>
+  );
+}
+
 export default function CheckoutPage() {
   const [currentStep, setCurrentStep] = useState(0);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("TARJETA");
   const router = useRouter();
-  const { subtotal, totalItems, isLoading } = useCart();
+  const { state, subtotal, totalItems, isLoading } = useCart();
   const { isAuthenticated } = useAuth();
   const stripePromise = useStripeConfig();
   const { toast } = useToast();
@@ -338,7 +1104,8 @@ export default function CheckoutPage() {
     resolver: zodResolver(shippingSchema),
   });
 
-  const total = useMemo(() => subtotal + 99, [subtotal]);
+  const pricing = useMemo(() => getExpectedCheckoutPricing(subtotal), [subtotal]);
+  const total = pricing.total;
 
   const onContinueToPayment = async () => {
     if (!isAuthenticated) {
@@ -541,8 +1308,18 @@ export default function CheckoutPage() {
                             <FormItem>
                               <FormLabel>Teléfono</FormLabel>
                               <FormControl>
-                                <Input {...field} className="h-12 rounded-[1rem]" type="tel" />
+                                <Input
+                                  {...field}
+                                  className="h-12 rounded-[1rem]"
+                                  type="tel"
+                                  inputMode="tel"
+                                  autoComplete="tel"
+                                  placeholder="477 123 4567"
+                                />
                               </FormControl>
+                              <p className="text-xs text-muted-foreground">
+                                Puedes escribirlo con espacios o +52. Para Aplazo enviaremos solo 10 dígitos.
+                              </p>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -573,21 +1350,40 @@ export default function CheckoutPage() {
                 </Button>
               </div>
             </>
-          ) : stripePromise ? (
-            <Elements stripe={stripePromise}>
-              <PaymentStep
-                values={shippingForm.getValues()}
-                total={total}
-                onBack={() => setCurrentStep(0)}
-              />
-            </Elements>
+          ) : paymentMethod === "TARJETA" ? (
+            stripePromise ? (
+              <Elements stripe={stripePromise}>
+                <CardPaymentStep
+                  values={shippingForm.getValues()}
+                  cartItems={state.items}
+                  total={total}
+                  onBack={() => setCurrentStep(0)}
+                  paymentMethod={paymentMethod}
+                  onPaymentMethodChange={setPaymentMethod}
+                />
+              </Elements>
+            ) : (
+              <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
+                <CardHeader>
+                  <CardTitle>Configuración faltante</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <PaymentMethodSelector
+                    value={paymentMethod}
+                    onValueChange={setPaymentMethod}
+                  />
+                  <p>No se pudo inicializar Stripe.</p>
+                </CardContent>
+              </Card>
+            )
           ) : (
-            <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
-              <CardHeader>
-                <CardTitle>Configuración faltante</CardTitle>
-              </CardHeader>
-              <CardContent>No se pudo inicializar Stripe.</CardContent>
-            </Card>
+            <AplazoPaymentStep
+              values={shippingForm.getValues()}
+              cartItems={state.items}
+              onBack={() => setCurrentStep(0)}
+              paymentMethod={paymentMethod}
+              onPaymentMethodChange={setPaymentMethod}
+            />
           )}
         </div>
 

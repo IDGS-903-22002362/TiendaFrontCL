@@ -25,32 +25,29 @@ const footerColumns = [
 
 export function StorefrontFooter() {
   return (
-    <footer className="border-t border-border bg-[#111614] text-white">
-      <div className="container py-10 md:py-14">
-        <div className="grid gap-8 rounded-[2rem] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-6 md:grid-cols-[1.2fr_0.8fr] md:p-10">
+    <footer className="border-t border-[#1c2420] bg-[#111715] text-white">
+      <div className="container py-12 md:py-16">
+        <div className="grid gap-10 rounded-[1.8rem] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(255,255,255,0.018))] p-6 md:grid-cols-[1.15fr_0.85fr] md:p-10 lg:p-12">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#d4af37]">
-              La Guarida
-            </p>
-            <h2 className="mt-3 max-w-2xl font-headline text-4xl font-semibold uppercase leading-none tracking-[0.04em] md:text-6xl">
-              Producto oficial con una experiencia limpia, rápida y comercial.
-            </h2>
-            <p className="mt-4 max-w-xl text-sm leading-6 text-white/70 md:text-base">
-              E-commerce oficial de Club León con foco en producto, navegación clara y compra sin fricción.
+            <p className="editorial-label text-[#d0ad63]">La Guarida</p>
+            <h2 className="mt-4 max-w-2xl font-headline text-4xl font-semibold uppercase leading-[0.9] tracking-[0.04em] md:text-6xl"></h2>
+            <p className="mt-5 max-w-xl text-sm leading-6 text-white/68 md:text-base">
+              E-commerce oficial de Club León con foco en producto, navegación
+              clara y compra sin fricción.
             </p>
           </div>
-          <div className="grid gap-8 sm:grid-cols-2">
+          <div className="grid gap-8 border-t border-white/8 pt-2 sm:grid-cols-2 sm:border-t-0 sm:pt-0">
             {footerColumns.map((column) => (
               <div key={column.title}>
-                <h3 className="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/52">
+                <h3 className="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/48">
                   {column.title}
                 </h3>
-                <ul className="mt-4 space-y-3">
+                <ul className="mt-5 space-y-3.5">
                   {column.links.map((link) => (
                     <li key={link.label}>
                       <Link
                         href={link.href}
-                        className="group inline-flex items-center gap-2 text-sm text-white/80 transition-colors hover:text-white"
+                        className="group inline-flex items-center gap-2 text-sm text-white/76 transition-colors hover:text-white"
                       >
                         <span>{link.label}</span>
                         <ChevronRight className="h-4 w-4 opacity-60 transition-transform group-hover:translate-x-0.5" />
@@ -72,7 +69,8 @@ export function StorefrontFooter() {
             </div>
           </div>
           <p className="text-xs uppercase tracking-[0.22em] text-white/42">
-            {new Date().getFullYear()} La Guarida. Todos los derechos reservados.
+            {new Date().getFullYear()} La Guarida. Todos los derechos
+            reservados.
           </p>
         </div>
       </div>

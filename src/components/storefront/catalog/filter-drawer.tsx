@@ -19,14 +19,14 @@ export function FilterDrawer({
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button variant="outline" className="h-11 flex-1 rounded-full xl:hidden">
+        <Button variant="outline" className="h-11 flex-1 xl:hidden">
           <Filter className="mr-2 h-4 w-4" />
           Filtros
         </Button>
       </SheetTrigger>
       <SheetContent
         side="bottom"
-        className="rounded-t-[2rem] border-t border-border bg-card px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]"
+        className="border-t border-black/14 bg-white px-5 pb-[calc(env(safe-area-inset-bottom)+1rem)]"
       >
         <SheetHeader className="mb-4 text-left">
           <SheetTitle>Refina el catálogo</SheetTitle>

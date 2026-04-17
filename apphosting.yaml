@@ -28,3 +28,6 @@ env:
 
   - variable: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
     value: pk_test_51SxZMWAcXWVVDBOGSUddGSABMplWjSCqbyq1LC0WTwRlZ20JSRXI1GjXtlDglZhm5Cvhv4dYcMxMpZU57xdaAyzO000OF4wNKD
+
+  - variable: NEXT_PUBLIC_APLAZO_SHOP_ID
+    value: Prueba Tienda

@@ -3,7 +3,13 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, BriefcaseBusiness, LogIn, ShieldCheck, User } from "lucide-react";
+import {
+  ArrowLeft,
+  BriefcaseBusiness,
+  LogIn,
+  ShieldCheck,
+  User,
+} from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import {
   getFirebaseIdTokenWithEmailPassword,
@@ -122,13 +128,15 @@ function LoginPageContent() {
     <div className="container py-5 md:py-8">
       <div className="mb-6 space-y-3">
         <Breadcrumbs
-          items={[
-            { label: "Inicio", href: "/" },
-            { label: "Cuenta" },
-          ]}
+          items={[{ label: "Inicio", href: "/" }, { label: "Cuenta" }]}
         />
         <div className="flex items-center gap-3">
-          <Button asChild variant="ghost" size="icon" className="h-10 w-10 rounded-full border border-border">
+          <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 rounded-full border border-border"
+          >
             <Link href="/">
               <ArrowLeft className="h-4 w-4" />
             </Link>
@@ -146,20 +154,20 @@ function LoginPageContent() {
 
       <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="rounded-[2rem] border border-border bg-[#121714] p-6 text-white shadow-[var(--shadow-elevated)] md:p-8">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#d4af37]">
-            La Guarida
-          </p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#d4af37]"></p>
           <h2 className="mt-4 font-headline text-5xl font-semibold uppercase leading-none tracking-[0.04em] md:text-7xl">
             Compra, seguimiento y cuenta en una sola capa.
           </h2>
           <p className="mt-5 max-w-lg text-sm leading-6 text-white/72 md:text-base">
-            El acceso mantiene la integración actual con Firebase y backend, pero ahora vive en una pantalla alineada al storefront premium.
+            El acceso mantiene la integración actual con Firebase y backend,
+            pero ahora vive en una pantalla alineada al storefront premium.
           </p>
           <div className="mt-8 rounded-[1.5rem] border border-white/10 bg-white/6 p-4 backdrop-blur-sm">
             <div className="flex items-start gap-3">
               <ShieldCheck className="mt-0.5 h-5 w-5 text-[#d4af37]" />
               <p className="text-sm leading-6 text-white/72">
-                La autenticación, el rol y el redireccionamiento siguen funcionando igual. Solo cambia la experiencia visual.
+                La autenticación, el rol y el redireccionamiento siguen
+                funcionando igual. Solo cambia la experiencia visual.
               </p>
             </div>
           </div>
@@ -172,14 +180,17 @@ function LoginPageContent() {
               Accede a tu cuenta
             </CardTitle>
             <CardDescription>
-              Usa tu cuenta habitual o el acceso interno si eres parte del equipo.
+              Usa tu cuenta habitual o el acceso interno si eres parte del
+              equipo.
             </CardDescription>
           </CardHeader>
           <CardContent>
             {!firebaseReady ? (
               <div className="rounded-[1.5rem] border border-border bg-muted/45 p-4 text-sm leading-6 text-muted-foreground">
                 <p>Falta configuración de Firebase para iniciar sesión.</p>
-                <p className="mt-2">Variables faltantes: {missingFirebaseVars.join(", ")}.</p>
+                <p className="mt-2">
+                  Variables faltantes: {missingFirebaseVars.join(", ")}.
+                </p>
               </div>
             ) : (
               <Tabs defaultValue="cliente">

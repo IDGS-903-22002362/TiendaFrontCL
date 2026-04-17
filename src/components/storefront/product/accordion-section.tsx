@@ -14,7 +14,7 @@ type AccordionSectionItem = {
 
 export function AccordionSection({ items }: { items: AccordionSectionItem[] }) {
   return (
-    <Accordion type="multiple" className="rounded-[1.5rem] border border-border bg-card px-5 shadow-[var(--shadow-card)]">
+    <Accordion type="multiple" className="rounded-[1.5rem] border border-border/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.5),rgba(255,255,255,0.18))] px-5 shadow-[var(--shadow-card)]">
       {items.map((item) => (
         <AccordionItem key={item.value} value={item.value} className="border-border/80">
           <AccordionTrigger className="py-5 font-headline text-xl font-semibold uppercase tracking-[0.03em] hover:no-underline">

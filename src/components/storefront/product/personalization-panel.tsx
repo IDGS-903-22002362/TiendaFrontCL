@@ -102,10 +102,10 @@ export function PersonalizationPanel({
   }, [draftValue, onChange, value]);
 
   return (
-    <div className="rounded-[1.5rem] border border-border bg-muted/45 p-4">
+    <div className="rounded-[1.3rem] border border-black/14 bg-white p-4 shadow-none">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary/74">
+          <p className="editorial-label text-primary/74">
             Personaliza tu jersey
           </p>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
@@ -115,7 +115,7 @@ export function PersonalizationPanel({
         {value ? (
           <Button
             variant="ghost"
-            className="h-9 rounded-full px-3 text-xs"
+            className="h-9 rounded-full border border-black/14 px-3 text-xs hover:border-black"
             onClick={() => {
               setMode("player");
               setPresetId(defaultPresetId);
@@ -134,10 +134,10 @@ export function PersonalizationPanel({
           type="button"
           onClick={() => setMode("player")}
           className={cn(
-            "rounded-full border px-4 py-2 text-sm font-medium transition-colors",
+            "rounded-full border px-4 py-2 text-sm font-medium transition-[border-color,background-color,color,transform]",
             mode === "player"
-              ? "border-primary bg-primary text-primary-foreground"
-              : "border-border bg-card text-foreground",
+              ? "border-primary bg-primary text-primary-foreground shadow-[var(--shadow-card)]"
+              : "border-black/14 bg-white text-foreground hover:-translate-y-px hover:border-black",
           )}
         >
           Elegir jugador
@@ -146,10 +146,10 @@ export function PersonalizationPanel({
           type="button"
           onClick={() => setMode("custom")}
           className={cn(
-            "rounded-full border px-4 py-2 text-sm font-medium transition-colors",
+            "rounded-full border px-4 py-2 text-sm font-medium transition-[border-color,background-color,color,transform]",
             mode === "custom"
-              ? "border-primary bg-primary text-primary-foreground"
-              : "border-border bg-card text-foreground",
+              ? "border-primary bg-primary text-primary-foreground shadow-[var(--shadow-card)]"
+              : "border-black/14 bg-white text-foreground hover:-translate-y-px hover:border-black",
           )}
         >
           Añadir el tuyo
@@ -159,7 +159,7 @@ export function PersonalizationPanel({
       {mode === "player" ? (
         <div className="mt-4">
           <Select value={presetId} onValueChange={setPresetId}>
-            <SelectTrigger className="h-12 rounded-[1rem] bg-card">
+            <SelectTrigger className="h-12 rounded-[1rem] border-black/14 bg-white">
               <SelectValue placeholder="Selecciona un preset" />
             </SelectTrigger>
             <SelectContent>
@@ -178,7 +178,7 @@ export function PersonalizationPanel({
             onChange={(event) => setCustomName(sanitizePersonalizationName(event.target.value))}
             placeholder="Nombre"
             maxLength={12}
-            className="h-12 rounded-[1rem] bg-card"
+            className="h-12 rounded-[1rem] border-black/14 bg-white"
           />
           <Input
             value={customNumber}
@@ -186,12 +186,12 @@ export function PersonalizationPanel({
             placeholder="Número"
             inputMode="numeric"
             maxLength={2}
-            className="h-12 rounded-[1rem] bg-card"
+            className="h-12 rounded-[1rem] border-black/14 bg-white"
           />
         </div>
       )}
 
-        <div className="mt-4 rounded-[1.25rem] border border-border bg-card px-4 py-3">
+      <div className="mt-4 rounded-[1.1rem] border border-black/14 bg-white px-4 py-3">
         <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary/70">
           Preview
         </p>

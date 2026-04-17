@@ -45,13 +45,13 @@ export function CartDrawer() {
     <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
       <SheetTrigger asChild>
         <Button
-          variant="ghost"
+          variant="outline"
           size="icon"
-          className="relative h-10 w-10 rounded-full border border-transparent hover:border-border"
+          className="relative h-11 w-11 rounded-full border-black/14 bg-white"
         >
           <ShoppingBag className="h-4.5 w-4.5" />
           {totalItems > 0 ? (
-            <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+            <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground shadow-[var(--shadow-card)]">
               {Math.min(totalItems, 99)}
             </span>
           ) : null}
@@ -59,14 +59,14 @@ export function CartDrawer() {
         </Button>
       </SheetTrigger>
 
-      <SheetContent className="flex w-full flex-col border-l border-border bg-card px-0 sm:max-w-lg">
-        <SheetHeader className="border-b border-border px-5 pb-5">
+      <SheetContent className="flex w-full flex-col border-l border-black/14 bg-white px-0 sm:max-w-lg">
+        <SheetHeader className="border-b border-black/12 px-5 pb-5">
           <SheetTitle>Tu carrito</SheetTitle>
         </SheetHeader>
 
         {state.items.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full border border-border bg-muted/55 text-primary">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full border border-black/14 bg-white text-primary shadow-[0_18px_34px_-28px_rgb(8_12_10_/_0.14)]">
               <ShoppingBag className="h-6 w-6" />
             </div>
             <h3 className="mt-6 font-headline text-3xl font-semibold uppercase leading-none">
@@ -90,10 +90,10 @@ export function CartDrawer() {
                   return (
                     <article
                       key={variantKey}
-                      className="rounded-[1.5rem] border border-border bg-muted/35 p-3"
+                      className="rounded-[1.15rem] border border-black/14 bg-white p-3 shadow-none"
                     >
                       <div className="flex gap-3">
-                        <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-[1.1rem] border border-border bg-card">
+                        <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-[0.95rem] border border-black/12 bg-white">
                           <Image src={item.image} alt={item.name} fill className="object-cover" />
                         </div>
 
@@ -122,7 +122,7 @@ export function CartDrawer() {
                           </div>
 
                           {personalization ? (
-                            <div className="mt-3 rounded-[1rem] border border-border bg-card px-3 py-2">
+                            <div className="mt-3 rounded-[1rem] border border-black/12 bg-white px-3 py-2">
                               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-primary/75">
                                 Personalización
                               </p>
@@ -133,7 +133,7 @@ export function CartDrawer() {
                           ) : null}
 
                           <div className="mt-4 flex items-end justify-between gap-3">
-                            <div className="flex items-center rounded-full border border-border bg-card p-1">
+                            <div className="flex items-center rounded-full border border-black/14 bg-white p-1 shadow-none">
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -184,8 +184,8 @@ export function CartDrawer() {
               </div>
             </ScrollArea>
 
-            <div className="border-t border-border px-5 py-5">
-              <div className="flex items-center justify-between rounded-[1.4rem] border border-border bg-muted/45 px-4 py-3">
+            <div className="border-t border-black/12 px-5 py-5">
+              <div className="flex items-center justify-between rounded-[1.2rem] border border-black/14 bg-[rgb(249_249_246)] px-4 py-3">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary/75">
                     Subtotal
@@ -202,7 +202,7 @@ export function CartDrawer() {
           </>
         )}
 
-        <SheetFooter className="border-t border-border px-5 py-5 sm:flex-col sm:space-x-0">
+        <SheetFooter className="border-t border-black/12 px-5 py-5 sm:flex-col sm:space-x-0">
           <Button
             className="h-12 w-full rounded-full"
             disabled={state.items.length === 0}

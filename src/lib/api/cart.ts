@@ -1,4 +1,4 @@
-import type { Cart, CartItem } from "@/lib/types";
+import type { Cart, CartItem, PaymentMethod } from "@/lib/types";
 import { apiFetch, unwrapData } from "./client";
 
 type UnknownRecord = Record<string, unknown>;
@@ -269,14 +269,12 @@ export async function updateCartItem(
   item: Pick<CartItem, "id" | "quantity" | "size" | "tallaId" | "color">,
   token?: string,
 ): Promise<Cart> {
-  const tallaId = resolveTallaId(item);
   const payload = await apiFetch<unknown>(
     `/api/carrito/items/${item.id}`,
     {
       method: "PUT",
       body: JSON.stringify({
         cantidad: item.quantity,
-        ...(tallaId ? { tallaId } : {}),
       }),
     },
     { sessionId, token, local: true },
@@ -290,14 +288,10 @@ export async function removeCartItem(
   item: Pick<CartItem, "id" | "size" | "tallaId">,
   token?: string,
 ): Promise<Cart> {
-  const tallaId = resolveTallaId(item);
   const payload = await apiFetch<unknown>(
     `/api/carrito/items/${item.id}`,
     {
       method: "DELETE",
-      body: JSON.stringify({
-        ...(tallaId ? { tallaId } : {}),
-      }),
     },
     { sessionId, token, local: true },
   );
@@ -329,7 +323,7 @@ export async function checkoutCart(payload: {
     codigoPostal: string;
     telefono: string;
   };
-  metodoPago: "TARJETA";
+  metodoPago: PaymentMethod;
   costoEnvio: number;
   notas?: string;
 }) {

@@ -13,7 +13,7 @@ export function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
 
   return (
     <nav aria-label="Breadcrumb" className="overflow-x-auto">
-      <ol className="flex min-w-max items-center gap-1.5 text-sm text-muted-foreground">
+      <ol className="flex min-w-max items-center gap-1.5 text-[0.72rem] font-medium uppercase tracking-[0.16em] text-muted-foreground">
         {items.map((item, index) => {
           const isLast = index === items.length - 1;
           return (

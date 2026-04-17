@@ -6,6 +6,7 @@ const API_BASE =
   FALLBACK_API_BASE;
 
 type ApiErrorPayload = {
+  ok?: boolean;
   success?: false;
   message?: string;
   error?: string | { code?: string; message?: string };
@@ -81,7 +82,7 @@ function shouldTryAuthRecovery(
   const payloadMessage = getPayloadMessage(payload);
 
   return (
-    payload.success === false &&
+    (payload.ok === false || payload.success === false) &&
     /token|autorizad|sesi[oó]n|session/i.test(payloadMessage)
   );
 }
@@ -226,7 +227,7 @@ export async function apiFetch<T>(
 
   if (
     shouldTryAuthRecovery(path, response, payload, options) &&
-    (!response.ok || payload?.success === false)
+    (!response.ok || payload?.success === false || payload?.ok === false)
   ) {
     const sessionRecovery = await recoverAuthSession();
 
@@ -244,7 +245,7 @@ export async function apiFetch<T>(
     }
   }
 
-  if (!response.ok || payload?.success === false) {
+  if (!response.ok || payload?.success === false || payload?.ok === false) {
     const message = getPayloadMessage(payload, `Error HTTP ${response.status}`);
     throw new ApiError(response.status, message, payload, getPayloadCode(payload));
   }

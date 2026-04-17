@@ -17,7 +17,10 @@ import {
 import { lineasApi } from "@/lib/api/lineas";
 import { tallasApi } from "@/lib/api/tallas";
 import { providersApi } from "@/lib/api/providers";
-import { productsAdminApi } from "@/lib/api/products-admin";
+import {
+  productsAdminApi,
+  type ProductDetailRecord,
+} from "@/lib/api/products-admin";
 import type {
   Category,
   Linea,
@@ -29,7 +32,10 @@ import type {
 import { ApiError } from "@/lib/api/client";
 import { useToast } from "@/hooks/use-toast";
 import { getApiErrorMessage } from "@/lib/api/errors";
-import { EntityPicker, type EntityOption } from "@/components/admin/entity-picker";
+import {
+  EntityPicker,
+  type EntityOption,
+} from "@/components/admin/entity-picker";
 import {
   Table,
   TableBody,
@@ -55,6 +61,31 @@ type PendingImageUpload = {
   previewUrl: string;
 };
 
+type ProductDetailDraft = {
+  draftId: string;
+  id?: string;
+  descripcion: string;
+};
+
+function createDraftId() {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function createDetailDraft(descripcion = "", id?: string): ProductDetailDraft {
+  return {
+    draftId: createDraftId(),
+    id,
+    descripcion,
+  };
+}
+
 const EMPTY_FORM = {
   descripcion: "",
   clave: "",
@@ -67,6 +98,7 @@ const EMPTY_FORM = {
   tallaIds: [] as string[],
   inventarioPorTalla: [] as ProductSizeStock[],
   imagenes: [] as string[],
+  detalles: [] as ProductDetailDraft[],
 };
 
 function toStringValue(value: unknown, fallback = ""): string {
@@ -137,6 +169,19 @@ function extractDetailRecord(value: unknown): Record<string, unknown> {
   return payload as Record<string, unknown>;
 }
 
+function normalizeDetailValue(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function normalizeDetailDrafts(details: ProductDetailDraft[]) {
+  return details
+    .map((detail) => ({
+      ...detail,
+      descripcion: normalizeDetailValue(detail.descripcion),
+    }))
+    .filter((detail) => Boolean(detail.descripcion));
+}
+
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [lineas, setLineas] = useState<Linea[]>([]);
@@ -160,6 +205,9 @@ export default function AdminProductsPage() {
   const [pendingDeletedImages, setPendingDeletedImages] = useState<string[]>(
     [],
   );
+  const [persistedDetails, setPersistedDetails] = useState<
+    ProductDetailRecord[]
+  >([]);
 
   const [formData, setFormData] = useState(EMPTY_FORM);
   const [isSaving, setIsSaving] = useState(false);
@@ -172,7 +220,9 @@ export default function AdminProductsPage() {
       const list = await fetchProducts();
       setProducts(list);
       setSelectedProductId((current) =>
-        current && !list.some((product) => product.id === current) ? "" : current,
+        current && !list.some((product) => product.id === current)
+          ? ""
+          : current,
       );
     } catch (error) {
       toast({
@@ -192,12 +242,13 @@ export default function AdminProductsPage() {
   const loadMeta = useCallback(async () => {
     setIsLoadingMeta(true);
     try {
-      const [lineasData, tallasData, categoriasData, proveedoresData] = await Promise.all([
-        lineasApi.getAll(),
-        tallasApi.getAll(),
-        fetchCategories(),
-        providersApi.getAll(),
-      ]);
+      const [lineasData, tallasData, categoriasData, proveedoresData] =
+        await Promise.all([
+          lineasApi.getAll(),
+          tallasApi.getAll(),
+          fetchCategories(),
+          providersApi.getAll(),
+        ]);
 
       setLineas(lineasData);
       setTallas(tallasData);
@@ -311,9 +362,10 @@ export default function AdminProductsPage() {
       setIsLoadingDetail(true);
 
       try {
-        const [detailRes, storefrontDetail] = await Promise.all([
+        const [detailRes, storefrontDetail, detailItems] = await Promise.all([
           productsAdminApi.getById(product.id),
           fetchProductById(product.id),
+          productsAdminApi.getDetails(product.id).catch(() => []),
         ]);
 
         const detailData = extractDetailRecord(detailRes);
@@ -346,11 +398,15 @@ export default function AdminProductsPage() {
           inventarioPorTalla:
             mapSizeInventory(detailData.inventarioPorTalla).length > 0
               ? mapSizeInventory(detailData.inventarioPorTalla)
-              : storefrontDetail?.inventarioPorTalla ?? [],
+              : (storefrontDetail?.inventarioPorTalla ?? []),
           imagenes: toStringArray(detailData.imagenes).filter(
             (url) => !isGeneratedPlaceholderImage(url),
           ),
+          detalles: detailItems.map((item) =>
+            createDetailDraft(item.descripcion, item.id),
+          ),
         });
+        setPersistedDetails(detailItems);
         setSelectedProductId(product.id);
         setLineaQuery(
           lineas.find((linea) => linea.id === toStringValue(detailData.lineaId))
@@ -358,7 +414,8 @@ export default function AdminProductsPage() {
         );
         setCategoriaQuery(
           categorias.find(
-            (categoria) => categoria.id === toStringValue(detailData.categoriaId),
+            (categoria) =>
+              categoria.id === toStringValue(detailData.categoriaId),
           )?.name ?? "",
         );
         setTallaQuery("");
@@ -385,9 +442,128 @@ export default function AdminProductsPage() {
       setCategoriaQuery("");
       setTallaQuery("");
       setProveedorQuery("");
+      setPersistedDetails([]);
       clearPendingImageChanges();
       setIsDialogOpen(true);
     }
+  };
+
+  const resetDialogState = () => {
+    setIsDialogOpen(false);
+    setEditingProductId(null);
+    setFormData(EMPTY_FORM);
+    setLineaQuery("");
+    setCategoriaQuery("");
+    setTallaQuery("");
+    setProveedorQuery("");
+    setPersistedDetails([]);
+    clearPendingImageChanges();
+  };
+
+  const handleAddDetail = () => {
+    setFormData((prev) => ({
+      ...prev,
+      detalles: [...prev.detalles, createDetailDraft()],
+    }));
+  };
+
+  const handleDetailChange = (draftId: string, descripcion: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      detalles: prev.detalles.map((detail) =>
+        detail.draftId === draftId ? { ...detail, descripcion } : detail,
+      ),
+    }));
+  };
+
+  const handleRemoveDetail = (draftId: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      detalles: prev.detalles.filter((detail) => detail.draftId !== draftId),
+    }));
+  };
+
+  const syncProductDetails = async (
+    productId: string,
+    details: ProductDetailDraft[],
+  ) => {
+    const normalizedDrafts = normalizeDetailDrafts(details);
+    const persistedById = new Map(
+      persistedDetails.map((detail) => [detail.id, detail]),
+    );
+    const detailIdsInForm = new Set(
+      normalizedDrafts
+        .map((detail) => detail.id)
+        .filter((detailId): detailId is string => Boolean(detailId)),
+    );
+
+    for (const persistedDetail of persistedDetails) {
+      if (!detailIdsInForm.has(persistedDetail.id)) {
+        await productsAdminApi.deleteDetail(productId, persistedDetail.id);
+      }
+    }
+
+    const nextDetails: ProductDetailDraft[] = [];
+
+    for (const draft of normalizedDrafts) {
+      if (draft.id) {
+        const persisted = persistedById.get(draft.id);
+        const persistedDescription = normalizeDetailValue(
+          persisted?.descripcion ?? "",
+        );
+
+        if (persisted && persistedDescription === draft.descripcion) {
+          nextDetails.push({ ...draft, descripcion: draft.descripcion });
+          continue;
+        }
+
+        const updated = await productsAdminApi.updateDetail(
+          productId,
+          draft.id,
+          {
+            descripcion: draft.descripcion,
+          },
+        );
+
+        nextDetails.push(
+          createDetailDraft(
+            updated?.descripcion ?? draft.descripcion,
+            draft.id,
+          ),
+        );
+        continue;
+      }
+
+      const created = await productsAdminApi.createDetail(productId, {
+        descripcion: draft.descripcion,
+      });
+
+      if (!created?.id) {
+        throw new Error("No se pudo crear uno de los detalles del producto.");
+      }
+
+      nextDetails.push(
+        createDetailDraft(created.descripcion ?? draft.descripcion, created.id),
+      );
+    }
+
+    const refreshedDetails = await productsAdminApi
+      .getDetails(productId)
+      .catch(() =>
+        nextDetails
+          .filter((detail) => Boolean(detail.id))
+          .map((detail) => ({
+            id: detail.id as string,
+            descripcion: detail.descripcion,
+            productoId: productId,
+          })),
+      );
+
+    setPersistedDetails(refreshedDetails);
+    setFormData((prev) => ({
+      ...prev,
+      detalles: nextDetails,
+    }));
   };
 
   const handleSave = async () => {
@@ -420,12 +596,25 @@ export default function AdminProductsPage() {
       toast({
         variant: "destructive",
         title: "Datos inválidos",
-        description: "Precio público, precio de compra y existencias deben ser numéricos",
+        description:
+          "Precio público, precio de compra y existencias deben ser numéricos",
+      });
+      return;
+    }
+
+    if (formData.detalles.some((detail) => !detail.descripcion.trim())) {
+      toast({
+        variant: "destructive",
+        title: "Detalles inválidos",
+        description:
+          "Elimina o corrige los detalles vacíos antes de guardar el producto.",
       });
       return;
     }
 
     setIsSaving(true);
+    let currentStage = "guardar producto";
+
     try {
       const payload = {
         clave: formData.clave.trim(),
@@ -480,7 +669,9 @@ export default function AdminProductsPage() {
         const persistedPrice = Number(updatedDetail.precioPublico);
         const persistedPurchasePrice = Number(updatedDetail.precioCompra);
         const persistedStock = Number(updatedDetail.existencias);
-        const persistedProvider = toStringValue(updatedDetail.proveedorId).trim();
+        const persistedProvider = toStringValue(
+          updatedDetail.proveedorId,
+        ).trim();
         const expectedPrice = Number(payload.precioPublico);
 
         if (
@@ -498,22 +689,27 @@ export default function AdminProductsPage() {
             "La API respondió 200, pero el producto no reflejó los cambios esperados.",
           );
         }
-
-        toast({ title: "Producto actualizado con éxito" });
       } else {
-        const created = (await productsAdminApi.create(payload)) as {
-          id?: string;
-          data?: { id?: string };
-        };
-        targetProductId = created.id ?? created.data?.id ?? null;
-        toast({ title: "Producto creado con éxito" });
+        const created = await productsAdminApi.create(payload);
+        targetProductId = created.id ?? null;
+
+        if (targetProductId) {
+          setEditingProductId(targetProductId);
+          setSelectedProductId(targetProductId);
+        }
       }
 
       if (!targetProductId) {
-        throw new Error("No se pudo resolver el ID del producto para imágenes");
+        throw new Error(
+          "No se pudo resolver el ID del producto para continuar.",
+        );
       }
 
+      currentStage = "sincronizar detalles";
+      await syncProductDetails(targetProductId, formData.detalles);
+
       if (pendingImageUploads.length > 0) {
+        currentStage = "subir imágenes";
         const uploadData = new FormData();
         pendingImageUploads.forEach((item) => {
           uploadData.append("images", item.file);
@@ -522,6 +718,7 @@ export default function AdminProductsPage() {
       }
 
       if (pendingDeletedImages.length > 0) {
+        currentStage = "eliminar imágenes";
         for (const imageUrl of pendingDeletedImages) {
           try {
             await productsAdminApi.deleteImage(targetProductId, imageUrl);
@@ -538,20 +735,18 @@ export default function AdminProductsPage() {
         }
       }
 
-      setIsDialogOpen(false);
-      setEditingProductId(null);
-      setFormData(EMPTY_FORM);
-      setLineaQuery("");
-      setCategoriaQuery("");
-      setTallaQuery("");
-      setProveedorQuery("");
-      clearPendingImageChanges();
+      toast({
+        title: editingProductId
+          ? "Producto actualizado con éxito"
+          : "Producto creado con éxito",
+      });
+      resetDialogState();
       void loadProducts();
     } catch (error) {
       toast({
         variant: "destructive",
         title: "Error al guardar",
-        description: getApiErrorMessage(error),
+        description: `No se pudo ${currentStage}: ${getApiErrorMessage(error)}`,
       });
     } finally {
       setIsSaving(false);
@@ -671,7 +866,9 @@ export default function AdminProductsPage() {
       return;
     }
 
-    const selected = products.find((product) => product.id === selectedProductId);
+    const selected = products.find(
+      (product) => product.id === selectedProductId,
+    );
     if (!selected) {
       toast({
         variant: "destructive",
@@ -1038,89 +1235,126 @@ export default function AdminProductsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Imágenes del producto</Label>
-              {editingProductId ? (
-                <>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={(event) => void handleUploadImages(event)}
-                    disabled={isSaving}
-                  />
-                  {(pendingImageUploads.length > 0 ||
-                    pendingDeletedImages.length > 0) && (
-                      <p className="text-xs text-muted-foreground">
-                        Cambios de imágenes pendientes. Se aplican al guardar.
-                      </p>
-                    )}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {formData.imagenes.map((imageUrl) => (
-                      <div
-                        key={imageUrl}
-                        className="relative border rounded-md overflow-hidden"
-                      >
-                        <img
-                          src={imageUrl}
-                          alt="Imagen del producto"
-                          className="h-24 w-full object-cover"
-                        />
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="destructive"
-                          className="absolute top-1 right-1 h-7 w-7"
-                          onClick={() => void handleDeleteImage(imageUrl)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                    {pendingImageUploads.map((item) => (
-                      <div
-                        key={item.id}
-                        className="relative border rounded-md overflow-hidden"
-                      >
-                        <img
-                          src={item.previewUrl}
-                          alt="Imagen nueva"
-                          className="h-24 w-full object-cover"
-                        />
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="destructive"
-                          className="absolute top-1 right-1 h-7 w-7"
-                          onClick={() =>
-                            void handleDeleteImage(item.previewUrl)
-                          }
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
+              <div className="flex items-center justify-between gap-2">
+                <Label>Detalles del producto</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddDetail}
+                  disabled={isSaving || isLoadingDetail}
+                >
+                  <Plus className="mr-1 h-4 w-4" /> Agregar detalle
+                </Button>
+              </div>
+
+              {formData.detalles.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  Guarda el producto primero para gestionar imágenes.
+                  Agrega bullets de detalle para mostrarlos en la ficha del
+                  producto.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {formData.detalles.map((detail, index) => (
+                    <div
+                      key={detail.draftId}
+                      className="flex items-center gap-2"
+                    >
+                      <Input
+                        value={detail.descripcion}
+                        placeholder={`Detalle ${index + 1}`}
+                        onChange={(event) =>
+                          handleDetailChange(detail.draftId, event.target.value)
+                        }
+                        disabled={isSaving || isLoadingDetail}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => handleRemoveDetail(detail.draftId)}
+                        disabled={isSaving}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Imágenes del producto</Label>
+              <Input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(event) => void handleUploadImages(event)}
+                disabled={isSaving}
+              />
+              {(pendingImageUploads.length > 0 ||
+                pendingDeletedImages.length > 0) && (
+                <p className="text-sm text-muted-foreground">
+                  Cambios de imágenes pendientes. Se aplican al guardar.
                 </p>
               )}
+              {!editingProductId && pendingImageUploads.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Puedes cargar imágenes desde ahora. Se subirán automáticamente
+                  al guardar el producto.
+                </p>
+              )}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {formData.imagenes.map((imageUrl) => (
+                  <div
+                    key={imageUrl}
+                    className="relative border rounded-md overflow-hidden"
+                  >
+                    <img
+                      src={imageUrl}
+                      alt="Imagen del producto"
+                      className="h-24 w-full object-cover"
+                    />
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="destructive"
+                      className="absolute top-1 right-1 h-7 w-7"
+                      onClick={() => void handleDeleteImage(imageUrl)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+                {pendingImageUploads.map((item) => (
+                  <div
+                    key={item.id}
+                    className="relative border rounded-md overflow-hidden"
+                  >
+                    <img
+                      src={item.previewUrl}
+                      alt="Imagen nueva"
+                      className="h-24 w-full object-cover"
+                    />
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="destructive"
+                      className="absolute top-1 right-1 h-7 w-7"
+                      onClick={() => void handleDeleteImage(item.previewUrl)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t">
             <Button
               variant="outline"
-              onClick={() => {
-                setIsDialogOpen(false);
-                setEditingProductId(null);
-                setFormData(EMPTY_FORM);
-                setLineaQuery("");
-                setCategoriaQuery("");
-                setTallaQuery("");
-                setProveedorQuery("");
-                clearPendingImageChanges();
-              }}
+              onClick={resetDialogState}
               disabled={isSaving}
             >
               Cancelar
@@ -1137,4 +1371,3 @@ export default function AdminProductsPage() {
     </div>
   );
 }
-

@@ -37,10 +37,14 @@ function sortProducts(products: Product[], sort: string) {
       });
       break;
     case "price-asc":
-      sortable.sort((a, b) => (a.salePrice || a.price) - (b.salePrice || b.price));
+      sortable.sort(
+        (a, b) => (a.salePrice || a.price) - (b.salePrice || b.price),
+      );
       break;
     case "price-desc":
-      sortable.sort((a, b) => (b.salePrice || b.price) - (a.salePrice || a.price));
+      sortable.sort(
+        (a, b) => (b.salePrice || b.price) - (a.salePrice || a.price),
+      );
       break;
     case "newest":
       sortable.sort(
@@ -62,7 +66,7 @@ export function ProductFilters({
   tallas,
 }: ProductFiltersProps) {
   const router = useRouter();
-  const initialSearchParams = useSearchParams();
+  const searchParams = useSearchParams();
   const { wishlistIds } = useStorefront();
 
   const maxCatalogPrice = useMemo(() => {
@@ -74,26 +78,28 @@ export function ProductFilters({
     return Math.max(100, Math.ceil(maxPrice / 100) * 100);
   }, [allProducts]);
 
-  const [sort, setSort] = useState(initialSearchParams.get("sort") || "featured");
-  const [category, setCategory] = useState(initialSearchParams.get("category") || "all");
-  const [linea, setLinea] = useState(initialSearchParams.get("linea") || "all");
+  const [sort, setSort] = useState(searchParams.get("sort") || "featured");
+  const [category, setCategory] = useState(
+    searchParams.get("category") || "all",
+  );
+  const [linea, setLinea] = useState(searchParams.get("linea") || "all");
   const [selectedSize, setSelectedSize] = useState(
-    initialSearchParams.get("size") || "all",
+    searchParams.get("size") || "all",
   );
   const [priceRange, setPriceRange] = useState<[number]>(() => {
-    const maxPriceFromQuery = Number(initialSearchParams.get("maxPrice"));
+    const maxPriceFromQuery = Number(searchParams.get("maxPrice"));
     if (!Number.isFinite(maxPriceFromQuery) || maxPriceFromQuery <= 0) {
       return [maxCatalogPrice];
     }
 
     return [Math.min(maxPriceFromQuery, maxCatalogPrice)];
   });
-  const [tags, setTags] = useState<string[]>(initialSearchParams.getAll("tag"));
+  const [tags, setTags] = useState<string[]>(searchParams.getAll("tag"));
   const [wishlistOnly, setWishlistOnly] = useState(
-    initialSearchParams.get("wishlist") === "1",
+    searchParams.get("wishlist") === "1",
   );
 
-  const searchQuery = initialSearchParams.get("q")?.trim() ?? "";
+  const searchQuery = searchParams.get("q")?.trim() ?? "";
 
   const visibleCategories = useMemo(
     () => categories.filter((categoryItem) => isCategoryVisible(categoryItem)),
@@ -124,11 +130,22 @@ export function ProductFilters({
     if (category !== "all") params.set("category", category);
     if (linea !== "all") params.set("linea", linea);
     if (selectedSize !== "all") params.set("size", selectedSize);
-    if (priceRange[0] < maxCatalogPrice) params.set("maxPrice", priceRange[0].toString());
+    if (priceRange[0] < maxCatalogPrice)
+      params.set("maxPrice", priceRange[0].toString());
     if (wishlistOnly) params.set("wishlist", "1");
     tags.forEach((tag) => params.append("tag", tag));
 
-    router.replace(`/products?${params.toString()}`, { scroll: false });
+    const nextQueryString = params.toString();
+    const currentQueryString = searchParams.toString();
+
+    if (nextQueryString === currentQueryString) {
+      return;
+    }
+
+    router.replace(
+      nextQueryString ? `/products?${nextQueryString}` : "/products",
+      { scroll: false },
+    );
   }, [
     category,
     linea,
@@ -139,11 +156,15 @@ export function ProductFilters({
     selectedSize,
     sort,
     tags,
+    searchParams,
     wishlistOnly,
   ]);
 
   useEffect(() => {
-    if (category !== "all" && !visibleCategories.some((item) => item.slug === category)) {
+    if (
+      category !== "all" &&
+      !visibleCategories.some((item) => item.slug === category)
+    ) {
       setCategory("all");
     }
   }, [category, visibleCategories]);
@@ -158,7 +179,8 @@ export function ProductFilters({
     if (
       selectedSize !== "all" &&
       !visibleSizes.some(
-        (sizeItem) => sizeItem.id === selectedSize || sizeItem.codigo === selectedSize,
+        (sizeItem) =>
+          sizeItem.id === selectedSize || sizeItem.codigo === selectedSize,
       )
     ) {
       setSelectedSize("all");
@@ -169,13 +191,21 @@ export function ProductFilters({
     let products = [...allProducts];
 
     if (category !== "all") {
-      const selectedCategory = visibleCategories.find((item) => item.slug === category);
-      const selectedSlug = normalizeStorefrontText(selectedCategory?.slug ?? category);
-      const selectedName = normalizeStorefrontText(selectedCategory?.name ?? category);
+      const selectedCategory = visibleCategories.find(
+        (item) => item.slug === category,
+      );
+      const selectedSlug = normalizeStorefrontText(
+        selectedCategory?.slug ?? category,
+      );
+      const selectedName = normalizeStorefrontText(
+        selectedCategory?.name ?? category,
+      );
 
       products = products.filter((product) => {
         const productCategory = normalizeStorefrontText(product.category);
-        return productCategory === selectedSlug || productCategory === selectedName;
+        return (
+          productCategory === selectedSlug || productCategory === selectedName
+        );
       });
     }
 
@@ -184,7 +214,9 @@ export function ProductFilters({
       products = products.filter((product) => {
         const productLineId = normalizeStorefrontText(product.lineId ?? "");
         const productLineName = normalizeStorefrontText(product.lineName ?? "");
-        return productLineId === selectedLine || productLineName === selectedLine;
+        return (
+          productLineId === selectedLine || productLineName === selectedLine
+        );
       });
     }
 
@@ -197,7 +229,9 @@ export function ProductFilters({
       );
     }
 
-    products = products.filter((product) => (product.salePrice || product.price) <= priceRange[0]);
+    products = products.filter(
+      (product) => (product.salePrice || product.price) <= priceRange[0],
+    );
 
     if (tags.length > 0) {
       products = products.filter((product) =>
@@ -250,11 +284,16 @@ export function ProductFilters({
 
   const activeFilters = [
     category !== "all"
-      ? visibleCategories.find((item) => item.slug === category)?.name ?? category
+      ? (visibleCategories.find((item) => item.slug === category)?.name ??
+        category)
       : null,
-    linea !== "all" ? visibleLineas.find((item) => item.id === linea)?.nombre ?? linea : null,
+    linea !== "all"
+      ? (visibleLineas.find((item) => item.id === linea)?.nombre ?? linea)
+      : null,
     selectedSize !== "all" ? `Talla ${selectedSize}` : null,
-    priceRange[0] < maxCatalogPrice ? `Hasta $${priceRange[0].toLocaleString()}` : null,
+    priceRange[0] < maxCatalogPrice
+      ? `Hasta $${priceRange[0].toLocaleString()}`
+      : null,
     wishlistOnly ? "Favoritos" : null,
     ...tags.map((tag) => (tag === "new" ? "Novedades" : "Ofertas")),
   ].filter(Boolean) as string[];
@@ -271,7 +310,9 @@ export function ProductFilters({
 
   const handleTagChange = (tag: string, checked: boolean) => {
     setTags((currentTags) =>
-      checked ? [...currentTags, tag] : currentTags.filter((item) => item !== tag),
+      checked
+        ? [...currentTags, tag]
+        : currentTags.filter((item) => item !== tag),
     );
   };
 
@@ -283,11 +324,17 @@ export function ProductFilters({
         </h3>
         <div className="space-y-2">
           <label className="flex items-center text-sm text-muted-foreground">
-            <Checkbox checked={category === "all"} onCheckedChange={() => setCategory("all")} />
+            <Checkbox
+              checked={category === "all"}
+              onCheckedChange={() => setCategory("all")}
+            />
             <span className="ml-2">Todas</span>
           </label>
           {visibleCategories.map((categoryItem) => (
-            <label key={categoryItem.id} className="flex items-center text-sm text-muted-foreground">
+            <label
+              key={categoryItem.id}
+              className="flex items-center text-sm text-muted-foreground"
+            >
               <Checkbox
                 checked={category === categoryItem.slug}
                 onCheckedChange={() => setCategory(categoryItem.slug)}
@@ -319,11 +366,17 @@ export function ProductFilters({
         </h3>
         <div className="space-y-2">
           <label className="flex items-center text-sm text-muted-foreground">
-            <Checkbox checked={linea === "all"} onCheckedChange={() => setLinea("all")} />
+            <Checkbox
+              checked={linea === "all"}
+              onCheckedChange={() => setLinea("all")}
+            />
             <span className="ml-2">Todas</span>
           </label>
           {visibleLineas.map((lineaItem) => (
-            <label key={lineaItem.id} className="flex items-center text-sm text-muted-foreground">
+            <label
+              key={lineaItem.id}
+              className="flex items-center text-sm text-muted-foreground"
+            >
               <Checkbox
                 checked={linea === lineaItem.id}
                 onCheckedChange={() => setLinea(lineaItem.id)}
@@ -347,10 +400,14 @@ export function ProductFilters({
             <span className="ml-2">Todas</span>
           </label>
           {visibleSizes.map((sizeItem) => (
-            <label key={sizeItem.id} className="flex items-center text-sm text-muted-foreground">
+            <label
+              key={sizeItem.id}
+              className="flex items-center text-sm text-muted-foreground"
+            >
               <Checkbox
                 checked={
-                  selectedSize === sizeItem.id || selectedSize === sizeItem.codigo
+                  selectedSize === sizeItem.id ||
+                  selectedSize === sizeItem.codigo
                 }
                 onCheckedChange={() => setSelectedSize(sizeItem.codigo)}
               />
@@ -368,14 +425,18 @@ export function ProductFilters({
           <label className="flex items-center text-sm text-muted-foreground">
             <Checkbox
               checked={tags.includes("new")}
-              onCheckedChange={(checked) => handleTagChange("new", Boolean(checked))}
+              onCheckedChange={(checked) =>
+                handleTagChange("new", Boolean(checked))
+              }
             />
             <span className="ml-2">Novedades</span>
           </label>
           <label className="flex items-center text-sm text-muted-foreground">
             <Checkbox
               checked={tags.includes("sale")}
-              onCheckedChange={(checked) => handleTagChange("sale", Boolean(checked))}
+              onCheckedChange={(checked) =>
+                handleTagChange("sale", Boolean(checked))
+              }
             />
             <span className="ml-2">Ofertas</span>
           </label>
@@ -391,7 +452,7 @@ export function ProductFilters({
             checked={wishlistOnly}
             onCheckedChange={(checked) => setWishlistOnly(Boolean(checked))}
           />
-          <span className="ml-2">Solo wishlist local</span>
+          <span className="ml-2">Solo favoritos</span>
         </label>
       </div>
     </div>
@@ -409,7 +470,9 @@ export function ProductFilters({
       <main>
         <ProductToolbar
           count={productsToShow.length}
-          searchLabel={searchQuery ? `Resultados para "${searchQuery}"` : undefined}
+          searchLabel={
+            searchQuery ? `Resultados para "${searchQuery}"` : undefined
+          }
           activeFilters={activeFilters}
           onClear={clearFilters}
           sort={sort}
@@ -419,8 +482,8 @@ export function ProductFilters({
 
         {searchWithoutMatches && searchQuery ? (
           <div className="mt-4 rounded-[1.5rem] border border-warning/35 bg-warning/10 px-4 py-3 text-sm text-warning">
-            No hubo coincidencias para &quot;{searchQuery}&quot;. Mostrando todos los
-            productos disponibles.
+            No hubo coincidencias para &quot;{searchQuery}&quot;. Mostrando
+            todos los productos disponibles.
           </div>
         ) : null}
 

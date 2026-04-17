@@ -1,4 +1,7 @@
 import type {
+  AplazoOnlineCreatePayload,
+  AplazoOnlineCreateResponse,
+  AplazoPaymentStatusResponse,
   Pago,
   PaymentInitPayload,
   PaymentInitResponse,
@@ -81,6 +84,64 @@ export const paymentsApi = {
       return null;
     }
     return mapPago(data);
+  },
+
+  async createAplazoOnlineAttempt(
+    payload: AplazoOnlineCreatePayload,
+    idempotencyKey?: string,
+  ) {
+    const raw = await apiFetch<AplazoOnlineCreateResponse>(
+      "/api/payments/aplazo/online/create",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      { local: true, idempotencyKey },
+    );
+
+    const data = unwrapData<unknown>(raw);
+    const record =
+      data && typeof data === "object" ? (data as UnknownRecord) : {};
+
+    return {
+      ok: true,
+      paymentAttemptId: toStringValue(record.paymentAttemptId),
+      provider: toStringValue(record.provider, "aplazo"),
+      flowType: toStringValue(record.flowType, "online"),
+      status: toStringValue(record.status, "pending_customer"),
+      url: toStringValue(record.url) || undefined,
+      loanId: toStringValue(record.loanId) || undefined,
+      loanToken: toStringValue(record.loanToken) || undefined,
+      redirectUrl: toStringValue(record.redirectUrl) || undefined,
+      checkoutUrl: toStringValue(record.checkoutUrl) || undefined,
+      expiresAt: toStringValue(record.expiresAt) || null,
+    } as AplazoOnlineCreateResponse;
+  },
+
+  async getAplazoPaymentStatus(paymentAttemptId: string) {
+    const raw = await apiFetch<AplazoPaymentStatusResponse>(
+      `/api/payments/${paymentAttemptId}/status`,
+      { method: "GET" },
+      { local: true },
+    );
+
+    const data = unwrapData<unknown>(raw);
+    const record =
+      data && typeof data === "object" ? (data as UnknownRecord) : {};
+
+    return {
+      ok: true,
+      paymentAttemptId: toStringValue(record.paymentAttemptId, paymentAttemptId),
+      provider: toStringValue(record.provider, "aplazo"),
+      status: toStringValue(record.status, "pending_customer"),
+      providerStatus: toStringValue(record.providerStatus) || undefined,
+      amount: toNumber(record.amount, 0),
+      currency: toStringValue(record.currency, "mxn") || undefined,
+      paidAt: toStringValue(record.paidAt) || null,
+      expiresAt: toStringValue(record.expiresAt) || null,
+      isTerminal: Boolean(record.isTerminal),
+      nextPollAfterMs: toNumber(record.nextPollAfterMs, 3000),
+    } as AplazoPaymentStatusResponse;
   },
 
   reembolsoAdmin(

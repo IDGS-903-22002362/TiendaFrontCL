@@ -17,6 +17,48 @@ export type Product = {
   tallaIds?: string[];
   inventarioPorTalla?: ProductSizeStock[];
   hasSizeInventory?: boolean;
+  detailIds?: string[];
+  activo?: boolean;
+  ratingSummary?: ProductRatingSummary;
+  isFavorito?: boolean;
+  ratingEligibility?: ProductRatingEligibility;
+  myRating?: ProductUserRating | null;
+};
+
+export type ProductRatingSummary = {
+  average: number;
+  count: number;
+  updatedAt?: string;
+};
+
+export type ProductRatingEligibilityReason =
+  | "eligible"
+  | "purchase_required"
+  | "not_delivered";
+
+export type ProductRatingEligibility = {
+  canRate: boolean;
+  reason: ProductRatingEligibilityReason;
+};
+
+export type ProductUserRating = {
+  score: number;
+  updatedAt: string;
+};
+
+export type ProductExtraDetail = {
+  id: string;
+  descripcion: string;
+  productoId: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type FavoriteItem = {
+  id: string;
+  usuarioId: string;
+  createdAt: string;
+  producto: Product;
 };
 
 export type Category = {
@@ -282,6 +324,21 @@ export type PaymentStatus =
   | "FALLIDO"
   | "REEMBOLSADO";
 
+export type PaymentMethod = "TARJETA" | "APLAZO";
+
+export type AplazoFlowType = "online" | "in_store";
+
+export type AplazoPaymentStatus =
+  | "pending_provider"
+  | "pending_customer"
+  | "authorized"
+  | "paid"
+  | "failed"
+  | "canceled"
+  | "expired"
+  | "refunded"
+  | "partially_refunded";
+
 export type Orden = {
   id: string;
   usuarioId?: string;
@@ -313,7 +370,7 @@ export type CheckoutPayload = {
     codigoPostal: string;
     email: string;
   };
-  metodoPago: "TARJETA";
+  metodoPago: PaymentMethod;
   costoEnvio: number;
   notas?: string;
 };
@@ -326,7 +383,7 @@ export type CheckoutResponse = {
 
 export type PaymentInitPayload = {
   ordenId: string;
-  metodoPago: "TARJETA";
+  metodoPago: PaymentMethod;
 };
 
 export type PaymentInitResponse = {
@@ -334,4 +391,70 @@ export type PaymentInitResponse = {
   paymentIntentId: string;
   clientSecret: string;
   status: string;
+};
+
+export type AplazoOnlineCreatePayload = {
+  totalPrice: number;
+  shopId: string;
+  cartId: string;
+  successUrl: string;
+  errorUrl: string;
+  cartUrl: string;
+  webHookUrl?: string;
+  buyer: {
+    addressLine: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    phone: string;
+    postalCode: string;
+  };
+  products: Array<{
+    id: string;
+    count: number;
+    description: string;
+    imageUrl?: string;
+    price: number;
+    title: string;
+  }>;
+  discount: {
+    price: number;
+    title: string;
+  };
+  shipping: {
+    price: number;
+    title: string;
+  };
+  taxes: {
+    price: number;
+    title: string;
+  };
+};
+
+export type AplazoOnlineCreateResponse = {
+  ok: true;
+  paymentAttemptId: string;
+  provider: "aplazo" | string;
+  flowType: AplazoFlowType;
+  status: AplazoPaymentStatus | string;
+  url?: string;
+  loanId?: string;
+  loanToken?: string;
+  redirectUrl?: string;
+  checkoutUrl?: string;
+  expiresAt?: string | null;
+};
+
+export type AplazoPaymentStatusResponse = {
+  ok: true;
+  paymentAttemptId: string;
+  provider: "aplazo" | string;
+  status: AplazoPaymentStatus | string;
+  providerStatus?: string;
+  amount?: number;
+  currency?: string;
+  paidAt?: string | null;
+  expiresAt?: string | null;
+  isTerminal: boolean;
+  nextPollAfterMs?: number;
 };

@@ -13,6 +13,7 @@ export function ConfirmationClient() {
   const searchParams = useSearchParams();
   const orderId = searchParams.get("ordenId") || "";
   const paymentId = searchParams.get("pagoId") || "";
+  const paymentAttemptId = searchParams.get("paymentAttemptId") || "";
   const fallbackStatus = searchParams.get("status") || "";
   const fallbackTotal = searchParams.get("total") || "";
 
@@ -20,6 +21,8 @@ export function ConfirmationClient() {
   const [paymentStatus, setPaymentStatus] = useState(fallbackStatus);
   const [total, setTotal] = useState(fallbackTotal);
   const [isLoading, setIsLoading] = useState(Boolean(orderId));
+  const isPaid =
+    paymentStatus === "paid" || paymentStatus === "COMPLETADO";
 
   useEffect(() => {
     if (!orderId) {
@@ -33,7 +36,9 @@ export function ConfirmationClient() {
           ordersApi.getById(orderId),
           paymentId
             ? paymentsApi.getById(paymentId)
-            : paymentsApi.getByOrden(orderId),
+            : paymentAttemptId
+              ? paymentsApi.getAplazoPaymentStatus(paymentAttemptId)
+              : paymentsApi.getByOrden(orderId),
         ]);
 
         if (order?.estado) {
@@ -51,7 +56,7 @@ export function ConfirmationClient() {
     };
 
     void load();
-  }, [orderId, paymentId]);
+  }, [orderId, paymentAttemptId, paymentId]);
 
   return (
     <div className="container flex min-h-[60vh] flex-col items-center justify-center py-8 text-center">
@@ -61,7 +66,7 @@ export function ConfirmationClient() {
             <CheckCircle className="h-10 w-10 text-success" />
           </div>
           <CardTitle className="pt-4 text-center font-headline text-3xl font-bold">
-            ¡Gracias por tu compra!
+            {isPaid ? "¡Gracias por tu compra!" : "Estamos validando tu pedido"}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">

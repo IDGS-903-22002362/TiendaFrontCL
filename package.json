@@ -9,7 +9,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit",
+    "typegen": "next typegen",
+    "typecheck": "npm run typegen && tsc --noEmit",
     "deploy:frontend": "firebase deploy --only apphosting:ecomerce-next-front --project e-comerce-leon"
   },
   "dependencies": {

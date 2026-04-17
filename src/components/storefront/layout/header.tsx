@@ -104,7 +104,10 @@ export function StorefrontHeader() {
         Math.max(0, Math.min(shellRect.height, shellRect.bottom)),
       );
 
-      rootStyle.setProperty("--storefront-header-reserved-height", `${reservedHeight}px`);
+      rootStyle.setProperty(
+        "--storefront-header-reserved-height",
+        `${reservedHeight}px`,
+      );
       rootStyle.setProperty(
         "--storefront-header-current-height",
         `${currentHeight}px`,
@@ -152,7 +155,11 @@ export function StorefrontHeader() {
     [],
   );
 
-  if (pathname.startsWith("/admin") || pathname.startsWith("/super-admin") || pathname.startsWith("/empleado-club")) {
+  if (
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/super-admin") ||
+    pathname.startsWith("/empleado-club")
+  ) {
     return null;
   }
 
@@ -166,24 +173,25 @@ export function StorefrontHeader() {
     >
       <div
         className={cn(
-          "border-b border-border/80 bg-[rgb(248_246_240_/_0.92)] shadow-[0_18px_38px_-34px_rgb(19_22_18_/_0.28)] backdrop-blur-xl transition-[background-color,box-shadow]",
-          isCompact && "bg-[rgb(248_246_240_/_0.98)] shadow-[0_16px_34px_-28px_rgb(19_22_18_/_0.24)]",
+          "border-b border-black/14 bg-[rgb(255_255_255_/_0.94)] backdrop-blur-md transition-all duration-300",
+          isCompact &&
+            "bg-[rgb(255_255_255_/_0.98)] shadow-[0_18px_34px_-28px_rgb(8_14_11_/_0.18)]",
         )}
       >
-        <UtilityBar compact={isCompact} />
+        <UtilityBar />
         <div
           className={cn(
-            "storefront-frame flex items-center gap-6 transition-[height,padding] duration-300",
-            isCompact ? "h-[4.75rem]" : "h-[5.5rem]",
+            "storefront-frame flex items-center gap-4 transition-[height,padding] duration-300 lg:!pl-3 xl:!pl-4 lg:gap-8",
+            isCompact ? "h-[4.35rem]" : "h-[5rem]",
           )}
         >
-          <div className="flex shrink-0 items-center gap-2 lg:w-[8rem] lg:gap-5">
+          <div className="flex shrink-0 items-center gap-2 lg:w-[15rem] lg:gap-4">
             <MobileNavDrawer
               trigger={
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-10 w-10 rounded-full border border-transparent lg:hidden"
+                  className="h-11 w-11 rounded-full border border-black/14 bg-white lg:hidden"
                 >
                   <Menu className="h-5 w-5" />
                   <span className="sr-only">Abrir menú</span>
@@ -195,31 +203,41 @@ export function StorefrontHeader() {
               email={user?.email}
               onLogout={() => void clearSession()}
             />
-            <Link href="/" className="flex items-center" aria-label="La Guarida inicio">
+            <Link
+              href="/"
+              className="flex items-center gap-3"
+              aria-label="La Guarida inicio"
+            >
               <Logo
                 className={cn(
                   "w-auto object-contain transition-[height] duration-300",
-                  isCompact ? "h-9 md:h-10 lg:h-11" : "h-10 md:h-12 lg:h-[3.25rem]",
+                  isCompact ? "h-10 md:h-11 lg:h-12" : "h-11 md:h-12 lg:h-14",
                 )}
               />
+              <div className="hidden xl:block">
+                <p className="editorial-label text-primary/64">Store oficial</p>
+                <p className="mt-1 font-headline text-[1.7rem] font-semibold uppercase leading-none tracking-[0.04em] text-foreground">
+                  La Guarida
+                </p>
+              </div>
             </Link>
           </div>
 
           <DesktopNav pathname={pathname} links={desktopLinks} />
 
-          <div className="ml-auto flex shrink-0 items-center gap-1.5 md:gap-2 lg:min-w-[18rem] lg:justify-end">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 md:gap-2 lg:min-w-[20rem] lg:justify-end">
             <SearchDrawer isDesktop={isDesktop} />
 
             <Button
               asChild
               variant="ghost"
               size="icon"
-              className="relative hidden h-10 w-10 rounded-full border border-transparent hover:border-border lg:inline-flex"
+              className="relative hidden h-11 w-11 rounded-full border border-black/14 bg-white lg:inline-flex"
             >
-                <Link href="/products?wishlist=1">
-                  <Heart className="h-4.5 w-4.5" />
+              <Link href="/products?wishlist=1">
+                <Heart className="h-4.5 w-4.5" />
                 {wishlistIds.length > 0 ? (
-                  <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                  <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground shadow-[var(--shadow-card)]">
                     {Math.min(wishlistIds.length, 99)}
                   </span>
                 ) : null}
@@ -233,7 +251,7 @@ export function StorefrontHeader() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="hidden h-10 w-10 rounded-full border border-transparent hover:border-border md:inline-flex"
+                    className="hidden h-11 w-11 rounded-full border border-black/14 bg-white md:inline-flex"
                   >
                     <UserRound className="h-4.5 w-4.5" />
                     <span className="sr-only">Cuenta</span>
@@ -241,7 +259,9 @@ export function StorefrontHeader() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64">
                   <div className="px-2 py-1.5">
-                    <p className="truncate text-sm font-medium text-foreground">{user?.email}</p>
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {user?.email}
+                    </p>
                     <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                       {role}
                     </p>
@@ -270,7 +290,7 @@ export function StorefrontHeader() {
                 asChild
                 variant="ghost"
                 size="icon"
-                className="hidden h-10 w-10 rounded-full border border-transparent hover:border-border md:inline-flex"
+                className="hidden h-11 w-11 rounded-full border border-black/14 bg-white md:inline-flex"
               >
                 <Link href="/login">
                   <UserRound className="h-4.5 w-4.5" />
@@ -286,12 +306,12 @@ export function StorefrontHeader() {
               asChild
               variant="ghost"
               size="icon"
-              className="relative h-10 w-10 rounded-full border border-transparent lg:hidden"
+              className="relative h-11 w-11 rounded-full border border-black/14 bg-white lg:hidden"
             >
               <Link href="/cart">
                 <ShoppingBag className="h-4.5 w-4.5" />
                 {totalItems > 0 ? (
-                  <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                  <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground shadow-[var(--shadow-card)]">
                     {Math.min(totalItems, 99)}
                   </span>
                 ) : null}

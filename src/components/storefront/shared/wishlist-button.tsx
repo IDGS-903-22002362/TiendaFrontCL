@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStorefront } from "@/hooks/use-storefront";
@@ -11,6 +12,7 @@ type WishlistButtonProps = {
 
 export function WishlistButton({ productId, className }: WishlistButtonProps) {
   const { isWishlisted, toggleWishlist } = useStorefront();
+  const [isPending, setIsPending] = useState(false);
   const active = isWishlisted(productId);
 
   return (
@@ -21,10 +23,16 @@ export function WishlistButton({ productId, className }: WishlistButtonProps) {
       onClick={(event) => {
         event.preventDefault();
         event.stopPropagation();
-        toggleWishlist(productId);
+        if (isPending) {
+          return;
+        }
+
+        setIsPending(true);
+        void toggleWishlist(productId).finally(() => setIsPending(false));
       }}
+      disabled={isPending}
       className={cn(
-        "inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-[rgb(250_248_242_/_0.92)] text-foreground transition-all hover:border-primary/45 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+        "inline-flex h-9 w-9 items-center justify-center rounded-full border border-black/14 bg-white text-foreground shadow-[0_10px_24px_-22px_rgb(10_14_11_/_0.22)] transition-[color,background-color,border-color,transform,opacity] hover:-translate-y-px hover:border-black hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 disabled:pointer-events-none disabled:opacity-70",
         active && "border-primary bg-primary text-primary-foreground",
         className,
       )}

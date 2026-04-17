@@ -60,11 +60,14 @@ export function AiWorkspace() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
+  const requestedTab = searchParams.get("tab") === "tryon" ? "tryon" : "chat";
+  const requestedProductId = searchParams.get("productId");
   const [sessions, setSessions] = useState<AiSession[]>([]);
   const [jobs, setJobs] = useState<TryOnJob[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoadingSidebar, setIsLoadingSidebar] = useState(false);
   const [isMobileSessionsOpen, setIsMobileSessionsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"chat" | "tryon">(requestedTab);
   const conversation = useAiConversation({
     defaultTitle: "Nueva conversacion AI",
     storageKey: isAuthenticated ? "ai-global-session" : undefined,
@@ -76,6 +79,13 @@ export function AiWorkspace() {
     },
   });
   const { currentSessionId, openSession } = conversation;
+  const defaultTryOnProduct = requestedProductId
+    ? products.find((product) => product.id === requestedProductId)
+    : undefined;
+
+  useEffect(() => {
+    setActiveTab(requestedTab);
+  }, [requestedTab]);
 
   const refreshSessions = useCallback(async () => {
     if (!isAuthenticated) {
@@ -311,7 +321,11 @@ export function AiWorkspace() {
           <CardContent className="space-y-3">{sessionsList}</CardContent>
         </Card>
 
-        <Tabs defaultValue="chat" className="w-full">
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => setActiveTab(value as "chat" | "tryon")}
+          className="w-full"
+        >
           <TabsList className="grid w-full grid-cols-2 lg:max-w-md">
             <TabsTrigger value="chat">Chat</TabsTrigger>
             <TabsTrigger value="tryon">Try-On</TabsTrigger>
@@ -390,6 +404,7 @@ export function AiWorkspace() {
             <AiTryOnPanel
               sessionId={conversation.currentSessionId || undefined}
               ensureSession={conversation.ensureSession}
+              defaultProduct={defaultTryOnProduct}
               products={products}
               allowProductSelection
               onJobCreated={refreshTryOnJobs}

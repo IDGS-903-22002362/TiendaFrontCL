@@ -23,7 +23,7 @@ export function QuantitySelector({
   };
 
   return (
-    <div className="inline-flex items-center rounded-full border border-border bg-muted/45 p-1">
+    <div className="inline-flex items-center rounded-full border border-border bg-card p-1 shadow-[inset_0_1px_0_rgb(255_255_255_/_0.75)]">
       <Button
         variant="ghost"
         size="icon"

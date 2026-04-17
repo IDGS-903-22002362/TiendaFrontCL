@@ -1,7 +1,8 @@
-import Image from "next/image";
+import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, CreditCard, Package, ShieldCheck } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { fetchCategories, fetchProducts } from "@/lib/api/storefront";
+import type { Product } from "@/lib/types";
 import {
   getCategoryCards,
   getFeaturedProducts,
@@ -9,29 +10,31 @@ import {
   getNewArrivalProducts,
   isPersonalizableProduct,
 } from "@/lib/storefront";
-import { Button } from "@/components/ui/button";
-import { HeroEditorial } from "@/components/storefront/home/hero-editorial";
 import { CategoryGrid } from "@/components/storefront/home/category-grid";
-import { ProductCarousel } from "@/components/storefront/product/product-carousel";
-import { SectionHeading } from "@/components/storefront/shared/section-heading";
+import { EditorialSplit } from "@/components/storefront/home/editorial-split";
+import { HeroEditorial } from "@/components/storefront/home/hero-editorial";
+import { LookbookSection } from "@/components/storefront/home/lookbook-section";
+import { ProductRail } from "@/components/storefront/home/product-rail";
+import { SectionHeader } from "@/components/storefront/home/section-header";
 
-const benefits = [
-  {
-    title: "Envío con seguimiento",
-    description: "Compra con trazabilidad clara y tiempos estimados desde checkout.",
-    icon: Package,
-  },
-  {
-    title: "Pagos protegidos",
-    description: "Stripe mantiene el proceso de pago seguro y sin fricción.",
-    icon: CreditCard,
-  },
-  {
-    title: "Compra oficial",
-    description: "Producto del club con identidad premium y navegación consistente.",
-    icon: ShieldCheck,
-  },
-];
+export const metadata: Metadata = {
+  title: "Inicio",
+  description:
+    "La Guarida presenta la colección oficial del Club León con una home editorial, limpia y enfocada en producto.",
+};
+
+function dedupeProducts(products: Array<Product | null | undefined>) {
+  const seen = new Set<string>();
+
+  return products.filter((product): product is Product => {
+    if (!product || seen.has(product.id)) {
+      return false;
+    }
+
+    seen.add(product.id);
+    return true;
+  });
+}
 
 export default async function Home() {
   const [products, categories] = await Promise.all([
@@ -40,157 +43,162 @@ export default async function Home() {
   ]);
 
   const heroProduct = getHeroProduct(products);
-  const featuredProducts = getFeaturedProducts(products);
-  const newArrivals = getNewArrivalProducts(products);
-  const categoryCards = getCategoryCards(categories, products);
-  const customizableProduct =
-    featuredProducts.find(isPersonalizableProduct) ||
-    products.find(isPersonalizableProduct);
-  const editorialProduct = featuredProducts[1] ?? heroProduct;
 
   if (!heroProduct) {
     return (
       <div className="container py-20">
-        <div className="rounded-[2rem] border border-border bg-card p-10 text-center shadow-[var(--shadow-card)]">
-          <h1 className="font-headline text-4xl font-semibold uppercase">La Guarida</h1>
+        <div className="home-surface rounded-[2rem] px-8 py-12 text-center">
+          <h1 className="font-headline text-4xl font-semibold uppercase tracking-[0.03em] text-foreground"></h1>
           <p className="mt-4 text-muted-foreground">
-            No hay productos visibles para construir la portada.
+            No hay productos visibles para construir la portada en este momento.
           </p>
         </div>
       </div>
     );
   }
 
+  const featuredProducts = dedupeProducts(getFeaturedProducts(products));
+  const newArrivals = dedupeProducts(getNewArrivalProducts(products));
+  const categoryCards = getCategoryCards(categories, products);
+  const homeCategories = [...categoryCards]
+    .sort((left, right) => right.count - left.count)
+    .slice(0, 4);
+  const customizableProduct =
+    featuredProducts.find(isPersonalizableProduct) ||
+    products.find(isPersonalizableProduct);
+  const editorialProduct =
+    featuredProducts.find((product) => product.id !== heroProduct.id) ||
+    newArrivals.find((product) => product.id !== heroProduct.id) ||
+    heroProduct;
+
+  const collectionProduct =
+    dedupeProducts([
+      customizableProduct && customizableProduct.id !== heroProduct.id
+        ? customizableProduct
+        : null,
+      editorialProduct,
+      heroProduct,
+    ])[0] ?? heroProduct;
+
+  const featuredRailProducts = dedupeProducts(
+    featuredProducts.filter(
+      (product) =>
+        product.id !== heroProduct.id && product.id !== collectionProduct.id,
+    ),
+  ).slice(0, 6);
+
+  const lookbookProducts = dedupeProducts([
+    editorialProduct,
+    ...featuredProducts,
+    ...newArrivals,
+  ])
+    .filter((product) => product.id !== collectionProduct.id)
+    .slice(0, 3);
+
+  const excludedIds = new Set([
+    heroProduct.id,
+    collectionProduct.id,
+    ...lookbookProducts.map((product) => product.id),
+  ]);
+
+  const secondaryRailProducts = dedupeProducts([
+    ...newArrivals,
+    ...featuredProducts,
+  ])
+    .filter((product) => !excludedIds.has(product.id))
+    .slice(0, 6);
+
+  const collectionIsPersonalizable = isPersonalizableProduct(collectionProduct);
+  const collectionTitle = collectionIsPersonalizable
+    ? "Personaliza la prenda oficial sin romper el ritmo de compra."
+    : "Colección oficial con más aire, mejor foco y menos ruido.";
+  const collectionDescription = collectionIsPersonalizable
+    ? "La personalización sigue conectada al PDP y al carrito actual, pero ahora entra en una composición más limpia, más directa y más centrada en la pieza."
+    : "La navegación comercial se apoya en bloques más sobrios para que el producto destaque antes que la interfaz.";
+
   return (
-    <div className="space-y-14 pb-10 md:space-y-20 md:pb-14">
-      <HeroEditorial product={heroProduct} />
+    <div className="pb-16 md:pb-24">
+      <HeroEditorial />
 
-      <section className="container">
-        <SectionHeading
-          eyebrow="Explora"
-          title="Colecciones con estructura comercial"
-          description="El catálogo se reorganiza para que la navegación sea limpia, densa y orientada a producto, no a cajas vacías."
+      <div className="home-section">
+        <EditorialSplit
+          product={collectionProduct}
+          eyebrow={
+            collectionIsPersonalizable
+              ? "Colección personalizable"
+              : "Colección destacada"
+          }
+          title={collectionTitle}
+          description={collectionDescription}
+          primaryHref={`/products/${collectionProduct.id}`}
+          primaryLabel={
+            collectionIsPersonalizable ? "Personalizar ahora" : "Ver colección"
+          }
+          secondaryHref={
+            collectionIsPersonalizable
+              ? "/products?category=jerseys"
+              : "/products"
+          }
+          secondaryLabel={
+            collectionIsPersonalizable ? "Ver jerseys" : "Ir al catálogo"
+          }
         />
-      </section>
-      <CategoryGrid categories={categoryCards} />
+      </div>
 
-      <ProductCarousel
-        eyebrow="Selección editorial"
-        title="Destacados"
-        description="Piezas con mejor presencia visual para abrir la compra desde home."
-        products={featuredProducts}
-        href="/products"
-        hrefLabel="Ver catálogo"
-      />
-
-      {customizableProduct ? (
-        <section className="container">
-          <div className="grid gap-6 overflow-hidden rounded-[2rem] border border-border bg-card shadow-[var(--shadow-card)] lg:grid-cols-[0.9fr_1.1fr]">
-            <div className="relative min-h-[280px] lg:min-h-[420px]">
-              <Image
-                src={customizableProduct.images[0]}
-                alt={customizableProduct.name}
-                fill
-                sizes="(max-width: 1024px) 100vw, 42vw"
-                className="object-cover"
-              />
-            </div>
-            <div className="flex flex-col justify-between px-6 py-7 md:px-8 md:py-9">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-primary/74">
-                  Jerseys personalizables
-                </p>
-                <h2 className="mt-3 font-headline text-4xl font-semibold uppercase leading-none tracking-[0.04em] md:text-6xl">
-                  Tu nombre. Tu dorsal. La misma narrativa visual.
-                </h2>
-                <p className="mt-4 max-w-xl text-sm leading-6 text-muted-foreground md:text-base">
-                  El nuevo flujo de personalización se integra al PDP con preview limpio, validación y resumen visible en carrito sin romper la lógica actual del checkout.
-                </p>
-              </div>
-
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <Button asChild className="h-12 rounded-full px-6">
-                  <Link href={`/products/${customizableProduct.id}`}>
-                    Personalizar ahora
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" className="h-12 rounded-full px-6">
-                  <Link href="/products?category=jerseys">Ver jerseys</Link>
-                </Button>
-              </div>
-            </div>
+      {homeCategories.length > 0 ? (
+        <section className="home-section">
+          <div className="container">
+            <SectionHeader
+              eyebrow="Explora por colección"
+              title="Menos caja. Más dirección comercial."
+              description="Las categorías entran como navegación editorial: jerarquía clara, menos ruido y mejor lectura para abrir el catálogo desde la intención correcta."
+              action={
+                <Link
+                  href="/products"
+                  className="editorial-link text-foreground/72 hover:text-primary"
+                >
+                  Ver catálogo
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              }
+            />
+          </div>
+          <div className="mt-8">
+            <CategoryGrid categories={homeCategories} />
           </div>
         </section>
       ) : null}
 
-      <ProductCarousel
-        eyebrow="Lanzamientos"
-        title="Novedades"
-        description="Productos recientes con tarjetas más finas y lectura comercial más clara."
-        products={newArrivals}
-        href="/products?tag=new"
-        hrefLabel="Ir a novedades"
-      />
-
-      <section className="container">
-        <div className="grid gap-4 md:grid-cols-3">
-          {benefits.map((benefit) => (
-            <article
-              key={benefit.title}
-              className="rounded-[1.75rem] border border-border bg-card px-5 py-6 shadow-[var(--shadow-card)]"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-muted/55 text-primary">
-                <benefit.icon className="h-5 w-5" />
-              </div>
-              <h3 className="mt-5 font-headline text-2xl font-semibold uppercase leading-none">
-                {benefit.title}
-              </h3>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                {benefit.description}
-              </p>
-            </article>
-          ))}
+      {featuredRailProducts.length > 0 ? (
+        <div className="home-section">
+          <ProductRail
+            eyebrow="Productos destacados"
+            title="Destacados"
+            description="Navegación directa por tipo y una lectura más limpia de cada pieza."
+            products={featuredRailProducts}
+            href="/products"
+            hrefLabel="Ver más"
+          />
         </div>
-      </section>
+      ) : null}
 
-      {editorialProduct ? (
-        <section className="container">
-          <div className="grid gap-6 overflow-hidden rounded-[2rem] border border-border bg-[#121714] text-white shadow-[var(--shadow-elevated)] lg:grid-cols-[1.05fr_0.95fr]">
-            <div className="relative min-h-[320px]">
-              <Image
-                src={editorialProduct.images[0]}
-                alt={editorialProduct.name}
-                fill
-                sizes="(max-width: 1024px) 100vw, 50vw"
-                className="object-cover"
-              />
-            </div>
-            <div className="flex flex-col justify-center px-6 py-8 md:px-8 md:py-10">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#d4af37]">
-                Cierre editorial
-              </p>
-              <h2 className="mt-3 font-headline text-4xl font-semibold uppercase leading-none tracking-[0.04em] md:text-6xl">
-                Continuidad real entre listado y detalle.
-              </h2>
-              <p className="mt-4 max-w-lg text-sm leading-6 text-white/72 md:text-base">
-                El mismo sistema visual ahora conecta hero, catálogo, producto, carrito y checkout con densidad correcta, jerarquía fuerte y acciones mejor distribuidas.
-              </p>
-              <div className="mt-7">
-                <Button
-                  asChild
-                  variant="outline"
-                  className="h-12 rounded-full border-white/14 bg-transparent px-6 text-white hover:bg-white/8 hover:text-white"
-                >
-                  <Link href={`/products/${editorialProduct.id}`}>
-                    Ver colección destacada
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-              </div>
-            </div>
-          </div>
-        </section>
+      {lookbookProducts.length >= 3 ? (
+        <div className="home-section">
+          <LookbookSection products={lookbookProducts} />
+        </div>
+      ) : null}
+
+      {secondaryRailProducts.length > 0 ? (
+        <div className="home-section">
+          <ProductRail
+            eyebrow="Productos nuevos"
+            title="Novedades"
+            description="Una segunda entrada comercial con el mismo lenguaje más recto y más enfocado en producto."
+            products={secondaryRailProducts}
+            href="/products?tag=new"
+            hrefLabel="Ver más"
+          />
+        </div>
       ) : null}
     </div>
   );

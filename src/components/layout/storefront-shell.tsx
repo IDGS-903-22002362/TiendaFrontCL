@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { Header } from "@/components/layout/header";
@@ -23,7 +23,8 @@ export function StorefrontShell({ children }: StorefrontShellProps) {
   const isSuperAdminRoute = pathname.startsWith("/super-admin");
   const isCheckoutRoute = pathname.startsWith("/checkout");
   const isLoginRoute = pathname === "/login";
-  const isPublicStorefront = !isAdminRoute && !isEmployeeRoute && !isSuperAdminRoute;
+  const isPublicStorefront =
+    !isAdminRoute && !isEmployeeRoute && !isSuperAdminRoute;
   const showBottomNav =
     pathname === "/" ||
     pathname === "/products" ||
@@ -45,7 +46,11 @@ export function StorefrontShell({ children }: StorefrontShellProps) {
   }, [isPublicStorefront]);
 
   if (!isPublicStorefront) {
-    return <div className="relative flex min-h-screen flex-col overflow-x-clip">{children}</div>;
+    return (
+      <div className="relative flex min-h-screen flex-col overflow-x-clip">
+        {children}
+      </div>
+    );
   }
 
   return (
@@ -69,7 +74,11 @@ export function StorefrontShell({ children }: StorefrontShellProps) {
         {children}
       </main>
       {!isCheckoutRoute ? <Footer /> : null}
-      {showBottomNav ? <MobileBottomNav /> : null}
+      {showBottomNav ? (
+        <Suspense fallback={null}>
+          <MobileBottomNav />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

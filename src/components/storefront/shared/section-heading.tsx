@@ -22,26 +22,32 @@ export function SectionHeading({
     <div
       className={cn(
         "flex flex-col gap-5 md:flex-row md:items-end md:justify-between",
-        align === "center" && "items-start text-left md:items-end",
+        align === "center" && "items-center text-center md:items-end md:text-left",
         className,
       )}
     >
-      <div className="max-w-2xl">
+      <div className="max-w-[46rem]">
         {eyebrow ? (
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-primary/78">
-            {eyebrow}
-          </p>
+          <div
+            className={cn(
+              "flex items-center gap-3",
+              align === "center" && "justify-center md:justify-start",
+            )}
+          >
+            <p className="editorial-label text-primary/76">{eyebrow}</p>
+            <span className="h-px w-12 bg-[color-mix(in_srgb,var(--secondary)_70%,transparent)]" />
+          </div>
         ) : null}
-        <h2 className="mt-2 font-headline text-3xl font-semibold uppercase leading-none tracking-[0.02em] text-foreground md:text-5xl">
+        <h2 className="mt-3 font-headline text-[2.2rem] font-semibold uppercase leading-[0.9] tracking-[0.03em] text-foreground md:text-[3.65rem]">
           {title}
         </h2>
         {description ? (
-          <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
+          <p className="mt-4 max-w-2xl text-sm leading-7 text-muted-foreground md:text-base">
             {description}
           </p>
         ) : null}
       </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
+      {action ? <div className="shrink-0 md:pb-1">{action}</div> : null}
     </div>
   );
 }

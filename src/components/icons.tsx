@@ -6,8 +6,8 @@ export function Logo({ className }: { className?: string }) {
     <Image
       src="/LOGOGRD.png"
       alt="Tienda Oficial del Club León La Guarida del León"
-      width={500}
-      height={500}
+      width={1365}
+      height={1024}
       className={cn(className)}
     />
   );
