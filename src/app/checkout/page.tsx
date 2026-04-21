@@ -74,6 +74,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { EmptyState } from "@/components/storefront/shared/empty-state";
 import { Breadcrumbs } from "@/components/storefront/shared/breadcrumbs";
+import { PaymentMethodStrip } from "@/components/storefront/shared/payment-method-strip";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/storefront";
 
@@ -451,7 +452,10 @@ function PaymentMethodSelector({
     value: PaymentMethod;
     title: string;
     description: string;
-    icon: typeof CreditCard;
+    icon?: typeof CreditCard;
+    logoSrc?: string;
+    logoWidth?: number;
+    logoHeight?: number;
   }> = [
     {
       value: "TARJETA",
@@ -463,7 +467,9 @@ function PaymentMethodSelector({
       value: "APLAZO",
       title: "Aplazo",
       description: "Te redirigiremos para completar y validar el pago de forma asíncrona.",
-      icon: Clock3,
+      logoSrc: "/images/iconosdepagos/aplazo.svg",
+      logoWidth: 92,
+      logoHeight: 32,
     },
   ];
 
@@ -481,7 +487,6 @@ function PaymentMethodSelector({
         className="gap-3"
       >
         {options.map((option) => {
-          const Icon = option.icon;
           const isActive = value === option.value;
 
           return (
@@ -503,13 +508,23 @@ function PaymentMethodSelector({
               <div className="flex min-w-0 flex-1 items-start gap-3">
                 <div
                   className={cn(
-                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border",
+                    "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border",
                     isActive
                       ? "border-primary/20 bg-primary/10 text-primary"
                       : "border-border bg-card text-muted-foreground",
                   )}
                 >
-                  <Icon className="h-4 w-4" />
+                  {option.logoSrc ? (
+                    <Image
+                      src={option.logoSrc}
+                      alt={`${option.title} logo`}
+                      width={option.logoWidth ?? 72}
+                      height={option.logoHeight ?? 24}
+                      className="h-auto w-7 object-contain"
+                    />
+                  ) : option.icon ? (
+                    <option.icon className="h-4 w-4" />
+                  ) : null}
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-foreground">{option.title}</p>
@@ -1369,6 +1384,12 @@ export default function CheckoutPage() {
               onPaymentMethodChange={setPaymentMethod}
             />
           )}
+
+          <PaymentMethodStrip
+            className="mt-6"
+            title="Métodos de pago disponibles"
+            description="Aceptamos tarjetas, SPEI, billeteras digitales y Aplazo para que el cierre del checkout se vea completo y claro desde el primer paso."
+          />
         </div>
 
         <div className="lg:sticky lg:top-[calc(var(--storefront-header-current-height,var(--storefront-header-desktop-height))+1.5rem)]">
