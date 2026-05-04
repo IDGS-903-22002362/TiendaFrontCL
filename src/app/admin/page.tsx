@@ -41,6 +41,11 @@ const sections = [
     description: "Métricas y jobs recientes del módulo AI.",
     adminOnly: true,
   },
+  {
+    href: "/admin/banners",
+    title: "Vallas Publicitarias",
+    description: "Gestión de banners para promociones y colecciones.",
+  }
 ];
 
 export default function AdminHomePage() {

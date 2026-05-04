@@ -99,6 +99,20 @@ export function ProductFilters({
     searchParams.get("wishlist") === "1",
   );
 
+  // Parsear IDs de productos específicos desde query string
+  const productIds = useMemo(() => {
+    const idsParam = searchParams.get("ids");
+    if (!idsParam) return [] as string[];
+    return idsParam.split(",").filter((id) => id.trim());
+  }, [searchParams]);
+
+  // Parsear límite de productos desde query string
+  const productLimit = useMemo(() => {
+    const limitParam = searchParams.get("limit");
+    const parsed = limitParam ? parseInt(limitParam, 10) : null;
+    return parsed && parsed > 0 ? parsed : null;
+  }, [searchParams]);
+
   const searchQuery = searchParams.get("q")?.trim() ?? "";
 
   const visibleCategories = useMemo(
@@ -134,6 +148,9 @@ export function ProductFilters({
       params.set("maxPrice", priceRange[0].toString());
     if (wishlistOnly) params.set("wishlist", "1");
     tags.forEach((tag) => params.append("tag", tag));
+    // Preservar IDs y limit si vienen desde URL (ej: banner con productos específicos)
+    if (productIds.length > 0) params.set("ids", productIds.join(","));
+    if (productLimit && productLimit > 0) params.set("limit", productLimit.toString());
 
     const nextQueryString = params.toString();
     const currentQueryString = searchParams.toString();
@@ -158,25 +175,35 @@ export function ProductFilters({
     tags,
     searchParams,
     wishlistOnly,
+    productIds,
+    productLimit,
   ]);
 
+  // Solo validar categorías/líneas/tallas si NO estamos usando IDs específicos
+  // (para evitar reiniciar filtros cuando venimos de un banner con productos específicos)
   useEffect(() => {
     if (
+      productIds.length === 0 &&
       category !== "all" &&
       !visibleCategories.some((item) => item.slug === category)
     ) {
       setCategory("all");
     }
-  }, [category, visibleCategories]);
-
-  useEffect(() => {
-    if (linea !== "all" && !visibleLineas.some((item) => item.id === linea)) {
-      setLinea("all");
-    }
-  }, [linea, visibleLineas]);
+  }, [category, visibleCategories, productIds]);
 
   useEffect(() => {
     if (
+      productIds.length === 0 &&
+      linea !== "all" &&
+      !visibleLineas.some((item) => item.id === linea)
+    ) {
+      setLinea("all");
+    }
+  }, [linea, visibleLineas, productIds]);
+
+  useEffect(() => {
+    if (
+      productIds.length === 0 &&
       selectedSize !== "all" &&
       !visibleSizes.some(
         (sizeItem) =>
@@ -185,10 +212,15 @@ export function ProductFilters({
     ) {
       setSelectedSize("all");
     }
-  }, [selectedSize, visibleSizes]);
+  }, [selectedSize, visibleSizes, productIds]);
 
   const { productsToShow, searchWithoutMatches } = useMemo(() => {
     let products = [...allProducts];
+
+    // Si hay IDs específicos de productos, filtrar solo esos
+    if (productIds.length > 0) {
+      products = products.filter((product) => productIds.includes(product.id));
+    }
 
     if (category !== "all") {
       const selectedCategory = visibleCategories.find(
@@ -243,15 +275,23 @@ export function ProductFilters({
       products = products.filter((product) => wishlistIds.includes(product.id));
     }
 
+    // Aplicar ordenamiento
+    let sortedProducts = sortProducts(products, sort);
+
+    // Aplicar límite de productos si está especificado
+    if (productLimit && productLimit > 0) {
+      sortedProducts = sortedProducts.slice(0, productLimit);
+    }
+
     const normalizedQuery = normalizeStorefrontText(searchQuery);
     if (!normalizedQuery) {
       return {
-        productsToShow: sortProducts(products, sort),
+        productsToShow: sortedProducts,
         searchWithoutMatches: false,
       };
     }
 
-    const searchMatches = products.filter((product) =>
+    const searchMatches = sortedProducts.filter((product) =>
       normalizeStorefrontText(
         `${product.name} ${product.description} ${product.category} ${product.lineName ?? ""}`,
       ).includes(normalizedQuery),
@@ -259,13 +299,13 @@ export function ProductFilters({
 
     if (searchMatches.length === 0) {
       return {
-        productsToShow: sortProducts(products, sort),
+        productsToShow: sortedProducts,
         searchWithoutMatches: true,
       };
     }
 
     return {
-      productsToShow: sortProducts(searchMatches, sort),
+      productsToShow: searchMatches,
       searchWithoutMatches: false,
     };
   }, [
@@ -280,6 +320,8 @@ export function ProductFilters({
     visibleCategories,
     wishlistIds,
     wishlistOnly,
+    productIds,
+    productLimit,
   ]);
 
   const activeFilters = [

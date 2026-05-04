@@ -15,6 +15,8 @@ import {
   LogOut,
   Menu,
   Bot,
+  BanIcon,
+  Coins,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,6 +36,7 @@ const adminNavLinks = [
   { href: "/admin/tallas", label: "Tallas", icon: Ruler },
   { href: "/admin/proveedores", label: "Proveedores", icon: Truck },
   { href: "/admin/ai", label: "AI", icon: Bot, adminOnly: true },
+  { href: "/admin/banners", label: "Vallas Publicitarias", icon: Ruler },
 ];
 
 export default function AdminLayout({

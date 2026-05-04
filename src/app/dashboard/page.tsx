@@ -28,8 +28,10 @@ export default function RoleRedirectPage() {
                 router.replace("/super-admin/usuarios");
                 break;
             case "ADMIN":
-            case "EMPLEADO":
                 router.replace("/admin");
+                break;
+            case "EMPLEADO":
+                router.replace("/empleado/puntos");
                 break;
             case "EMPLEADO_CLUB":
                 router.replace("/empleado-club/noticias");

@@ -158,7 +158,8 @@ export function StorefrontHeader() {
   if (
     pathname.startsWith("/admin") ||
     pathname.startsWith("/super-admin") ||
-    pathname.startsWith("/empleado-club")
+    pathname.startsWith("/empleado-club") ||
+    pathname.startsWith("/empleado")
   ) {
     return null;
   }
@@ -175,7 +176,7 @@ export function StorefrontHeader() {
         className={cn(
           "border-b border-black/14 bg-[rgb(255_255_255_/_0.94)] backdrop-blur-md transition-all duration-300",
           isCompact &&
-            "bg-[rgb(255_255_255_/_0.98)] shadow-[0_18px_34px_-28px_rgb(8_14_11_/_0.18)]",
+          "bg-[rgb(255_255_255_/_0.98)] shadow-[0_18px_34px_-28px_rgb(8_14_11_/_0.18)]",
         )}
       >
         <UtilityBar />
