@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
+    Gift,
     GalleryThumbnails,
     Newspaper,
     LogOut,
@@ -22,6 +23,7 @@ import {
 
 const navLinks = [
     { href: "/empleado-club/noticias", label: "Noticias", icon: Newspaper },
+    { href: "/empleado-club/beneficios", label: "Beneficios", icon: Gift },
     { href: "/empleado-club/galerias", label: "Galerías", icon: GalleryThumbnails },
 ];
 

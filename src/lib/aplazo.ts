@@ -1,14 +1,13 @@
 import type {
   AplazoOnlineCreatePayload,
   AplazoPaymentStatus,
+  AplazoReturnKind,
   CartItem,
   PaymentMethod,
 } from "@/lib/types";
 
 const APLAZO_STORAGE_KEY = "aplazo_checkout_state";
 const APLAZO_RETRY_PAYLOAD_KEY = "aplazo_checkout_retry_payload";
-const APLAZO_PUBLIC_BASE_URL =
-  "https://ecomerce-next-front--e-comerce-leon.us-central1.hosted.app";
 
 export type StoredAplazoCheckoutState = {
   paymentMethod: PaymentMethod;
@@ -31,23 +30,31 @@ export type StoredAplazoCheckoutState = {
 
 export type StoredAplazoRetryPayload = Omit<
   AplazoOnlineCreatePayload,
-  "successUrl" | "errorUrl" | "cartUrl" | "webHookUrl"
+  "successUrl" | "failureUrl" | "cancelUrl" | "cartUrl"
 >;
 
-const TERMINAL_FAILURE_STATUSES = new Set<AplazoPaymentStatus | string>([
-  "failed",
-  "canceled",
-  "expired",
+type AplazoPayloadProduct = {
+  id: string;
+  count: number;
+  description: string;
+  imageUrl?: string;
+  price: number;
+  title: string;
+};
+
+const TERMINAL_FAILURE_STATUSES = new Set<AplazoPaymentStatus>([
+  "FAILED",
+  "CANCELED",
+  "EXPIRED",
 ]);
 
-const TERMINAL_STATUSES = new Set<AplazoPaymentStatus | string>([
+const TERMINAL_STATUSES = new Set<AplazoPaymentStatus>([
   ...TERMINAL_FAILURE_STATUSES,
-  "paid",
-  "refunded",
-  "partially_refunded",
+  "PAID",
+  "REFUNDED",
+  "PARTIALLY_REFUNDED",
 ]);
 
-type AplazoPayloadProduct = AplazoOnlineCreatePayload["products"][number];
 type ItemCandidate = Partial<CartItem> &
   Record<string, unknown> & {
     productoId?: string;
@@ -242,6 +249,43 @@ export function safeString(value: unknown, fallback = ""): string {
   return fallback;
 }
 
+export function normalizeAplazoStatus(
+  status?: string | null,
+): AplazoPaymentStatus | null {
+  if (typeof status !== "string") {
+    return null;
+  }
+
+  const normalizedKey = status.trim().replace(/[\s-]+/g, "_").toUpperCase();
+  if (!normalizedKey) {
+    return null;
+  }
+
+  switch (normalizedKey) {
+    case "PENDING_PROVIDER":
+      return "PENDING_PROVIDER";
+    case "PENDING_CUSTOMER":
+      return "PENDING_CUSTOMER";
+    case "AUTHORIZED":
+      return "PENDING_PROVIDER";
+    case "PAID":
+      return "PAID";
+    case "FAILED":
+      return "FAILED";
+    case "CANCELED":
+    case "CANCELLED":
+      return "CANCELED";
+    case "EXPIRED":
+      return "EXPIRED";
+    case "REFUNDED":
+      return "REFUNDED";
+    case "PARTIALLY_REFUNDED":
+      return "PARTIALLY_REFUNDED";
+    default:
+      return null;
+  }
+}
+
 export function toAplazoMinorUnit(value: number): number {
   if (!Number.isFinite(value)) {
     return 0;
@@ -355,12 +399,34 @@ export function getAplazoCartFingerprint(items: CartItem[]): string {
 }
 
 export function buildAplazoReturnUrls(origin: string) {
-  void origin;
+  const baseOrigin =
+    typeof origin === "string" && origin.trim()
+      ? origin.replace(/\/+$/, "")
+      : "";
 
   return {
-    successUrl: `${APLAZO_PUBLIC_BASE_URL}/pagos/aplazo/success`,
-    errorUrl: `${APLAZO_PUBLIC_BASE_URL}/pagos/aplazo/failure`,
-    cartUrl: `${APLAZO_PUBLIC_BASE_URL}/cart`,
+    successUrl: `${baseOrigin}/payments/aplazo/success`,
+    failureUrl: `${baseOrigin}/payments/aplazo/failure`,
+    cancelUrl: `${baseOrigin}/payments/aplazo/cancel`,
+    cartUrl: `${baseOrigin}/cart`,
+  };
+}
+
+function normalizeStoredCheckoutState(
+  state: StoredAplazoCheckoutState,
+): StoredAplazoCheckoutState {
+  const lastKnownStatus = normalizeAplazoStatus(state.lastKnownStatus);
+  const lastReturnPath =
+    state.lastReturnPath === "success" ||
+    state.lastReturnPath === "failure" ||
+    state.lastReturnPath === "cancel"
+      ? state.lastReturnPath
+      : undefined;
+
+  return {
+    ...state,
+    lastKnownStatus: lastKnownStatus ?? undefined,
+    lastReturnPath,
   };
 }
 
@@ -375,7 +441,9 @@ export function readStoredAplazoCheckoutState(): StoredAplazoCheckoutState | nul
   }
 
   try {
-    return JSON.parse(raw) as StoredAplazoCheckoutState;
+    return normalizeStoredCheckoutState(
+      JSON.parse(raw) as StoredAplazoCheckoutState,
+    );
   } catch {
     localStorage.removeItem(APLAZO_STORAGE_KEY);
     return null;
@@ -389,7 +457,10 @@ export function writeStoredAplazoCheckoutState(
     return;
   }
 
-  localStorage.setItem(APLAZO_STORAGE_KEY, JSON.stringify(state));
+  localStorage.setItem(
+    APLAZO_STORAGE_KEY,
+    JSON.stringify(normalizeStoredCheckoutState(state)),
+  );
 }
 
 export function clearStoredAplazoCheckoutState() {
@@ -438,32 +509,32 @@ export function clearStoredAplazoRetryPayload() {
 }
 
 export function isAplazoTerminalStatus(status?: string | null) {
-  return Boolean(status && TERMINAL_STATUSES.has(status));
+  const normalized = normalizeAplazoStatus(status);
+  return Boolean(normalized && TERMINAL_STATUSES.has(normalized));
 }
 
 export function isAplazoRetryableStatus(status?: string | null) {
-  return Boolean(status && TERMINAL_FAILURE_STATUSES.has(status));
+  const normalized = normalizeAplazoStatus(status);
+  return Boolean(normalized && TERMINAL_FAILURE_STATUSES.has(normalized));
 }
 
 export function getAplazoStatusLabel(status?: string | null) {
-  switch (status) {
-    case "pending_provider":
+  switch (normalizeAplazoStatus(status)) {
+    case "PENDING_PROVIDER":
       return "Preparando pago";
-    case "pending_customer":
+    case "PENDING_CUSTOMER":
       return "Esperando confirmación";
-    case "authorized":
-      return "Validando";
-    case "paid":
+    case "PAID":
       return "Pagado";
-    case "failed":
+    case "FAILED":
       return "Fallido";
-    case "canceled":
+    case "CANCELED":
       return "Cancelado";
-    case "expired":
+    case "EXPIRED":
       return "Expirado";
-    case "refunded":
+    case "REFUNDED":
       return "Reembolsado";
-    case "partially_refunded":
+    case "PARTIALLY_REFUNDED":
       return "Reembolso parcial";
     default:
       return "Pendiente";
@@ -472,22 +543,20 @@ export function getAplazoStatusLabel(status?: string | null) {
 
 export function getAplazoStatusDescription(
   status?: string | null,
-  returnKind: "success" | "failure" | "cancel" = "success",
+  returnKind: AplazoReturnKind = "success",
 ) {
-  switch (status) {
-    case "pending_provider":
+  switch (normalizeAplazoStatus(status)) {
+    case "PENDING_PROVIDER":
       return "Estamos preparando tu pago con Aplazo antes de confirmar el resultado final.";
-    case "pending_customer":
+    case "PENDING_CUSTOMER":
       return "Estamos esperando confirmación de Aplazo. No cierres esta ventana si acabas de completar el flujo.";
-    case "authorized":
-      return "Tu pago está en validación intermedia. Confirmaremos el resultado en cuanto el backend lo reciba.";
-    case "paid":
+    case "PAID":
       return "Tu pago fue confirmado. Te llevaremos a la confirmación final del pedido.";
-    case "failed":
+    case "FAILED":
       return "Aplazo reportó un fallo al procesar el pago. Puedes intentar nuevamente o volver al checkout.";
-    case "canceled":
+    case "CANCELED":
       return "El flujo de Aplazo fue cancelado antes de completarse. Puedes intentarlo de nuevo cuando quieras.";
-    case "expired":
+    case "EXPIRED":
       return "El intento de pago expiró. Genera un nuevo intento para continuar con la compra.";
     default:
       if (returnKind === "failure") {

@@ -1,11 +1,20 @@
 import type {
+  AplazoInStoreCreatePayload,
+  AplazoInStoreCreateResponse,
   AplazoOnlineCreatePayload,
   AplazoOnlineCreateResponse,
+  AplazoPaymentStatus,
   AplazoPaymentStatusResponse,
+  AplazoReturnKind,
+  AplazoReturnResponse,
   Pago,
   PaymentInitPayload,
   PaymentInitResponse,
 } from "@/lib/types";
+import {
+  isAplazoTerminalStatus,
+  normalizeAplazoStatus,
+} from "@/lib/aplazo";
 import { apiFetch, unwrapData } from "./client";
 
 type UnknownRecord = Record<string, unknown>;
@@ -19,6 +28,43 @@ function toStringValue(value: unknown, fallback = "") {
 function toNumber(value: unknown, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toBoolean(value: unknown, fallback = false) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    if (value === "true") return true;
+    if (value === "false") return false;
+  }
+
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+
+  return fallback;
+}
+
+function buildQueryString(query: Record<string, string | undefined>) {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(query).forEach(([key, value]) => {
+    if (typeof value === "string" && value.trim()) {
+      searchParams.set(key, value);
+    }
+  });
+
+  const search = searchParams.toString();
+  return search ? `?${search}` : "";
+}
+
+function normalizeAplazoStatusValue(
+  value: unknown,
+  fallback: AplazoPaymentStatus = "PENDING_CUSTOMER",
+) {
+  return normalizeAplazoStatus(toStringValue(value)) ?? fallback;
 }
 
 function mapPago(input: unknown): Pago {
@@ -108,7 +154,7 @@ export const paymentsApi = {
       paymentAttemptId: toStringValue(record.paymentAttemptId),
       provider: toStringValue(record.provider, "aplazo"),
       flowType: toStringValue(record.flowType, "online"),
-      status: toStringValue(record.status, "pending_customer"),
+      status: normalizeAplazoStatusValue(record.status),
       url: toStringValue(record.url) || undefined,
       loanId: toStringValue(record.loanId) || undefined,
       loanToken: toStringValue(record.loanToken) || undefined,
@@ -116,6 +162,36 @@ export const paymentsApi = {
       checkoutUrl: toStringValue(record.checkoutUrl) || undefined,
       expiresAt: toStringValue(record.expiresAt) || null,
     } as AplazoOnlineCreateResponse;
+  },
+
+  async createAplazoInStoreAttempt(
+    payload: AplazoInStoreCreatePayload,
+    idempotencyKey?: string,
+  ) {
+    const raw = await apiFetch<AplazoInStoreCreateResponse>(
+      "/api/payments/aplazo/in-store/create",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      { local: true, idempotencyKey },
+    );
+
+    const data = unwrapData<unknown>(raw);
+    const record =
+      data && typeof data === "object" ? (data as UnknownRecord) : {};
+
+    return {
+      ok: true,
+      paymentAttemptId: toStringValue(record.paymentAttemptId),
+      provider: toStringValue(record.provider, "aplazo"),
+      flowType: "in_store",
+      status: normalizeAplazoStatusValue(record.status),
+      paymentLink: toStringValue(record.paymentLink) || undefined,
+      qrString: toStringValue(record.qrString) || undefined,
+      qrImageUrl: toStringValue(record.qrImageUrl) || undefined,
+      expiresAt: toStringValue(record.expiresAt) || null,
+    } as AplazoInStoreCreateResponse;
   },
 
   async getAplazoPaymentStatus(paymentAttemptId: string) {
@@ -129,19 +205,65 @@ export const paymentsApi = {
     const record =
       data && typeof data === "object" ? (data as UnknownRecord) : {};
 
+    const status = normalizeAplazoStatusValue(record.status);
+    const isTerminal = toBoolean(
+      record.isTerminal,
+      isAplazoTerminalStatus(status),
+    );
+
     return {
       ok: true,
       paymentAttemptId: toStringValue(record.paymentAttemptId, paymentAttemptId),
       provider: toStringValue(record.provider, "aplazo"),
-      status: toStringValue(record.status, "pending_customer"),
+      status,
       providerStatus: toStringValue(record.providerStatus) || undefined,
       amount: toNumber(record.amount, 0),
-      currency: toStringValue(record.currency, "mxn") || undefined,
+      currency: toStringValue(record.currency, "MXN") || undefined,
       paidAt: toStringValue(record.paidAt) || null,
       expiresAt: toStringValue(record.expiresAt) || null,
-      isTerminal: Boolean(record.isTerminal),
-      nextPollAfterMs: toNumber(record.nextPollAfterMs, 3000),
+      isTerminal,
+      nextPollAfterMs: toNumber(record.nextPollAfterMs, isTerminal ? 0 : 3000),
     } as AplazoPaymentStatusResponse;
+  },
+
+  async getAplazoReturnPayload(
+    kind: AplazoReturnKind,
+    query: {
+      paymentAttemptId?: string;
+      providerPaymentId?: string;
+      providerReference?: string;
+    },
+  ) {
+    const search = buildQueryString(query);
+    const raw = await apiFetch<AplazoReturnResponse>(
+      `/api/payments/aplazo/returns/${kind}${search}`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+      },
+      { local: true },
+    );
+
+    const data = unwrapData<unknown>(raw);
+    const record =
+      data && typeof data === "object" ? (data as UnknownRecord) : {};
+    const status = normalizeAplazoStatusValue(record.status);
+    const isTerminal = toBoolean(
+      record.isTerminal,
+      isAplazoTerminalStatus(status),
+    );
+
+    return {
+      ok: true,
+      paymentAttemptId: toStringValue(record.paymentAttemptId) || undefined,
+      provider: toStringValue(record.provider, "aplazo"),
+      status,
+      message: toStringValue(record.message) || undefined,
+      isTerminal,
+      nextPollAfterMs: toNumber(record.nextPollAfterMs, isTerminal ? 0 : 3000),
+    } as AplazoReturnResponse;
   },
 
   reembolsoAdmin(

@@ -13,7 +13,10 @@ import { useToast } from "@/hooks/use-toast";
 import { addCartItem, fetchCart, getOrCreateSessionId } from "@/lib/api/cart";
 import { ordersApi } from "@/lib/api/orders";
 import { paymentsApi } from "@/lib/api/payments";
-import { getApiErrorMessage } from "@/lib/api/errors";
+import {
+  getAplazoPaymentErrorMessage,
+  getApiErrorMessage,
+} from "@/lib/api/errors";
 import {
   buildAplazoReturnUrls,
   clearStoredAplazoCheckoutState,
@@ -21,19 +24,25 @@ import {
   getAplazoStatusDescription,
   getAplazoStatusLabel,
   isAplazoRetryableStatus,
+  normalizeAplazoStatus,
   readStoredAplazoCheckoutState,
   readStoredAplazoRetryPayload,
   writeStoredAplazoCheckoutState,
 } from "@/lib/aplazo";
 import { formatCurrency } from "@/lib/storefront";
-import type { AplazoPaymentStatusResponse, Orden } from "@/lib/types";
+import type {
+  AplazoPaymentStatusResponse,
+  AplazoReturnKind,
+  AplazoReturnResponse,
+  Orden,
+} from "@/lib/types";
 
 type AplazoReturnClientProps = {
-  returnKind: "success" | "failure" | "cancel";
+  returnKind: AplazoReturnKind;
 };
 
 function getStatusVariant(status?: string) {
-  if (status === "paid") {
+  if (normalizeAplazoStatus(status) === "PAID") {
     return "default";
   }
   if (isAplazoRetryableStatus(status)) {
@@ -43,7 +52,7 @@ function getStatusVariant(status?: string) {
 }
 
 function getStatusIcon(status?: string) {
-  if (status === "paid") {
+  if (normalizeAplazoStatus(status) === "PAID") {
     return CheckCircle;
   }
   if (isAplazoRetryableStatus(status)) {
@@ -66,6 +75,9 @@ export function AplazoReturnClient({
   const [orderId, setOrderId] = useState("");
   const [paymentStatus, setPaymentStatus] =
     useState<AplazoPaymentStatusResponse | null>(null);
+  const [returnPayload, setReturnPayload] = useState<AplazoReturnResponse | null>(
+    null,
+  );
   const [errorMessage, setErrorMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -74,23 +86,108 @@ export function AplazoReturnClient({
 
   const paymentAttemptIdParam = searchParams.get("paymentAttemptId") || "";
   const orderIdParam = searchParams.get("ordenId") || "";
+  const providerPaymentIdParam = searchParams.get("providerPaymentId") || "";
+  const providerReferenceParam = searchParams.get("providerReference") || "";
 
   useEffect(() => {
-    const storedState = readStoredAplazoCheckoutState();
-    const nextPaymentAttemptId =
-      paymentAttemptIdParam || storedState?.paymentAttemptId || "";
-    const nextOrderId = orderIdParam || storedState?.orderId || "";
+    let isCancelled = false;
 
-    setPaymentAttemptId(nextPaymentAttemptId);
-    setOrderId(nextOrderId);
-
-    if (!nextPaymentAttemptId) {
-      setErrorMessage(
-        "No encontramos un intento de pago para validar. Puedes volver al checkout y generar uno nuevo.",
+    const resolveReturn = async () => {
+      const storedState = readStoredAplazoCheckoutState();
+      const nextOrderId = orderIdParam || storedState?.orderId || "";
+      const fallbackAttemptId =
+        paymentAttemptIdParam || storedState?.paymentAttemptId || "";
+      const shouldResolveFromBackend = Boolean(
+        paymentAttemptIdParam ||
+          providerPaymentIdParam ||
+          providerReferenceParam,
       );
-      setIsLoading(false);
-    }
-  }, [orderIdParam, paymentAttemptIdParam]);
+
+      setOrderId(nextOrderId);
+
+      try {
+        let resolvedReturn: AplazoReturnResponse | null = null;
+
+        if (shouldResolveFromBackend) {
+          resolvedReturn = await paymentsApi.getAplazoReturnPayload(returnKind, {
+            paymentAttemptId: paymentAttemptIdParam || undefined,
+            providerPaymentId: providerPaymentIdParam || undefined,
+            providerReference: providerReferenceParam || undefined,
+          });
+        }
+
+        if (isCancelled) {
+          return;
+        }
+
+        const nextPaymentAttemptId =
+          resolvedReturn?.paymentAttemptId || fallbackAttemptId;
+
+        setReturnPayload(resolvedReturn);
+        setPaymentAttemptId(nextPaymentAttemptId);
+
+        if (storedState) {
+          writeStoredAplazoCheckoutState({
+            ...storedState,
+            paymentAttemptId: nextPaymentAttemptId || storedState.paymentAttemptId,
+            orderId: nextOrderId || storedState.orderId,
+            lastKnownStatus:
+              resolvedReturn?.status ?? storedState.lastKnownStatus,
+            lastReturnPath: returnKind,
+            updatedAt: new Date().toISOString(),
+          });
+        }
+
+        if (!nextPaymentAttemptId && !resolvedReturn) {
+          setErrorMessage(
+            "No encontramos un intento de pago para validar. Puedes volver al checkout y generar uno nuevo.",
+          );
+          setIsLoading(false);
+          return;
+        }
+
+        if (!nextPaymentAttemptId && resolvedReturn?.isTerminal) {
+          setErrorMessage("");
+          setIsLoading(false);
+          return;
+        }
+
+        if (!nextPaymentAttemptId) {
+          setErrorMessage(
+            "No fue posible resolver el intento de pago. Vuelve al checkout para generar uno nuevo.",
+          );
+          setIsLoading(false);
+          return;
+        }
+
+        setErrorMessage("");
+      } catch (error) {
+        if (isCancelled) {
+          return;
+        }
+
+        setPaymentAttemptId(fallbackAttemptId);
+        setReturnPayload(null);
+        setErrorMessage(getApiErrorMessage(error));
+
+        if (!fallbackAttemptId) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void resolveReturn();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    orderIdParam,
+    paymentAttemptIdParam,
+    providerPaymentIdParam,
+    providerReferenceParam,
+    returnKind,
+  ]);
 
   useEffect(() => {
     if (!orderId) {
@@ -156,7 +253,7 @@ export function AplazoReturnClient({
           });
         }
 
-        if (nextStatus.status === "paid") {
+        if (nextStatus.status === "PAID") {
           redirectRef.current = true;
           clearStoredAplazoCheckoutState();
           clearStoredAplazoRetryPayload();
@@ -353,6 +450,7 @@ export function AplazoReturnClient({
       }
 
       setPaymentAttemptId(attempt.paymentAttemptId);
+      setReturnPayload(null);
       setPaymentStatus(null);
       setErrorMessage("");
       setIsLoading(true);
@@ -360,7 +458,7 @@ export function AplazoReturnClient({
       toast({
         variant: "destructive",
         title: "No se pudo reintentar Aplazo",
-        description: getApiErrorMessage(error),
+        description: getAplazoPaymentErrorMessage(error, "online"),
       });
     } finally {
       setIsRetrying(false);
@@ -369,11 +467,18 @@ export function AplazoReturnClient({
 
   const displayStatus = paymentStatus?.status
     ? paymentStatus.status
+    : returnPayload?.status
+      ? returnPayload.status
     : returnKind === "failure"
-      ? "failed"
+      ? "FAILED"
       : returnKind === "cancel"
-        ? "canceled"
-        : "pending_customer";
+        ? "CANCELED"
+        : "PENDING_CUSTOMER";
+
+  const descriptionMessage = paymentStatus
+    ? getAplazoStatusDescription(displayStatus, returnKind)
+    : returnPayload?.message ||
+      getAplazoStatusDescription(displayStatus, returnKind);
 
   const totalLabel = useMemo(() => {
     if (typeof order?.total === "number" && Number.isFinite(order.total)) {
@@ -388,9 +493,8 @@ export function AplazoReturnClient({
   const StatusIcon = getStatusIcon(displayStatus);
   const isRetryable = isAplazoRetryableStatus(displayStatus);
   const isPending =
-    displayStatus === "pending_provider" ||
-    displayStatus === "pending_customer" ||
-    displayStatus === "authorized";
+    displayStatus === "PENDING_PROVIDER" ||
+    displayStatus === "PENDING_CUSTOMER";
 
   return (
     <div className="container flex min-h-[60vh] items-center justify-center py-8">
@@ -410,9 +514,9 @@ export function AplazoReturnClient({
         </CardHeader>
         <CardContent className="space-y-5">
           <p className="text-center text-sm leading-6 text-muted-foreground">
-            {isPending
+            {isPending && paymentStatus
               ? "Estamos confirmando tu pago con Aplazo..."
-              : getAplazoStatusDescription(displayStatus, returnKind)}
+              : descriptionMessage}
           </p>
 
           <div className="grid gap-3 rounded-[1.4rem] border border-border bg-muted/35 p-4 text-sm text-muted-foreground md:grid-cols-2">

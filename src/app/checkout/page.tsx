@@ -29,7 +29,10 @@ import {
 } from "@/lib/api/cart";
 import { ordersApi } from "@/lib/api/orders";
 import { paymentsApi } from "@/lib/api/payments";
-import { getApiErrorMessage } from "@/lib/api/errors";
+import {
+  getAplazoPaymentErrorMessage,
+  getApiErrorMessage,
+} from "@/lib/api/errors";
 import {
   buildAplazoReturnUrls,
   calculateAplazoItemsTotal,
@@ -45,13 +48,10 @@ import {
   normalizeWhitespace,
   safeString,
   readStoredAplazoCheckoutState,
-  splitFullName,
-  toAplazoMinorUnit,
   validateAplazoProducts,
   writeStoredAplazoRetryPayload,
   writeStoredAplazoCheckoutState,
 } from "@/lib/aplazo";
-import { ApiError } from "@/lib/api/client";
 import type {
   AplazoOnlineCreatePayload,
   CartItem,
@@ -74,6 +74,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { EmptyState } from "@/components/storefront/shared/empty-state";
 import { Breadcrumbs } from "@/components/storefront/shared/breadcrumbs";
+import { PaymentMethodStrip } from "@/components/storefront/shared/payment-method-strip";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/storefront";
 
@@ -117,11 +118,11 @@ function maskPhoneForLog(phone: string) {
   return `${"*".repeat(phone.length - 4)}${phone.slice(-4)}`;
 }
 
-function sanitizeAplazoBuyerForLog(buyer: SanitizedAplazoBuyer) {
+function sanitizeAplazoCustomerForLog(customer: SanitizedAplazoCustomer) {
   return {
-    ...buyer,
-    email: maskEmailForLog(buyer.email),
-    phone: maskPhoneForLog(buyer.phone),
+    ...customer,
+    email: maskEmailForLog(customer.email),
+    phone: maskPhoneForLog(customer.phone),
   };
 }
 
@@ -174,11 +175,10 @@ const shippingSchema = z.object({
 
 type ShippingValues = z.infer<typeof shippingSchema>;
 
-type SanitizedAplazoBuyer = {
+type SanitizedAplazoCustomer = {
+  name: string;
   addressLine: string;
   email: string;
-  firstName: string;
-  lastName: string;
   phone: string;
   postalCode: string;
 };
@@ -187,32 +187,32 @@ function getSanitizedCheckoutName(value: string) {
   return normalizeWhitespace(value);
 }
 
-function getSanitizedAplazoBuyer(values: ShippingValues): SanitizedAplazoBuyer {
-  const fullName = getSanitizedCheckoutName(values.name);
-  const { firstName, lastName } = splitFullName(fullName);
+function getSanitizedAplazoCustomer(
+  values: ShippingValues,
+): SanitizedAplazoCustomer {
+  const name = getSanitizedCheckoutName(values.name);
   const addressLine = normalizeWhitespace(
     [values.calle, values.numero, values.colonia].filter(Boolean).join(" "),
   );
 
   return {
+    name,
     addressLine: safeString(addressLine, "Pendiente por confirmar"),
     email: normalizeEmail(values.email),
-    firstName,
-    lastName,
     phone: normalizeMxPhoneForAplazo(values.telefono),
     postalCode: normalizeWhitespace(values.zip),
   };
 }
 
 function validateAplazoSubmission(values: ShippingValues, items: CartItem[]) {
-  const buyer = getSanitizedAplazoBuyer(values);
-  const fullName = getSanitizedCheckoutName(values.name);
+  const customer = getSanitizedAplazoCustomer(values);
+  const fullName = customer.name;
 
   if (!fullName) {
     return { ok: false as const, message: "Ingresa un nombre válido" };
   }
 
-  if (!isValidEmail(buyer.email)) {
+  if (!isValidEmail(customer.email)) {
     return { ok: false as const, message: "Ingresa un correo válido" };
   }
 
@@ -232,9 +232,7 @@ function validateAplazoSubmission(values: ShippingValues, items: CartItem[]) {
     };
   }
 
-  const estimatedTotal = productsValidation.totalPrice + toAplazoMinorUnit(SHIPPING_COST);
-
-  if (estimatedTotal <= 0) {
+  if (productsValidation.totalPrice <= 0) {
     return {
       ok: false as const,
       message: "No fue posible preparar el pago con Aplazo",
@@ -243,11 +241,9 @@ function validateAplazoSubmission(values: ShippingValues, items: CartItem[]) {
 
   return {
     ok: true as const,
-    buyer,
+    customer,
     fullName,
-    products: productsValidation.products,
     validatedSubtotal: calculateAplazoItemsTotal(items),
-    estimatedTotal,
   };
 }
 
@@ -278,30 +274,23 @@ function buildAplazoPayload(params: {
   order: Pick<Orden, "subtotal" | "shippingCost" | "total">;
   origin: string;
 }): AplazoOnlineCreatePayload {
-  const { successUrl, errorUrl, cartUrl } = buildAplazoReturnUrls(params.origin);
-  const buyer = getSanitizedAplazoBuyer(params.values);
+  const { successUrl, failureUrl, cancelUrl, cartUrl } = buildAplazoReturnUrls(
+    params.origin,
+  );
+  const customer = getSanitizedAplazoCustomer(params.values);
   const productsValidation = validateAplazoProducts(params.items);
   const orderSubtotal = roundCurrency(params.order.subtotal ?? 0);
   const orderShipping = roundCurrency(params.order.shippingCost ?? 0);
   const orderTaxes = 0;
-  const orderDiscount = 0;
-  const totalPrice = toAplazoMinorUnit(roundCurrency(params.order.total ?? 0));
-  const shippingPrice = toAplazoMinorUnit(orderShipping);
-  const taxesPrice = toAplazoMinorUnit(orderTaxes);
-  const discountPrice = toAplazoMinorUnit(orderDiscount);
-  const productsTotal = productsValidation.totalPrice;
-  const expectedTotal =
-    productsTotal + shippingPrice + taxesPrice - discountPrice;
-  // TODO: hacer obligatorio NEXT_PUBLIC_APLAZO_SHOP_ID por ambiente cuando
-  // backend/frontend cierren la configuración final de Aplazo.
-  const shopId =
-    safeString(process.env.NEXT_PUBLIC_APLAZO_SHOP_ID, "") ||
-    "TODO_APLAZO_SHOP_ID";
+  const orderTotal = roundCurrency(params.order.total ?? 0);
+  const productsTotal = roundCurrency(calculateAplazoItemsTotal(params.items));
+  const expectedTotal = roundCurrency(productsTotal + orderShipping + orderTaxes);
+  const shopId = safeString(process.env.NEXT_PUBLIC_APLAZO_SHOP_ID, "");
 
   if (
-    !buyer.firstName ||
-    !isValidEmail(buyer.email) ||
-    !isValidMxPhoneForAplazo(buyer.phone)
+    !customer.name ||
+    !isValidEmail(customer.email) ||
+    !isValidMxPhoneForAplazo(customer.phone)
   ) {
     throw new Error("No fue posible preparar el pago con Aplazo");
   }
@@ -312,62 +301,48 @@ function buildAplazoPayload(params: {
     );
   }
 
-  if (orderSubtotal <= 0 || totalPrice <= 0 || orderShipping < 0) {
+  if (orderSubtotal <= 0 || orderTotal <= 0 || orderShipping < 0) {
     throw new Error("No fue posible preparar el pago con Aplazo");
   }
 
-  if (expectedTotal !== totalPrice) {
+  if (expectedTotal !== orderTotal) {
     throw new Error("No fue posible preparar el pago con Aplazo");
   }
 
   return {
-    totalPrice,
-    shopId,
-    cartId: params.orderId,
+    orderId: params.orderId,
+    customer: {
+      name: customer.name,
+      email: customer.email,
+      phone: customer.phone,
+    },
+    currency: "MXN",
     successUrl,
-    errorUrl,
+    failureUrl,
+    cancelUrl,
     cartUrl,
-    buyer,
-    products: productsValidation.products,
-    discount: {
-      price: discountPrice,
-      title: "Descuento",
-    },
-    shipping: {
-      price: shippingPrice,
-      title: "Envío",
-    },
-    taxes: {
-      price: taxesPrice,
-      title: "IVA",
+    metadata: {
+      cartId: params.orderId,
+      ...(shopId ? { shopId } : {}),
+      addressLine: customer.addressLine,
+      postalCode: customer.postalCode,
+      discountTitle: "Descuento",
+      shippingTitle: "Envío",
+      taxTitle: "IVA",
     },
   };
 }
 
 function getAplazoErrorMessage(error: unknown) {
-  if (error instanceof ApiError) {
-    if (error.code === "PAYMENT_VALIDATION_ERROR") {
-      return error.message;
-    }
-
-    if (error.code === "PAYMENT_PROVIDER_ERROR") {
-      return "No fue posible iniciar el pago con Aplazo. Revisa tus datos e inténtalo de nuevo.";
-    }
-  }
-
-  return getApiErrorMessage(error);
+  return getAplazoPaymentErrorMessage(error, "online");
 }
 
 function omitAplazoUrls(payload: AplazoOnlineCreatePayload) {
   return {
-    totalPrice: payload.totalPrice,
-    shopId: payload.shopId,
-    cartId: payload.cartId,
-    buyer: payload.buyer,
-    products: payload.products,
-    discount: payload.discount,
-    shipping: payload.shipping,
-    taxes: payload.taxes,
+    orderId: payload.orderId,
+    customer: payload.customer,
+    currency: payload.currency,
+    metadata: payload.metadata,
   };
 }
 
@@ -477,7 +452,10 @@ function PaymentMethodSelector({
     value: PaymentMethod;
     title: string;
     description: string;
-    icon: typeof CreditCard;
+    icon?: typeof CreditCard;
+    logoSrc?: string;
+    logoWidth?: number;
+    logoHeight?: number;
   }> = [
     {
       value: "TARJETA",
@@ -489,7 +467,9 @@ function PaymentMethodSelector({
       value: "APLAZO",
       title: "Aplazo",
       description: "Te redirigiremos para completar y validar el pago de forma asíncrona.",
-      icon: Clock3,
+      logoSrc: "/images/iconosdepagos/aplazo.svg",
+      logoWidth: 92,
+      logoHeight: 32,
     },
   ];
 
@@ -507,7 +487,6 @@ function PaymentMethodSelector({
         className="gap-3"
       >
         {options.map((option) => {
-          const Icon = option.icon;
           const isActive = value === option.value;
 
           return (
@@ -529,13 +508,23 @@ function PaymentMethodSelector({
               <div className="flex min-w-0 flex-1 items-start gap-3">
                 <div
                   className={cn(
-                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border",
+                    "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border",
                     isActive
                       ? "border-primary/20 bg-primary/10 text-primary"
                       : "border-border bg-card text-muted-foreground",
                   )}
                 >
-                  <Icon className="h-4 w-4" />
+                  {option.logoSrc ? (
+                    <Image
+                      src={option.logoSrc}
+                      alt={`${option.title} logo`}
+                      width={option.logoWidth ?? 72}
+                      height={option.logoHeight ?? 24}
+                      className="h-auto w-7 object-contain"
+                    />
+                  ) : option.icon ? (
+                    <option.icon className="h-4 w-4" />
+                  ) : null}
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-foreground">{option.title}</p>
@@ -793,7 +782,7 @@ function AplazoPaymentStep({
     setSubmissionError(null);
     logAplazoDebug("Teléfono Aplazo normalizado", {
       originalPhone: values.telefono,
-      normalizedPhone: validation.buyer.phone,
+      normalizedPhone: validation.customer.phone,
     });
 
     setIsProcessing(true);
@@ -852,7 +841,7 @@ function AplazoPaymentStep({
             ciudad: values.city,
             estado: values.estado,
             codigoPostal: values.zip,
-            telefono: validation.buyer.phone,
+            telefono: validation.customer.phone,
           },
           metodoPago: "APLAZO",
           costoEnvio: SHIPPING_COST,
@@ -900,25 +889,32 @@ function AplazoPaymentStep({
         values: {
           ...values,
           name: validation.fullName,
-          email: validation.buyer.email,
-          telefono: validation.buyer.phone,
+          email: validation.customer.email,
+          telefono: validation.customer.phone,
         },
         items: cartItems,
         order: createdOrder,
         origin,
       });
 
-      logAplazoDebug(
-        "Buyer Aplazo transformado",
-        sanitizeAplazoBuyerForLog(createPayload.buyer),
-      );
-      logAplazoDebug("Products Aplazo transformados", createPayload.products);
       logAplazoDebug("Payload Aplazo sanitizado", {
-        cartId: createPayload.cartId,
-        shopId: createPayload.shopId,
-        buyer: sanitizeAplazoBuyerForLog(createPayload.buyer),
-        products: createPayload.products,
-        totalPrice: createPayload.totalPrice,
+        orderId: createPayload.orderId,
+        customer: createPayload.customer
+          ? sanitizeAplazoCustomerForLog({
+              name: createPayload.customer.name ?? "",
+              email: createPayload.customer.email ?? "",
+              phone: createPayload.customer.phone ?? "",
+              addressLine:
+                typeof createPayload.metadata?.addressLine === "string"
+                  ? createPayload.metadata.addressLine
+                  : "",
+              postalCode:
+                typeof createPayload.metadata?.postalCode === "string"
+                  ? createPayload.metadata.postalCode
+                  : "",
+            })
+          : undefined,
+        metadata: createPayload.metadata,
       });
 
       writeStoredAplazoRetryPayload(omitAplazoUrls(createPayload));
@@ -987,7 +983,10 @@ function AplazoPaymentStep({
       setSubmissionError(description);
       logAplazoDebug("Error al crear intento Aplazo", {
         description,
-        code: error instanceof ApiError ? error.code : undefined,
+        code:
+          error && typeof error === "object" && "code" in error
+            ? String((error as { code?: unknown }).code ?? "") || undefined
+            : undefined,
       });
       toast({
         variant: "destructive",
@@ -1385,6 +1384,12 @@ export default function CheckoutPage() {
               onPaymentMethodChange={setPaymentMethod}
             />
           )}
+
+          <PaymentMethodStrip
+            className="mt-6"
+            title="Métodos de pago disponibles"
+            description="Aceptamos tarjetas, SPEI, billeteras digitales y Aplazo para que el cierre del checkout se vea completo y claro desde el primer paso."
+          />
         </div>
 
         <div className="lg:sticky lg:top-[calc(var(--storefront-header-current-height,var(--storefront-header-desktop-height))+1.5rem)]">

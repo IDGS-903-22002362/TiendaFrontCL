@@ -327,17 +327,22 @@ export type PaymentStatus =
 export type PaymentMethod = "TARJETA" | "APLAZO";
 
 export type AplazoFlowType = "online" | "in_store";
+export type AplazoReturnKind = "success" | "failure" | "cancel";
 
 export type AplazoPaymentStatus =
-  | "pending_provider"
-  | "pending_customer"
-  | "authorized"
-  | "paid"
-  | "failed"
-  | "canceled"
-  | "expired"
-  | "refunded"
-  | "partially_refunded";
+  | "PENDING_PROVIDER"
+  | "PENDING_CUSTOMER"
+  | "PAID"
+  | "CANCELED"
+  | "FAILED"
+  | "EXPIRED"
+  | "REFUNDED"
+  | "PARTIALLY_REFUNDED";
+
+export type AplazoLegacyPaymentStatus =
+  | Lowercase<AplazoPaymentStatus>
+  | "AUTHORIZED"
+  | "authorized";
 
 export type Orden = {
   id: string;
@@ -394,40 +399,26 @@ export type PaymentInitResponse = {
 };
 
 export type AplazoOnlineCreatePayload = {
-  totalPrice: number;
-  shopId: string;
-  cartId: string;
-  successUrl: string;
-  errorUrl: string;
-  cartUrl: string;
-  webHookUrl?: string;
-  buyer: {
-    addressLine: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    phone: string;
-    postalCode: string;
+  orderId: string;
+  customer?: {
+    name?: string;
+    email?: string;
+    phone?: string;
   };
-  products: Array<{
-    id: string;
-    count: number;
-    description: string;
-    imageUrl?: string;
-    price: number;
-    title: string;
-  }>;
-  discount: {
-    price: number;
-    title: string;
-  };
-  shipping: {
-    price: number;
-    title: string;
-  };
-  taxes: {
-    price: number;
-    title: string;
+  currency?: "MXN";
+  successUrl?: string;
+  failureUrl?: string;
+  cancelUrl?: string;
+  cartUrl?: string;
+  metadata?: {
+    cartId?: string;
+    shopId?: string;
+    addressLine?: string;
+    postalCode?: string;
+    discountTitle?: string;
+    shippingTitle?: string;
+    taxTitle?: string;
+    [key: string]: unknown;
   };
 };
 
@@ -436,7 +427,7 @@ export type AplazoOnlineCreateResponse = {
   paymentAttemptId: string;
   provider: "aplazo" | string;
   flowType: AplazoFlowType;
-  status: AplazoPaymentStatus | string;
+  status: AplazoPaymentStatus;
   url?: string;
   loanId?: string;
   loanToken?: string;
@@ -445,16 +436,60 @@ export type AplazoOnlineCreateResponse = {
   expiresAt?: string | null;
 };
 
+export type AplazoInStoreCreatePayload = {
+  posSessionId: string;
+  deviceId: string;
+  cajaId: string;
+  sucursalId: string;
+  vendedorUid: string;
+  customer?: {
+    name?: string;
+    email?: string;
+    phone?: string;
+  };
+  items: Array<{
+    productoId: string;
+    cantidad: number;
+    tallaId?: string;
+  }>;
+  metadata?: {
+    commChannel?: string;
+    [key: string]: unknown;
+  };
+};
+
+export type AplazoInStoreCreateResponse = {
+  ok: true;
+  paymentAttemptId: string;
+  provider: "aplazo" | string;
+  flowType: "in_store";
+  status: AplazoPaymentStatus;
+  paymentLink?: string;
+  qrString?: string;
+  qrImageUrl?: string;
+  expiresAt?: string | null;
+};
+
 export type AplazoPaymentStatusResponse = {
   ok: true;
   paymentAttemptId: string;
   provider: "aplazo" | string;
-  status: AplazoPaymentStatus | string;
+  status: AplazoPaymentStatus;
   providerStatus?: string;
   amount?: number;
   currency?: string;
   paidAt?: string | null;
   expiresAt?: string | null;
+  isTerminal: boolean;
+  nextPollAfterMs?: number;
+};
+
+export type AplazoReturnResponse = {
+  ok: true;
+  paymentAttemptId?: string;
+  provider: "aplazo" | string;
+  status: AplazoPaymentStatus;
+  message?: string;
   isTerminal: boolean;
   nextPollAfterMs?: number;
 };

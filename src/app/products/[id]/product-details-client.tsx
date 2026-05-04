@@ -21,6 +21,7 @@ import { ProductGallery } from "@/components/storefront/product/product-gallery"
 import { ProductInfoPanel } from "@/components/storefront/product/product-info-panel";
 import { AccordionSection } from "@/components/storefront/product/accordion-section";
 import { StickySidebar } from "@/components/storefront/product/sticky-sidebar";
+import { PaymentMethodStrip } from "@/components/storefront/shared/payment-method-strip";
 
 const ProductQnA = dynamic(
   () => import("./product-qna").then((module) => module.ProductQnA),
@@ -185,6 +186,11 @@ export function ProductDetailsClient({
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(400px,440px)] lg:items-stretch xl:gap-10">
         <div className="min-w-0 space-y-8 xl:space-y-10">
           <ProductGallery product={currentProduct} />
+          <PaymentMethodStrip
+            compact
+            title="Métodos de pago"
+            description="Disponible con tarjeta, SPEI, billeteras digitales y Aplazo para cerrar la compra sin fricción."
+          />
           <AccordionSection items={accordionItems} />
           {children ? <div>{children}</div> : null}
         </div>

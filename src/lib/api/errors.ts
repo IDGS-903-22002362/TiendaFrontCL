@@ -70,3 +70,33 @@ export function getApiErrorMessage(error: unknown): string {
 
   return "Ocurrió un error inesperado";
 }
+
+export function getAplazoPaymentErrorMessage(
+  error: unknown,
+  context: "online" | "in_store" = "online",
+): string {
+  if (!(error instanceof ApiError)) {
+    return getApiErrorMessage(error);
+  }
+
+  switch (error.code) {
+    case "PAYMENT_VALIDATION_ERROR":
+      return getApiErrorMessage(error);
+    case "PAYMENT_AMOUNT_MISMATCH":
+      return "El total validado por backend cambió. Actualiza el checkout y vuelve a intentarlo.";
+    case "PAYMENT_PROVIDER_ERROR":
+      return context === "in_store"
+        ? "Aplazo no pudo generar el enlace o QR de cobro. Revisa los datos e inténtalo de nuevo."
+        : "No fue posible iniciar el pago con Aplazo. Revisa los datos e inténtalo de nuevo.";
+    case "PAYMENT_PROVIDER_TIMEOUT":
+      return "Aplazo tardó demasiado en responder. Conserva el intento y sigue consultando el estado antes de repetir la operación.";
+    case "PAYMENT_AUTH_REQUIRED":
+      return "Tu sesión expiró. Inicia sesión nuevamente para continuar con Aplazo.";
+    case "PAYMENT_FORBIDDEN":
+      return context === "in_store"
+        ? "Tu usuario no tiene permisos para operar Aplazo en tienda."
+        : "No tienes permiso para operar este intento de pago.";
+    default:
+      return getApiErrorMessage(error);
+  }
+}
