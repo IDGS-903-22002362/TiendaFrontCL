@@ -19,7 +19,7 @@ function isProductDetailRoute(pathname: string) {
 export function StorefrontShell({ children }: StorefrontShellProps) {
   const pathname = usePathname();
   const isAdminRoute = pathname.startsWith("/admin");
-  const isEmployeeRoute = pathname.startsWith("/empleado-club");
+  const isEmployeeRoute = pathname.startsWith("/empleado-club") || pathname.startsWith("/empleado");
   const isSuperAdminRoute = pathname.startsWith("/super-admin");
   const isCheckoutRoute = pathname.startsWith("/checkout");
   const isLoginRoute = pathname === "/login";
@@ -63,11 +63,11 @@ export function StorefrontShell({ children }: StorefrontShellProps) {
             ? "pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+1rem)] md:pb-12"
             : "pb-10 md:pb-12",
           isProductDetailRoute(pathname) &&
-            "pb-[calc(var(--product-mobile-cta-height)+8rem)] md:pb-12",
+          "pb-[calc(var(--product-mobile-cta-height)+8rem)] md:pb-12",
           isCheckoutRoute &&
-            "pb-[calc(var(--checkout-mobile-cta-height)+1.5rem)] md:pb-12",
+          "pb-[calc(var(--checkout-mobile-cta-height)+1.5rem)] md:pb-12",
           pathname === "/ai" &&
-            "pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+1.25rem)] md:pb-12",
+          "pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+1.25rem)] md:pb-12",
           isLoginRoute && "pb-10",
         )}
       >

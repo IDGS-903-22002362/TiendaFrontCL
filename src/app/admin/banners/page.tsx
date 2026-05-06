@@ -9,8 +9,8 @@ import {
     ImageIcon,
     X,
     Video,
-    MoveUp,
-    MoveDown,
+    RotateCcw,
+    GripVertical,
 } from "lucide-react";
 import { bannersAdminApi } from "@/lib/api/banners";
 import { fetchCategories, fetchProducts } from "@/lib/api/storefront";
@@ -77,8 +77,11 @@ export default function AdminBannersPage() {
     const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
     const [pendingVideoFile, setPendingVideoFile] = useState<File | null>(null);
     const [formData, setFormData] = useState(EMPTY_FORM);
+    const [draggedId, setDraggedId] = useState<string | null>(null);
 
     const { toast } = useToast();
+
+    const MAX_ACTIVE_BANNERS = 6;
 
     const loadBanners = useCallback(async () => {
         setIsLoading(true);
@@ -179,6 +182,21 @@ export default function AdminBannersPage() {
             return;
         }
 
+        // Validar límite de banners activos
+        if (formData.active) {
+            const currentBanner = editingBannerId ? banners.find(b => b.id === editingBannerId) : null;
+            const isActivatingNewBanner = !editingBannerId || (currentBanner && !currentBanner.active);
+
+            if (isActivatingNewBanner && activeBannersCount >= MAX_ACTIVE_BANNERS) {
+                toast({
+                    variant: "destructive",
+                    title: "Límite alcanzado",
+                    description: `Solo puedes tener máximo ${MAX_ACTIVE_BANNERS} banners activos. Desactiva uno antes de crear este nuevo.`,
+                });
+                return;
+            }
+        }
+
         setIsSaving(true);
         try {
             const payload = {
@@ -227,43 +245,98 @@ export default function AdminBannersPage() {
     };
 
     const handleDelete = async (id: string) => {
-        if (!window.confirm("¿Eliminar este banner permanentemente?")) return;
+        if (!window.confirm("¿Desactivar este banner?")) return;
         try {
-            await bannersAdminApi.delete(id);
-            toast({ title: "Banner eliminado" });
+            await bannersAdminApi.update(id, { active: false });
+            toast({ title: "Banner desactivado" });
             void loadBanners();
         } catch (error) {
             toast({
                 variant: "destructive",
-                title: "Error al eliminar",
+                title: "Error al desactivar",
                 description: getApiErrorMessage(error),
             });
         }
     };
 
-    const handleMoveOrder = async (id: string, direction: "up" | "down") => {
-        const currentIndex = banners.findIndex((b) => b.id === id);
-        if (direction === "up" && currentIndex === 0) return;
-        if (direction === "down" && currentIndex === banners.length - 1) return;
+    const handleReactivate = async (id: string) => {
+        const activeBannersCount = banners.filter(b => b.active).length;
+        if (activeBannersCount >= MAX_ACTIVE_BANNERS) {
+            toast({
+                variant: "destructive",
+                title: "Límite alcanzado",
+                description: `Solo puedes tener máximo ${MAX_ACTIVE_BANNERS} banners activos. Desactiva uno antes de reactivar este.`,
+            });
+            return;
+        }
 
-        const newOrder = [...banners];
-        const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
-        [newOrder[currentIndex], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[currentIndex]];
-
-        // Actualizar orden en backend
         try {
-            await bannersAdminApi.update(id, { order: targetIndex + 1 });
-            await bannersAdminApi.update(newOrder[targetIndex].id, { order: currentIndex + 1 });
-            await loadBanners();
+            await bannersAdminApi.update(id, { active: true });
+            toast({ title: "Banner reactivado" });
+            void loadBanners();
+        } catch (error) {
+            toast({
+                variant: "destructive",
+                title: "Error al reactivar",
+                description: getApiErrorMessage(error),
+            });
+        }
+    };
+
+    const handleDragStart = (e: React.DragEvent, id: string) => {
+        setDraggedId(id);
+        e.dataTransfer.effectAllowed = "move";
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+    };
+
+    const handleDrop = async (e: React.DragEvent, targetId: string) => {
+        e.preventDefault();
+        if (!draggedId || draggedId === targetId) {
+            setDraggedId(null);
+            return;
+        }
+
+        const draggedIndex = banners.findIndex(b => b.id === draggedId);
+        const targetIndex = banners.findIndex(b => b.id === targetId);
+
+        if (draggedIndex === -1 || targetIndex === -1) {
+            setDraggedId(null);
+            return;
+        }
+
+        const newBanners = [...banners];
+        [newBanners[draggedIndex], newBanners[targetIndex]] = [newBanners[targetIndex], newBanners[draggedIndex]];
+
+        // Actualizar órdenes en el backend
+        try {
+            await Promise.all([
+                bannersAdminApi.update(draggedId, { order: targetIndex + 1 }),
+                bannersAdminApi.update(targetId, { order: draggedIndex + 1 }),
+            ]);
             toast({ title: "Orden actualizado" });
+            void loadBanners();
         } catch (error) {
             toast({
                 variant: "destructive",
                 title: "Error al reordenar",
                 description: getApiErrorMessage(error),
             });
+        } finally {
+            setDraggedId(null);
         }
     };
+
+    const handleDragEnd = () => {
+        setDraggedId(null);
+    };
+
+    const activeBannersCount = useMemo(() => {
+        return banners.filter(b => b.active).length;
+    }, [banners]);
 
     return (
         <div className="space-y-6">
@@ -306,28 +379,24 @@ export default function AdminBannersPage() {
                                 </TableRow>
                             ) : (
                                 banners.map((banner) => (
-                                    <TableRow key={banner.id}>
-                                        <TableCell>
-                                            <div className="flex items-center gap-1">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-7 w-7"
-                                                    onClick={() => handleMoveOrder(banner.id, "up")}
-                                                    disabled={banner.order === 1}
-                                                >
-                                                    <MoveUp className="h-3 w-3" />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-7 w-7"
-                                                    onClick={() => handleMoveOrder(banner.id, "down")}
-                                                    disabled={banner.order === banners.length}
-                                                >
-                                                    <MoveDown className="h-3 w-3" />
-                                                </Button>
-                                                <span className="text-sm ml-1">{banner.order}</span>
+                                    <TableRow
+                                        key={banner.id}
+                                        draggable
+                                        onDragStart={(e) => handleDragStart(e, banner.id)}
+                                        onDragOver={handleDragOver}
+                                        onDrop={(e) => handleDrop(e, banner.id)}
+                                        onDragEnd={handleDragEnd}
+                                        className={`cursor-move transition-colors ${draggedId === banner.id
+                                                ? "bg-muted opacity-50"
+                                                : draggedId
+                                                    ? "hover:bg-muted/50"
+                                                    : ""
+                                            }`}
+                                    >
+                                        <TableCell className="text-center">
+                                            <div className="flex items-center justify-center gap-2">
+                                                <GripVertical className="h-4 w-4 text-muted-foreground" />
+                                                <span className="font-medium text-sm">{banner.order}</span>
                                             </div>
                                         </TableCell>
                                         <TableCell>
@@ -360,14 +429,27 @@ export default function AdminBannersPage() {
                                                 <Button variant="outline" size="sm" onClick={() => openForm(banner)}>
                                                     <Edit className="h-4 w-4 mr-1" /> Editar
                                                 </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="text-destructive hover:text-destructive"
-                                                    onClick={() => handleDelete(banner.id)}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
+                                                {banner.active ? (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="text-destructive hover:text-destructive"
+                                                        onClick={() => handleDelete(banner.id)}
+                                                        title="Desactivar banner"
+                                                    >
+                                                        <X className="h-4 w-4" />
+                                                    </Button>
+                                                ) : (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="text-green-600 hover:text-green-700"
+                                                        onClick={() => handleReactivate(banner.id)}
+                                                        title="Reactivar banner"
+                                                    >
+                                                        <RotateCcw className="h-4 w-4" />
+                                                    </Button>
+                                                )}
                                             </div>
                                         </TableCell>
                                     </TableRow>
@@ -375,6 +457,9 @@ export default function AdminBannersPage() {
                             )}
                         </TableBody>
                     </Table>
+                </div>
+                <div className="px-6 py-3 border-t bg-muted/30 text-sm text-muted-foreground">
+                    <span>Banners activos: <strong>{activeBannersCount}</strong> de {MAX_ACTIVE_BANNERS} máximo</span>
                 </div>
             </div>
 
@@ -417,6 +502,33 @@ export default function AdminBannersPage() {
                                     min={1}
                                     value={formData.order}
                                     onChange={(e) => setFormData((p) => ({ ...p, order: parseInt(e.target.value) || 1 }))}
+                                />
+                            </div>
+                            <div className="flex items-center justify-between p-3 border rounded-md bg-muted/50">
+                                <div className="space-y-1">
+                                    <Label htmlFor="active" className="text-sm font-medium">
+                                        Activo
+                                    </Label>
+                                    {!formData.active && activeBannersCount < MAX_ACTIVE_BANNERS && (
+                                        <p className="text-xs text-muted-foreground">
+                                            Puedes activar este banner ({activeBannersCount}/{MAX_ACTIVE_BANNERS})
+                                        </p>
+                                    )}
+                                    {formData.active && activeBannersCount >= MAX_ACTIVE_BANNERS && !editingBannerId && (
+                                        <p className="text-xs text-yellow-600">
+                                            Máximo {MAX_ACTIVE_BANNERS} banners activos al mismo tiempo
+                                        </p>
+                                    )}
+                                </div>
+                                <Switch
+                                    id="active"
+                                    checked={formData.active}
+                                    onCheckedChange={(checked) => {
+                                        if (!checked || activeBannersCount < MAX_ACTIVE_BANNERS || editingBannerId) {
+                                            setFormData((p) => ({ ...p, active: checked }));
+                                        }
+                                    }}
+                                    disabled={formData.active && activeBannersCount >= MAX_ACTIVE_BANNERS && !editingBannerId}
                                 />
                             </div>
                         </TabsContent>

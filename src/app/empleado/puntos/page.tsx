@@ -13,7 +13,6 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, Eye, EyeOff, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { apiFetch } from "@/lib/api/client";
 import { useAuth } from "@/hooks/use-auth";
 
 // ============================================

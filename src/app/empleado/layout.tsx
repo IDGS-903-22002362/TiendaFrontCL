@@ -23,6 +23,7 @@ import {
 
 const navLinks = [
     { href: "/empleado/puntos", label: "Puntos", icon: Coins },
+    { href: "/empleado/aplazo", label: "Aplazo POS", icon: GalleryThumbnails },
 ];
 
 export default function EmpleadoLayout({

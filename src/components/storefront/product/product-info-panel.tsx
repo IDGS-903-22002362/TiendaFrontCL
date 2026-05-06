@@ -94,7 +94,7 @@ export function ProductInfoPanel({
 
   const selectedStock = selectedSize
     ? (product.inventarioPorTalla?.find((item) => item.tallaId === selectedSize)
-        ?.cantidad ??
+      ?.cantidad ??
       product.stockTotal ??
       product.stock)
     : (product.stockTotal ?? product.stock);
@@ -271,13 +271,12 @@ export function ProductInfoPanel({
                         type="button"
                         onClick={() => setSelectedSize(size)}
                         disabled={disabled}
-                        className={`rounded-[0.95rem] border px-4 py-3 text-sm font-medium transition-[border-color,background-color,color,transform] ${
-                          selectedSize === size
+                        className={`rounded-[0.95rem] border px-4 py-3 text-sm font-medium transition-[border-color,background-color,color,transform] ${selectedSize === size
                             ? "border-primary bg-primary text-primary-foreground shadow-[var(--shadow-card)]"
                             : disabled
                               ? "cursor-not-allowed border-black/10 bg-[rgb(244_244_240)] text-muted-foreground/50"
                               : "border-black/14 bg-white text-foreground hover:-translate-y-px hover:border-black"
-                        }`}
+                          }`}
                       >
                         {size}
                       </button>
@@ -291,6 +290,7 @@ export function ProductInfoPanel({
               <PersonalizationPanel
                 value={personalization}
                 onChange={handlePersonalizationChange}
+                jerseyBackImage={product.images[product.images.length - 1]} // ← la última imagen como espalda
               />
             ) : null}
 

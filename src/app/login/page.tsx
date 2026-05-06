@@ -56,11 +56,11 @@ function LoginPageContent() {
       case "ADMIN":
         return "/admin";
       case "EMPLEADO":
+        return "/empleado/puntos"
+      case "EMPLEADO":
         return redirectTo === "/" ? "/admin/aplazo" : redirectTo;
       case "EMPLEADO_CLUB":
         return "/empleado-club/noticias";
-      case "EMPLEADO":
-        return "/empleado/puntos"
       default:
         return redirectTo;
     }

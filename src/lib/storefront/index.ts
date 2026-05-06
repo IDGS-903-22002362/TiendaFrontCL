@@ -47,8 +47,9 @@ export function isPersonalizableProduct(product: Product) {
   const normalized = normalizeStorefrontText(
     `${product.name} ${product.description} ${product.category}`,
   );
+  // Solo jerseys son personalizables, no playeras, polos, chamarras, etc.
   return (
-    (normalized.includes("jersey") || normalized.includes("playera")) &&
+    normalized.includes("jersey") &&
     Boolean(product.sizes?.length)
   );
 }
