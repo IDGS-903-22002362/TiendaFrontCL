@@ -30,6 +30,7 @@ type EntityPickerProps = {
   allowEmpty?: boolean;
   emptyLabel?: string;
   disabled?: boolean;
+  showSelectedId?: boolean;
 };
 
 function normalize(value: string) {
@@ -53,6 +54,7 @@ export function EntityPicker({
   allowEmpty = true,
   emptyLabel = "Sin selección",
   disabled = false,
+  showSelectedId = true,
 }: EntityPickerProps) {
   const filteredOptions = useMemo(() => {
     const normalizedQuery = normalize(query);
@@ -99,9 +101,11 @@ export function EntityPicker({
           ))}
         </SelectContent>
       </Select>
-      <p className="text-xs text-text-muted">
-        {selectedOption ? `ID seleccionado: ${selectedOption.id}` : "Sin selección"}
-      </p>
+      {showSelectedId ? (
+        <p className="text-xs text-text-muted">
+          {selectedOption ? `ID seleccionado: ${selectedOption.id}` : "Sin selección"}
+        </p>
+      ) : null}
     </div>
   );
 }

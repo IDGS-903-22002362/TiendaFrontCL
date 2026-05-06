@@ -14,7 +14,14 @@ function resolveBackendBase() {
     process.env.API_BASE_URL ||
     process.env.NEXT_PUBLIC_API_BASE_URL ||
     FALLBACK_API_BASE
-  );
+  ).replace(/\/+$/, "");
+}
+
+function joinBackendUrl(path: string) {
+  const base = resolveBackendBase();
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+
+  return `${base}${normalizedPath}`;
 }
 
 type BackendAuthResponse = {
@@ -59,7 +66,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const backendResponse = await fetch(
-      `${resolveBackendBase()}/api/auth/register-or-login`,
+      joinBackendUrl("/api/auth/register-or-login"),
       {
         method: "POST",
         headers: {

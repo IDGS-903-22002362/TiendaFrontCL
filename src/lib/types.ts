@@ -330,17 +330,26 @@ export type AplazoFlowType = "online" | "in_store";
 export type AplazoReturnKind = "success" | "failure" | "cancel";
 
 export type AplazoPaymentStatus =
-  | "PENDING_PROVIDER"
-  | "PENDING_CUSTOMER"
-  | "PAID"
-  | "CANCELED"
-  | "FAILED"
-  | "EXPIRED"
-  | "REFUNDED"
-  | "PARTIALLY_REFUNDED";
+  | "created"
+  | "pending_provider"
+  | "pending_customer"
+  | "authorized"
+  | "paid"
+  | "canceled"
+  | "failed"
+  | "expired"
+  | "refunded"
+  | "partially_refunded";
 
 export type AplazoLegacyPaymentStatus =
-  | Lowercase<AplazoPaymentStatus>
+  | Uppercase<AplazoPaymentStatus>
+  | "PENDING"
+  | "APPROVED"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "pending"
+  | "approved"
+  | "completed"
   | "AUTHORIZED"
   | "authorized";
 
@@ -359,11 +368,15 @@ export type Orden = {
 export type Pago = {
   id: string;
   ordenId: string;
+  provider?: "stripe" | "aplazo" | string;
+  paymentAttemptId?: string;
   paymentIntentId?: string;
   clientSecret?: string;
   status: PaymentStatus | string;
   monto?: number;
   moneda?: string;
+  totalRefundedAmount?: number;
+  refunds?: AplazoRefundItem[];
   createdAt?: string;
 };
 
@@ -405,20 +418,25 @@ export type AplazoOnlineCreatePayload = {
     email?: string;
     phone?: string;
   };
+  total?: number;
   currency?: "MXN";
+  items?: Array<{
+    productoId?: string;
+    id?: string;
+    cantidad?: number;
+    quantity?: number;
+    tallaId?: string;
+    [key: string]: unknown;
+  }>;
+  subtotal?: number;
+  tax?: number;
+  shipping?: number;
   successUrl?: string;
   failureUrl?: string;
   cancelUrl?: string;
   cartUrl?: string;
   metadata?: {
     cartId?: string;
-    shopId?: string;
-    addressLine?: string;
-    postalCode?: string;
-    discountTitle?: string;
-    shippingTitle?: string;
-    taxTitle?: string;
-    [key: string]: unknown;
   };
 };
 
@@ -428,45 +446,8 @@ export type AplazoOnlineCreateResponse = {
   provider: "aplazo" | string;
   flowType: AplazoFlowType;
   status: AplazoPaymentStatus;
-  url?: string;
-  loanId?: string;
-  loanToken?: string;
   redirectUrl?: string;
   checkoutUrl?: string;
-  expiresAt?: string | null;
-};
-
-export type AplazoInStoreCreatePayload = {
-  posSessionId: string;
-  deviceId: string;
-  cajaId: string;
-  sucursalId: string;
-  vendedorUid: string;
-  customer?: {
-    name?: string;
-    email?: string;
-    phone?: string;
-  };
-  items: Array<{
-    productoId: string;
-    cantidad: number;
-    tallaId?: string;
-  }>;
-  metadata?: {
-    commChannel?: string;
-    [key: string]: unknown;
-  };
-};
-
-export type AplazoInStoreCreateResponse = {
-  ok: true;
-  paymentAttemptId: string;
-  provider: "aplazo" | string;
-  flowType: "in_store";
-  status: AplazoPaymentStatus;
-  paymentLink?: string;
-  qrString?: string;
-  qrImageUrl?: string;
   expiresAt?: string | null;
 };
 
@@ -492,4 +473,127 @@ export type AplazoReturnResponse = {
   message?: string;
   isTerminal: boolean;
   nextPollAfterMs?: number;
+};
+
+export type AplazoAdminActionResponse = {
+  ok: true;
+  paymentAttemptId: string;
+  provider: "aplazo";
+  status: AplazoPaymentStatus;
+  providerStatus?: string;
+};
+
+export type AplazoRefundRequestPayload = {
+  reason?: string;
+  refundAmountMinor?: number;
+};
+
+export type AplazoRefundRequestStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "processed";
+
+export type AplazoRefundRequest = {
+  id: string;
+  provider: "aplazo";
+  orderId: string;
+  paymentAttemptId: string;
+  userId: string;
+  reason: string;
+  status: AplazoRefundRequestStatus;
+  refundAmount?: number;
+  refundAmountMinor?: number;
+  providerRefundId?: string;
+  providerStatus?: string;
+  rejectionReason?: string;
+  lastProcessingError?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  approvedAt?: string;
+  processedAt?: string;
+  rejectedAt?: string;
+};
+
+export type AplazoRefundRequestResponse = {
+  ok: true;
+  data: AplazoRefundRequest;
+};
+
+export type AplazoRefundRequestListResponse = {
+  ok: true;
+  count: number;
+  data: AplazoRefundRequest[];
+};
+
+export type AplazoRefundItem = {
+  id?: string;
+  status?: string;
+  refundState?: "requested" | "processing" | "succeeded" | "failed" | string;
+  refundDate?: string | null;
+  amount?: number;
+};
+
+export type AplazoRefundStatusResponse = {
+  ok: true;
+  paymentAttemptId: string;
+  provider: "aplazo";
+  status: AplazoPaymentStatus;
+  refundState?: string;
+  providerStatus?: string;
+  refundId?: string;
+  refundAmount?: number;
+  totalRefundedAmount: number;
+  currency: string;
+  refunds: AplazoRefundItem[];
+};
+
+export type AplazoRefundCreateResponse = AplazoRefundStatusResponse;
+
+export type AplazoActionResult = {
+  ok: boolean;
+  message: string;
+  technicalMessage?: string;
+};
+
+export type RefundRequest = {
+  paymentAttemptId: string;
+  reason: string;
+  amount?: number;
+};
+
+export type RefundStatus =
+  | "requested"
+  | "processing"
+  | "completed"
+  | "failed";
+
+export type RefundSummary = {
+  refundId?: string;
+  status: RefundStatus;
+  amount: number;
+  reason?: string;
+  createdAt?: string;
+};
+
+export type PaymentTimelineEvent = {
+  id: string;
+  type:
+    | "attempt_created"
+    | "qr_generated"
+    | "link_sent"
+    | "status_checked"
+    | "checkout_opened"
+    | "payment_approved"
+    | "payment_canceled"
+    | "attempt_expired"
+    | "webhook_received"
+    | "refund_requested"
+    | "refund_completed"
+    | "refund_failed"
+    | "manual_action";
+  title: string;
+  description?: string;
+  createdAt: string;
+  status?: AplazoPaymentStatus | string;
 };

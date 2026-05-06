@@ -120,7 +120,7 @@ function maskPhoneForLog(phone: string) {
 
 function sanitizeAplazoCustomerForLog(customer: SanitizedAplazoCustomer) {
   return {
-    ...customer,
+    namePresent: Boolean(customer.name),
     email: maskEmailForLog(customer.email),
     phone: maskPhoneForLog(customer.phone),
   };
@@ -285,7 +285,6 @@ function buildAplazoPayload(params: {
   const orderTotal = roundCurrency(params.order.total ?? 0);
   const productsTotal = roundCurrency(calculateAplazoItemsTotal(params.items));
   const expectedTotal = roundCurrency(productsTotal + orderShipping + orderTaxes);
-  const shopId = safeString(process.env.NEXT_PUBLIC_APLAZO_SHOP_ID, "");
 
   if (
     !customer.name ||
@@ -323,12 +322,6 @@ function buildAplazoPayload(params: {
     cartUrl,
     metadata: {
       cartId: params.orderId,
-      ...(shopId ? { shopId } : {}),
-      addressLine: customer.addressLine,
-      postalCode: customer.postalCode,
-      discountTitle: "Descuento",
-      shippingTitle: "Envío",
-      taxTitle: "IVA",
     },
   };
 }
@@ -900,19 +893,7 @@ function AplazoPaymentStep({
       logAplazoDebug("Payload Aplazo sanitizado", {
         orderId: createPayload.orderId,
         customer: createPayload.customer
-          ? sanitizeAplazoCustomerForLog({
-              name: createPayload.customer.name ?? "",
-              email: createPayload.customer.email ?? "",
-              phone: createPayload.customer.phone ?? "",
-              addressLine:
-                typeof createPayload.metadata?.addressLine === "string"
-                  ? createPayload.metadata.addressLine
-                  : "",
-              postalCode:
-                typeof createPayload.metadata?.postalCode === "string"
-                  ? createPayload.metadata.postalCode
-                  : "",
-            })
+          ? sanitizeAplazoCustomerForLog(validation.customer)
           : undefined,
         metadata: createPayload.metadata,
       });
@@ -941,9 +922,8 @@ function AplazoPaymentStep({
 
       logAplazoDebug("Respuesta Aplazo create online", {
         paymentAttemptId: attempt.paymentAttemptId,
-        url: attempt.url,
-        loanId: attempt.loanId,
-        loanTokenPresent: Boolean(attempt.loanToken),
+        redirectUrlPresent: Boolean(attempt.redirectUrl),
+        checkoutUrlPresent: Boolean(attempt.checkoutUrl),
       });
 
       if (!attempt.paymentAttemptId) {
@@ -965,7 +945,7 @@ function AplazoPaymentStep({
         updatedAt: new Date().toISOString(),
       });
 
-      const targetUrl = attempt.url || attempt.redirectUrl || attempt.checkoutUrl;
+      const targetUrl = attempt.checkoutUrl || attempt.redirectUrl;
       if (targetUrl) {
         window.location.assign(targetUrl);
         return;

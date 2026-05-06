@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Barlow_Condensed, Manrope } from "next/font/google";
+import { Ubuntu } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from "@/hooks/use-auth";
@@ -7,14 +7,15 @@ import { CartProvider } from "@/hooks/use-cart";
 import { StorefrontProvider } from "@/hooks/use-storefront";
 import { StorefrontShell } from "@/components/layout/storefront-shell";
 
-const bodyFont = Manrope({
+const bodyFont = Ubuntu({
   subsets: ["latin"],
+  weight: ["300", "400", "500", "700"],
   variable: "--font-body-family",
 });
 
-const headlineFont = Barlow_Condensed({
+const headlineFont = Ubuntu({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["300", "400", "500", "700"],
   variable: "--font-headline-family",
 });
 

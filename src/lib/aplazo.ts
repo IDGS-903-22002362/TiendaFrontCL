@@ -43,16 +43,16 @@ type AplazoPayloadProduct = {
 };
 
 const TERMINAL_FAILURE_STATUSES = new Set<AplazoPaymentStatus>([
-  "FAILED",
-  "CANCELED",
-  "EXPIRED",
+  "failed",
+  "canceled",
+  "expired",
 ]);
 
 const TERMINAL_STATUSES = new Set<AplazoPaymentStatus>([
   ...TERMINAL_FAILURE_STATUSES,
-  "PAID",
-  "REFUNDED",
-  "PARTIALLY_REFUNDED",
+  "paid",
+  "refunded",
+  "partially_refunded",
 ]);
 
 type ItemCandidate = Partial<CartItem> &
@@ -262,25 +262,31 @@ export function normalizeAplazoStatus(
   }
 
   switch (normalizedKey) {
+    case "CREATED":
+      return "created";
+    case "PENDING":
+      return "pending_customer";
     case "PENDING_PROVIDER":
-      return "PENDING_PROVIDER";
+      return "pending_provider";
     case "PENDING_CUSTOMER":
-      return "PENDING_CUSTOMER";
+      return "pending_customer";
     case "AUTHORIZED":
-      return "PENDING_PROVIDER";
+      return "authorized";
     case "PAID":
-      return "PAID";
+    case "APPROVED":
+    case "COMPLETED":
+      return "paid";
     case "FAILED":
-      return "FAILED";
+      return "failed";
     case "CANCELED":
     case "CANCELLED":
-      return "CANCELED";
+      return "canceled";
     case "EXPIRED":
-      return "EXPIRED";
+      return "expired";
     case "REFUNDED":
-      return "REFUNDED";
+      return "refunded";
     case "PARTIALLY_REFUNDED":
-      return "PARTIALLY_REFUNDED";
+      return "partially_refunded";
     default:
       return null;
   }
@@ -520,21 +526,25 @@ export function isAplazoRetryableStatus(status?: string | null) {
 
 export function getAplazoStatusLabel(status?: string | null) {
   switch (normalizeAplazoStatus(status)) {
-    case "PENDING_PROVIDER":
+    case "created":
+      return "Creado";
+    case "pending_provider":
       return "Preparando pago";
-    case "PENDING_CUSTOMER":
+    case "pending_customer":
       return "Esperando confirmación";
-    case "PAID":
+    case "authorized":
+      return "Autorizado";
+    case "paid":
       return "Pagado";
-    case "FAILED":
+    case "failed":
       return "Fallido";
-    case "CANCELED":
+    case "canceled":
       return "Cancelado";
-    case "EXPIRED":
+    case "expired":
       return "Expirado";
-    case "REFUNDED":
+    case "refunded":
       return "Reembolsado";
-    case "PARTIALLY_REFUNDED":
+    case "partially_refunded":
       return "Reembolso parcial";
     default:
       return "Pendiente";
@@ -546,18 +556,26 @@ export function getAplazoStatusDescription(
   returnKind: AplazoReturnKind = "success",
 ) {
   switch (normalizeAplazoStatus(status)) {
-    case "PENDING_PROVIDER":
+    case "created":
+      return "El intento fue creado y está esperando avanzar con Aplazo.";
+    case "pending_provider":
       return "Estamos preparando tu pago con Aplazo antes de confirmar el resultado final.";
-    case "PENDING_CUSTOMER":
-      return "Estamos esperando confirmación de Aplazo. No cierres esta ventana si acabas de completar el flujo.";
-    case "PAID":
+    case "pending_customer":
+      return "Tu pago está pendiente en Aplazo. Si acabas de completar el flujo, actualizaremos el pedido en cuanto recibamos la confirmación.";
+    case "authorized":
+      return "Aplazo autorizó el intento y estamos cerrando la confirmación del pedido.";
+    case "paid":
       return "Tu pago fue confirmado. Te llevaremos a la confirmación final del pedido.";
-    case "FAILED":
+    case "failed":
       return "Aplazo reportó un fallo al procesar el pago. Puedes intentar nuevamente o volver al checkout.";
-    case "CANCELED":
+    case "canceled":
       return "El flujo de Aplazo fue cancelado antes de completarse. Puedes intentarlo de nuevo cuando quieras.";
-    case "EXPIRED":
+    case "expired":
       return "El intento de pago expiró. Genera un nuevo intento para continuar con la compra.";
+    case "refunded":
+      return "El pago fue reembolsado. Puedes revisar el detalle en tus pedidos.";
+    case "partially_refunded":
+      return "Se aplicó un reembolso parcial a este pago. Puedes revisar el detalle en tus pedidos.";
     default:
       if (returnKind === "failure") {
         return "El pago regresó con una señal de fallo, pero seguiremos consultando el backend antes de cerrar el estado.";

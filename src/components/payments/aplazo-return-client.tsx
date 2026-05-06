@@ -42,7 +42,7 @@ type AplazoReturnClientProps = {
 };
 
 function getStatusVariant(status?: string) {
-  if (normalizeAplazoStatus(status) === "PAID") {
+  if (normalizeAplazoStatus(status) === "paid") {
     return "default";
   }
   if (isAplazoRetryableStatus(status)) {
@@ -52,7 +52,7 @@ function getStatusVariant(status?: string) {
 }
 
 function getStatusIcon(status?: string) {
-  if (normalizeAplazoStatus(status) === "PAID") {
+  if (normalizeAplazoStatus(status) === "paid") {
     return CheckCircle;
   }
   if (isAplazoRetryableStatus(status)) {
@@ -253,7 +253,7 @@ export function AplazoReturnClient({
           });
         }
 
-        if (nextStatus.status === "PAID") {
+        if (nextStatus.status === "paid") {
           redirectRef.current = true;
           clearStoredAplazoCheckoutState();
           clearStoredAplazoRetryPayload();
@@ -443,7 +443,7 @@ export function AplazoReturnClient({
         updatedAt: new Date().toISOString(),
       });
 
-      const targetUrl = attempt.url || attempt.redirectUrl || attempt.checkoutUrl;
+      const targetUrl = attempt.checkoutUrl || attempt.redirectUrl;
       if (targetUrl) {
         window.location.assign(targetUrl);
         return;
@@ -470,10 +470,10 @@ export function AplazoReturnClient({
     : returnPayload?.status
       ? returnPayload.status
     : returnKind === "failure"
-      ? "FAILED"
+      ? "failed"
       : returnKind === "cancel"
-        ? "CANCELED"
-        : "PENDING_CUSTOMER";
+        ? "canceled"
+        : "pending_customer";
 
   const descriptionMessage = paymentStatus
     ? getAplazoStatusDescription(displayStatus, returnKind)
@@ -493,12 +493,20 @@ export function AplazoReturnClient({
   const StatusIcon = getStatusIcon(displayStatus);
   const isRetryable = isAplazoRetryableStatus(displayStatus);
   const isPending =
-    displayStatus === "PENDING_PROVIDER" ||
-    displayStatus === "PENDING_CUSTOMER";
+    displayStatus === "pending_provider" ||
+    displayStatus === "pending_customer";
+  const isPaid = displayStatus === "paid";
+  const customerTitle = isPaid
+    ? "Pago confirmado"
+    : isRetryable
+      ? "No se completó el pago"
+      : isPending
+        ? "Pago pendiente"
+        : "Estado del pago";
 
   return (
     <div className="container flex min-h-[60vh] items-center justify-center py-8">
-      <Card className="w-full max-w-2xl rounded-[2rem] border-border bg-card shadow-[var(--shadow-card)]">
+      <Card className="w-full max-w-xl rounded-lg border-border bg-card shadow-[var(--shadow-card)]">
         <CardHeader className="space-y-4 pb-4 text-center">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary">
             <StatusIcon className="h-8 w-8" />
@@ -507,8 +515,8 @@ export function AplazoReturnClient({
             <Badge variant={getStatusVariant(displayStatus)} className="mx-auto">
               {getAplazoStatusLabel(displayStatus)}
             </Badge>
-            <CardTitle className="font-headline text-3xl uppercase tracking-[0.04em]">
-              Validando pago con Aplazo
+            <CardTitle className="font-headline text-2xl font-bold">
+              {customerTitle}
             </CardTitle>
           </div>
         </CardHeader>
@@ -519,31 +527,23 @@ export function AplazoReturnClient({
               : descriptionMessage}
           </p>
 
-          <div className="grid gap-3 rounded-[1.4rem] border border-border bg-muted/35 p-4 text-sm text-muted-foreground md:grid-cols-2">
+          <div className="grid gap-3 rounded-lg border border-border bg-muted/35 p-4 text-sm text-muted-foreground sm:grid-cols-2">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary/74">
+              <p className="text-xs font-semibold text-primary/80">
                 Pedido
               </p>
               <p className="mt-1 font-medium text-foreground">{orderId || order?.id || "Pendiente"}</p>
             </div>
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary/74">
-                Intento
-              </p>
-              <p className="mt-1 break-all font-medium text-foreground">
-                {paymentAttemptId || "Pendiente"}
-              </p>
-            </div>
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary/74">
-                Estado backend
+              <p className="text-xs font-semibold text-primary/80">
+                Estado
               </p>
               <p className="mt-1 font-medium text-foreground">
-                {paymentStatus?.providerStatus || getAplazoStatusLabel(displayStatus)}
+                {getAplazoStatusLabel(displayStatus)}
               </p>
             </div>
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary/74">
+              <p className="text-xs font-semibold text-primary/80">
                 Total
               </p>
               <p className="mt-1 font-medium text-foreground">{totalLabel}</p>
@@ -557,27 +557,27 @@ export function AplazoReturnClient({
           ) : null}
 
           {errorMessage ? (
-            <div className="rounded-[1.3rem] border border-destructive/20 bg-destructive/8 px-4 py-3 text-sm text-destructive">
+            <div className="rounded-lg border border-destructive/20 bg-destructive/8 px-4 py-3 text-sm text-destructive">
               {errorMessage}
             </div>
           ) : null}
 
           {isLoading ? (
-            <div className="flex items-center justify-center gap-2 rounded-[1.3rem] border border-border bg-muted/35 px-4 py-4 text-sm text-muted-foreground">
+            <div className="flex items-center justify-center gap-2 rounded-lg border border-border bg-muted/35 px-4 py-4 text-sm text-muted-foreground">
               <RefreshCw className="h-4 w-4 animate-spin" />
               Estamos confirmando tu pago con Aplazo...
             </div>
           ) : null}
 
           {isRestoringCart ? (
-            <div className="flex items-center justify-center gap-2 rounded-[1.3rem] border border-border bg-muted/35 px-4 py-4 text-sm text-muted-foreground">
+            <div className="flex items-center justify-center gap-2 rounded-lg border border-border bg-muted/35 px-4 py-4 text-sm text-muted-foreground">
               <RefreshCw className="h-4 w-4 animate-spin" />
               Restaurando carrito...
             </div>
           ) : null}
 
           {cartRestored ? (
-            <div className="rounded-[1.3rem] border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary">
+            <div className="rounded-lg border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary">
               Recuperamos tu carrito para que puedas retomar la compra.
             </div>
           ) : null}
@@ -604,11 +604,19 @@ export function AplazoReturnClient({
                 {isRestoringCart ? "Restaurando..." : "Restaurar carrito"}
               </Button>
             ) : null}
-            <Button asChild variant={isRetryable ? "outline" : "default"} className="w-full">
-              <Link href="/checkout">Volver al checkout</Link>
-            </Button>
+            {isRetryable ? (
+              <Button asChild variant="outline" className="w-full">
+                <Link href="/checkout">Volver al checkout</Link>
+              </Button>
+            ) : (
+              <Button asChild className="w-full">
+                <Link href="/order-history">Ver mis pedidos</Link>
+              </Button>
+            )}
             <Button asChild variant="outline" className="w-full">
-              <Link href="/cart">Ir al carrito</Link>
+              <Link href={isRetryable ? "/cart" : "/products"}>
+                {isRetryable ? "Ir al carrito" : "Seguir comprando"}
+              </Link>
             </Button>
           </div>
         </CardContent>

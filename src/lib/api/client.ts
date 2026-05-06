@@ -5,6 +5,13 @@ const API_BASE =
   process.env.API_BASE_URL ||
   FALLBACK_API_BASE;
 
+function joinApiUrl(base: string, path: string) {
+  const sanitizedBase = base.replace(/\/+$/, "");
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+
+  return `${sanitizedBase}${normalizedPath}`;
+}
+
 type ApiErrorPayload = {
   ok?: boolean;
   success?: false;
@@ -199,7 +206,7 @@ export async function apiFetch<T>(
   }
 
   let response: Response;
-  const endpoint = options?.local ? path : `${API_BASE}${path}`;
+  const endpoint = options?.local ? path : joinApiUrl(API_BASE, path);
 
   try {
     response = await fetch(endpoint, {
