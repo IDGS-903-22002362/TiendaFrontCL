@@ -5,12 +5,12 @@ import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-    Gift,
     GalleryThumbnails,
     Newspaper,
     LogOut,
     Menu,
     User,
+    Coins,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,12 +22,11 @@ import {
 } from "@/components/ui/sheet";
 
 const navLinks = [
-    { href: "/empleado-club/noticias", label: "Noticias", icon: Newspaper },
-    { href: "/empleado-club/beneficios", label: "Beneficios", icon: Gift },
-    { href: "/empleado-club/galerias", label: "Galerías", icon: GalleryThumbnails },
+    { href: "/empleado/puntos", label: "Puntos", icon: Coins },
+    { href: "/empleado/aplazo", label: "Aplazo POS", icon: GalleryThumbnails },
 ];
 
-export default function EmpleadoClubLayout({
+export default function EmpleadoLayout({
     children,
 }: {
     children: React.ReactNode;
@@ -38,12 +37,12 @@ export default function EmpleadoClubLayout({
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     useEffect(() => {
-        if (!isLoading && role !== "EMPLEADO_CLUB") {
+        if (!isLoading && role !== "EMPLEADO") {
             router.replace("/login");
         }
     }, [role, isLoading, router]);
 
-    if (isLoading || role !== "EMPLEADO_CLUB") {
+    if (isLoading || role !== "EMPLEADO") {
         return (
             <div className="flex min-h-screen items-center justify-center">
                 <p className="text-text-secondary">Verificando acceso...</p>
@@ -62,8 +61,8 @@ export default function EmpleadoClubLayout({
                         href={link.href}
                         onClick={() => setIsMobileMenuOpen(false)}
                         className={`flex items-center gap-3 rounded-2xl px-3 py-2.5 transition-all ${isActive
-                                ? "bg-primary text-primary-foreground shadow-[var(--shadow-glow)]"
-                                : "text-text-secondary hover:bg-muted hover:text-foreground"
+                            ? "bg-primary text-primary-foreground shadow-[var(--shadow-glow)]"
+                            : "text-text-secondary hover:bg-muted hover:text-foreground"
                             }`}
                     >
                         <Icon className="h-5 w-5" />
@@ -110,7 +109,7 @@ export default function EmpleadoClubLayout({
                 </Sheet>
                 <div className="flex flex-1 items-center justify-between">
                     <span className="font-headline text-lg font-bold">
-                        Panel Empleado Club
+                        Panel Empleado Guarida
                     </span>
                     <span className="text-xs uppercase text-text-muted">EMPLEADO</span>
                 </div>
@@ -121,7 +120,7 @@ export default function EmpleadoClubLayout({
                 <div className="flex h-full max-h-screen flex-col gap-2">
                     <div className="flex h-14 items-center border-b border-border px-4 lg:h-[60px] lg:px-6">
                         <Link href="/empleado-club" className="flex items-center gap-2 font-semibold">
-                            <span className="font-headline text-xl">Empleado Club</span>
+                            <span className="font-headline text-xl">Empleado Guarida</span>
                         </Link>
                     </div>
                     <div className="flex-1 overflow-auto py-2">

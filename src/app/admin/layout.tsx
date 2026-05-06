@@ -34,6 +34,7 @@ const adminNavLinks = [
   { href: "/admin/tallas", label: "Tallas", icon: Ruler },
   { href: "/admin/proveedores", label: "Proveedores", icon: Truck },
   { href: "/admin/ai", label: "AI", icon: Bot, adminOnly: true },
+  { href: "/admin/banners", label: "Vallas Publicitarias", icon: Ruler },
 ];
 
 export default function AdminLayout({

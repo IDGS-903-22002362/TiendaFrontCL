@@ -145,9 +145,9 @@ export type SendAiMessageInput = {
 export type SendAiMessagePayload =
   | string
   | {
-      text: string;
-      displayText?: string;
-    };
+    text: string;
+    displayText?: string;
+  };
 
 export type CreateTryOnJobInput = {
   sessionId: string;
@@ -170,3 +170,50 @@ export type AiSseHandlers = {
   onFinal?: (payload: AiChatResult) => void;
   onError?: (error: AiSseError) => void;
 };
+
+// ========== BANNERS ==========
+export type BannerContentType =
+  | "categoria"
+  | "linea"
+  | "talla"
+  | "productos"
+  | "novedades"
+  | "mas_vendidos";
+
+export interface BannerButton {
+  text: string;
+  url?: string;
+  style?: "primary" | "secondary" | "outline";
+}
+
+export interface BannerContentConfig {
+  type: BannerContentType;
+  categoriaId?: string;
+  lineaId?: string;
+  tallaId?: string;
+  productIds?: string[];
+  limit?: number;           // 1-50, default 10
+  sortBy?: "createdAt" | "precioPublico" | "mas_vendidos";
+  sortOrder?: "asc" | "desc";
+  minDiscount?: number;     // para ofertas (si implementas)
+}
+
+export interface Banner {
+  id: string;
+  title: string;
+  subtitle?: string;
+  backgroundImage?: string;
+  videoUrl?: string;
+  buttons: BannerButton[];
+  contentConfig: BannerContentConfig;
+  active: boolean;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CreateBannerDTO = Omit<Banner, "id" | "createdAt" | "updatedAt"> & {
+  id?: never;
+};
+
+export type UpdateBannerDTO = Partial<CreateBannerDTO>;

@@ -20,12 +20,12 @@ export type EntityOption = {
 type EntityPickerProps = {
   className?: string;
   label: string;
-  searchLabel: string;
+  searchLabel?: string;
   selectLabel: string;
-  query: string;
+  query?: string;
   value: string;
   options: EntityOption[];
-  onQueryChange: (query: string) => void;
+  onQueryChange?: (query: string) => void;
   onValueChange: (value: string) => void;
   allowEmpty?: boolean;
   emptyLabel?: string;
@@ -57,7 +57,7 @@ export function EntityPicker({
   showSelectedId = true,
 }: EntityPickerProps) {
   const filteredOptions = useMemo(() => {
-    const normalizedQuery = normalize(query);
+    const normalizedQuery = normalize(query || "");
     if (!normalizedQuery) {
       return options;
     }
@@ -74,12 +74,14 @@ export function EntityPicker({
   return (
     <div className={className ? `space-y-2 ${className}` : "space-y-2"}>
       <Label>{label}</Label>
-      <Input
-        placeholder={searchLabel}
-        value={query}
-        onChange={(event) => onQueryChange(event.target.value)}
-        disabled={disabled}
-      />
+      {onQueryChange && (
+        <Input
+          placeholder={searchLabel}
+          value={query || ""}
+          onChange={(event) => onQueryChange(event.target.value)}
+          disabled={disabled}
+        />
+      )}
       <Select
         value={value || "__none__"}
         onValueChange={(nextValue) =>
