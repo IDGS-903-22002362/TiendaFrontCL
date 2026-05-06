@@ -199,11 +199,11 @@ export function ProductInfoPanel({
       <div className="space-y-6">
         <div className="rounded-[1.7rem] border border-black/14 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(250,250,247,0.98))] p-5 shadow-[0_22px_42px_-36px_rgb(8_12_10_/_0.18)] md:p-6">
           <div className="flex items-start justify-between gap-4">
-            <div>
+            <div className="min-w-0 flex-1">
               <p className="editorial-label text-primary/72">
                 {product.lineName || product.category}
               </p>
-              <h1 className="mt-3 font-headline text-4xl font-semibold uppercase leading-[0.9] tracking-[0.04em] md:text-6xl">
+              <h1 className="mt-3 max-w-full font-headline text-[2.1rem] font-semibold uppercase leading-[1.04] tracking-normal [overflow-wrap:normal] [word-break:normal] md:text-[2.55rem] xl:text-[2.8rem]">
                 {product.name}
               </h1>
             </div>

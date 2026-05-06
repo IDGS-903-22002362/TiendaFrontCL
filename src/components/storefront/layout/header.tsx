@@ -186,7 +186,7 @@ export function StorefrontHeader() {
             isCompact ? "h-[4.35rem]" : "h-[5rem]",
           )}
         >
-          <div className="flex shrink-0 items-center gap-2 lg:w-[15rem] lg:gap-4">
+          <div className="flex shrink-0 items-center gap-2 lg:w-[10rem] lg:gap-4">
             <MobileNavDrawer
               trigger={
                 <Button
@@ -206,21 +206,17 @@ export function StorefrontHeader() {
             />
             <Link
               href="/"
-              className="flex items-center gap-3"
+              className="flex items-center"
               aria-label="La Guarida inicio"
             >
               <Logo
                 className={cn(
                   "w-auto object-contain transition-[height] duration-300",
-                  isCompact ? "h-10 md:h-11 lg:h-12" : "h-11 md:h-12 lg:h-14",
+                  isCompact
+                    ? "h-14 md:h-[3.75rem] lg:h-16"
+                    : "h-16 md:h-[4.5rem] lg:h-20",
                 )}
               />
-              <div className="hidden xl:block">
-                <p className="editorial-label text-primary/64">Store oficial</p>
-                <p className="mt-1 font-headline text-[1.7rem] font-semibold uppercase leading-none tracking-[0.04em] text-foreground">
-                  La Guarida
-                </p>
-              </div>
             </Link>
           </div>
 

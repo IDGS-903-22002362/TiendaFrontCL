@@ -361,6 +361,7 @@ body[data-storefront="true"] {
       radial-gradient(circle at top left, rgb(13 75 56 / 0.035), transparent 22rem),
       radial-gradient(circle at top right, rgb(0 0 0 / 0.03), transparent 20rem),
       linear-gradient(180deg, var(--background-deep), var(--background) 22%, var(--background));
+    overflow-x: clip;
     padding-bottom: env(safe-area-inset-bottom);
   }
 
@@ -374,6 +375,22 @@ body[data-storefront="true"] {
 
   body[data-storefront="true"] :where(*) {
     border-radius: 0 !important;
+  }
+
+  :where(.flex, .grid) > :where(*) {
+    min-width: 0;
+  }
+
+  :where(h1, h2, h3, h4, h5, h6, p, a, button, label, figcaption) {
+    max-width: 100%;
+    overflow-wrap: break-word;
+    text-wrap: pretty;
+  }
+
+  :where(.font-headline, .editorial-label, .home-kicker, .home-link, .editorial-link, [class*="uppercase"]) {
+    hyphens: manual;
+    overflow-wrap: normal;
+    word-break: normal;
   }
 
   ::selection {
