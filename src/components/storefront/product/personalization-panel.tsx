@@ -221,7 +221,7 @@ export function PersonalizationPanel({
             value={customName}
             onChange={(e) => handleCustomNameChange(e.target.value)}
             placeholder="Nombre"
-            maxLength={12}
+            maxLength={10}
             className="h-12 rounded-[1rem] border-black/14 bg-white"
           />
           <Input
