@@ -56,9 +56,7 @@ function LoginPageContent() {
       case "ADMIN":
         return "/admin";
       case "EMPLEADO":
-        return "/empleado/puntos"
-      case "EMPLEADO":
-        return redirectTo === "/" ? "/admin/aplazo" : redirectTo;
+        return redirectTo === "/" ? "/admin" : redirectTo;
       case "EMPLEADO_CLUB":
         return "/empleado-club/noticias";
       default:

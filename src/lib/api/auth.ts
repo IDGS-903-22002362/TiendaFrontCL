@@ -43,7 +43,7 @@ export async function registerOrLoginWithFirebaseToken(
   profile?: RegisterOrLoginPayload,
 ) {
   return apiFetch<RegisterOrLoginResponse>(
-    "/auth/register-or-login",
+    "/api/auth/register-or-login",
     {
       method: "POST",
       body: JSON.stringify(profile ?? {}),

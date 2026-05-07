@@ -8,12 +8,13 @@ function resolveBackendBase() {
     process.env.API_BASE_URL ||
     process.env.NEXT_PUBLIC_API_BASE_URL ||
     FALLBACK_API_BASE
-  );
+  ).replace(/\/+$/, "");
 }
 
 function joinUrl(base: string, path: string) {
-  const sanitizedBase = base.endsWith("/") ? base.slice(0, -1) : base;
+  const sanitizedBase = base.replace(/\/+$/, "");
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+
   return `${sanitizedBase}${normalizedPath}`;
 }
 

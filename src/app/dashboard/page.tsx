@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
  * Esta página redirige automáticamente al usuario según su rol
  * SUPER_ADMIN → /super-admin/usuarios
  * ADMIN → /admin
- * EMPLEADO → /admin/aplazo
+ * EMPLEADO → /admin
  * CLIENTE → /
  */
 export default function RoleRedirectPage() {
@@ -32,7 +32,7 @@ export default function RoleRedirectPage() {
                 router.replace("/admin");
                 break;
             case "EMPLEADO":
-                router.replace("/admin/aplazo");
+                router.replace("/admin");
                 break;
             case "EMPLEADO":
                 router.replace("/empleado/puntos");

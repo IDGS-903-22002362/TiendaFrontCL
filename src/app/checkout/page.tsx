@@ -3,15 +3,20 @@
 import Image from "next/image";
 import { type ReactNode, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { type UseFormReturn, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import {
+  AddressElement,
   CardElement,
   Elements,
   useElements,
   useStripe,
 } from "@stripe/react-stripe-js";
+import type {
+  StripeAddressElementChangeEvent,
+  StripeAddressElementOptions,
+} from "@stripe/stripe-js";
 import {
   ArrowLeft,
   Clock3,
@@ -62,6 +67,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useStripeConfig } from "@/hooks/use-stripe-config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Form,
@@ -85,6 +91,13 @@ function roundCurrency(value: number) {
 }
 
 const IS_DEVELOPMENT = process.env.NODE_ENV !== "production";
+
+if (IS_DEVELOPMENT && typeof window !== "undefined") {
+  console.log(
+    "Google Maps key loaded:",
+    Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY),
+  );
+}
 
 function logAplazoDebug(message: string, payload?: unknown) {
   if (!IS_DEVELOPMENT) {
@@ -120,7 +133,7 @@ function maskPhoneForLog(phone: string) {
 
 function sanitizeAplazoCustomerForLog(customer: SanitizedAplazoCustomer) {
   return {
-    ...customer,
+    namePresent: Boolean(customer.name),
     email: maskEmailForLog(customer.email),
     phone: maskPhoneForLog(customer.phone),
   };
@@ -175,6 +188,25 @@ const shippingSchema = z.object({
 
 type ShippingValues = z.infer<typeof shippingSchema>;
 
+type CapturedAddressValue = StripeAddressElementChangeEvent["value"];
+
+const addressElementOptions: StripeAddressElementOptions = {
+  mode: "shipping",
+  allowedCountries: ["MX"],
+  fields: {
+    phone: "always",
+  },
+  validation: {
+    phone: {
+      required: "always",
+    },
+  },
+  autocomplete: {
+    mode: "google_maps_api",
+    apiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
+  },
+};
+
 type SanitizedAplazoCustomer = {
   name: string;
   addressLine: string;
@@ -185,6 +217,42 @@ type SanitizedAplazoCustomer = {
 
 function getSanitizedCheckoutName(value: string) {
   return normalizeWhitespace(value);
+}
+
+function splitStreetAndNumber(line1: string) {
+  const normalizedLine = normalizeWhitespace(line1);
+  const match = normalizedLine.match(/^(.*?)(?:\s+)?(#?\d[\w\-\/]*)$/);
+
+  if (!match?.[1] || !match[2]) {
+    return {
+      calle: normalizedLine,
+      numero: "S/N",
+    };
+  }
+
+  return {
+    calle: normalizeWhitespace(match[1]),
+    numero: normalizeWhitespace(match[2]),
+  };
+}
+
+function mapAddressElementToShippingValues(
+  value: CapturedAddressValue,
+  email: string,
+): ShippingValues {
+  const { calle, numero } = splitStreetAndNumber(value.address.line1);
+
+  return {
+    name: normalizeWhitespace(value.name),
+    telefono: normalizeWhitespace(value.phone ?? ""),
+    calle,
+    numero,
+    colonia: normalizeWhitespace(value.address.line2 ?? "") || "Sin colonia",
+    city: normalizeWhitespace(value.address.city),
+    estado: normalizeWhitespace(value.address.state),
+    zip: normalizeWhitespace(value.address.postal_code),
+    email,
+  };
 }
 
 function getSanitizedAplazoCustomer(
@@ -285,7 +353,6 @@ function buildAplazoPayload(params: {
   const orderTotal = roundCurrency(params.order.total ?? 0);
   const productsTotal = roundCurrency(calculateAplazoItemsTotal(params.items));
   const expectedTotal = roundCurrency(productsTotal + orderShipping + orderTaxes);
-  const shopId = safeString(process.env.NEXT_PUBLIC_APLAZO_SHOP_ID, "");
 
   if (
     !customer.name ||
@@ -323,12 +390,6 @@ function buildAplazoPayload(params: {
     cartUrl,
     metadata: {
       cartId: params.orderId,
-      ...(shopId ? { shopId } : {}),
-      addressLine: customer.addressLine,
-      postalCode: customer.postalCode,
-      discountTitle: "Descuento",
-      shippingTitle: "Envío",
-      taxTitle: "IVA",
     },
   };
 }
@@ -538,6 +599,146 @@ function PaymentMethodSelector({
         })}
       </RadioGroup>
     </div>
+  );
+}
+
+function ShippingAddressStep({
+  form,
+  isAuthenticated,
+  onAddressCaptured,
+  onContinue,
+}: {
+  form: UseFormReturn<ShippingValues>;
+  isAuthenticated: boolean;
+  onAddressCaptured: (value: CapturedAddressValue) => void;
+  onContinue: () => void;
+}) {
+  const elements = useElements();
+  const { toast } = useToast();
+  const [addressError, setAddressError] = useState<string | null>(null);
+  const [deliveryReferences, setDeliveryReferences] = useState("");
+
+  const handleContinue = async () => {
+    if (!isAuthenticated) {
+      toast({
+        variant: "destructive",
+        title: "Sesón requerida",
+        description: "Debes iniciar sesión para completar checkout.",
+      });
+      return;
+    }
+
+    const isEmailValid = await form.trigger("email");
+    if (!isEmailValid) {
+      return;
+    }
+
+    const addressElement = elements?.getElement("address");
+    if (!addressElement) {
+      setAddressError("No se pudo cargar el formulario de dirección. Intenta nuevamente.");
+      return;
+    }
+
+    const { complete, value } = await addressElement.getValue();
+    if (!complete) {
+      setAddressError("Completa tu dirección de entrega para continuar.");
+      return;
+    }
+
+    setAddressError(null);
+    onAddressCaptured(value);
+
+    const mappedValues = mapAddressElementToShippingValues(
+      value,
+      form.getValues("email"),
+    );
+
+    form.reset(mappedValues, {
+      keepErrors: false,
+      keepDirty: true,
+      keepTouched: true,
+    });
+
+    const isValid = await form.trigger();
+    if (isValid) {
+      onContinue();
+    }
+  };
+
+  return (
+    <>
+      <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
+        <CardHeader className="pb-4">
+          <CardTitle>Información de envi­o</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Form {...form}>
+            <form className="space-y-4">
+              <div className="space-y-2">
+                <FormLabel>Dirección de entrega</FormLabel>
+                <div
+                  className={cn(
+                    "rounded-[1.5rem] border bg-muted/45 p-4 transition-colors",
+                    addressError ? "border-destructive" : "border-border",
+                  )}
+                >
+                  <AddressElement options={addressElementOptions} />
+                </div>
+                {addressError ? (
+                  <p className="text-sm font-medium text-destructive">{addressError}</p>
+                ) : (
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Selecciona una dirección de México y confirma el teléfono.
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <FormLabel htmlFor="delivery-references">
+                  Referencias de entrega
+                </FormLabel>
+                <Textarea
+                  id="delivery-references"
+                  value={deliveryReferences}
+                  onChange={(event) => setDeliveryReferences(event.target.value)}
+                  placeholder="Casa, color de fachada, entre calles o indicaciones para mensajerí­a."
+                  className="min-h-[96px] rounded-[1rem]"
+                />
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Campo opcional, solo queda preparado en esta pantalla.
+                </p>
+              </div>
+
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input {...field} className="h-12 rounded-[1rem]" type="email" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </form>
+          </Form>
+        </CardContent>
+      </Card>
+
+      <div className="hidden md:mt-5 md:block">
+        <Button className="h-12 rounded-full px-6" onClick={() => void handleContinue()}>
+          Continuar a pago
+        </Button>
+      </div>
+
+      <MobileCheckoutActions>
+        <Button className="h-12 w-full rounded-full" onClick={() => void handleContinue()}>
+          Continuar a pago
+        </Button>
+      </MobileCheckoutActions>
+    </>
   );
 }
 
@@ -900,19 +1101,7 @@ function AplazoPaymentStep({
       logAplazoDebug("Payload Aplazo sanitizado", {
         orderId: createPayload.orderId,
         customer: createPayload.customer
-          ? sanitizeAplazoCustomerForLog({
-              name: createPayload.customer.name ?? "",
-              email: createPayload.customer.email ?? "",
-              phone: createPayload.customer.phone ?? "",
-              addressLine:
-                typeof createPayload.metadata?.addressLine === "string"
-                  ? createPayload.metadata.addressLine
-                  : "",
-              postalCode:
-                typeof createPayload.metadata?.postalCode === "string"
-                  ? createPayload.metadata.postalCode
-                  : "",
-            })
+          ? sanitizeAplazoCustomerForLog(validation.customer)
           : undefined,
         metadata: createPayload.metadata,
       });
@@ -941,9 +1130,8 @@ function AplazoPaymentStep({
 
       logAplazoDebug("Respuesta Aplazo create online", {
         paymentAttemptId: attempt.paymentAttemptId,
-        url: attempt.url,
-        loanId: attempt.loanId,
-        loanTokenPresent: Boolean(attempt.loanToken),
+        redirectUrlPresent: Boolean(attempt.redirectUrl),
+        checkoutUrlPresent: Boolean(attempt.checkoutUrl),
       });
 
       if (!attempt.paymentAttemptId) {
@@ -965,7 +1153,7 @@ function AplazoPaymentStep({
         updatedAt: new Date().toISOString(),
       });
 
-      const targetUrl = attempt.url || attempt.redirectUrl || attempt.checkoutUrl;
+      const targetUrl = attempt.checkoutUrl || attempt.redirectUrl;
       if (targetUrl) {
         window.location.assign(targetUrl);
         return;
@@ -1093,34 +1281,29 @@ function AplazoPaymentStep({
 export default function CheckoutPage() {
   const [currentStep, setCurrentStep] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("TARJETA");
+  const [, setCapturedAddress] = useState<CapturedAddressValue | null>(null);
   const router = useRouter();
   const { state, subtotal, totalItems, isLoading } = useCart();
   const { isAuthenticated } = useAuth();
   const stripePromise = useStripeConfig();
-  const { toast } = useToast();
 
   const shippingForm = useForm<ShippingValues>({
     resolver: zodResolver(shippingSchema),
+    defaultValues: {
+      name: "",
+      telefono: "",
+      calle: "",
+      numero: "",
+      colonia: "",
+      city: "",
+      estado: "",
+      zip: "",
+      email: "",
+    },
   });
 
   const pricing = useMemo(() => getExpectedCheckoutPricing(subtotal), [subtotal]);
   const total = pricing.total;
-
-  const onContinueToPayment = async () => {
-    if (!isAuthenticated) {
-      toast({
-        variant: "destructive",
-        title: "Sesión requerida",
-        description: "Debes iniciar sesión para completar checkout.",
-      });
-      return;
-    }
-
-    const isValid = await shippingForm.trigger();
-    if (isValid) {
-      setCurrentStep(1);
-    }
-  };
 
   if (isLoading) {
     return <div className="container py-14 text-center text-muted-foreground">Cargando checkout...</div>;
@@ -1192,163 +1375,25 @@ export default function CheckoutPage() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
         <div>
           {currentStep === 0 ? (
-            <>
+            stripePromise ? (
+              <Elements stripe={stripePromise}>
+                <ShippingAddressStep
+                  form={shippingForm}
+                  isAuthenticated={isAuthenticated}
+                  onAddressCaptured={setCapturedAddress}
+                  onContinue={() => setCurrentStep(1)}
+                />
+              </Elements>
+            ) : (
               <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
-                <CardHeader className="pb-4">
-                  <CardTitle>Información de envío</CardTitle>
+                <CardHeader>
+                  <CardTitle>Configuración faltante</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <Form {...shippingForm}>
-                    <form className="space-y-4">
-                      <FormField
-                        control={shippingForm.control}
-                        name="name"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Nombre completo</FormLabel>
-                            <FormControl>
-                              <Input {...field} className="h-12 rounded-[1rem]" autoComplete="name" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px]">
-                        <FormField
-                          control={shippingForm.control}
-                          name="calle"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Calle</FormLabel>
-                              <FormControl>
-                                <Input {...field} className="h-12 rounded-[1rem]" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={shippingForm.control}
-                          name="numero"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Número</FormLabel>
-                              <FormControl>
-                                <Input {...field} className="h-12 rounded-[1rem]" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-
-                      <FormField
-                        control={shippingForm.control}
-                        name="colonia"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Colonia</FormLabel>
-                            <FormControl>
-                              <Input {...field} className="h-12 rounded-[1rem]" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <FormField
-                          control={shippingForm.control}
-                          name="city"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Ciudad</FormLabel>
-                              <FormControl>
-                                <Input {...field} className="h-12 rounded-[1rem]" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={shippingForm.control}
-                          name="estado"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Estado</FormLabel>
-                              <FormControl>
-                                <Input {...field} className="h-12 rounded-[1rem]" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-
-                      <div className="grid gap-4 md:grid-cols-[180px_minmax(0,1fr)]">
-                        <FormField
-                          control={shippingForm.control}
-                          name="zip"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Código postal</FormLabel>
-                              <FormControl>
-                                <Input {...field} className="h-12 rounded-[1rem]" inputMode="numeric" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={shippingForm.control}
-                          name="telefono"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Teléfono</FormLabel>
-                              <FormControl>
-                                <Input
-                                  {...field}
-                                  className="h-12 rounded-[1rem]"
-                                  type="tel"
-                                  inputMode="tel"
-                                  autoComplete="tel"
-                                  placeholder="477 123 4567"
-                                />
-                              </FormControl>
-                              <p className="text-xs text-muted-foreground">
-                                Puedes escribirlo con espacios o +52. Para Aplazo enviaremos solo 10 dígitos.
-                              </p>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-
-                      <FormField
-                        control={shippingForm.control}
-                        name="email"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Email</FormLabel>
-                            <FormControl>
-                              <Input {...field} className="h-12 rounded-[1rem]" type="email" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </form>
-                  </Form>
+                  <p>No se pudo inicializar Stripe para capturar la dirección.</p>
                 </CardContent>
               </Card>
-
-              <div className="hidden md:mt-5 md:block">
-                <Button className="h-12 rounded-full px-6" onClick={() => void onContinueToPayment()}>
-                  Continuar a pago
-                </Button>
-              </div>
-            </>
+            )
           ) : paymentMethod === "TARJETA" ? (
             stripePromise ? (
               <Elements stripe={stripePromise}>
@@ -1397,13 +1442,6 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      {currentStep === 0 ? (
-        <MobileCheckoutActions>
-          <Button className="h-12 w-full rounded-full" onClick={() => void onContinueToPayment()}>
-            Continuar a pago
-          </Button>
-        </MobileCheckoutActions>
-      ) : null}
     </div>
   );
 }

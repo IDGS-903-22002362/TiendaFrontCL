@@ -1,4 +1,4 @@
-import type { Orden } from "@/lib/types";
+import type { AplazoRefundItem, Orden, Pago } from "@/lib/types";
 import { apiFetch, unwrapData } from "./client";
 
 type UnknownRecord = Record<string, unknown>;
@@ -32,6 +32,61 @@ function mapOrden(input: unknown): Orden {
     metodoPago: toStringValue(item.metodoPago) || undefined,
     createdAt: toStringValue(item.createdAt ?? item.fechaCreacion) || undefined,
     updatedAt: toStringValue(item.updatedAt) || undefined,
+  };
+}
+
+function normalizeRefundState(value: unknown) {
+  const normalized = toStringValue(value).trim().toLowerCase();
+  if (normalized === "completed") return "succeeded";
+  return normalized || undefined;
+}
+
+function mapRefund(input: unknown): AplazoRefundItem {
+  const item =
+    input && typeof input === "object" ? (input as UnknownRecord) : {};
+
+  return {
+    id: toStringValue(item.id ?? item.refundId ?? item.reference) || undefined,
+    status: toStringValue(item.status) || undefined,
+    refundState: normalizeRefundState(item.refundState) || undefined,
+    refundDate: toStringValue(item.refundDate ?? item.createdAt) || null,
+    amount: toNumber(item.amount, 0),
+  };
+}
+
+function mapPago(input: unknown): Pago | null {
+  const item =
+    input && typeof input === "object" ? (input as UnknownRecord) : {};
+  const id = toStringValue(item.id ?? item._id ?? item.pagoId);
+  const explicitPaymentAttemptId = toStringValue(
+    item.paymentAttemptId ?? item.attemptId ?? item.intentoPagoId,
+  );
+  const provider = toStringValue(
+    item.provider ?? item.proveedor ?? item.metodoPago,
+  ).toLowerCase();
+  const paymentAttemptId =
+    explicitPaymentAttemptId || (provider.includes("aplazo") ? id : "");
+
+  if (!id && !paymentAttemptId) {
+    return null;
+  }
+
+  return {
+    id,
+    ordenId: toStringValue(item.ordenId),
+    provider: provider || (paymentAttemptId ? "aplazo" : undefined),
+    paymentAttemptId: paymentAttemptId || undefined,
+    paymentIntentId: toStringValue(item.paymentIntentId) || undefined,
+    clientSecret: toStringValue(item.clientSecret) || undefined,
+    status: toStringValue(item.status ?? item.estado, "PENDIENTE"),
+    monto: toNumber(item.monto ?? item.total, 0),
+    moneda: toStringValue(item.moneda ?? item.currency) || undefined,
+    totalRefundedAmount:
+      item.totalRefundedAmount === undefined
+        ? undefined
+        : toNumber(item.totalRefundedAmount, 0),
+    refunds: Array.isArray(item.refunds) ? item.refunds.map(mapRefund) : undefined,
+    createdAt: toStringValue(item.createdAt) || undefined,
   };
 }
 
@@ -95,12 +150,14 @@ export const ordersApi = {
     return mapOrden(data);
   },
 
-  getPago(id: string) {
-    return apiFetch<unknown>(
+  async getPago(id: string) {
+    const payload = await apiFetch<unknown>(
       `/api/ordenes/${id}/pago`,
       { method: "GET" },
       { local: true },
     );
+    const data = unwrapData<unknown>(payload);
+    return mapPago(data);
   },
 
   updateEstado(id: string, estado: string) {

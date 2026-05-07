@@ -8,7 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ordersApi } from "@/lib/api/orders";
 import { paymentsApi } from "@/lib/api/payments";
-import { normalizeAplazoStatus } from "@/lib/aplazo";
+import {
+  getAplazoStatusDescription,
+  getAplazoStatusLabel,
+  normalizeAplazoStatus,
+} from "@/lib/aplazo";
 
 export function ConfirmationClient() {
   const searchParams = useSearchParams();
@@ -23,8 +27,15 @@ export function ConfirmationClient() {
   const [total, setTotal] = useState(fallbackTotal);
   const [isLoading, setIsLoading] = useState(Boolean(orderId));
   const isPaid =
-    normalizeAplazoStatus(paymentStatus) === "PAID" ||
+    normalizeAplazoStatus(paymentStatus) === "paid" ||
     paymentStatus === "COMPLETADO";
+  const normalizedAplazoStatus = normalizeAplazoStatus(paymentStatus);
+  const paymentLabel = normalizedAplazoStatus
+    ? getAplazoStatusLabel(normalizedAplazoStatus)
+    : paymentStatus || "Pendiente";
+  const paymentDescription = normalizedAplazoStatus
+    ? getAplazoStatusDescription(normalizedAplazoStatus)
+    : "Hemos recibido tu pedido y estamos validando el estado final del pago.";
 
   useEffect(() => {
     if (!orderId) {
@@ -62,7 +73,7 @@ export function ConfirmationClient() {
 
   return (
     <div className="container flex min-h-[60vh] flex-col items-center justify-center py-8 text-center">
-      <Card className="w-full max-w-lg">
+      <Card className="w-full max-w-lg rounded-lg">
         <CardHeader>
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-success/30 bg-success/15">
             <CheckCircle className="h-10 w-10 text-success" />
@@ -73,8 +84,7 @@ export function ConfirmationClient() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-text-secondary">
-            Hemos recibido tu pedido y estamos validando el estado final del
-            pago.
+            {isPaid ? "Tu pedido quedó registrado correctamente." : paymentDescription}
           </p>
 
           <div>
@@ -89,7 +99,7 @@ export function ConfirmationClient() {
             </p>
             <p>
               <span className="font-medium">Estado de pago:</span>{" "}
-              {isLoading ? "Consultando..." : paymentStatus || "Pendiente"}
+              {isLoading ? "Consultando..." : paymentLabel}
             </p>
             <p>
               <span className="font-medium">Total:</span> ${total || "0.00"}

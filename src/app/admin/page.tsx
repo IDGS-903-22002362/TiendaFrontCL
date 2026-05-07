@@ -6,11 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const sections = [
   {
-    href: "/admin/aplazo",
-    title: "Aplazo POS",
-    description: "Creación de intentos in-store, links de cobro y seguimiento por QR.",
-  },
-  {
     href: "/admin/ordenes",
     title: "Órdenes",
     description: "Seguimiento logístico, cancelaciones y estatus de los pedidos.",
