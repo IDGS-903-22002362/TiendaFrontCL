@@ -45,6 +45,11 @@ const sections = [
     href: "/admin/banners",
     title: "Vallas Publicitarias",
     description: "Gestión de banners para promociones y colecciones.",
+  },
+  {
+    href: "/admin/puntos",
+    title: "Puntos",
+    description: "Gestión de puntos para promociones y colecciones.",
   }
 ];
 

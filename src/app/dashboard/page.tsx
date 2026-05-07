@@ -32,9 +32,6 @@ export default function RoleRedirectPage() {
                 router.replace("/admin");
                 break;
             case "EMPLEADO":
-                router.replace("/admin");
-                break;
-            case "EMPLEADO":
                 router.replace("/empleado/puntos");
                 break;
             case "EMPLEADO_CLUB":

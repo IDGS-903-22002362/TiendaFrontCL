@@ -15,6 +15,7 @@ import {
   LogOut,
   Menu,
   Bot,
+  Coins,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,6 +36,7 @@ const adminNavLinks = [
   { href: "/admin/proveedores", label: "Proveedores", icon: Truck },
   { href: "/admin/ai", label: "AI", icon: Bot, adminOnly: true },
   { href: "/admin/banners", label: "Vallas Publicitarias", icon: Ruler },
+  { href: "/admin/puntos", label: "Puntos", icon: Coins, empleadoOnly: true },
 ];
 
 export default function AdminLayout({
@@ -83,7 +85,7 @@ export default function AdminLayout({
   const NavLinks = () => (
     <>
       {adminNavLinks
-        .filter((link) => !link.adminOnly || role === "ADMIN")
+        .filter((link) => (!link.adminOnly || role === "ADMIN") && (!link.empleadoOnly || role === "EMPLEADO"))
         .map((link) => {
           const Icon = link.icon;
           const isActive =
