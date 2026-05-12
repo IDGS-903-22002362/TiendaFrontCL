@@ -42,14 +42,66 @@ export async function GET(request: NextRequest) {
   const token = getApiTokenFromRequest(request);
   const role = getUserRoleFromRequest(request);
 
-  return NextResponse.json({
-    success: true,
-    data: {
-      isAuthenticated: Boolean(token),
-      token,
-      role,
-    },
-  });
+  if (!token) {
+    return NextResponse.json({
+      success: true,
+      data: { isAuthenticated: false, token: "", role: "", user: null },
+    });
+  }
+
+  // Recuperar datos del usuario desde el backend
+  try {
+    const backendRes = await fetch(joinBackendUrl("/api/auth/refresh"), {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!backendRes.ok) {
+      // Token inválido o expirado — limpiar cookies
+      const response = NextResponse.json({
+        success: true,
+        data: { isAuthenticated: false, token: "", role: "", user: null },
+      });
+      clearSessionCookies(response);
+      return response;
+    }
+
+    const payload = await backendRes.json() as BackendAuthResponse;
+
+    // Renovar cookie con token fresco si el backend lo rotó
+    const freshToken = payload.token ?? token;
+    const response = NextResponse.json({
+      success: true,
+      data: {
+        isAuthenticated: true,
+        token: freshToken,
+        role: payload.usuario?.rol ?? role,
+        user: {
+          id: payload.usuario?.id ?? payload.usuario?.uid,
+          uid: payload.usuario?.uid,
+          email: payload.usuario?.email,
+          nombre: payload.usuario?.nombre,
+          perfilCompleto: payload.usuario?.perfilCompleto,
+          rol: payload.usuario?.rol,
+        },
+      },
+    });
+
+    // Renovar cookies si el token cambió
+    if (freshToken !== token) {
+      setSessionCookies(response, {
+        token: freshToken,
+        role: payload.usuario?.rol ?? role,
+      });
+    }
+
+    return response;
+  } catch {
+    return NextResponse.json({
+      success: true,
+      data: { isAuthenticated: false, token: "", role: "", user: null },
+    });
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -110,6 +162,7 @@ export async function POST(request: NextRequest) {
     setSessionCookies(response, {
       token: payload.token,
       role: payload.usuario?.rol ?? "",
+      user: payload.usuario ?? null,
     });
 
     return response;

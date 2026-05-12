@@ -414,7 +414,7 @@ export default function AdminAssignPoints() {
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Asignación de Puntos</h1>
                     <p className="text-muted-foreground">
-                        Escanea el QR del usuario, ingresa el monto total de la compra y asigna puntos automáticamente (1 MXN = 0.10 puntos)
+                        Escanea el QR del usuario, ingresa el monto total de la compra y asigna puntos automáticamente (100 MXN = 10 puntos)
                     </p>
                     <div className="text-sm text-muted-foreground mt-2">
                         Asignado por: <Badge variant="secondary">{adminName}</Badge>
@@ -491,7 +491,7 @@ export default function AdminAssignPoints() {
                             </div>
                             {moneyAmount > 0 && (
                                 <p className="text-xs text-green-600">
-                                    Equivalente a <strong>{pointsToAssign}</strong> {pointsToAssign === 0.10 ? "punto" : "puntos"}
+                                    Equivalente a <strong>{pointsToAssign * 0.10}</strong> {pointsToAssign === 0.10 ? "punto" : "puntos"}
                                 </p>
                             )}
                         </div>

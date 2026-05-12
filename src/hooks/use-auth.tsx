@@ -87,11 +87,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRole(response.data?.role ?? "");
     setUser(response.data?.user ?? null);
 
-    try {
-      const streakResponse = await getUserStreak();
-      setStreak(streakResponse.data);
-    } catch {
-      setStreak(null);
+    // 👇 Notificar a Flutter si estamos dentro de un WebView
+    if (typeof window !== "undefined" && (window as any).ClubLeonBridge) {
+      (window as any).ClubLeonBridge.postMessage(
+        JSON.stringify({
+          type: "CLUBLEON_LOGIN",
+          token: response.data?.token ?? "",
+        })
+      );
     }
   }, []);
 

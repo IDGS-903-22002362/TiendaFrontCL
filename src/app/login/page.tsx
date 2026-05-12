@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   BriefcaseBusiness,
+  Eye,
+  EyeOff,
   LogIn,
   ShieldCheck,
   User,
@@ -44,6 +46,7 @@ function LoginPageContent() {
   const [workerEmail, setWorkerEmail] = useState("");
   const [workerPassword, setWorkerPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const redirectTo = searchParams.get("redirect") || "/";
   const firebaseReady = isFirebaseConfigured();
@@ -168,8 +171,7 @@ function LoginPageContent() {
             <div className="flex items-start gap-3">
               <ShieldCheck className="mt-0.5 h-5 w-5 text-[#d4af37]" />
               <p className="text-sm leading-6 text-white/72">
-                La autenticación, el rol y el redireccionamiento siguen
-                funcionando igual. Solo cambia la experiencia visual.
+                Únete al club y difruta de muchos beneficios.
               </p>
             </div>
           </div>
@@ -182,8 +184,7 @@ function LoginPageContent() {
               Accede a tu cuenta
             </CardTitle>
             <CardDescription>
-              Usa tu cuenta habitual o el acceso interno si eres parte del
-              equipo.
+              ¡Ingresa las credenciales de tu cuenta para gestionar tus pedidos, puntos y más!
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -196,17 +197,6 @@ function LoginPageContent() {
               </div>
             ) : (
               <Tabs defaultValue="cliente">
-                <TabsList className="grid w-full grid-cols-2 rounded-full p-1">
-                  <TabsTrigger value="cliente" className="rounded-full">
-                    <User className="mr-2 h-4 w-4" />
-                    Cliente
-                  </TabsTrigger>
-                  <TabsTrigger value="trabajador" className="rounded-full">
-                    <BriefcaseBusiness className="mr-2 h-4 w-4" />
-                    Trabajador
-                  </TabsTrigger>
-                </TabsList>
-
                 <TabsContent value="cliente" className="mt-6 space-y-4">
                   <Input
                     type="email"
@@ -217,14 +207,29 @@ function LoginPageContent() {
                     onChange={(event) => setEmail(event.target.value)}
                     className="h-12 rounded-[1rem]"
                   />
-                  <Input
-                    type="password"
-                    autoComplete="current-password"
-                    placeholder="Contraseña"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    className="h-12 rounded-[1rem]"
-                  />
+                  <div className="relative w-full">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="current-password"
+                      placeholder="Contraseña"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      className="h-12 rounded-[1rem] pr-12"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                      aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    >
+                      {showPassword ? (
+                        <EyeOff size={20} />
+                      ) : (
+                        <Eye size={20} />
+                      )}
+                    </button>
+                  </div>
                   <Button
                     className="h-12 w-full rounded-full"
                     onClick={() => void onEmailPasswordLogin(false)}

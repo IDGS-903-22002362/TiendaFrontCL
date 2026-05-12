@@ -68,11 +68,15 @@ export async function createLocalSessionFromFirebaseToken(
 }
 
 export async function getLocalSessionStatus() {
-  return apiFetch<SessionStatusResponse>(
-    "/api/auth/session",
-    { method: "GET" },
-    { local: true },
-  );
+  return apiFetch<{
+    success: boolean;
+    data: {
+      isAuthenticated: boolean;
+      token: string;
+      role: UserRole | "";
+      user: Partial<AuthUsuario> | null;  // 👈 que esté tipado
+    };
+  }>("/api/auth/session", { method: "GET" }, { local: true });
 }
 
 export async function clearLocalSession() {
