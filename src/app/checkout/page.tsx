@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { type UseFormReturn, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -23,17 +23,25 @@ import {
   CreditCard,
   Home,
   ShieldCheck,
+  Store,
 } from "lucide-react";
 import { useCart } from "@/hooks/use-cart";
 import { useAuth } from "@/hooks/use-auth";
 import { useStorefront } from "@/hooks/use-storefront";
 import {
   checkoutCart,
+  fetchCart,
   getCartVariantKey,
   getOrCreateSessionId,
 } from "@/lib/api/cart";
 import { ordersApi } from "@/lib/api/orders";
 import { paymentsApi } from "@/lib/api/payments";
+import {
+  pickupApi,
+  type FulfillmentMethod,
+  type PickupContact,
+  type PickupLocation,
+} from "@/lib/api/pickup";
 import {
   getAplazoPaymentErrorMessage,
   getApiErrorMessage,
@@ -139,8 +147,11 @@ function sanitizeAplazoCustomerForLog(customer: SanitizedAplazoCustomer) {
   };
 }
 
-function getExpectedCheckoutPricing(subtotal: number) {
-  const shipping = SHIPPING_COST;
+function getExpectedCheckoutPricing(
+  subtotal: number,
+  fulfillmentMethod: FulfillmentMethod = "DELIVERY",
+) {
+  const shipping = fulfillmentMethod === "PICKUP" ? 0 : SHIPPING_COST;
   const tax = 0;
   const total = subtotal + shipping + tax;
 
@@ -155,8 +166,12 @@ function getExpectedCheckoutPricing(subtotal: number) {
 function validateOrderPricing(params: {
   order: Pick<Orden, "subtotal" | "shippingCost" | "total">;
   expectedSubtotal: number;
+  fulfillmentMethod?: FulfillmentMethod;
 }) {
-  const expected = getExpectedCheckoutPricing(params.expectedSubtotal);
+  const expected = getExpectedCheckoutPricing(
+    params.expectedSubtotal,
+    params.fulfillmentMethod,
+  );
   const actualSubtotal = roundCurrency(params.order.subtotal ?? 0);
   const actualShipping = roundCurrency(params.order.shippingCost ?? 0);
   const actualTotal = roundCurrency(params.order.total ?? 0);
@@ -187,6 +202,18 @@ const shippingSchema = z.object({
 });
 
 type ShippingValues = z.infer<typeof shippingSchema>;
+
+type PickupCheckoutValues = {
+  fulfillmentMethod: "PICKUP";
+  pickupLocation: PickupLocation;
+  pickupContact: PickupContact;
+};
+
+type DeliveryCheckoutValues = ShippingValues & {
+  fulfillmentMethod: "DELIVERY";
+};
+
+type CheckoutValues = DeliveryCheckoutValues | PickupCheckoutValues;
 
 type CapturedAddressValue = StripeAddressElementChangeEvent["value"];
 
@@ -255,9 +282,24 @@ function mapAddressElementToShippingValues(
   };
 }
 
-function getSanitizedAplazoCustomer(
-  values: ShippingValues,
-): SanitizedAplazoCustomer {
+function getSanitizedAplazoCustomer(values: CheckoutValues): SanitizedAplazoCustomer {
+  if (values.fulfillmentMethod === "PICKUP") {
+    const location = values.pickupLocation;
+
+    return {
+      name: getSanitizedCheckoutName(values.pickupContact.name),
+      addressLine: safeString(
+        [location.address, location.city, location.state]
+          .filter(Boolean)
+          .join(" "),
+        "Recoger en tienda",
+      ),
+      email: normalizeEmail(values.pickupContact.email ?? ""),
+      phone: normalizeMxPhoneForAplazo(values.pickupContact.phone ?? ""),
+      postalCode: normalizeWhitespace(location.postalCode),
+    };
+  }
+
   const name = getSanitizedCheckoutName(values.name);
   const addressLine = normalizeWhitespace(
     [values.calle, values.numero, values.colonia].filter(Boolean).join(" "),
@@ -272,7 +314,7 @@ function getSanitizedAplazoCustomer(
   };
 }
 
-function validateAplazoSubmission(values: ShippingValues, items: CartItem[]) {
+function validateAplazoSubmission(values: CheckoutValues, items: CartItem[]) {
   const customer = getSanitizedAplazoCustomer(values);
   const fullName = customer.name;
 
@@ -284,7 +326,7 @@ function validateAplazoSubmission(values: ShippingValues, items: CartItem[]) {
     return { ok: false as const, message: "Ingresa un correo válido" };
   }
 
-  if (!isValidMxPhoneForAplazo(values.telefono)) {
+  if (!isValidMxPhoneForAplazo(customer.phone)) {
     return {
       ok: false as const,
       message: "Ingresa un teléfono válido de 10 dígitos",
@@ -335,9 +377,57 @@ function getOrderIdFromCheckoutResult(payload: unknown): string {
   return typeof orderId === "string" ? orderId : "";
 }
 
+function buildCheckoutPayload(
+  values: CheckoutValues,
+  metodoPago: PaymentMethod,
+) {
+  if (values.fulfillmentMethod === "PICKUP") {
+    return {
+      fulfillmentMethod: "PICKUP" as const,
+      pickupLocationId: values.pickupLocation.id,
+      pickupContact: values.pickupContact,
+      metodoPago,
+      costoEnvio: 0,
+    };
+  }
+
+  return {
+    fulfillmentMethod: "DELIVERY" as const,
+    direccionEnvio: {
+      nombre: values.name,
+      calle: values.calle,
+      numero: values.numero,
+      colonia: values.colonia,
+      ciudad: values.city,
+      estado: values.estado,
+      codigoPostal: values.zip,
+      telefono: values.telefono,
+    },
+    metodoPago,
+    costoEnvio: SHIPPING_COST,
+  };
+}
+
+async function resolveCartIdForPickup(cartId?: string) {
+  const sessionId = getOrCreateSessionId();
+
+  if (cartId) {
+    return { cartId, sessionId };
+  }
+
+  const cart = await fetchCart(sessionId);
+  if (!cart.id) {
+    throw new Error(
+      "No se pudo identificar el carrito para validar recolección. Recarga el checkout e intenta nuevamente.",
+    );
+  }
+
+  return { cartId: cart.id, sessionId };
+}
+
 function buildAplazoPayload(params: {
   orderId: string;
-  values: ShippingValues;
+  values: CheckoutValues;
   items: CartItem[];
   order: Pick<Orden, "subtotal" | "shippingCost" | "total">;
   origin: string;
@@ -424,10 +514,14 @@ function MobileCheckoutActions({ children }: { children: ReactNode }) {
   );
 }
 
-function OrderSummaryPanel() {
+function OrderSummaryPanel({
+  fulfillmentMethod,
+}: {
+  fulfillmentMethod: FulfillmentMethod;
+}) {
   const { state, subtotal, totalItems } = useCart();
   const { getPersonalization } = useStorefront();
-  const pricing = getExpectedCheckoutPricing(subtotal);
+  const pricing = getExpectedCheckoutPricing(subtotal, fulfillmentMethod);
 
   return (
     <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
@@ -471,8 +565,14 @@ function OrderSummaryPanel() {
             <span>{formatCurrency(pricing.subtotal)}</span>
           </div>
           <div className="flex items-center justify-between">
-            <span>Envío estimado</span>
-            <span>{formatCurrency(pricing.shipping)}</span>
+            <span>
+              {fulfillmentMethod === "PICKUP" ? "Recoger en tienda" : "Envío estimado"}
+            </span>
+            <span>
+              {fulfillmentMethod === "PICKUP"
+                ? "Sin costo"
+                : formatCurrency(pricing.shipping)}
+            </span>
           </div>
           <div className="flex items-center justify-between">
             <span>Artículos</span>
@@ -602,16 +702,135 @@ function PaymentMethodSelector({
   );
 }
 
+function FulfillmentSelector({
+  value,
+  onValueChange,
+}: {
+  value: FulfillmentMethod;
+  onValueChange: (value: FulfillmentMethod) => void;
+}) {
+  const options: Array<{
+    value: FulfillmentMethod;
+    title: string;
+    description: string;
+    icon: typeof Home;
+  }> = [
+    {
+      value: "DELIVERY",
+      title: "Envío a domicilio",
+      description: "Recibe tu pedido en una dirección de México.",
+      icon: Home,
+    },
+    {
+      value: "PICKUP",
+      title: "Recoger en tienda",
+      description: "Compra en línea y recoge en una sucursal disponible.",
+      icon: Store,
+    },
+  ];
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <p className="text-sm font-medium text-foreground">Método de entrega</p>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+          Elige si quieres envío a domicilio o recolección sin costo.
+        </p>
+      </div>
+      <RadioGroup
+        value={value}
+        onValueChange={(nextValue) => onValueChange(nextValue as FulfillmentMethod)}
+        className="grid gap-3 md:grid-cols-2"
+      >
+        {options.map((option) => {
+          const isActive = value === option.value;
+          const Icon = option.icon;
+
+          return (
+            <label
+              key={option.value}
+              htmlFor={`fulfillment-${option.value}`}
+              className={cn(
+                "flex cursor-pointer gap-3 rounded-[1.4rem] border px-4 py-4 transition-colors",
+                isActive
+                  ? "border-primary bg-primary/8"
+                  : "border-border bg-muted/35 hover:bg-muted/55",
+              )}
+            >
+              <RadioGroupItem
+                id={`fulfillment-${option.value}`}
+                value={option.value}
+                className="mt-1"
+              />
+              <div className="flex min-w-0 gap-3">
+                <div
+                  className={cn(
+                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border",
+                    isActive
+                      ? "border-primary/20 bg-primary/10 text-primary"
+                      : "border-border bg-card text-muted-foreground",
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">
+                    {option.title}
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                    {option.description}
+                  </p>
+                </div>
+              </div>
+            </label>
+          );
+        })}
+      </RadioGroup>
+    </div>
+  );
+}
+
+function formatPreparationTime(minutes?: number) {
+  if (!minutes || minutes <= 0) {
+    return "Tiempo por confirmar";
+  }
+
+  if (minutes < 60) {
+    return `${minutes} min aprox.`;
+  }
+
+  const hours = Math.round((minutes / 60) * 10) / 10;
+  return `${hours} h aprox.`;
+}
+
 function ShippingAddressStep({
   form,
+  fulfillmentMethod,
+  onFulfillmentMethodChange,
+  pickupLocations,
+  selectedPickupLocationId,
+  pickupContact,
+  isLoadingPickupLocations,
+  pickupError,
+  onSelectedPickupLocationIdChange,
+  onPickupContactChange,
   isAuthenticated,
   onAddressCaptured,
   onContinue,
 }: {
   form: UseFormReturn<ShippingValues>;
+  fulfillmentMethod: FulfillmentMethod;
+  onFulfillmentMethodChange: (value: FulfillmentMethod) => void;
+  pickupLocations: PickupLocation[];
+  selectedPickupLocationId: string;
+  pickupContact: PickupContact;
+  isLoadingPickupLocations: boolean;
+  pickupError: string | null;
+  onSelectedPickupLocationIdChange: (value: string) => void;
+  onPickupContactChange: (value: PickupContact) => void;
   isAuthenticated: boolean;
   onAddressCaptured: (value: CapturedAddressValue) => void;
-  onContinue: () => void;
+  onContinue: (values: CheckoutValues) => void;
 }) {
   const elements = useElements();
   const { toast } = useToast();
@@ -622,8 +841,39 @@ function ShippingAddressStep({
     if (!isAuthenticated) {
       toast({
         variant: "destructive",
-        title: "Sesón requerida",
+        title: "Sesión requerida",
         description: "Debes iniciar sesión para completar checkout.",
+      });
+      return;
+    }
+
+    if (fulfillmentMethod === "PICKUP") {
+      const selectedLocation = pickupLocations.find(
+        (location) => location.id === selectedPickupLocationId,
+      );
+      const contactName = normalizeWhitespace(pickupContact.name);
+      const contactEmail = normalizeEmail(pickupContact.email ?? form.getValues("email"));
+      const contactPhone = normalizeWhitespace(pickupContact.phone ?? "");
+
+      if (!selectedLocation) {
+        setAddressError("Selecciona una sucursal para recoger tu pedido.");
+        return;
+      }
+
+      if (!contactName) {
+        setAddressError("Ingresa el nombre de la persona que recogerá el pedido.");
+        return;
+      }
+
+      setAddressError(null);
+      onContinue({
+        fulfillmentMethod: "PICKUP",
+        pickupLocation: selectedLocation,
+        pickupContact: {
+          name: contactName,
+          ...(contactPhone ? { phone: contactPhone } : {}),
+          ...(contactEmail ? { email: contactEmail } : {}),
+        },
       });
       return;
     }
@@ -661,7 +911,10 @@ function ShippingAddressStep({
 
     const isValid = await form.trigger();
     if (isValid) {
-      onContinue();
+      onContinue({
+        ...form.getValues(),
+        fulfillmentMethod: "DELIVERY",
+      });
     }
   };
 
@@ -669,39 +922,196 @@ function ShippingAddressStep({
     <>
       <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
         <CardHeader className="pb-4">
-          <CardTitle>Información de envi­o</CardTitle>
+          <CardTitle>Entrega</CardTitle>
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form className="space-y-4">
-              <div className="space-y-2">
-                <FormLabel>Dirección de entrega</FormLabel>
-                <div
-                  className={cn(
-                    "rounded-[1.5rem] border bg-muted/45 p-4 transition-colors",
-                    addressError ? "border-destructive" : "border-border",
+            <form className="space-y-5">
+              <FulfillmentSelector
+                value={fulfillmentMethod}
+                onValueChange={(value) => {
+                  setAddressError(null);
+                  onFulfillmentMethodChange(value);
+                }}
+              />
+
+              {fulfillmentMethod === "DELIVERY" ? (
+                <div className="space-y-2">
+                  <FormLabel>Dirección de entrega</FormLabel>
+                  <div
+                    className={cn(
+                      "rounded-[1.5rem] border bg-muted/45 p-4 transition-colors",
+                      addressError ? "border-destructive" : "border-border",
+                    )}
+                  >
+                    <AddressElement options={addressElementOptions} />
+                  </div>
+                  {addressError ? (
+                    <p className="text-sm font-medium text-destructive">
+                      {addressError}
+                    </p>
+                  ) : (
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      Selecciona una dirección de México y confirma el teléfono.
+                    </p>
                   )}
-                >
-                  <AddressElement options={addressElementOptions} />
                 </div>
-                {addressError ? (
-                  <p className="text-sm font-medium text-destructive">{addressError}</p>
-                ) : (
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    Selecciona una dirección de México y confirma el teléfono.
-                  </p>
-                )}
-              </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="space-y-3">
+                    <FormLabel>Sucursal de recolección</FormLabel>
+                    {isLoadingPickupLocations ? (
+                      <div className="rounded-[1.4rem] border border-border bg-muted/35 px-4 py-5 text-sm text-muted-foreground">
+                        Cargando sucursales...
+                      </div>
+                    ) : pickupError ? (
+                      <div className="rounded-[1.4rem] border border-destructive/30 bg-destructive/8 px-4 py-3 text-sm text-destructive">
+                        {pickupError}
+                      </div>
+                    ) : pickupLocations.length === 0 ? (
+                      <div className="rounded-[1.4rem] border border-border bg-muted/35 px-4 py-5 text-sm text-muted-foreground">
+                        No hay sucursales con recolección disponible por ahora.
+                      </div>
+                    ) : (
+                      <RadioGroup
+                        value={selectedPickupLocationId}
+                        onValueChange={onSelectedPickupLocationIdChange}
+                        className="gap-3"
+                      >
+                        {pickupLocations.map((location) => (
+                          <label
+                            key={location.id}
+                            htmlFor={`pickup-location-${location.id}`}
+                            className={cn(
+                              "flex cursor-pointer gap-3 rounded-[1.4rem] border px-4 py-4 transition-colors",
+                              selectedPickupLocationId === location.id
+                                ? "border-primary bg-primary/8"
+                                : "border-border bg-muted/35 hover:bg-muted/55",
+                            )}
+                          >
+                            <RadioGroupItem
+                              id={`pickup-location-${location.id}`}
+                              value={location.id}
+                              className="mt-1"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-semibold text-foreground">
+                                {location.name}
+                              </p>
+                              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                                {[
+                                  location.address,
+                                  location.city,
+                                  location.state,
+                                  location.postalCode,
+                                ]
+                                  .filter(Boolean)
+                                  .join(", ")}
+                              </p>
+                              <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                                <span className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-3 py-1">
+                                  <Clock3 className="h-3.5 w-3.5" />
+                                  {formatPreparationTime(
+                                    location.estimatedPreparationMinutes,
+                                  )}
+                                </span>
+                                {location.phone ? (
+                                  <span className="rounded-full border border-border bg-card px-3 py-1">
+                                    {location.phone}
+                                  </span>
+                                ) : null}
+                              </div>
+                              {location.pickupInstructions ? (
+                                <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                                  {location.pickupInstructions}
+                                </p>
+                              ) : null}
+                            </div>
+                          </label>
+                        ))}
+                      </RadioGroup>
+                    )}
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-2 md:col-span-2">
+                      <FormLabel htmlFor="pickup-contact-name">
+                        Nombre de quien recoge
+                      </FormLabel>
+                      <Input
+                        id="pickup-contact-name"
+                        value={pickupContact.name}
+                        onChange={(event) =>
+                          onPickupContactChange({
+                            ...pickupContact,
+                            name: event.target.value,
+                          })
+                        }
+                        className="h-12 rounded-[1rem]"
+                        autoComplete="name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <FormLabel htmlFor="pickup-contact-phone">
+                        Teléfono
+                      </FormLabel>
+                      <Input
+                        id="pickup-contact-phone"
+                        value={pickupContact.phone ?? ""}
+                        onChange={(event) =>
+                          onPickupContactChange({
+                            ...pickupContact,
+                            phone: event.target.value,
+                          })
+                        }
+                        className="h-12 rounded-[1rem]"
+                        inputMode="tel"
+                        autoComplete="tel"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <FormLabel htmlFor="pickup-contact-email">
+                        Email
+                      </FormLabel>
+                      <Input
+                        id="pickup-contact-email"
+                        value={pickupContact.email ?? ""}
+                        onChange={(event) =>
+                          onPickupContactChange({
+                            ...pickupContact,
+                            email: event.target.value,
+                          })
+                        }
+                        className="h-12 rounded-[1rem]"
+                        type="email"
+                        autoComplete="email"
+                      />
+                    </div>
+                  </div>
+
+                  {addressError ? (
+                    <p className="text-sm font-medium text-destructive">
+                      {addressError}
+                    </p>
+                  ) : null}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <FormLabel htmlFor="delivery-references">
-                  Referencias de entrega
+                  {fulfillmentMethod === "PICKUP"
+                    ? "Notas para recolección"
+                    : "Referencias de entrega"}
                 </FormLabel>
                 <Textarea
                   id="delivery-references"
                   value={deliveryReferences}
                   onChange={(event) => setDeliveryReferences(event.target.value)}
-                  placeholder="Casa, color de fachada, entre calles o indicaciones para mensajerí­a."
+                  placeholder={
+                    fulfillmentMethod === "PICKUP"
+                      ? "Nombre alterno o indicaciones para mostrador."
+                      : "Casa, color de fachada, entre calles o indicaciones para mensajería."
+                  }
                   className="min-h-[96px] rounded-[1rem]"
                 />
                 <p className="text-xs leading-5 text-muted-foreground">
@@ -709,19 +1119,21 @@ function ShippingAddressStep({
                 </p>
               </div>
 
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input {...field} className="h-12 rounded-[1rem]" type="email" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {fulfillmentMethod === "DELIVERY" ? (
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input {...field} className="h-12 rounded-[1rem]" type="email" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ) : null}
             </form>
           </Form>
         </CardContent>
@@ -744,13 +1156,15 @@ function ShippingAddressStep({
 
 function CardPaymentStep({
   values,
+  cartId,
   cartItems,
   total,
   onBack,
   paymentMethod,
   onPaymentMethodChange,
 }: {
-  values: ShippingValues;
+  values: CheckoutValues;
+  cartId?: string;
   cartItems: CartItem[];
   total: number;
   onBack: () => void;
@@ -795,20 +1209,24 @@ function CardPaymentStep({
         (sum, item) => sum + item.price * item.quantity,
         0,
       );
-      const checkoutResult = await checkoutCart({
-        direccionEnvio: {
-          nombre: values.name,
-          calle: values.calle,
-          numero: values.numero,
-          colonia: values.colonia,
-          ciudad: values.city,
-          estado: values.estado,
-          codigoPostal: values.zip,
-          telefono: values.telefono,
-        },
-        metodoPago: "TARJETA",
-        costoEnvio: SHIPPING_COST,
-      });
+      if (values.fulfillmentMethod === "PICKUP") {
+        const pickupCart = await resolveCartIdForPickup(cartId);
+        const availability = await pickupApi.validateAvailability({
+          locationId: values.pickupLocation.id,
+          cartId: pickupCart.cartId,
+          sessionId: pickupCart.sessionId,
+        });
+
+        if (!availability.canPickup) {
+          throw new Error(
+            "La sucursal seleccionada no tiene disponibilidad para todos los productos.",
+          );
+        }
+      }
+
+      const checkoutResult = await checkoutCart(
+        buildCheckoutPayload(values, "TARJETA"),
+      );
 
       const ordenId = getOrderIdFromCheckoutResult(checkoutResult);
       if (!ordenId) {
@@ -823,6 +1241,7 @@ function CardPaymentStep({
       validateOrderPricing({
         order: createdOrder,
         expectedSubtotal,
+        fulfillmentMethod: values.fulfillmentMethod,
       });
 
       const idempotencyKey = crypto.randomUUID();
@@ -839,15 +1258,29 @@ function CardPaymentStep({
         payment_method: {
           card: cardElement,
           billing_details: {
-            name: values.name,
-            email: values.email,
-            address: {
-              city: values.city,
-              state: values.estado,
-              line1: `${values.calle} ${values.numero}`,
-              line2: values.colonia,
-              postal_code: values.zip,
-            },
+            name:
+              values.fulfillmentMethod === "PICKUP"
+                ? values.pickupContact.name
+                : values.name,
+            email:
+              values.fulfillmentMethod === "PICKUP"
+                ? values.pickupContact.email
+                : values.email,
+            address:
+              values.fulfillmentMethod === "PICKUP"
+                ? {
+                    city: values.pickupLocation.city,
+                    state: values.pickupLocation.state,
+                    line1: values.pickupLocation.address,
+                    postal_code: values.pickupLocation.postalCode,
+                  }
+                : {
+                    city: values.city,
+                    state: values.estado,
+                    line1: `${values.calle} ${values.numero}`,
+                    line2: values.colonia,
+                    postal_code: values.zip,
+                  },
           },
         },
       });
@@ -945,12 +1378,14 @@ function CardPaymentStep({
 
 function AplazoPaymentStep({
   values,
+  cartId,
   cartItems,
   onBack,
   paymentMethod,
   onPaymentMethodChange,
 }: {
-  values: ShippingValues;
+  values: CheckoutValues;
+  cartId?: string;
   cartItems: CartItem[];
   onBack: () => void;
   paymentMethod: PaymentMethod;
@@ -982,7 +1417,10 @@ function AplazoPaymentStep({
 
     setSubmissionError(null);
     logAplazoDebug("Teléfono Aplazo normalizado", {
-      originalPhone: values.telefono,
+      originalPhone:
+        values.fulfillmentMethod === "PICKUP"
+          ? values.pickupContact.phone
+          : values.telefono,
       normalizedPhone: validation.customer.phone,
     });
 
@@ -990,7 +1428,11 @@ function AplazoPaymentStep({
 
     try {
       const origin = window.location.origin;
-      const cartFingerprint = getAplazoCartFingerprint(cartItems);
+      const cartFingerprint = [
+        getAplazoCartFingerprint(cartItems),
+        values.fulfillmentMethod,
+        values.fulfillmentMethod === "PICKUP" ? values.pickupLocation.id : "",
+      ].join("|");
       const cartSessionId = getOrCreateSessionId();
       const cartSnapshot = cartItems.map((item) => ({
         productoId: item.id,
@@ -1033,20 +1475,42 @@ function AplazoPaymentStep({
       let createdOrder: Orden | null = null;
 
       if (!canReuseStoredOrder) {
-        const checkoutResult = await checkoutCart({
-          direccionEnvio: {
-            nombre: validation.fullName,
-            calle: values.calle,
-            numero: values.numero,
-            colonia: values.colonia,
-            ciudad: values.city,
-            estado: values.estado,
-            codigoPostal: values.zip,
-            telefono: validation.customer.phone,
-          },
-          metodoPago: "APLAZO",
-          costoEnvio: SHIPPING_COST,
-        });
+        if (values.fulfillmentMethod === "PICKUP") {
+          const pickupCart = await resolveCartIdForPickup(cartId);
+          const availability = await pickupApi.validateAvailability({
+            locationId: values.pickupLocation.id,
+            cartId: pickupCart.cartId,
+            sessionId: pickupCart.sessionId,
+          });
+
+          if (!availability.canPickup) {
+            throw new Error(
+              "La sucursal seleccionada no tiene disponibilidad para todos los productos.",
+            );
+          }
+        }
+
+        const checkoutValues =
+          values.fulfillmentMethod === "PICKUP"
+            ? {
+                ...values,
+                pickupContact: {
+                  ...values.pickupContact,
+                  name: validation.fullName,
+                  email: validation.customer.email,
+                  phone: validation.customer.phone,
+                },
+              }
+            : {
+                ...values,
+                name: validation.fullName,
+                email: validation.customer.email,
+                telefono: validation.customer.phone,
+              };
+
+        const checkoutResult = await checkoutCart(
+          buildCheckoutPayload(checkoutValues, "APLAZO"),
+        );
 
         orderId = getOrderIdFromCheckoutResult(checkoutResult);
         if (!orderId) {
@@ -1083,16 +1547,29 @@ function AplazoPaymentStep({
       validateOrderPricing({
         order: createdOrder,
         expectedSubtotal: validation.validatedSubtotal,
+        fulfillmentMethod: values.fulfillmentMethod,
       });
 
       createPayload = buildAplazoPayload({
         orderId,
         values: {
-          ...values,
-          name: validation.fullName,
-          email: validation.customer.email,
-          telefono: validation.customer.phone,
-        },
+          ...(values.fulfillmentMethod === "PICKUP"
+            ? {
+                ...values,
+                pickupContact: {
+                  ...values.pickupContact,
+                  name: validation.fullName,
+                  email: validation.customer.email,
+                  phone: validation.customer.phone,
+                },
+              }
+            : {
+                ...values,
+                name: validation.fullName,
+                email: validation.customer.email,
+                telefono: validation.customer.phone,
+              }),
+        } as CheckoutValues,
         items: cartItems,
         order: createdOrder,
         origin,
@@ -1221,7 +1698,10 @@ function AplazoPaymentStep({
                         cartItems.reduce(
                           (sum, item) => sum + item.price * item.quantity,
                           0,
-                        ) + SHIPPING_COST,
+                        ) +
+                          (values.fulfillmentMethod === "PICKUP"
+                            ? 0
+                            : SHIPPING_COST),
                       )}
                     </span>
                   </p>
@@ -1281,6 +1761,20 @@ function AplazoPaymentStep({
 export default function CheckoutPage() {
   const [currentStep, setCurrentStep] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("TARJETA");
+  const [fulfillmentMethod, setFulfillmentMethod] =
+    useState<FulfillmentMethod>("DELIVERY");
+  const [pickupLocations, setPickupLocations] = useState<PickupLocation[]>([]);
+  const [selectedPickupLocationId, setSelectedPickupLocationId] = useState("");
+  const [pickupContact, setPickupContact] = useState<PickupContact>({
+    name: "",
+    phone: "",
+    email: "",
+  });
+  const [isLoadingPickupLocations, setIsLoadingPickupLocations] = useState(false);
+  const [pickupError, setPickupError] = useState<string | null>(null);
+  const [checkoutValues, setCheckoutValues] = useState<CheckoutValues | null>(
+    null,
+  );
   const [, setCapturedAddress] = useState<CapturedAddressValue | null>(null);
   const router = useRouter();
   const { state, subtotal, totalItems, isLoading } = useCart();
@@ -1302,8 +1796,40 @@ export default function CheckoutPage() {
     },
   });
 
-  const pricing = useMemo(() => getExpectedCheckoutPricing(subtotal), [subtotal]);
+  useEffect(() => {
+    if (fulfillmentMethod !== "PICKUP" || pickupLocations.length > 0) {
+      return;
+    }
+
+    const loadPickupLocations = async () => {
+      setIsLoadingPickupLocations(true);
+      setPickupError(null);
+
+      try {
+        const locations = await pickupApi.listLocations();
+        setPickupLocations(locations);
+        setSelectedPickupLocationId((current) => current || locations[0]?.id || "");
+      } catch (error) {
+        setPickupError(getApiErrorMessage(error));
+      } finally {
+        setIsLoadingPickupLocations(false);
+      }
+    };
+
+    void loadPickupLocations();
+  }, [fulfillmentMethod, pickupLocations.length]);
+
+  const pricing = useMemo(
+    () => getExpectedCheckoutPricing(subtotal, fulfillmentMethod),
+    [fulfillmentMethod, subtotal],
+  );
   const total = pricing.total;
+  const activeCheckoutValues =
+    checkoutValues ??
+    ({
+      ...shippingForm.getValues(),
+      fulfillmentMethod: "DELIVERY",
+    } as DeliveryCheckoutValues);
 
   if (isLoading) {
     return <div className="container py-14 text-center text-muted-foreground">Cargando checkout...</div>;
@@ -1357,7 +1883,7 @@ export default function CheckoutPage() {
             <Home className="h-4 w-4" />
             <div>
               <p className="text-xs uppercase tracking-[0.18em]">Paso 1</p>
-              <p className="font-medium">Información de envío</p>
+              <p className="font-medium">Entrega</p>
             </div>
           </div>
         </div>
@@ -1379,9 +1905,24 @@ export default function CheckoutPage() {
               <Elements stripe={stripePromise}>
                 <ShippingAddressStep
                   form={shippingForm}
+                  fulfillmentMethod={fulfillmentMethod}
+                  onFulfillmentMethodChange={(value) => {
+                    setFulfillmentMethod(value);
+                    setCheckoutValues(null);
+                  }}
+                  pickupLocations={pickupLocations}
+                  selectedPickupLocationId={selectedPickupLocationId}
+                  pickupContact={pickupContact}
+                  isLoadingPickupLocations={isLoadingPickupLocations}
+                  pickupError={pickupError}
+                  onSelectedPickupLocationIdChange={setSelectedPickupLocationId}
+                  onPickupContactChange={setPickupContact}
                   isAuthenticated={isAuthenticated}
                   onAddressCaptured={setCapturedAddress}
-                  onContinue={() => setCurrentStep(1)}
+                  onContinue={(values) => {
+                    setCheckoutValues(values);
+                    setCurrentStep(1);
+                  }}
                 />
               </Elements>
             ) : (
@@ -1398,7 +1939,8 @@ export default function CheckoutPage() {
             stripePromise ? (
               <Elements stripe={stripePromise}>
                 <CardPaymentStep
-                  values={shippingForm.getValues()}
+                  values={activeCheckoutValues}
+                  cartId={state.id}
                   cartItems={state.items}
                   total={total}
                   onBack={() => setCurrentStep(0)}
@@ -1422,7 +1964,8 @@ export default function CheckoutPage() {
             )
           ) : (
             <AplazoPaymentStep
-              values={shippingForm.getValues()}
+              values={activeCheckoutValues}
+              cartId={state.id}
               cartItems={state.items}
               onBack={() => setCurrentStep(0)}
               paymentMethod={paymentMethod}
@@ -1438,7 +1981,7 @@ export default function CheckoutPage() {
         </div>
 
         <div className="lg:sticky lg:top-[calc(var(--storefront-header-current-height,var(--storefront-header-desktop-height))+1.5rem)]">
-          <OrderSummaryPanel />
+          <OrderSummaryPanel fulfillmentMethod={fulfillmentMethod} />
         </div>
       </div>
 

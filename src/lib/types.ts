@@ -79,6 +79,7 @@ export type CartItem = {
 };
 
 export type Cart = {
+  id?: string;
   items: CartItem[];
 };
 
@@ -325,6 +326,16 @@ export type PaymentStatus =
   | "REEMBOLSADO";
 
 export type PaymentMethod = "TARJETA" | "APLAZO";
+export type FulfillmentMethod = "DELIVERY" | "PICKUP";
+
+export type FulfillmentStatus =
+  | "PENDING_PAYMENT"
+  | "PAID"
+  | "PREPARING"
+  | "READY_FOR_PICKUP"
+  | "PICKED_UP"
+  | "EXPIRED"
+  | "CANCELED";
 
 export type AplazoFlowType = "online" | "in_store";
 export type AplazoReturnKind = "success" | "failure" | "cancel";
@@ -361,6 +372,22 @@ export type Orden = {
   subtotal?: number;
   shippingCost?: number;
   metodoPago?: string;
+  fulfillmentMethod?: FulfillmentMethod;
+  fulfillmentStatus?: FulfillmentStatus | string;
+  pickupLocation?: {
+    id?: string;
+    name?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+    phone?: string;
+  };
+  pickupInstructions?: string;
+  pickupCodeLast4?: string;
+  pickupQrPayload?: string;
+  readyForPickupAt?: string;
+  pickupExpiresAt?: string;
   createdAt?: string;
   updatedAt?: string;
 };

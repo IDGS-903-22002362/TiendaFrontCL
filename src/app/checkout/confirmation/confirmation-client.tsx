@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ordersApi } from "@/lib/api/orders";
 import { paymentsApi } from "@/lib/api/payments";
+import type { Orden } from "@/lib/types";
 import {
   getAplazoStatusDescription,
   getAplazoStatusLabel,
@@ -25,7 +26,9 @@ export function ConfirmationClient() {
   const [orderStatus, setOrderStatus] = useState(fallbackStatus);
   const [paymentStatus, setPaymentStatus] = useState(fallbackStatus);
   const [total, setTotal] = useState(fallbackTotal);
+  const [order, setOrder] = useState<Orden | null>(null);
   const [isLoading, setIsLoading] = useState(Boolean(orderId));
+  const isPickup = order?.fulfillmentMethod === "PICKUP";
   const isPaid =
     normalizeAplazoStatus(paymentStatus) === "paid" ||
     paymentStatus === "COMPLETADO";
@@ -54,6 +57,7 @@ export function ConfirmationClient() {
               : paymentsApi.getByOrden(orderId),
         ]);
 
+        setOrder(order);
         if (order?.estado) {
           setOrderStatus(order.estado);
         }
@@ -105,6 +109,41 @@ export function ConfirmationClient() {
               <span className="font-medium">Total:</span> ${total || "0.00"}
             </p>
           </div>
+
+          {isPickup ? (
+            <div className="rounded-md border bg-muted/40 px-4 py-3 text-left text-sm">
+              <p className="font-semibold">Recoger en tienda</p>
+              {order.pickupLocation ? (
+                <p className="mt-1 text-text-secondary">
+                  {[
+                    order.pickupLocation.name,
+                    order.pickupLocation.address,
+                    order.pickupLocation.city,
+                    order.pickupLocation.state,
+                  ]
+                    .filter(Boolean)
+                    .join(", ")}
+                </p>
+              ) : null}
+              {order.fulfillmentStatus ? (
+                <p className="mt-2">
+                  <span className="font-medium">Estado pickup:</span>{" "}
+                  {order.fulfillmentStatus}
+                </p>
+              ) : null}
+              {order.pickupInstructions ? (
+                <p className="mt-2 text-text-secondary">
+                  {order.pickupInstructions}
+                </p>
+              ) : null}
+              {order.pickupCodeLast4 ? (
+                <p className="mt-2">
+                  <span className="font-medium">Código termina en:</span>{" "}
+                  {order.pickupCodeLast4}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="flex flex-col gap-2 pt-4 sm:flex-row">
             <Button asChild className="w-full" size="lg">

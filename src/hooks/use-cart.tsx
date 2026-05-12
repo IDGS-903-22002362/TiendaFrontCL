@@ -22,7 +22,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { getApiErrorMessage } from "@/lib/api/errors";
 
 type CartContextType = {
-  state: { items: CartItem[] };
+  state: { id?: string; items: CartItem[] };
   addToCart: (item: Omit<CartItem, "quantity"> & { quantity?: number }) => Promise<void>;
   removeItem: (id: string, tallaId?: string) => Promise<void>;
   setItemQuantity: (
@@ -44,6 +44,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [items, setItems] = useState<CartItem[]>([]);
+  const [cartId, setCartId] = useState<string | undefined>(undefined);
   const [sessionId, setSessionId] = useState("");
   const [mergedToken, setMergedToken] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -63,6 +64,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
           activeSessionId,
           isAuthenticated ? authToken : undefined,
         );
+        setCartId(cart.id);
         setItems(cart.items);
       } catch (error) {
         console.error("Failed to load cart from API", error);
@@ -88,6 +90,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
       try {
         await mergeCartSession(sessionId);
         const cart = await fetchCart(sessionId, authToken);
+        setCartId((current) => cart.id ?? current);
         setItems(cart.items);
         setMergedToken(token);
       } catch (error) {
@@ -122,6 +125,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         isAuthenticated ? authToken : undefined,
       );
 
+      setCartId((current) => cart.id ?? current);
       setItems(cart.items);
       setIsDrawerOpen(true); // Abrir el carrito dinámicamente al añadir
       
@@ -150,6 +154,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         { id, tallaId },
         isAuthenticated ? authToken : undefined,
       );
+      setCartId((current) => cart.id ?? current);
       setItems(cart.items);
     } catch (error) {
       console.error("Failed to remove cart item", error);
@@ -176,6 +181,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         { id, tallaId, quantity },
         isAuthenticated ? authToken : undefined,
       );
+      setCartId((current) => cart.id ?? current);
       setItems(cart.items);
     } catch (error) {
       console.error("Failed to update cart item quantity", error);
@@ -197,6 +203,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         sessionId,
         isAuthenticated ? authToken : undefined,
       );
+      setCartId((current) => cart.id ?? current);
       setItems(cart.items);
     } catch (error) {
       console.error("Failed to clear cart", error);
@@ -220,7 +227,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   return (
     <CartContext.Provider
       value={{
-        state: { items },
+        state: { id: cartId, items },
         addToCart,
         removeItem,
         setItemQuantity,

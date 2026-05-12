@@ -21,6 +21,10 @@ function toNumber(value: unknown, fallback = 0) {
 function mapOrden(input: unknown): Orden {
   const item =
     input && typeof input === "object" ? (input as UnknownRecord) : {};
+  const pickupLocation =
+    item.pickupLocation && typeof item.pickupLocation === "object"
+      ? (item.pickupLocation as UnknownRecord)
+      : undefined;
 
   return {
     id: toStringValue(item.id ?? item._id ?? item.ordenId),
@@ -30,6 +34,42 @@ function mapOrden(input: unknown): Orden {
     subtotal: toNumber(item.subtotal, 0),
     shippingCost: toNumber(item.costoEnvio ?? item.shippingCost, 0),
     metodoPago: toStringValue(item.metodoPago) || undefined,
+    fulfillmentMethod:
+      toStringValue(item.fulfillmentMethod) === "PICKUP"
+        ? "PICKUP"
+        : toStringValue(item.fulfillmentMethod) === "DELIVERY"
+          ? "DELIVERY"
+          : undefined,
+    fulfillmentStatus: toStringValue(item.fulfillmentStatus) || undefined,
+    pickupLocation: pickupLocation
+      ? {
+          id: toStringValue(pickupLocation.id ?? pickupLocation._id) || undefined,
+          name:
+            toStringValue(pickupLocation.name ?? pickupLocation.nombre) ||
+            undefined,
+          address:
+            toStringValue(pickupLocation.address ?? pickupLocation.direccion) ||
+            undefined,
+          city:
+            toStringValue(pickupLocation.city ?? pickupLocation.ciudad) ||
+            undefined,
+          state:
+            toStringValue(pickupLocation.state ?? pickupLocation.estado) ||
+            undefined,
+          postalCode:
+            toStringValue(
+              pickupLocation.postalCode ?? pickupLocation.codigoPostal,
+            ) || undefined,
+          phone:
+            toStringValue(pickupLocation.phone ?? pickupLocation.telefono) ||
+            undefined,
+        }
+      : undefined,
+    pickupInstructions: toStringValue(item.pickupInstructions) || undefined,
+    pickupCodeLast4: toStringValue(item.pickupCodeLast4) || undefined,
+    pickupQrPayload: toStringValue(item.pickupQrPayload) || undefined,
+    readyForPickupAt: toStringValue(item.readyForPickupAt) || undefined,
+    pickupExpiresAt: toStringValue(item.pickupExpiresAt) || undefined,
     createdAt: toStringValue(item.createdAt ?? item.fechaCreacion) || undefined,
     updatedAt: toStringValue(item.updatedAt) || undefined,
   };

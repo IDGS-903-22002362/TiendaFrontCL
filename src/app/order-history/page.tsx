@@ -53,6 +53,16 @@ const refundStatusLabel: Record<string, string> = {
   processed: "Procesada",
 };
 
+const fulfillmentStatusLabel: Record<string, string> = {
+  PENDING_PAYMENT: "Pendiente de pago",
+  PAID: "Pago confirmado",
+  PREPARING: "Preparando",
+  READY_FOR_PICKUP: "Listo para recoger",
+  PICKED_UP: "Pedido recogido",
+  EXPIRED: "Recolección expirada",
+  CANCELED: "Cancelado",
+};
+
 function isAplazoOrder(order: Orden) {
   return order.metodoPago?.toLowerCase().includes("aplazo") ?? false;
 }
@@ -60,6 +70,16 @@ function isAplazoOrder(order: Orden) {
 function canRequestRefund(order: Orden) {
   const status = order.estado.trim().toUpperCase();
   return isAplazoOrder(order) && status !== "CANCELADA";
+}
+
+function getOrderFulfillmentLabel(order: Orden) {
+  if (order.fulfillmentMethod !== "PICKUP") {
+    return "Envío";
+  }
+
+  return order.fulfillmentStatus
+    ? (fulfillmentStatusLabel[order.fulfillmentStatus] ?? order.fulfillmentStatus)
+    : "Recoger en tienda";
 }
 
 function formatDate(value?: string) {
@@ -217,7 +237,9 @@ export default function OrderHistoryPage() {
                       <p className="mt-1 truncate font-medium">{order.id}</p>
                     </div>
                     <Badge variant={statusVariant[order.estado] || "default"}>
-                      {order.estado}
+                      {order.fulfillmentMethod === "PICKUP"
+                        ? getOrderFulfillmentLabel(order)
+                        : order.estado}
                     </Badge>
                   </div>
                   <div className="mt-4 flex items-end justify-between gap-3">
@@ -230,6 +252,21 @@ export default function OrderHistoryPage() {
                       ${order.total.toFixed(2)}
                     </p>
                   </div>
+                  {order.fulfillmentMethod === "PICKUP" ? (
+                    <div className="mt-3 rounded-[18px] border border-border bg-card px-3 py-2 text-xs text-text-secondary">
+                      <p className="font-medium text-foreground">
+                        Recoger en tienda
+                      </p>
+                      {order.pickupLocation?.name ? (
+                        <p className="mt-1">{order.pickupLocation.name}</p>
+                      ) : null}
+                      {order.pickupCodeLast4 ? (
+                        <p className="mt-1">
+                          Código termina en {order.pickupCodeLast4}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
                   {canRequestRefund(order) ? (
                     <Button
                       type="button"
@@ -253,6 +290,7 @@ export default function OrderHistoryPage() {
                   <TableHead>Pedido</TableHead>
                   <TableHead>Fecha</TableHead>
                   <TableHead>Estatus</TableHead>
+                  <TableHead>Entrega</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
@@ -260,11 +298,11 @@ export default function OrderHistoryPage() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={5}>Cargando pedidos...</TableCell>
+                    <TableCell colSpan={6}>Cargando pedidos...</TableCell>
                   </TableRow>
                 ) : sortedOrders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-text-secondary">Aún no tienes pedidos.</TableCell>
+                    <TableCell colSpan={6} className="text-text-secondary">Aún no tienes pedidos.</TableCell>
                   </TableRow>
                 ) : (
                   sortedOrders.map((order) => (
@@ -275,6 +313,25 @@ export default function OrderHistoryPage() {
                         <Badge variant={statusVariant[order.estado] || "default"}>
                           {order.estado}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <Badge
+                            variant={
+                              order.fulfillmentMethod === "PICKUP"
+                                ? "secondary"
+                                : "outline"
+                            }
+                          >
+                            {getOrderFulfillmentLabel(order)}
+                          </Badge>
+                          {order.fulfillmentMethod === "PICKUP" &&
+                          order.pickupLocation?.name ? (
+                            <p className="text-xs text-text-muted">
+                              {order.pickupLocation.name}
+                            </p>
+                          ) : null}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right font-headline text-secondary">
                         ${order.total.toFixed(2)}

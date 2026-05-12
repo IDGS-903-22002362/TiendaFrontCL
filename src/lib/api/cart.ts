@@ -1,4 +1,5 @@
 import type { Cart, CartItem, PaymentMethod } from "@/lib/types";
+import type { FulfillmentMethod, PickupContact } from "./pickup";
 import { apiFetch, unwrapData } from "./client";
 
 type UnknownRecord = Record<string, unknown>;
@@ -33,11 +34,15 @@ function toStringArray(value: unknown): string[] {
   return [];
 }
 
-function resolveTallaId(item: Pick<CartItem, "tallaId" | "size">): string | undefined {
+function resolveTallaId(
+  item: Pick<CartItem, "tallaId" | "size">,
+): string | undefined {
   return toStringValue(item.tallaId ?? item.size) || undefined;
 }
 
-export function getCartVariantKey(item: Pick<CartItem, "id" | "tallaId" | "size">): string {
+export function getCartVariantKey(
+  item: Pick<CartItem, "id" | "tallaId" | "size">,
+): string {
   return `${item.id}::${resolveTallaId(item) ?? "no-size"}`;
 }
 
@@ -101,11 +106,25 @@ function normalizeCartItems(payload: unknown): unknown[] {
 
   if (data && typeof data === "object") {
     const record = data as UnknownRecord;
+    const nestedCart =
+      record.carrito && typeof record.carrito === "object"
+        ? (record.carrito as UnknownRecord)
+        : record.cart && typeof record.cart === "object"
+          ? (record.cart as UnknownRecord)
+          : undefined;
     const keys = ["items", "productos", "articulos", "carrito"];
 
     for (const key of keys) {
       if (Array.isArray(record[key])) {
         return record[key] as unknown[];
+      }
+    }
+
+    if (nestedCart) {
+      for (const key of ["items", "productos", "articulos"]) {
+        if (Array.isArray(nestedCart[key])) {
+          return nestedCart[key] as unknown[];
+        }
       }
     }
   }
@@ -114,7 +133,26 @@ function normalizeCartItems(payload: unknown): unknown[] {
 }
 
 function mapCart(payload: unknown): Cart {
+  const data = unwrapData<unknown>(payload);
+  const record =
+    data && typeof data === "object" ? (data as UnknownRecord) : undefined;
+  const nestedCart =
+    record?.carrito && typeof record.carrito === "object"
+      ? (record.carrito as UnknownRecord)
+      : record?.cart && typeof record.cart === "object"
+        ? (record.cart as UnknownRecord)
+        : undefined;
+  const source = nestedCart ?? record;
+
   return {
+    id:
+      toStringValue(
+        source?.id ??
+          source?._id ??
+          source?.cartId ??
+          record?.carritoId ??
+          record?.carritoID,
+      ) || undefined,
     items: normalizeCartItems(payload).map(mapCartItem),
   };
 }
@@ -193,6 +231,7 @@ async function enrichCart(cart: Cart, token?: string): Promise<Cart> {
   );
 
   return {
+    ...cart,
     items: cart.items.map((item) => {
       const snapshot = snapshots.get(item.id);
 
@@ -313,7 +352,8 @@ export async function clearCart(
 }
 
 export async function checkoutCart(payload: {
-  direccionEnvio: {
+  fulfillmentMethod?: FulfillmentMethod;
+  direccionEnvio?: {
     nombre: string;
     calle: string;
     numero: string;
@@ -323,6 +363,8 @@ export async function checkoutCart(payload: {
     codigoPostal: string;
     telefono: string;
   };
+  pickupLocationId?: string;
+  pickupContact?: PickupContact;
   metodoPago: PaymentMethod;
   costoEnvio: number;
   notas?: string;
