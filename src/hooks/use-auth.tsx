@@ -178,6 +178,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ],
   );
 
+  // use-auth.tsx - dentro de AuthProvider, después de las definiciones
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).__tiendaAuth = {
+        signInWithFirebase: signInWithFirebase,
+        getAuthStatus: () => ({
+          isAuthenticated: Boolean(token) && !isLoading,
+          token,
+          user
+        })
+      };
+    }
+  }, [signInWithFirebase, token, user, isLoading]);
+
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
