@@ -144,7 +144,7 @@ function LoginPageContent() {
   const handleRegister = () => {
     toast({
       title: "Crear cuenta",
-      description: "El registro de nuevos usuarios estará disponible muy pronto. ¡Gracias por tu paciencia!",
+      description: "El registro de usuarios está disponible dentro de nuestra app móvil. Descárgala gratis para unirte al club y disfrutar de todos los beneficios.",
     });
   };
 
@@ -173,7 +173,7 @@ function LoginPageContent() {
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary/80">
               Bienvenido
             </p>
-            <h1 className="mt-1 font-headline text-4xl font-semibold uppercase leading-none tracking-[0.04em] md:text-6xl">
+            <h1 className="mt-1 font-headline text-4xl font-semibold uppercase leading-none tracking-[0.04em] md:text-2xl">
               Accede a tu cuenta
             </h1>
           </div>
@@ -343,7 +343,7 @@ function LoginPageContent() {
                 onClick={handleRegister}
                 className="font-medium text-primary underline-offset-4 transition-all hover:underline"
               >
-                Regístrate aquí
+                Regístrate en nuestra app
               </button>
             </p>
           </CardFooter>

@@ -74,7 +74,7 @@ export async function getLocalSessionStatus() {
       isAuthenticated: boolean;
       token: string;
       role: UserRole | "";
-      user: Partial<AuthUsuario> | null;  // 👈 que esté tipado
+      user: Partial<AuthUsuario> | null;
     };
   }>("/api/auth/session", { method: "GET" }, { local: true });
 }
