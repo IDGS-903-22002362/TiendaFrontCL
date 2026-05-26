@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import {
+  getFirebaseIdTokenWithApplePopup,
   getFirebaseIdTokenWithEmailPassword,
   getFirebaseIdTokenWithGooglePopup,
 } from "@/lib/firebase/auth";
@@ -127,6 +128,23 @@ function LoginPageContent() {
       toast({
         variant: "destructive",
         title: "No pudimos conectar con Google",
+        description: getApiErrorMessage(error),
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  // Dentro de onEmailPasswordLogin, onGoogleLogin, agrega:
+  const onAppleLogin = async () => {
+    setIsSubmitting(true);
+    try {
+      const firebaseIdToken = await getFirebaseIdTokenWithApplePopup();
+      await signInWithFirebase(firebaseIdToken);
+      toast({ title: "¡Bienvenido!", description: "Sesión iniciada con Apple." });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "No pudimos conectar con Apple",
         description: getApiErrorMessage(error),
       });
     } finally {
@@ -339,12 +357,9 @@ function LoginPageContent() {
           <CardFooter className="flex justify-center border-t border-border/50 pt-4">
             <p className="text-sm text-muted-foreground">
               ¿No tienes cuenta?{" "}
-              <button
-                onClick={handleRegister}
-                className="font-medium text-primary underline-offset-4 transition-all hover:underline"
-              >
-                Regístrate en nuestra app
-              </button>
+              <Link href="/register" className="font-medium text-primary underline-offset-4 transition-all hover:underline">
+                Regístrate aquí
+              </Link>
             </p>
           </CardFooter>
         </Card>

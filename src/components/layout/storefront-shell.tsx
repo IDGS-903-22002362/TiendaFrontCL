@@ -2,7 +2,8 @@
 
 import { Suspense, type ReactNode } from "react";
 import { useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/use-auth";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
@@ -18,6 +19,16 @@ function isProductDetailRoute(pathname: string) {
 
 export function StorefrontShell({ children }: StorefrontShellProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { isAuthenticated, user, isLoading } = useAuth();
+
+  // Redirigir a complete-profile si el usuario está autenticado pero su perfil no está completo
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && user && !user.perfilCompleto && pathname !== "/complete-profile") {
+      router.push("/complete-profile");
+    }
+  }, [isAuthenticated, user, isLoading, pathname, router]);
+
   const isAdminRoute = pathname.startsWith("/admin");
   const isEmployeeRoute = pathname.startsWith("/empleado-club") || pathname.startsWith("/empleado");
   const isSuperAdminRoute = pathname.startsWith("/super-admin");
