@@ -87,13 +87,12 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Renovar cookies si el token cambió
-    if (freshToken !== token) {
-      setSessionCookies(response, {
-        token: freshToken,
-        role: payload.usuario?.rol ?? role,
-      });
-    }
+    // Sincronizar cookies con datos frescos de usuario (incluye perfilCompleto)
+    setSessionCookies(response, {
+      token: freshToken,
+      role: payload.usuario?.rol ?? role,
+      user: payload.usuario ?? null,
+    });
 
     return response;
   } catch {

@@ -41,7 +41,7 @@ import { Breadcrumbs } from "@/components/storefront/shared/breadcrumbs";
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { signInWithFirebase, isAuthenticated, isLoading, role } = useAuth();
+  const { signInWithFirebase, isAuthenticated, isLoading, role, user } = useAuth();
   const { toast } = useToast();
 
   const [email, setEmail] = useState("");
@@ -62,7 +62,14 @@ function LoginPageContent() {
     );
   }
 
-  const getTargetRedirect = (currentRole: string | undefined) => {
+  const getTargetRedirect = (
+    currentRole: string | undefined,
+    isProfileComplete: boolean | undefined,
+  ) => {
+    if (isProfileComplete === false) {
+      return "/complete-profile";
+    }
+
     switch (currentRole) {
       case "SUPER_ADMIN":
         return "/super-admin/usuarios";
@@ -79,10 +86,10 @@ function LoginPageContent() {
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      router.replace(getTargetRedirect(role));
+      router.replace(getTargetRedirect(role, user?.perfilCompleto));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, isLoading, role, router]);
+  }, [isAuthenticated, isLoading, role, user?.perfilCompleto, router]);
 
   const onEmailPasswordLogin = async (workerMode = false) => {
     const targetEmail = workerMode ? workerEmail : email;
@@ -320,6 +327,23 @@ function LoginPageContent() {
                       />
                     </svg>
                     Google
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-12 w-full rounded-full border-muted-foreground/30 transition-all hover:scale-[1.01] hover:bg-muted/50"
+                    onClick={() => void onAppleLogin()}
+                    disabled={isSubmitting}
+                  >
+                    <svg
+                      className="mr-2 h-5 w-5"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path d="M17.05 12.536c.026 2.813 2.467 3.75 2.494 3.762-.021.066-.39 1.338-1.285 2.652-.773 1.135-1.575 2.266-2.84 2.289-1.244.024-1.644-.738-3.067-.738-1.424 0-1.868.715-3.045.762-1.219.046-2.148-1.221-2.927-2.352-1.589-2.297-2.803-6.492-1.173-9.328.808-1.408 2.254-2.299 3.825-2.321 1.197-.023 2.327.808 3.067.808.739 0 2.126-.999 3.583-.852.609.025 2.32.246 3.421 1.857-.089.055-2.046 1.194-2.053 3.561z" />
+                      <path d="M14.942 5.847c.648-.786 1.084-1.88.965-2.97-.934.037-2.063.621-2.733 1.407-.6.694-1.124 1.805-.983 2.869 1.041.081 2.102-.53 2.751-1.306z" />
+                    </svg>
+                    Apple
                   </Button>
                 </TabsContent>
 
