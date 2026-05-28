@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -21,7 +21,8 @@ import { Input } from "@/components/ui/input";
 
 function LoginPageContent() {
   const router = useRouter();
-  const { signInWithFirebase, isAuthenticated, isLoading, role } = useAuth();
+  const searchParams = useSearchParams();
+  const { signInWithFirebase, isAuthenticated, isLoading, role, user } = useAuth();
   const { toast } = useToast();
 
   const [email, setEmail] = useState("");
@@ -39,7 +40,14 @@ function LoginPageContent() {
     );
   }
 
-  const getTargetRedirect = (currentRole: string | undefined) => {
+  const getTargetRedirect = (
+    currentRole: string | undefined,
+    isProfileComplete: boolean | undefined,
+  ) => {
+    if (isProfileComplete === false) {
+      return "/complete-profile";
+    }
+
     switch (currentRole) {
       case "SUPER_ADMIN":
         return "/super-admin/usuarios";
@@ -56,10 +64,10 @@ function LoginPageContent() {
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      router.replace(getTargetRedirect(role));
+      router.replace(getTargetRedirect(role, user?.perfilCompleto));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, isLoading, role, router]);
+  }, [isAuthenticated, isLoading, role, user?.perfilCompleto, router]);
 
   const onEmailPasswordLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -170,16 +178,38 @@ function LoginPageContent() {
         )}
 
         {/* Loading state */}
+        {/* Loading state */}
         {isSubmitting && (
           <div className="mb-6 flex flex-col items-center">
-            <div className="mb-4 h-16 w-16 animate-spin rounded-full border-4 border-white/20 border-t-white" />
-            <p className="text-center text-white">Iniciando sesión</p>
+            {/* Icono redondo SVG (Spinner nativo e indestructible) */}
+            <svg
+              className="mb-4 h-16 w-16 animate-spin text-white"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-20"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-100"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+
+            <p className="text-center text-white font-medium">Iniciando sesión</p>
           </div>
         )}
 
         {!isSubmitting && !firebaseReady && (
           <div className="mb-6 w-full max-w-sm rounded-2xl border border-amber-200/30 bg-amber-500/15 p-5 text-center text-amber-100">
-            <p className="font-medium">✨ Servicio en mantenimiento</p>
+            <p className="font-medium">Servicio en mantenimiento</p>
             <p className="mt-2 text-sm">Intenta más tarde o contacta con soporte.</p>
           </div>
         )}

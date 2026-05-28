@@ -116,8 +116,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ...response.data,
         perfilCompleto: response.data.perfilCompleto,
       }));
+
+      // Revalidar sesión para sincronizar cookies (perfilCompleto) y estado local.
+      await refreshSession();
     },
-    [],
+    [refreshSession],
   );
 
   const updateProfilePhone = useCallback(async (telefono: string) => {
