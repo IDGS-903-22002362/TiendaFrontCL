@@ -8,6 +8,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { cn } from "@/lib/utils";
+import { useIsFromMobileApp } from "@/hooks/use-from-mobile-app";
 
 type StorefrontShellProps = {
   children: ReactNode;
@@ -43,6 +44,7 @@ export function StorefrontShell({ children }: StorefrontShellProps) {
     pathname === "/order-history" ||
     pathname === "/profile" ||
     pathname === "/ai";
+  const { isFromMobileApp } = useIsFromMobileApp();
 
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -66,7 +68,9 @@ export function StorefrontShell({ children }: StorefrontShellProps) {
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-clip">
-      <Header />
+      <Suspense fallback={null}>
+        <Header />
+      </Suspense>
       <main
         className={cn(
           "relative flex-grow pt-[var(--storefront-header-reserved-height,var(--storefront-header-mobile-height))] lg:pt-[var(--storefront-header-reserved-height,var(--storefront-header-desktop-height))]",
@@ -84,8 +88,8 @@ export function StorefrontShell({ children }: StorefrontShellProps) {
       >
         {children}
       </main>
-      {!isCheckoutRoute ? <Footer /> : null}
-      {showBottomNav ? (
+      {!isCheckoutRoute && !isFromMobileApp ? <Footer /> : null}
+      {showBottomNav && !isFromMobileApp ? (
         <Suspense fallback={null}>
           <MobileBottomNav />
         </Suspense>
