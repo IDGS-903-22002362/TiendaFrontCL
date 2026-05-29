@@ -8,6 +8,7 @@ type ApiSuccess<T> = {
 };
 
 export type CompleteProfilePayload = {
+  nombre?: string;
   telefono?: string;
   fechaNacimiento?: string;
   genero?: string;
@@ -30,7 +31,7 @@ export type UserStreakCheckIn = UserStreak & {
 };
 
 export async function completeUserProfile(payload: CompleteProfilePayload) {
-  return apiFetch<ApiSuccess<{ uid: string; perfilCompleto: boolean }>>(
+  return apiFetch<ApiSuccess<{ uid: string; perfilCompleto: boolean; nombre?: string; telefono?: string; fechaNacimiento?: string; genero?: string; edad?: number }>>(
     "/api/usuarios/completar-perfil",
     {
       method: "PUT",

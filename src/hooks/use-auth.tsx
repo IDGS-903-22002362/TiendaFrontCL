@@ -87,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRole(response.data?.role ?? "");
     setUser(response.data?.user ?? null);
 
-    // 👇 Notificar a Flutter si estamos dentro de un WebView
+    // Notificar a Flutter si estamos dentro de un WebView
     if (typeof window !== "undefined" && (window as any).ClubLeonBridge) {
       (window as any).ClubLeonBridge.postMessage(
         JSON.stringify({
@@ -110,17 +110,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const completeProfile = useCallback(
     async (payload: CompleteProfilePayload) => {
       const response = await completeUserProfile(payload);
+      // Actualizar el usuario con todos los datos retornados del backend
       setUser((currentUser) => ({
         ...(currentUser ?? {}),
-        uid: response.data.uid,
+        ...response.data,
         perfilCompleto: response.data.perfilCompleto,
-        telefono: payload.telefono ?? currentUser?.telefono,
-        fechaNacimiento:
-          payload.fechaNacimiento ?? currentUser?.fechaNacimiento,
-        genero: payload.genero ?? currentUser?.genero,
       }));
+
+      // Revalidar sesión para sincronizar cookies (perfilCompleto) y estado local.
+      await refreshSession();
     },
-    [],
+    [refreshSession],
   );
 
   const updateProfilePhone = useCallback(async (telefono: string) => {

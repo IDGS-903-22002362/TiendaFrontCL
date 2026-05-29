@@ -1072,19 +1072,19 @@ function FulfillmentSelector({
     description: string;
     icon: typeof Home;
   }> = [
-    {
-      value: "DELIVERY",
-      title: "Envío a domicilio",
-      description: "Recibe tu pedido en una dirección de México.",
-      icon: Home,
-    },
-    {
-      value: "PICKUP",
-      title: "Recoger en tienda",
-      description: "Compra en línea y recoge en una sucursal disponible.",
-      icon: Store,
-    },
-  ];
+      {
+        value: "DELIVERY",
+        title: "Envío a domicilio",
+        description: "Recibe tu pedido en una dirección de México.",
+        icon: Home,
+      },
+      {
+        value: "PICKUP",
+        title: "Recoger en tienda",
+        description: "Compra en línea y recoge en una sucursal disponible.",
+        icon: Store,
+      },
+    ];
 
   return (
     <div className="space-y-3">
@@ -2755,20 +2755,20 @@ function AplazoPaymentStep({
         const checkoutValues =
           values.fulfillmentMethod === "PICKUP"
             ? {
-                ...values,
-                pickupContact: {
-                  ...values.pickupContact,
-                  name: validation.fullName,
-                  email: validation.customer.email,
-                  phone: validation.customer.phone,
-                },
-              }
-            : {
-                ...values,
+              ...values,
+              pickupContact: {
+                ...values.pickupContact,
                 name: validation.fullName,
                 email: validation.customer.email,
-                telefono: validation.customer.phone,
-              };
+                phone: validation.customer.phone,
+              },
+            }
+            : {
+              ...values,
+              name: validation.fullName,
+              email: validation.customer.email,
+              telefono: validation.customer.phone,
+            };
 
         const checkoutResult = await checkoutCart(
           buildCheckoutPayload(checkoutValues, "APLAZO"),
@@ -2816,20 +2816,20 @@ function AplazoPaymentStep({
         values: {
           ...(values.fulfillmentMethod === "PICKUP"
             ? {
-                ...values,
-                pickupContact: {
-                  ...values.pickupContact,
-                  name: validation.fullName,
-                  email: validation.customer.email,
-                  phone: validation.customer.phone,
-                },
-              }
-            : {
-                ...values,
+              ...values,
+              pickupContact: {
+                ...values.pickupContact,
                 name: validation.fullName,
                 email: validation.customer.email,
-                telefono: validation.customer.phone,
-              }),
+                phone: validation.customer.phone,
+              },
+            }
+            : {
+              ...values,
+              name: validation.fullName,
+              email: validation.customer.email,
+              telefono: validation.customer.phone,
+            }),
         } as CheckoutValues,
         items: cartItems,
         order: createdOrder,
@@ -3045,8 +3045,15 @@ export default function CheckoutPage() {
   );
   const router = useRouter();
   const { state, subtotal, totalItems, isLoading } = useCart();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user, isLoading: isAuthLoading } = useAuth();
   const stripePromise = useStripeConfig();
+
+  // Validación: verificar que el perfil esté completo antes de continuar
+  useEffect(() => {
+    if (!isAuthLoading && isAuthenticated && user && !user.perfilCompleto) {
+      router.replace("/complete-profile");
+    }
+  }, [isAuthLoading, isAuthenticated, user, router]);
 
   const shippingForm = useForm<ShippingValues>({
     resolver: zodResolver(shippingSchema),

@@ -2,11 +2,13 @@
 
 import { Suspense, type ReactNode } from "react";
 import { useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/use-auth";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { cn } from "@/lib/utils";
+import { useIsFromMobileApp } from "@/hooks/use-from-mobile-app";
 
 type StorefrontShellProps = {
   children: ReactNode;
@@ -18,6 +20,16 @@ function isProductDetailRoute(pathname: string) {
 
 export function StorefrontShell({ children }: StorefrontShellProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { isAuthenticated, user, isLoading } = useAuth();
+
+  // Redirigir a complete-profile si el usuario está autenticado pero su perfil no está completo
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && user && !user.perfilCompleto && pathname !== "/complete-profile") {
+      router.push("/complete-profile");
+    }
+  }, [isAuthenticated, user, isLoading, pathname, router]);
+
   const isAdminRoute = pathname.startsWith("/admin");
   const isEmployeeRoute = pathname.startsWith("/empleado-club") || pathname.startsWith("/empleado");
   const isSuperAdminRoute = pathname.startsWith("/super-admin");
@@ -32,6 +44,7 @@ export function StorefrontShell({ children }: StorefrontShellProps) {
     pathname === "/order-history" ||
     pathname === "/profile" ||
     pathname === "/ai";
+  const { isFromMobileApp } = useIsFromMobileApp();
 
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -55,7 +68,9 @@ export function StorefrontShell({ children }: StorefrontShellProps) {
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-clip">
-      <Header />
+      <Suspense fallback={null}>
+        <Header />
+      </Suspense>
       <main
         className={cn(
           "relative flex-grow pt-[var(--storefront-header-reserved-height,var(--storefront-header-mobile-height))] lg:pt-[var(--storefront-header-reserved-height,var(--storefront-header-desktop-height))]",
@@ -73,8 +88,8 @@ export function StorefrontShell({ children }: StorefrontShellProps) {
       >
         {children}
       </main>
-      {!isCheckoutRoute ? <Footer /> : null}
-      {showBottomNav ? (
+      {!isCheckoutRoute && !isFromMobileApp ? <Footer /> : null}
+      {showBottomNav && !isFromMobileApp ? (
         <Suspense fallback={null}>
           <MobileBottomNav />
         </Suspense>

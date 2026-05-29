@@ -45,7 +45,7 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { isAuthenticated, isLoading, role, clearSession } = useAuth();
+  const { isAuthenticated, isLoading, role, user, clearSession } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -62,6 +62,11 @@ export default function AdminLayout({
         return;
       }
 
+      if (user && user.perfilCompleto === false) {
+        router.replace("/complete-profile");
+        return;
+      }
+
       if (role !== "ADMIN" && role !== "EMPLEADO" && role !== "SUPER_ADMIN") {
         router.replace("/");
       }
@@ -70,6 +75,7 @@ export default function AdminLayout({
     isAuthenticated,
     isLoading,
     role,
+    user,
     router,
   ]);
 

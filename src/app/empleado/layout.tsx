@@ -31,16 +31,28 @@ export default function EmpleadoLayout({
 }: {
     children: React.ReactNode;
 }) {
-    const { role, isLoading, clearSession } = useAuth();
+    const { role, user, isAuthenticated, isLoading, clearSession } = useAuth();
     const router = useRouter();
     const pathname = usePathname();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     useEffect(() => {
-        if (!isLoading && role !== "EMPLEADO") {
-            router.replace("/login");
+        if (!isLoading) {
+            if (!isAuthenticated) {
+                router.replace("/login?redirect=/empleado");
+                return;
+            }
+
+            if (user && user.perfilCompleto === false) {
+                router.replace("/complete-profile");
+                return;
+            }
+
+            if (role !== "EMPLEADO") {
+                router.replace("/login");
+            }
         }
-    }, [role, isLoading, router]);
+    }, [role, user, isAuthenticated, isLoading, router]);
 
     if (isLoading || role !== "EMPLEADO") {
         return (
