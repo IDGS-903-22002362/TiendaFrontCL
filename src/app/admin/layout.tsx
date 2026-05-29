@@ -31,6 +31,7 @@ const adminNavLinks = [
   { href: "/admin/ordenes", label: "Órdenes", icon: ShoppingCart },
   { href: "/admin/productos", label: "Productos", icon: Package },
   { href: "/admin/inventario", label: "Inventario", icon: Archive },
+  { href: "/admin/fedex", label: "FedEx", icon: Truck },
   { href: "/admin/lineas", label: "Líneas", icon: Tags },
   { href: "/admin/tallas", label: "Tallas", icon: Ruler },
   { href: "/admin/proveedores", label: "Proveedores", icon: Truck },
@@ -195,3 +196,4 @@ export default function AdminLayout({
     </div>
   );
 }
+

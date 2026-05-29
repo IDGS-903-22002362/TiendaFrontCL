@@ -1,4 +1,4 @@
-import type { ProductSizeStock } from "@/lib/types";
+import type { ProductFedexShipping, ProductSizeStock } from "@/lib/types";
 import { apiFetch } from "./client";
 
 export type ProductCreatePayload = {
@@ -12,6 +12,7 @@ export type ProductCreatePayload = {
   lineaId?: string;
   tallaIds?: string[];
   inventarioPorTalla?: ProductSizeStock[];
+  fedexShipping?: ProductFedexShipping;
 };
 
 export type ProductUpdatePayload = Partial<ProductCreatePayload>;
@@ -40,6 +41,7 @@ export type ProductAdminDetail = {
   lineaId?: string;
   tallaIds: string[];
   inventarioPorTalla?: ProductSizeStock[];
+  fedexShipping?: ProductFedexShipping;
   imagenes: string[];
 };
 

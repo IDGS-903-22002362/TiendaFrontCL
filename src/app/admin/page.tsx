@@ -21,6 +21,11 @@ const sections = [
     description: "Movimientos, ajustes y alertas de stock.",
   },
   {
+    href: "/admin/fedex",
+    title: "FedEx",
+    description: "Health, tracking, guias, pickups y pruebas sandbox.",
+  },
+  {
     href: "/admin/lineas",
     title: "Líneas",
     description: "Gestión parcial de líneas del catálogo.",

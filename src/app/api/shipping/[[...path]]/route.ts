@@ -2,10 +2,7 @@ import { NextRequest } from "next/server";
 import { proxyToBackend } from "@/lib/server/backend-client";
 
 function getSuffix(path?: string[]) {
-  if (!path || path.length === 0) {
-    return "";
-  }
-  return `/${path.join("/")}`;
+  return path && path.length > 0 ? `/${path.join("/")}` : "";
 }
 
 function requiresAuthForPath(path?: string[]) {
@@ -15,17 +12,15 @@ function requiresAuthForPath(path?: string[]) {
 
   const suffix = `/${path.join("/")}`;
   return (
-    suffix === "/checkout" ||
-    suffix === "/merge" ||
-    suffix === "/shipping/fedex/quotes"
+    suffix === "/fedex/postal/validate" ||
+    suffix === "/fedex/address/validate"
   );
 }
 
 function forward(request: NextRequest, path?: string[]) {
-  const suffix = getSuffix(path);
   return proxyToBackend({
     request,
-    backendPath: `/api/carrito${suffix}`,
+    backendPath: `/api/shipping${getSuffix(path)}`,
     requireAuth: requiresAuthForPath(path),
   });
 }
@@ -38,20 +33,6 @@ export function GET(
 }
 
 export function POST(
-  request: NextRequest,
-  context: { params: Promise<{ path?: string[] }> },
-) {
-  return context.params.then((params) => forward(request, params.path));
-}
-
-export function PUT(
-  request: NextRequest,
-  context: { params: Promise<{ path?: string[] }> },
-) {
-  return context.params.then((params) => forward(request, params.path));
-}
-
-export function DELETE(
   request: NextRequest,
   context: { params: Promise<{ path?: string[] }> },
 ) {

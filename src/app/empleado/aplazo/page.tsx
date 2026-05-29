@@ -57,7 +57,7 @@ type InStoreItemDraft = {
 };
 
 function getStatusVariant(status?: string) {
-  if (normalizeAplazoStatus(status) === "PAID") {
+  if (normalizeAplazoStatus(status) === "paid") {
     return "default";
   }
   if (isAplazoRetryableStatus(status)) {
@@ -67,7 +67,7 @@ function getStatusVariant(status?: string) {
 }
 
 function getStatusIcon(status?: string) {
-  if (normalizeAplazoStatus(status) === "PAID") {
+  if (normalizeAplazoStatus(status) === "paid") {
     return CheckCircle;
   }
   if (isAplazoRetryableStatus(status)) {

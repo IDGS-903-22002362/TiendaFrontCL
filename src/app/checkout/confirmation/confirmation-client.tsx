@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ordersApi } from "@/lib/api/orders";
 import { paymentsApi } from "@/lib/api/payments";
-import type { Orden } from "@/lib/types";
+import { fedexApi } from "@/lib/api/fedex";
+import type { FedExTracking, Orden } from "@/lib/types";
 import {
   getAplazoStatusDescription,
   getAplazoStatusLabel,
@@ -27,6 +28,7 @@ export function ConfirmationClient() {
   const [paymentStatus, setPaymentStatus] = useState(fallbackStatus);
   const [total, setTotal] = useState(fallbackTotal);
   const [order, setOrder] = useState<Orden | null>(null);
+  const [tracking, setTracking] = useState<FedExTracking | null>(null);
   const [isLoading, setIsLoading] = useState(Boolean(orderId));
   const isPickup = order?.fulfillmentMethod === "PICKUP";
   const isPaid =
@@ -66,6 +68,14 @@ export function ConfirmationClient() {
         }
         if (payment?.status) {
           setPaymentStatus(payment.status);
+        }
+
+        if (order?.fulfillmentMethod !== "PICKUP") {
+          try {
+            setTracking(await fedexApi.getOrderTracking(orderId));
+          } catch {
+            setTracking(null);
+          }
         }
       } finally {
         setIsLoading(false);
@@ -140,6 +150,41 @@ export function ConfirmationClient() {
                 <p className="mt-2">
                   <span className="font-medium">Código termina en:</span>{" "}
                   {order.pickupCodeLast4}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {!isPickup && order?.shipping ? (
+            <div className="rounded-md border bg-muted/40 px-4 py-3 text-left text-sm">
+              <p className="font-semibold">Envio FedEx</p>
+              <p className="mt-1 text-text-secondary">
+                {order.shipping.serviceName ??
+                  order.shipping.serviceType ??
+                  "Servicio por confirmar"}
+                {typeof order.shipping.amount === "number"
+                  ? ` · $${order.shipping.amount.toFixed(2)}`
+                  : ""}
+              </p>
+              <p className="mt-2">
+                <span className="font-medium">Estado:</span>{" "}
+                {tracking?.statusLabel ??
+                  tracking?.status ??
+                  order.shipping.status ??
+                  "Pendiente"}
+              </p>
+              {tracking?.trackingNumber ?? order.shipping.trackingNumber ? (
+                <p className="mt-1">
+                  <span className="font-medium">Guia:</span>{" "}
+                  {tracking?.trackingNumber ?? order.shipping.trackingNumber}
+                </p>
+              ) : null}
+              {tracking?.estimatedDeliveryDate ??
+              order.shipping.estimatedDeliveryDate ? (
+                <p className="mt-1">
+                  <span className="font-medium">Entrega estimada:</span>{" "}
+                  {tracking?.estimatedDeliveryDate ??
+                    order.shipping.estimatedDeliveryDate}
                 </p>
               ) : null}
             </div>

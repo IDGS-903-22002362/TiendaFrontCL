@@ -20,11 +20,12 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { ordersApi } from "@/lib/api/orders";
 import { paymentsApi } from "@/lib/api/payments";
+import { fedexApi } from "@/lib/api/fedex";
 import {
   getApiErrorMessage,
   getAplazoRefundRequestErrorMessage,
 } from "@/lib/api/errors";
-import type { AplazoRefundRequest, Orden } from "@/lib/types";
+import type { AplazoRefundRequest, FedExTracking, Orden } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -106,6 +107,9 @@ export default function OrderHistoryPage() {
   const [refundError, setRefundError] = useState("");
   const [isLoadingRefunds, setIsLoadingRefunds] = useState(false);
   const [isSubmittingRefund, setIsSubmittingRefund] = useState(false);
+  const [trackingByOrderId, setTrackingByOrderId] = useState<
+    Record<string, FedExTracking | null>
+  >({});
   const { toast } = useToast();
 
   const loadOrders = useCallback(async () => {
@@ -181,6 +185,23 @@ export default function OrderHistoryPage() {
       });
     } finally {
       setIsSubmittingRefund(false);
+    }
+  };
+
+  const loadTracking = async (order: Orden) => {
+    if (order.fulfillmentMethod === "PICKUP") return;
+
+    try {
+      const tracking = await fedexApi.getOrderTracking(order.id);
+      setTrackingByOrderId((current) => ({
+        ...current,
+        [order.id]: tracking,
+      }));
+    } catch {
+      setTrackingByOrderId((current) => ({
+        ...current,
+        [order.id]: null,
+      }));
     }
   };
 
@@ -265,6 +286,34 @@ export default function OrderHistoryPage() {
                           Código termina en {order.pickupCodeLast4}
                         </p>
                       ) : null}
+                    </div>
+                  ) : null}
+                  {order.fulfillmentMethod !== "PICKUP" ? (
+                    <div className="mt-3 rounded-[18px] border border-border bg-card px-3 py-2 text-xs text-text-secondary">
+                      <p className="font-medium text-foreground">FedEx</p>
+                      <p className="mt-1">
+                        {trackingByOrderId[order.id]?.statusLabel ??
+                          trackingByOrderId[order.id]?.status ??
+                          order.shipping?.status ??
+                          "Tracking pendiente"}
+                      </p>
+                      {trackingByOrderId[order.id]?.trackingNumber ??
+                      order.shipping?.trackingNumber ? (
+                        <p className="mt-1">
+                          Guia:{" "}
+                          {trackingByOrderId[order.id]?.trackingNumber ??
+                            order.shipping?.trackingNumber}
+                        </p>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="mt-2 h-8 px-0"
+                        onClick={() => void loadTracking(order)}
+                      >
+                        Consultar tracking
+                      </Button>
                     </div>
                   ) : null}
                   {canRequestRefund(order) ? (

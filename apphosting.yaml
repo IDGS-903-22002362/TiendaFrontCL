@@ -31,3 +31,6 @@ env:
 
   - variable: NEXT_PUBLIC_APLAZO_SHOP_ID
     value: Prueba Tienda
+
+  - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+    value: AIzaSyBH74ZroHtQ1VALF5eL7BjEIGU_R3OJWIE
