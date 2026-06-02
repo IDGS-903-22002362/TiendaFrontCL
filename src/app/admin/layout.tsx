@@ -26,18 +26,38 @@ import {
   SheetHeader,
 } from "@/components/ui/sheet";
 
-const adminNavLinks = [
-  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/ordenes", label: "Órdenes", icon: ShoppingCart },
-  { href: "/admin/productos", label: "Productos", icon: Package },
-  { href: "/admin/inventario", label: "Inventario", icon: Archive },
-  { href: "/admin/fedex", label: "FedEx", icon: Truck },
-  { href: "/admin/lineas", label: "Líneas", icon: Tags },
-  { href: "/admin/tallas", label: "Tallas", icon: Ruler },
-  { href: "/admin/proveedores", label: "Proveedores", icon: Truck },
-  { href: "/admin/ai", label: "AI", icon: Bot, adminOnly: true },
-  { href: "/admin/banners", label: "Vallas Publicitarias", icon: Ruler },
-  { href: "/admin/puntos", label: "Puntos", icon: Coins, empleadoOnly: true },
+const navGroups = [
+  {
+    title: "Operación",
+    links: [
+      { href: "/admin", label: "Dashboard", icon: LayoutDashboard, adminOnly: false, empleadoOnly: false },
+      { href: "/admin/ordenes", label: "Órdenes", icon: ShoppingCart, adminOnly: false, empleadoOnly: false },
+      { href: "/admin/inventario", label: "Inventario", icon: Archive, adminOnly: false, empleadoOnly: false },
+    ],
+  },
+  {
+    title: "Catálogo",
+    links: [
+      { href: "/admin/productos", label: "Productos", icon: Package, adminOnly: false, empleadoOnly: false },
+      { href: "/admin/lineas", label: "Líneas", icon: Tags, adminOnly: false, empleadoOnly: false },
+      { href: "/admin/tallas", label: "Tallas", icon: Ruler, adminOnly: false, empleadoOnly: false },
+      { href: "/admin/proveedores", label: "Proveedores", icon: Truck, adminOnly: false, empleadoOnly: false },
+    ],
+  },
+  {
+    title: "Marketing",
+    links: [
+      { href: "/admin/banners", label: "Vallas Publicitarias", icon: Ruler, adminOnly: false, empleadoOnly: false },
+      { href: "/admin/puntos", label: "Puntos", icon: Coins, adminOnly: false, empleadoOnly: true },
+    ],
+  },
+  {
+    title: "Integraciones",
+    links: [
+      { href: "/admin/fedex", label: "FedEx", icon: Truck, adminOnly: false, empleadoOnly: false },
+      { href: "/admin/ai", label: "AI", icon: Bot, adminOnly: true, empleadoOnly: false },
+    ],
+  }
 ];
 
 export default function AdminLayout({
@@ -90,31 +110,44 @@ export default function AdminLayout({
   }
 
   const NavLinks = () => (
-    <>
-      {adminNavLinks
-        .filter((link) => (!link.adminOnly || role === "ADMIN") && (!link.empleadoOnly || role === "EMPLEADO"))
-        .map((link) => {
-          const Icon = link.icon;
-          const isActive =
-            pathname === link.href ||
-            (pathname.startsWith(link.href) && link.href !== "/admin");
+    <div className="flex flex-col gap-6">
+      {navGroups.map((group) => {
+        const visibleLinks = group.links.filter(
+          (link) => (!link.adminOnly || role === "ADMIN") && (!link.empleadoOnly || role === "EMPLEADO")
+        );
 
-          return (
-            <Link
-              key={link.href}
-              href={link.href}
-              onClick={() => setIsMobileMenuOpen(false)}
-              className={`flex items-center gap-3 rounded-2xl px-3 py-2.5 transition-all ${isActive
-                ? "bg-primary text-primary-foreground shadow-[var(--shadow-glow)]"
-                : "text-text-secondary hover:bg-muted hover:text-foreground"
-                }`}
-            >
-              <Icon className="h-5 w-5" />
-              {link.label}
-            </Link>
-          );
-        })}
-    </>
+        if (visibleLinks.length === 0) return null;
+
+        return (
+          <div key={group.title} className="flex flex-col gap-1">
+            <h3 className="px-3 text-xs font-semibold uppercase tracking-wider text-text-muted mb-2">
+              {group.title}
+            </h3>
+            {visibleLinks.map((link) => {
+              const Icon = link.icon;
+              const isActive =
+                pathname === link.href ||
+                (pathname.startsWith(link.href) && link.href !== "/admin");
+
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${isActive
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-text-secondary hover:bg-muted hover:text-foreground"
+                    }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {link.label}
+                </Link>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
   );
 
   return (

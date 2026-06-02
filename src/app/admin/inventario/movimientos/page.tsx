@@ -40,6 +40,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 
 const TYPE_OPTIONS: Array<{
   label: string;
@@ -56,6 +58,21 @@ const TYPE_OPTIONS: Array<{
 function formatTallaOption(tallas: Talla[], tallaId: string) {
   const matched = tallas.find((item) => item.id === tallaId);
   return matched ? `${matched.codigo} (${tallaId})` : tallaId;
+}
+
+function getBadgeVariant(tipo: string) {
+  switch (tipo) {
+    case "entrada":
+      return "default";
+    case "salida":
+      return "destructive";
+    case "venta":
+      return "secondary";
+    case "devolucion":
+      return "outline";
+    default:
+      return "outline";
+  }
 }
 
 export default function InventoryMovementsPage() {
@@ -313,17 +330,10 @@ export default function InventoryMovementsPage() {
       ? filterProductStock.tallaIds
       : tallas.map((item) => item.id);
 
-  return (
-    <div className="container mx-auto space-y-6 px-4 py-8">
-      <header>
-        <h1 className="font-headline text-3xl font-bold">
-          Movimientos de inventario
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Historial con filtros y paginación cursor-based.
-        </p>
-      </header>
+  const isFiltered = Boolean(filterProductId || filterTallaId || tipo !== "all" || fechaDesde || fechaHasta);
 
+  return (
+    <div className="space-y-6">
       {!canUseInventory ? (
         <Card>
           <CardContent className="py-6 text-sm text-muted-foreground">
@@ -339,45 +349,51 @@ export default function InventoryMovementsPage() {
             </CardHeader>
             <CardContent>
               <form
-                className="grid gap-3 md:grid-cols-4"
+                className="grid gap-4 md:grid-cols-12"
                 onSubmit={onRegisterMovement}
               >
-                <Select
-                  value={movTipo}
-                  onValueChange={(value) =>
-                    setMovTipo(
-                      value as "entrada" | "salida" | "venta" | "devolucion",
-                    )
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Tipo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="entrada">Entrada</SelectItem>
-                    <SelectItem value="salida">Salida</SelectItem>
-                    <SelectItem value="venta">Venta</SelectItem>
-                    <SelectItem value="devolucion">Devolución</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <div className="md:col-span-2">
-                  <EntityPicker
-                    label="Producto"
-                    searchLabel="Buscar por nombre, clave o descripción"
-                    selectLabel="Selecciona producto"
-                    query={movProductQuery}
-                    value={movProductId}
-                    options={productOptions}
-                    onQueryChange={setMovProductQuery}
-                    onValueChange={setMovProductId}
-                    allowEmpty={false}
-                    disabled={catalogLoading}
-                  />
+                <div className="md:col-span-4 space-y-2">
+                  <label className="text-sm font-medium">Producto</label>
+                  <div className="w-full">
+                    <EntityPicker
+                      label=""
+                      searchLabel="Buscar producto..."
+                      selectLabel="Selecciona producto"
+                      query={movProductQuery}
+                      value={movProductId}
+                      options={productOptions}
+                      onQueryChange={setMovProductQuery}
+                      onValueChange={setMovProductId}
+                      allowEmpty={false}
+                      disabled={catalogLoading}
+                    />
+                  </div>
                 </div>
 
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">Talla</p>
+                <div className="md:col-span-2 space-y-2">
+                  <label className="text-sm font-medium">Tipo</label>
+                  <Select
+                    value={movTipo}
+                    onValueChange={(value) =>
+                      setMovTipo(
+                        value as "entrada" | "salida" | "venta" | "devolucion",
+                      )
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="entrada">Entrada</SelectItem>
+                      <SelectItem value="salida">Salida</SelectItem>
+                      <SelectItem value="venta">Venta</SelectItem>
+                      <SelectItem value="devolucion">Devolución</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="md:col-span-2 space-y-2">
+                  <label className="text-sm font-medium">Talla</label>
                   {registerTallas.length > 0 ? (
                     <Select value={movTallaId || ""} onValueChange={setMovTallaId}>
                       <SelectTrigger>
@@ -396,63 +412,76 @@ export default function InventoryMovementsPage() {
                   )}
                 </div>
 
-                <Input
-                  required
-                  type="number"
-                  min={1}
-                  value={movCantidad}
-                  onChange={(event) => setMovCantidad(event.target.value)}
-                />
-                <Input
-                  placeholder="Orden ID (venta/devolución)"
-                  value={movOrdenId}
-                  onChange={(event) => setMovOrdenId(event.target.value)}
-                  className="md:col-span-2"
-                />
-                <Input
-                  placeholder="Referencia"
-                  value={movReferencia}
-                  onChange={(event) => setMovReferencia(event.target.value)}
-                  className="md:col-span-2"
-                />
-                <Textarea
-                  placeholder="Motivo"
-                  value={movMotivo}
-                  onChange={(event) => setMovMotivo(event.target.value)}
-                  className="md:col-span-4"
-                />
+                <div className="md:col-span-2 space-y-2">
+                  <label className="text-sm font-medium">Cantidad</label>
+                  <Input
+                    required
+                    type="number"
+                    min={1}
+                    value={movCantidad}
+                    onChange={(event) => setMovCantidad(event.target.value)}
+                  />
+                </div>
 
-                <div className="md:col-span-4">
-                  <Button type="submit" disabled={!movProductId}>
+                <div className="md:col-span-2 flex items-end">
+                  <Button type="submit" disabled={!movProductId} className="w-full">
                     Registrar
                   </Button>
+                </div>
+
+                <div className="md:col-span-4 space-y-2">
+                  <label className="text-sm font-medium">Orden ID (opcional)</label>
+                  <Input
+                    placeholder="Venta / Devolución"
+                    value={movOrdenId}
+                    onChange={(event) => setMovOrdenId(event.target.value)}
+                  />
+                </div>
+                <div className="md:col-span-4 space-y-2">
+                  <label className="text-sm font-medium">Referencia (opcional)</label>
+                  <Input
+                    placeholder="Documento o persona"
+                    value={movReferencia}
+                    onChange={(event) => setMovReferencia(event.target.value)}
+                  />
+                </div>
+                <div className="md:col-span-4 space-y-2">
+                  <label className="text-sm font-medium">Motivo (opcional)</label>
+                  <Input
+                    placeholder="Justificación del movimiento"
+                    value={movMotivo}
+                    onChange={(event) => setMovMotivo(event.target.value)}
+                  />
                 </div>
               </form>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Filtros</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-5">
-              <div className="md:col-span-2">
-                <EntityPicker
-                  label="Producto"
-                  searchLabel="Buscar por nombre, clave o descripción"
-                  selectLabel="Filtrar por producto"
-                  query={filterProductQuery}
-                  value={filterProductId}
-                  options={productOptions}
-                  onQueryChange={setFilterProductQuery}
-                  onValueChange={setFilterProductId}
-                  allowEmpty
-                  disabled={catalogLoading}
-                />
+            <CardHeader className="pb-3 border-b border-border/50 mb-4">
+              <div className="flex items-center justify-between">
+                <CardTitle>Historial</CardTitle>
               </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
 
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Talla</p>
+              <div className="flex flex-wrap items-center gap-3 mb-6 bg-muted/30 p-3 rounded-lg border border-border/50">
+                <div className="w-[200px]">
+                  <EntityPicker
+                    label=""
+                    searchLabel="Buscar producto"
+                    selectLabel="Producto (Todos)"
+                    query={filterProductQuery}
+                    value={filterProductId}
+                    options={productOptions}
+                    onQueryChange={setFilterProductQuery}
+                    onValueChange={setFilterProductId}
+                    allowEmpty
+                    disabled={catalogLoading}
+                  />
+                </div>
+
+                <div className="w-[140px]">
                 <Select
                   value={filterTallaId || "__all__"}
                   onValueChange={(value) =>
@@ -460,7 +489,7 @@ export default function InventoryMovementsPage() {
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Todas" />
+                    <SelectValue placeholder="Talla" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__all__">Todas</SelectItem>
@@ -471,48 +500,41 @@ export default function InventoryMovementsPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">
-                  {filterTallaId ? `ID talla: ${filterTallaId}` : "Sin filtro de talla"}
-                </p>
-              </div>
+                </div>
 
-              <Select
-                value={tipo}
-                onValueChange={(value) =>
-                  setTipo(value as InventoryMovementType | "all")
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {TYPE_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                type="datetime-local"
-                value={fechaDesde}
-                onChange={(event) => setFechaDesde(event.target.value)}
-              />
-              <Input
-                type="datetime-local"
-                value={fechaHasta}
-                onChange={(event) => setFechaHasta(event.target.value)}
-              />
+                <div className="w-[140px]">
+                <Select
+                  value={tipo}
+                  onValueChange={(value) =>
+                    setTipo(value as InventoryMovementType | "all")
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TYPE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                </div>
 
-              <div className="md:col-span-5 flex flex-wrap gap-2">
                 <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() => void loadPage(undefined, false)}
                   disabled={loading}
                 >
-                  Aplicar filtros
+                  Buscar
                 </Button>
+
+                {isFiltered && (
                 <Button
-                  variant="outline"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => {
                     setFilterProductId("");
                     setFilterProductQuery("");
@@ -525,21 +547,14 @@ export default function InventoryMovementsPage() {
                 >
                   Limpiar
                 </Button>
+                )}
               </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Resultados</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Tipo</TableHead>
                     <TableHead>Producto</TableHead>
+                    <TableHead>Tipo</TableHead>
                     <TableHead>Talla</TableHead>
                     <TableHead>Cantidad</TableHead>
                     <TableHead>Fecha</TableHead>
@@ -547,20 +562,32 @@ export default function InventoryMovementsPage() {
                 </TableHeader>
                 <TableBody>
                   {loading && rows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6}>Cargando...</TableCell>
-                    </TableRow>
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={i}>
+                        <TableCell><Skeleton className="h-4 w-[200px]" /></TableCell>
+                        <TableCell><Skeleton className="h-6 w-16 rounded-full" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-12" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-8" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                      </TableRow>
+                    ))
                   ) : rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6}>Sin resultados.</TableCell>
+                      <TableCell colSpan={5} className="text-center py-8 text-text-muted">
+                        No hay movimientos para los filtros seleccionados.
+                      </TableCell>
                     </TableRow>
                   ) : (
                     rows.map((row) => (
                       <TableRow key={row.id}>
-                        <TableCell>{row.id}</TableCell>
-                        <TableCell>{row.tipo}</TableCell>
                         <TableCell>
                           {productNameById.get(row.productoId) ?? row.productoId}
+                          <span className="block text-[10px] text-text-muted font-mono">{row.id}</span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getBadgeVariant(row.tipo) as "default" | "destructive" | "secondary" | "outline"} className="capitalize">
+                            {row.tipo}
+                          </Badge>
                         </TableCell>
                         <TableCell>
                           {row.tallaId
