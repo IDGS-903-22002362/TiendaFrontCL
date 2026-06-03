@@ -15,7 +15,7 @@ import { Breadcrumbs } from "@/components/storefront/shared/breadcrumbs";
 
 export default function RegisterPage() {
     const router = useRouter();
-    const { signInWithFirebase, completeProfile } = useAuth();
+    const { signInWithFirebase, completeProfile, clearSession } = useAuth();
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
@@ -84,8 +84,10 @@ export default function RegisterPage() {
                 genero: generoNormalizado,
             });
 
-            toast({ title: "¡Cuenta creada!", description: "Bienvenido a Club León." });
-            router.push("/"); // Redirige a la página principal o donde corresponda
+            await clearSession();
+
+            toast({ title: "¡Cuenta creada!", description: "Accede con verficación de correo" });
+            router.push(`/login?email=${encodeURIComponent(form.email)}`); // Redirige a la página principal o donde corresponda
         } catch (error) {
             console.error(error);
             toast({

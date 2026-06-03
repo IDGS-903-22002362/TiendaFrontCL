@@ -106,7 +106,42 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => ({}))) as {
     firebaseIdToken?: string;
+    backendToken?: string;
+    user?: BackendAuthResponse["usuario"];
   };
+
+  if (body.backendToken) {
+    if (!body.user) {
+      return NextResponse.json(
+        { success: false, message: "user es requerido con backendToken" },
+        { status: 400 },
+      );
+    }
+
+    const response = NextResponse.json({
+      success: true,
+      data: {
+        token: body.backendToken,
+        role: body.user.rol ?? "",
+        user: {
+          id: body.user.uid,
+          uid: body.user.uid,
+          email: body.user.email,
+          nombre: body.user.nombre,
+          perfilCompleto: body.user.perfilCompleto,
+          rol: body.user.rol,
+        },
+      },
+    });
+
+    setSessionCookies(response, {
+      token: body.backendToken,
+      role: body.user.rol ?? "",
+      user: body.user,
+    });
+
+    return response;
+  }
 
   if (!body.firebaseIdToken) {
     return NextResponse.json(

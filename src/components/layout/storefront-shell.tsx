@@ -68,28 +68,30 @@ export function StorefrontShell({ children }: StorefrontShellProps) {
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-clip">
-      <Suspense fallback={null}>
-        <Header />
-      </Suspense>
+      {!isLoginRoute && (
+        <Suspense fallback={null}>
+          <Header />
+        </Suspense>
+      )}
       <main
         className={cn(
-          "relative flex-grow pt-[var(--storefront-header-reserved-height,var(--storefront-header-mobile-height))] lg:pt-[var(--storefront-header-reserved-height,var(--storefront-header-desktop-height))]",
+          "relative flex-grow", !isLoginRoute && "pt-[var(--storefront-header-reserved-height,var(--storefront-header-mobile-height))] lg:pt-[var(--storefront-header-reserved-height,var(--storefront-header-desktop-height))]",
           showBottomNav
             ? "pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+1rem)] md:pb-12"
-            : "pb-10 md:pb-12",
+            : "",
           isProductDetailRoute(pathname) &&
-          "pb-[calc(var(--product-mobile-cta-height)+8rem)] md:pb-12",
+          "pb-[calc(var(--product-mobile-cta-height)+8rem)] ",
           isCheckoutRoute &&
-          "pb-[calc(var(--checkout-mobile-cta-height)+1.5rem)] md:pb-12",
+          "pb-[calc(var(--checkout-mobile-cta-height)+1.5rem)] ",
           pathname === "/ai" &&
-          "pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+1.25rem)] md:pb-12",
-          isLoginRoute && "pb-10",
+          "pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+1.25rem)] ",
+          isLoginRoute && "",
         )}
       >
         {children}
       </main>
-      {!isCheckoutRoute && !isFromMobileApp ? <Footer /> : null}
-      {showBottomNav && !isFromMobileApp ? (
+      {!isCheckoutRoute && !isFromMobileApp && !isLoginRoute ? <Footer /> : null}
+      {showBottomNav && !isFromMobileApp && !isLoginRoute ? (
         <Suspense fallback={null}>
           <MobileBottomNav />
         </Suspense>

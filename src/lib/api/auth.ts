@@ -86,3 +86,17 @@ export async function clearLocalSession() {
     { local: true },
   );
 }
+
+export async function createLocalSessionFromBackendToken(
+  backendToken: string,
+  user: Partial<AuthUsuario>,
+) {
+  return apiFetch<SessionStatusResponse>(
+    "/api/auth/session",
+    {
+      method: "POST",
+      body: JSON.stringify({ backendToken, user }),
+    },
+    { local: true },
+  );
+}

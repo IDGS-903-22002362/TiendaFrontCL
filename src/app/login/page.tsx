@@ -18,11 +18,37 @@ import { getApiErrorMessage } from "@/lib/api/errors";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { apiFetch } from "@/lib/api/client";
+import { createLocalSessionFromBackendToken } from "@/lib/api/auth";
+import { UserRole } from "@/lib/types";
+
+// Definir tipos para las respuestas de la API
+interface RequestVerificationResponse {
+  success: boolean;
+  message?: string;
+  expiresIn?: number;
+}
+
+interface VerifyAndLoginResponse {
+  success: boolean;
+  message?: string;
+  remainingAttempts?: number;
+  data?: {
+    token: string;
+    user: {
+      uid: string;
+      email: string;
+      nombre: string;
+      rol: string;
+      perfilCompleto: boolean;
+    };
+  };
+}
 
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { signInWithFirebase, isAuthenticated, isLoading, role, user } = useAuth();
+  const { signInWithFirebase, isAuthenticated, isLoading, role, user, refreshSession } = useAuth();
   const { toast } = useToast();
 
   const [email, setEmail] = useState("");
@@ -30,6 +56,14 @@ function LoginPageContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+
+  // Estados para verificación OTP
+  const [showVerification, setShowVerification] = useState(false);
+  const [verificationCode, setVerificationCode] = useState("");
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [isRequestingCode, setIsRequestingCode] = useState(false);
+  const [resendTimer, setResendTimer] = useState(0);
+  const [attempts, setAttempts] = useState(3);
 
   const firebaseReady = isFirebaseConfigured();
 
@@ -69,12 +103,118 @@ function LoginPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, isLoading, role, user?.perfilCompleto, router]);
 
-  const onEmailPasswordLogin = async () => {
-    if (!email.trim() || !password.trim()) {
+  // Timer para reenviar código
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (resendTimer > 0) {
+      interval = setInterval(() => {
+        setResendTimer((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [resendTimer]);
+
+  // Solicitar código de verificación
+  const onRequestVerificationCode = async () => {
+    if (!email.trim()) {
       toast({
         variant: "destructive",
         title: "Datos incompletos",
-        description: "Por favor, ingresa tu correo y contraseña.",
+        description: "Por favor, ingresa tu correo electrónico.",
+      });
+      return;
+    }
+
+    setIsRequestingCode(true);
+    setErrorMessage("");
+
+    try {
+      const response = await apiFetch<RequestVerificationResponse>("/api/auth/request-verification-code", {
+        method: "POST",
+        body: JSON.stringify({ email: email.trim() }),
+      });
+
+      if (response.success) {
+        setPendingEmail(email.trim());
+        setShowVerification(true);
+        setAttempts(3);
+        setResendTimer(60);
+        toast({
+          title: "Código enviado",
+          description: `Hemos enviado un código de verificación a ${email.trim()}`,
+        });
+      } else {
+        setErrorMessage(response.message || "Error al enviar el código");
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: response.message || "Error al enviar el código de verificación",
+        });
+      }
+    } catch (error) {
+      const errorMsg = getApiErrorMessage(error);
+      setErrorMessage(errorMsg);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: errorMsg,
+      });
+    } finally {
+      setIsRequestingCode(false);
+    }
+  };
+
+  // Reenviar código
+  const onResendCode = async () => {
+    if (resendTimer > 0) return;
+
+    setIsRequestingCode(true);
+    setErrorMessage("");
+
+    try {
+      const response = await apiFetch<RequestVerificationResponse>("/api/auth/request-verification-code", {
+        method: "POST",
+        body: JSON.stringify({ email: pendingEmail }),
+      });
+
+      if (response.success) {
+        setResendTimer(60);
+        setAttempts(3);
+        toast({
+          title: "Código reenviado",
+          description: "Revisa tu correo electrónico",
+        });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: response.message || "Error al reenviar el código",
+        });
+      }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: getApiErrorMessage(error),
+      });
+    } finally {
+      setIsRequestingCode(false);
+    }
+  };
+
+  // Verificar código e iniciar sesión
+  const onVerifyAndLogin = async () => {
+    if (!verificationCode.trim() || verificationCode.length !== 6) {
+      toast({
+        variant: "destructive",
+        title: "Código inválido",
+        description: "Por favor, ingresa el código de 6 dígitos",
       });
       return;
     }
@@ -83,23 +223,61 @@ function LoginPageContent() {
     setErrorMessage("");
 
     try {
-      const firebaseIdToken = await getFirebaseIdTokenWithEmailPassword(
-        email.trim(),
-        password
-      );
-      await signInWithFirebase(firebaseIdToken);
-      toast({ title: "¡Bienvenido!", description: "Sesión iniciada correctamente." });
+      const response = await apiFetch<VerifyAndLoginResponse>("/api/auth/verify-and-login", {
+        method: "POST",
+        body: JSON.stringify({
+          email: pendingEmail,
+          verificationCode: verificationCode.trim(),
+        }),
+      });
+
+      if (response.success && response.data?.token) {
+        await createLocalSessionFromBackendToken(
+          response.data.token,
+          {
+            ...response.data.user,
+            rol: response.data.user.rol as UserRole, // Cast necesario si el backend devuelve el rol como string
+          }
+        );
+        await refreshSession();
+        toast({ title: "¡Bienvenido!", description: "Sesión iniciada correctamente." });
+      } else {
+        setAttempts(response.remainingAttempts || attempts - 1);
+        setErrorMessage(response.message || "Código incorrecto");
+
+        if (response.remainingAttempts === 0) {
+          setShowVerification(false);
+          setVerificationCode("");
+          setPendingEmail("");
+          toast({
+            variant: "destructive",
+            title: "Demasiados intentos",
+            description: "Por favor, solicita un nuevo código",
+          });
+        } else {
+          toast({
+            variant: "destructive",
+            title: "Código incorrecto",
+            description: response.message || `Te quedan ${response.remainingAttempts || attempts - 1} intentos`,
+          });
+        }
+      }
     } catch (error) {
       const errorMsg = getApiErrorMessage(error);
       setErrorMessage(errorMsg);
       toast({
         variant: "destructive",
-        title: "Error al iniciar sesión",
+        title: "Error al verificar",
         description: errorMsg,
       });
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const onEmailPasswordLogin = async () => {
+    // Redirigir al flujo OTP
+    onRequestVerificationCode();
   };
 
   const onGoogleLogin = async () => {
@@ -144,7 +322,15 @@ function LoginPageContent() {
   };
 
   const handleGoBack = () => {
-    router.push("/");
+    if (showVerification) {
+      setShowVerification(false);
+      setVerificationCode("");
+      setPendingEmail("");
+      setErrorMessage("");
+      setAttempts(3);
+    } else {
+      router.push("/");
+    }
   };
 
   if (isAuthenticated) {
@@ -155,6 +341,13 @@ function LoginPageContent() {
     <div className="flex min-h-screen flex-col bg-[#007A53]">
       {/* Back button */}
       <div className="absolute left-4 top-4 z-10">
+        <button
+          onClick={handleGoBack}
+          className="flex items-center gap-2 rounded-full bg-white/20 px-4 py-2 text-white backdrop-blur-sm transition-all hover:bg-white/30"
+        >
+          <ArrowLeft className="h-5 w-5" />
+          <span className="text-sm">Volver</span>
+        </button>
       </div>
 
       {/* Main content */}
@@ -178,10 +371,8 @@ function LoginPageContent() {
         )}
 
         {/* Loading state */}
-        {/* Loading state */}
         {isSubmitting && (
           <div className="mb-6 flex flex-col items-center">
-            {/* Icono redondo SVG (Spinner nativo e indestructible) */}
             <svg
               className="mb-4 h-16 w-16 animate-spin text-white"
               xmlns="http://www.w3.org/2000/svg"
@@ -202,8 +393,9 @@ function LoginPageContent() {
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
               />
             </svg>
-
-            <p className="text-center text-white font-medium">Iniciando sesión</p>
+            <p className="text-center text-white font-medium">
+              {showVerification ? "Verificando código..." : "Iniciando sesión"}
+            </p>
           </div>
         )}
 
@@ -216,96 +408,130 @@ function LoginPageContent() {
 
         {!isSubmitting && firebaseReady && (
           <>
-            {/* Form card */}
-            <div className="w-full max-w-sm space-y-4 rounded-3xl bg-white p-8 shadow-2xl">
-              {/* Email Input */}
-              <div className="relative">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
-                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
-                    <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
-                  </svg>
-                </div>
-                <Input
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  placeholder="Correo electrónico"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  disabled={isSubmitting}
-                  className="h-14 rounded-full border-0 border-b-2 border-gray-300 bg-white/50 pl-12 pr-4 text-gray-900 placeholder-gray-500 transition-all focus:border-[#007A53] focus:bg-white focus:ring-0"
-                />
-              </div>
-
-              {/* Password Input */}
-              <div className="relative">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
-                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-                <Input
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
-                  placeholder="Contraseña"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  disabled={isSubmitting}
-                  className="h-14 rounded-full border-0 border-b-2 border-gray-300 bg-white/50 pl-12 pr-12 text-gray-900 placeholder-gray-500 transition-all focus:border-[#007A53] focus:bg-white focus:ring-0"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  disabled={isSubmitting}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 disabled:opacity-50"
-                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
-                >
-                  {showPassword ? (
+            {!showVerification ? (
+              // Formulario de login inicial
+              <div className="w-full max-w-sm space-y-4 rounded-3xl bg-white p-8 shadow-2xl">
+                {/* Email Input */}
+                <div className="relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
                     <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                      <path
-                        fillRule="evenodd"
-                        d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
-                        clipRule="evenodd"
-                      />
+                      <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+                      <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
                     </svg>
-                  ) : (
+                  </div>
+                  <Input
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    placeholder="Correo electrónico"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    disabled={isRequestingCode}
+                    className="h-14 rounded-full border-0 border-b-2 border-gray-300 bg-white/50 pl-12 pr-4 text-gray-900 placeholder-gray-500 transition-all focus:border-[#007A53] focus:bg-white focus:ring-0"
+                  />
+                </div>
+
+                {/* Login Button - Ahora es "Continuar" */}
+                <Button
+                  className="h-14 w-full rounded-full bg-[#007A53] text-lg font-bold text-white transition-all hover:bg-[#006248] disabled:opacity-70"
+                  onClick={onRequestVerificationCode}
+                  disabled={isRequestingCode}
+                >
+                  {isRequestingCode ? "Enviando..." : "Continuar"}
+                </Button>
+
+                {/* Register Link */}
+                <div className="text-center">
+                  <Link
+                    href="/register"
+                    className="text-sm font-bold text-[#007A53] underline-offset-4 hover:underline"
+                  >
+                    ¿No tienes cuenta? Regístrate aquí
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              // Formulario de verificación de código
+              <div className="w-full max-w-sm space-y-4 rounded-3xl bg-white p-8 shadow-2xl">
+                <div className="text-center">
+                  <p className="text-sm text-gray-600">
+                    Hemos enviado un código de verificación a
+                  </p>
+                  <p className="mt-1 font-semibold text-[#007A53]">
+                    {pendingEmail}
+                  </p>
+                </div>
+
+                {/* Código Input */}
+                <div className="relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
                     <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
                       <path
                         fillRule="evenodd"
-                        d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z"
+                        d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
                         clipRule="evenodd"
                       />
-                      <path d="M15.171 13.576l1.477-1.477A10.014 10.014 0 0019.542 10c-1.274-4.057-5.064-7-9.542-7a9.958 9.958 0 00-4.512 1.074l1.478 1.478a4 4 0 015.597 5.597zM6.84 6.84a1 1 0 000 1.415l5.916 5.916a1 1 0 001.415-1.415L8.254 6.84a1 1 0 00-1.415 0z" />
                     </svg>
-                  )}
-                </button>
-              </div>
+                  </div>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="Código de 6 dígitos"
+                    value={verificationCode}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+                      setVerificationCode(value);
+                    }}
+                    disabled={isSubmitting}
+                    className="h-14 rounded-full border-0 border-b-2 border-gray-300 bg-white/50 pl-12 text-center text-2xl tracking-widest text-gray-900 placeholder-gray-500 transition-all focus:border-[#007A53] focus:bg-white focus:ring-0"
+                    maxLength={6}
+                  />
+                </div>
 
-              {/* Login Button */}
-              <Button
-                className="h-14 w-full rounded-full bg-[#007A53] text-lg font-bold text-white transition-all hover:bg-[#006248] disabled:opacity-70"
-                onClick={onEmailPasswordLogin}
-                disabled={isSubmitting}
-              >
-                Entrar
-              </Button>
+                {/* Intentos restantes */}
+                {attempts < 3 && attempts > 0 && (
+                  <p className="text-center text-xs text-orange-600">
+                    Te quedan {attempts} intento{attempts !== 1 ? 's' : ''}
+                  </p>
+                )}
 
-              {/* Register Link */}
-              <div className="text-center">
-                <Link
-                  href="/register"
-                  className="text-sm font-bold text-[#007A53] underline-offset-4 hover:underline"
+                {/* Botones */}
+                <Button
+                  className="h-14 w-full rounded-full bg-[#007A53] text-lg font-bold text-white transition-all hover:bg-[#006248] disabled:opacity-70"
+                  onClick={onVerifyAndLogin}
+                  disabled={isSubmitting || verificationCode.length !== 6}
                 >
-                  ¿No tienes cuenta? Regístrate aquí
-                </Link>
+                  {isSubmitting ? "Verificando..." : "Verificar e Iniciar Sesión"}
+                </Button>
+
+                <div className="text-center">
+                  <button
+                    onClick={onResendCode}
+                    disabled={resendTimer > 0 || isRequestingCode}
+                    className="text-sm font-bold text-[#007A53] underline-offset-4 hover:underline disabled:opacity-50"
+                  >
+                    {resendTimer > 0
+                      ? `Reenviar código en ${resendTimer}s`
+                      : "¿No recibiste el código? Reenviar"}
+                  </button>
+                </div>
+
+                <div className="text-center">
+                  <button
+                    onClick={() => {
+                      setShowVerification(false);
+                      setVerificationCode("");
+                      setPendingEmail("");
+                      setErrorMessage("");
+                      setAttempts(3);
+                    }}
+                    className="text-sm text-gray-500 hover:text-gray-700"
+                  >
+                    ← Usar otro correo
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Divider */}
             <div className="my-6 flex w-full max-w-sm items-center gap-4">
@@ -320,7 +546,7 @@ function LoginPageContent() {
               <Button
                 className="h-14 w-full rounded-full bg-white text-lg font-semibold text-gray-900 transition-all hover:bg-gray-50 disabled:opacity-70"
                 onClick={onGoogleLogin}
-                disabled={isSubmitting}
+                disabled={isSubmitting || isRequestingCode}
               >
                 <svg className="mr-3 h-6 w-6" viewBox="0 0 24 24">
                   <path
@@ -347,7 +573,7 @@ function LoginPageContent() {
               <Button
                 className="h-14 w-full rounded-full bg-black text-lg font-semibold text-white transition-all hover:bg-gray-900 disabled:opacity-70"
                 onClick={onAppleLogin}
-                disabled={isSubmitting}
+                disabled={isSubmitting || isRequestingCode}
               >
                 <svg className="mr-3 h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M17.05 13.5c-.02-1.96 1.6-2.92 1.68-2.96-.92-1.34-2.35-1.52-2.86-1.54-1.2-.13-2.36.71-2.97.71-.6 0-1.54-.69-2.53-.67-1.3.02-2.5.76-3.16 1.92-1.35 2.33-.34 5.76 1 7.65.67.93 1.47 1.96 2.51 1.92 1.01-.04 1.39-.65 2.6-.65 1.2 0 1.55.65 2.6.62 1.08-.02 1.76-.95 2.41-1.88.76-1.1 1.07-2.17 1.08-2.23-.05-.01-2.11-.81-2.13-3.18zm-2.03-6.86c.54-.65.9-1.55.8-2.45-.77.03-1.71.51-2.27 1.15-.5.58-.94 1.5-.82 2.38.86.07 1.74-.44 2.29-1.08z" />
