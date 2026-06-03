@@ -25,6 +25,7 @@ import type {
   Category,
   Linea,
   Product,
+  ProductFedexShipping,
   ProductSizeStock,
   Proveedor,
   Talla,
@@ -97,6 +98,13 @@ const EMPTY_FORM = {
   lineaId: "",
   tallaIds: [] as string[],
   inventarioPorTalla: [] as ProductSizeStock[],
+  fedexShipping: {
+    enabled: true,
+    weightKg: "",
+    lengthCm: "",
+    widthCm: "",
+    heightCm: "",
+  },
   imagenes: [] as string[],
   detalles: [] as ProductDetailDraft[],
 };
@@ -142,6 +150,68 @@ function mapSizeInventory(input: unknown): ProductSizeStock[] {
       };
     })
     .filter((entry) => Boolean(entry.tallaId));
+}
+
+function mapFedexShipping(input: unknown) {
+  const item =
+    input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+
+  return {
+    enabled: typeof item.enabled === "boolean" ? item.enabled : true,
+    weightKg: toStringValue(item.weightKg),
+    lengthCm: toStringValue(item.lengthCm),
+    widthCm: toStringValue(item.widthCm),
+    heightCm: toStringValue(item.heightCm),
+  };
+}
+
+function buildFedexShippingPayload(
+  input: typeof EMPTY_FORM.fedexShipping,
+): ProductFedexShipping | undefined {
+  const values = {
+    weightKg: input.weightKg.trim(),
+    lengthCm: input.lengthCm.trim(),
+    widthCm: input.widthCm.trim(),
+    heightCm: input.heightCm.trim(),
+  };
+  const hasValues = Object.values(values).some((value) => value.length > 0);
+
+  if (!input.enabled) {
+    return { enabled: false, packageType: "YOUR_PACKAGING" };
+  }
+
+  if (!hasValues) {
+    return undefined;
+  }
+
+  const weightKg = Number(values.weightKg);
+  const lengthCm = Number(values.lengthCm);
+  const widthCm = Number(values.widthCm);
+  const heightCm = Number(values.heightCm);
+
+  if (
+    !Number.isFinite(weightKg) ||
+    !Number.isFinite(lengthCm) ||
+    !Number.isFinite(widthCm) ||
+    !Number.isFinite(heightCm) ||
+    weightKg <= 0 ||
+    lengthCm <= 0 ||
+    widthCm <= 0 ||
+    heightCm <= 0
+  ) {
+    throw new Error(
+      "Completa peso, largo, ancho y alto con numeros mayores a 0 para activar envio FedEx.",
+    );
+  }
+
+  return {
+    enabled: input.enabled,
+    weightKg,
+    lengthCm,
+    widthCm,
+    heightCm,
+    packageType: "YOUR_PACKAGING",
+  };
 }
 
 function normalizeSearchValue(value: string): string {
@@ -399,6 +469,7 @@ export default function AdminProductsPage() {
             mapSizeInventory(detailData.inventarioPorTalla).length > 0
               ? mapSizeInventory(detailData.inventarioPorTalla)
               : (storefrontDetail?.inventarioPorTalla ?? []),
+          fedexShipping: mapFedexShipping(detailData.fedexShipping),
           imagenes: toStringArray(detailData.imagenes).filter(
             (url) => !isGeneratedPlaceholderImage(url),
           ),
@@ -637,7 +708,13 @@ export default function AdminProductsPage() {
         lineaId?: string;
         tallaIds: string[];
         inventarioPorTalla?: ProductSizeStock[];
+        fedexShipping?: ProductFedexShipping;
       };
+
+      const fedexShipping = buildFedexShippingPayload(formData.fedexShipping);
+      if (fedexShipping) {
+        payload.fedexShipping = fedexShipping;
+      }
 
       if (formData.tallaIds.length > 0) {
         const normalizedInventory = formData.tallaIds.map((tallaId) => {
@@ -1231,6 +1308,118 @@ export default function AdminProductsPage() {
                     </label>
                   ))
                 )}
+              </div>
+            </div>
+
+            <div className="space-y-3 rounded-md border p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label>Paquete FedEx</Label>
+                </div>
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={formData.fedexShipping.enabled}
+                    onCheckedChange={(checked) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        fedexShipping:
+                          checked === true
+                            ? { ...prev.fedexShipping, enabled: true }
+                            : {
+                                enabled: false,
+                                weightKg: "",
+                                lengthCm: "",
+                                widthCm: "",
+                                heightCm: "",
+                              },
+                      }))
+                    }
+                    disabled={isLoadingDetail}
+                  />
+                  <span>Requiere envío</span>
+                </label>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-4">
+                <div className="space-y-2">
+                  <Label htmlFor="fedex-weight">Peso kg</Label>
+                  <Input
+                    id="fedex-weight"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.fedexShipping.weightKg}
+                    onChange={(event) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        fedexShipping: {
+                          ...prev.fedexShipping,
+                          weightKg: event.target.value,
+                        },
+                      }))
+                    }
+                    disabled={isLoadingDetail || !formData.fedexShipping.enabled}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fedex-length">Largo cm</Label>
+                  <Input
+                    id="fedex-length"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={formData.fedexShipping.lengthCm}
+                    onChange={(event) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        fedexShipping: {
+                          ...prev.fedexShipping,
+                          lengthCm: event.target.value,
+                        },
+                      }))
+                    }
+                    disabled={isLoadingDetail || !formData.fedexShipping.enabled}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fedex-width">Ancho cm</Label>
+                  <Input
+                    id="fedex-width"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={formData.fedexShipping.widthCm}
+                    onChange={(event) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        fedexShipping: {
+                          ...prev.fedexShipping,
+                          widthCm: event.target.value,
+                        },
+                      }))
+                    }
+                    disabled={isLoadingDetail || !formData.fedexShipping.enabled}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fedex-height">Alto cm</Label>
+                  <Input
+                    id="fedex-height"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={formData.fedexShipping.heightCm}
+                    onChange={(event) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        fedexShipping: {
+                          ...prev.fedexShipping,
+                          heightCm: event.target.value,
+                        },
+                      }))
+                    }
+                    disabled={isLoadingDetail || !formData.fedexShipping.enabled}
+                  />
+                </div>
               </div>
             </div>
 

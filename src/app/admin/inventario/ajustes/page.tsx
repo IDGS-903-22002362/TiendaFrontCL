@@ -286,14 +286,7 @@ export default function InventoryAdjustmentsPage() {
   };
 
   return (
-    <div className="container mx-auto space-y-6 px-4 py-8">
-      <header>
-        <h1 className="font-headline text-3xl font-bold">Ajustes de inventario</h1>
-        <p className="text-sm text-muted-foreground">
-          Ajuste puntual y reemplazo masivo por talla.
-        </p>
-      </header>
-
+    <div className="space-y-6">
       {!canUseInventory ? (
         <Card>
           <CardContent className="py-6 text-sm text-muted-foreground">

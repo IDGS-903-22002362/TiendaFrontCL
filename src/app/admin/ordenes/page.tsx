@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Copy, CreditCard, RefreshCw, Filter, Search, X } from "lucide-react";
+import { Copy, CreditCard, RefreshCw, Filter, Search, X, Truck } from "lucide-react";
 import { ordersApi } from "@/lib/api/orders";
 import { paymentsApi } from "@/lib/api/payments";
+import { fedexAdminApi } from "@/lib/api/fedex";
 import type {
   AplazoRefundRequest,
   AplazoRefundRequestStatus,
@@ -240,6 +241,49 @@ export default function AdminOrdersPage() {
       });
     }
   }
+
+  const handleCreateFedExShipment = async (order: Orden) => {
+    try {
+      await fedexAdminApi.shipOrder(order.id);
+      toast({ title: "Guia FedEx solicitada" });
+      void loadOrders(estadoFilter);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error FedEx",
+        description: getApiErrorMessage(error),
+      });
+    }
+  };
+
+  const handleCancelFedExShipment = async (order: Orden) => {
+    if (order.shipping?.status === "DELIVERED") {
+      toast({
+        variant: "destructive",
+        title: "Guia entregada",
+        description: "FedEx ya marco esta guia como entregada; no puede cancelarse desde la UI.",
+      });
+      return;
+    }
+
+    const reason = window.prompt("Motivo para cancelar la guia FedEx");
+    if (!reason?.trim()) return;
+
+    try {
+      await fedexAdminApi.cancelShipment(order.id, {
+        reason: reason.trim(),
+        forceRefreshTracking: true,
+      });
+      toast({ title: "Cancelacion FedEx solicitada" });
+      void loadOrders(estadoFilter);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error FedEx",
+        description: getApiErrorMessage(error),
+      });
+    }
+  };
 
   const resetRefundForm = () => {
     setRefundAmount("");
@@ -679,19 +723,20 @@ export default function AdminOrdersPage() {
                 <TableHead>Cliente</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead>Estado Actual</TableHead>
+                <TableHead>FedEx</TableHead>
                 <TableHead className="text-right min-w-[200px]">Acciones Operativas</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     Cargando órdenes de la base de datos...
                   </TableCell>
                 </TableRow>
               ) : filteredOrders.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     No hay órdenes con los filtros actuales.
                   </TableCell>
                 </TableRow>
@@ -727,6 +772,23 @@ export default function AdminOrdersPage() {
                       <Badge variant={badgeVariants[order.estado] || "default"}>
                         {order.estado}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {order.fulfillmentMethod === "PICKUP" ? (
+                        <span className="text-muted-foreground">Pickup</span>
+                      ) : (
+                        <div className="space-y-1">
+                          <Badge variant="outline">
+                            {order.shipping?.status ?? "Sin guia"}
+                          </Badge>
+                          <p className="max-w-[160px] truncate text-muted-foreground">
+                            {order.shipping?.trackingNumber ??
+                              order.shipping?.serviceName ??
+                              order.shipping?.serviceType ??
+                              "FedEx"}
+                          </p>
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="text-right flex items-center justify-end gap-2">
                       <Select 
@@ -764,6 +826,30 @@ export default function AdminOrdersPage() {
                         <CreditCard className="mr-1 h-3.5 w-3.5" />
                         Pago
                       </Button>
+                      {order.fulfillmentMethod !== "PICKUP" ? (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-xs px-2"
+                            onClick={() => void handleCreateFedExShipment(order)}
+                          >
+                            <Truck className="mr-1 h-3.5 w-3.5" />
+                            Guia
+                          </Button>
+                          {order.shipping?.trackingNumber ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 text-xs px-2"
+                              onClick={() => void handleCancelFedExShipment(order)}
+                              disabled={order.shipping?.status === "DELIVERED"}
+                            >
+                              Cancelar guia
+                            </Button>
+                          ) : null}
+                        </>
+                      ) : null}
                     </TableCell>
                   </TableRow>
                 ))

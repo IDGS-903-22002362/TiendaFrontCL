@@ -7,16 +7,9 @@ import { type UseFormReturn, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import {
-  AddressElement,
-  CardElement,
-  Elements,
-  useElements,
-  useStripe,
+  EmbeddedCheckout,
+  EmbeddedCheckoutProvider,
 } from "@stripe/react-stripe-js";
-import type {
-  StripeAddressElementChangeEvent,
-  StripeAddressElementOptions,
-} from "@stripe/stripe-js";
 import {
   ArrowLeft,
   Clock3,
@@ -24,10 +17,12 @@ import {
   Home,
   ShieldCheck,
   Store,
+  Truck,
 } from "lucide-react";
 import { useCart } from "@/hooks/use-cart";
 import { useAuth } from "@/hooks/use-auth";
 import { useStorefront } from "@/hooks/use-storefront";
+import { ApiError } from "@/lib/api/client";
 import {
   checkoutCart,
   fetchCart,
@@ -43,9 +38,23 @@ import {
   type PickupLocation,
 } from "@/lib/api/pickup";
 import {
+  buildFedExQuotePayload,
+  fedexApi,
+  getMexicoStateLabelFromFedExCode,
+  normalizeFedExShippingOption,
+  normalizeFedExShippingQuote,
+  toFedexRecipient,
+  type FedExDireccionEnvio,
+} from "@/lib/api/fedex";
+import {
   getAplazoPaymentErrorMessage,
   getApiErrorMessage,
 } from "@/lib/api/errors";
+import {
+  buildCheckoutShippingAddress,
+  buildCheckoutShippingSelection,
+  toLegacyDireccionEnvio,
+} from "@/lib/checkout/shipping";
 import {
   buildAplazoReturnUrls,
   calculateAplazoItemsTotal,
@@ -65,16 +74,36 @@ import {
   writeStoredAplazoRetryPayload,
   writeStoredAplazoCheckoutState,
 } from "@/lib/aplazo";
+import { MX_STATES } from "@/lib/shipping/mx-states";
 import type {
+  AddressValidationStatus,
   AplazoOnlineCreatePayload,
   CartItem,
+  FedExAddressValidation,
+  FedExShippingOption,
+  FedExShippingQuote,
   Orden,
   PaymentMethod,
+  ShippingSelection,
 } from "@/lib/types";
+import type {
+  CheckoutShippingAddress,
+} from "@/types/shipping";
 import { useToast } from "@/hooks/use-toast";
 import { useStripeConfig } from "@/hooks/use-stripe-config";
+import {
+  GooglePlaceAutocompleteElement,
+  type ParsedGoogleCheckoutAddress,
+} from "@/components/checkout/GooglePlaceAutocompleteElement";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -91,8 +120,6 @@ import { Breadcrumbs } from "@/components/storefront/shared/breadcrumbs";
 import { PaymentMethodStrip } from "@/components/storefront/shared/payment-method-strip";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/storefront";
-
-const SHIPPING_COST = 99;
 
 function roundCurrency(value: number) {
   return Math.round(value * 100) / 100;
@@ -150,8 +177,9 @@ function sanitizeAplazoCustomerForLog(customer: SanitizedAplazoCustomer) {
 function getExpectedCheckoutPricing(
   subtotal: number,
   fulfillmentMethod: FulfillmentMethod = "DELIVERY",
+  shippingAmount = 0,
 ) {
-  const shipping = fulfillmentMethod === "PICKUP" ? 0 : SHIPPING_COST;
+  const shipping = fulfillmentMethod === "PICKUP" ? 0 : shippingAmount;
   const tax = 0;
   const total = subtotal + shipping + tax;
 
@@ -166,38 +194,41 @@ function getExpectedCheckoutPricing(
 function validateOrderPricing(params: {
   order: Pick<Orden, "subtotal" | "shippingCost" | "total">;
   expectedSubtotal: number;
-  fulfillmentMethod?: FulfillmentMethod;
 }) {
-  const expected = getExpectedCheckoutPricing(
-    params.expectedSubtotal,
-    params.fulfillmentMethod,
-  );
   const actualSubtotal = roundCurrency(params.order.subtotal ?? 0);
   const actualShipping = roundCurrency(params.order.shippingCost ?? 0);
   const actualTotal = roundCurrency(params.order.total ?? 0);
+  const expectedSubtotal = roundCurrency(params.expectedSubtotal);
+  const expectedTotal = roundCurrency(actualSubtotal + actualShipping);
 
   if (
-    actualSubtotal === expected.subtotal &&
-    actualShipping === expected.shipping &&
-    actualTotal === expected.total
+    actualSubtotal === expectedSubtotal &&
+    actualShipping >= 0 &&
+    actualTotal === expectedTotal
   ) {
     return;
   }
 
   throw new Error(
-    `La orden backend devolvió subtotal ${formatCurrency(actualSubtotal)}, envío ${formatCurrency(actualShipping)} y total ${formatCurrency(actualTotal)}, pero el checkout mostraba ${formatCurrency(expected.total)}. Revisa el pricing antes de continuar con el pago.`,
+    `La orden backend devolvió subtotal ${formatCurrency(actualSubtotal)}, envío ${formatCurrency(actualShipping)} y total ${formatCurrency(actualTotal)}, pero el carrito esperaba subtotal ${formatCurrency(expectedSubtotal)}. Revisa el pricing antes de continuar con el pago.`,
   );
 }
 
 const shippingSchema = z.object({
   name: z.string().min(2, "Nombre es requerido"),
-  telefono: z.string().min(10, "Teléfono a 10 dígitos requerido"),
+  telefono: z
+    .string()
+    .refine(
+      (value) => isValidMxPhoneForAplazo(value),
+      "El teléfono debe tener exactamente 10 dígitos",
+    ),
   calle: z.string().min(2, "Calle es requerida"),
   numero: z.string().min(1, "Número es requerido"),
+  numeroInterior: z.string().optional(),
   colonia: z.string().min(2, "Colonia es requerida"),
   city: z.string().min(2, "Ciudad es requerida"),
   estado: z.string().min(2, "Estado es requerido"),
-  zip: z.string().min(4, "Código postal inválido"),
+  zip: z.string().regex(/^\d{5}$/, "Código postal inválido"),
   email: z.string().email("Email inválido"),
 });
 
@@ -209,30 +240,26 @@ type PickupCheckoutValues = {
   pickupContact: PickupContact;
 };
 
+type DeliveryShippingSelection = {
+  quote: FedExShippingQuote;
+  selectedOption: FedExShippingOption;
+  shippingSelection: ShippingSelection;
+};
+
+type CheckoutPricing = ReturnType<typeof getExpectedCheckoutPricing>;
+
 type DeliveryCheckoutValues = ShippingValues & {
   fulfillmentMethod: "DELIVERY";
+  deliveryReferences?: string;
+  formattedAddress?: string;
+  shippingAddress: CheckoutShippingAddress;
+  addressValidationStatus?: AddressValidationStatus;
+  shippingQuote?: FedExShippingQuote | null;
+  shippingSelection?: DeliveryShippingSelection | null;
+  checkoutPricing?: CheckoutPricing;
 };
 
 type CheckoutValues = DeliveryCheckoutValues | PickupCheckoutValues;
-
-type CapturedAddressValue = StripeAddressElementChangeEvent["value"];
-
-const addressElementOptions: StripeAddressElementOptions = {
-  mode: "shipping",
-  allowedCountries: ["MX"],
-  fields: {
-    phone: "always",
-  },
-  validation: {
-    phone: {
-      required: "always",
-    },
-  },
-  autocomplete: {
-    mode: "google_maps_api",
-    apiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-  },
-};
 
 type SanitizedAplazoCustomer = {
   name: string;
@@ -263,23 +290,248 @@ function splitStreetAndNumber(line1: string) {
   };
 }
 
-function mapAddressElementToShippingValues(
-  value: CapturedAddressValue,
-  email: string,
-): ShippingValues {
-  const { calle, numero } = splitStreetAndNumber(value.address.line1);
+function buildFedExDireccionEnvio(
+  values: ShippingValues,
+  referencias?: string,
+  addressValidationStatus?: AddressValidationStatus,
+): FedExDireccionEnvio {
+  return toLegacyDireccionEnvio(
+    buildCheckoutShippingAddress(
+      {
+        fullName: values.name,
+        phone: normalizeMxPhoneForAplazo(values.telefono),
+        street1: `${values.calle} ${values.numero}`.trim(),
+        street2: values.colonia,
+        interiorNumber: values.numeroInterior,
+        references: referencias,
+        city: values.city,
+        stateLabel: values.estado,
+        postalCode: values.zip,
+        countryCode: "MX",
+      },
+      addressValidationStatus,
+    ),
+  );
+}
+
+function validateDireccionEnvio(address: FedExDireccionEnvio): string[] {
+  const errors: string[] = [];
+
+  if (!address.nombre.trim()) errors.push("Captura el nombre de quien recibe.");
+  if (!/^\d{10}$/.test(address.telefono)) {
+    errors.push("El telefono debe tener 10 digitos.");
+  }
+  if (!address.calle.trim()) errors.push("Captura la calle.");
+  if (!address.numero.trim()) errors.push("Captura el numero exterior.");
+  if (!address.colonia.trim()) errors.push("Captura la colonia.");
+  if (!address.ciudad.trim()) errors.push("Captura la ciudad.");
+  if (!address.estado.trim()) errors.push("Captura el estado.");
+  if (!/^\d{5}$/.test(address.codigoPostal)) {
+    errors.push("El codigo postal debe tener 5 digitos.");
+  }
+
+  return errors;
+}
+
+function buildAddressValidationKey(address: FedExDireccionEnvio) {
+  return [
+    address.calle,
+    address.numero,
+    address.numeroInterior ?? "",
+    address.colonia,
+    address.ciudad,
+    address.estado,
+    address.codigoPostal,
+  ]
+    .map((value) => normalizeWhitespace(value).toLowerCase())
+    .join("|");
+}
+
+function isDireccionValidatable(address: FedExDireccionEnvio) {
+  return validateDireccionEnvio(address).length === 0;
+}
+
+function parseResolvedAddress(streetLines: string[]) {
+  const [line1 = "", line2 = ""] = streetLines;
+  const { calle, numero } = splitStreetAndNumber(line1);
+  const interiorMatch = line2.match(/\bInt(?:\.|erior)?\s+(.+)$/i);
 
   return {
-    name: normalizeWhitespace(value.name),
-    telefono: normalizeWhitespace(value.phone ?? ""),
     calle,
     numero,
-    colonia: normalizeWhitespace(value.address.line2 ?? "") || "Sin colonia",
-    city: normalizeWhitespace(value.address.city),
-    estado: normalizeWhitespace(value.address.state),
-    zip: normalizeWhitespace(value.address.postal_code),
-    email,
+    numeroInterior: interiorMatch?.[1]
+      ? normalizeWhitespace(interiorMatch[1])
+      : "",
+    colonia: normalizeWhitespace(
+      interiorMatch ? line2.replace(interiorMatch[0], "") : line2,
+    ),
   };
+}
+
+function buildSuggestedShippingValues(
+  original: ShippingValues,
+  validation: FedExAddressValidation,
+): ShippingValues | null {
+  const resolved = validation.resolvedAddress ?? validation.addresses?.[0];
+  if (!resolved) {
+    return null;
+  }
+
+  const parsed = parseResolvedAddress(resolved.streetLines);
+
+  return {
+    ...original,
+    calle: parsed.calle || original.calle,
+    numero: parsed.numero || original.numero,
+    numeroInterior: parsed.numeroInterior || original.numeroInterior || "",
+    colonia: parsed.colonia || original.colonia,
+    city: normalizeWhitespace(resolved.city ?? original.city),
+    estado:
+      getMexicoStateLabelFromFedExCode(resolved.stateOrProvinceCode) ??
+      normalizeWhitespace(original.estado),
+    zip: normalizeWhitespace(resolved.postalCode || original.zip),
+  };
+}
+
+function hasAddressSuggestion(
+  original: ShippingValues,
+  validation: FedExAddressValidation,
+) {
+  const suggested = buildSuggestedShippingValues(original, validation);
+  if (!suggested) {
+    return false;
+  }
+
+  return (
+    buildAddressValidationKey(buildFedExDireccionEnvio(original)) !==
+    buildAddressValidationKey(buildFedExDireccionEnvio(suggested))
+  );
+}
+
+function getNextAddressValidationStatus(
+  validation: FedExAddressValidation,
+): AddressValidationStatus {
+  const firstAddress = validation.addresses?.[0] ?? validation.resolvedAddress;
+  const attributes = firstAddress?.attributes ?? {};
+  const isAddressSuccess = validation.success === true || validation.isValid === true;
+  const isStandardized =
+    firstAddress?.isStandardized === true ||
+    attributes.AddressType === "STANDARDIZED";
+  const isMatched = attributes.Matched === true || attributes.Matched === "true";
+  const isValidlyFormed =
+    attributes.ValidlyFormed === true || attributes.ValidlyFormed === "true";
+
+  if (firstAddress?.isLikelyValid === true) {
+    return "VALIDATED";
+  }
+
+  // En Mexico, FedEx puede responder Address Validation con 200 y direccion
+  // estandarizada, pero `isLikelyValid` puede venir en false porque no siempre
+  // hay validacion DPV completa. Si Postal Validation paso, permitimos cotizar
+  // como USER_CONFIRMED y dejamos que Rates determine si hay tarifa disponible.
+  if (isAddressSuccess && (isStandardized || isMatched || isValidlyFormed)) {
+    return "USER_CONFIRMED";
+  }
+
+  if (isAddressSuccess) {
+    return "USER_CONFIRMED";
+  }
+
+  return "NOT_VALIDATED";
+}
+
+function canUseAddressForFedExQuote(status?: AddressValidationStatus) {
+  return (
+    status === "VALIDATED" ||
+    status === "USER_CONFIRMED" ||
+    status === "VALIDATION_UNAVAILABLE"
+  );
+}
+
+function isRecoverableFedExQuoteError(error: ApiError) {
+  const message = getApiErrorMessage(error);
+  const provider = error.payload?.provider;
+
+  return (
+    error.status === 422 ||
+    error.status === 502 ||
+    (error.status === 500 &&
+      (provider === "FEDEX" ||
+        /invalid service and packaging combination/i.test(message)))
+  );
+}
+
+function getFedExQuoteErrorMessage(error: unknown) {
+  if (error instanceof ApiError) {
+    switch (error.code) {
+      case "SHIPPING_ADDRESS_REQUIRED":
+        return "Completa la direccion de entrega antes de cotizar.";
+      case "FEDEX_RATE_UNAVAILABLE":
+        return "FedEx no devolvio tarifas para esta direccion.";
+      case "FEDEX_SERVICE_UNAVAILABLE":
+        return "FedEx no esta disponible por el momento. Intenta nuevamente en unos segundos.";
+      case "FEDEX_PRODUCT_DIMENSIONS_MISSING":
+        return "Un producto del carrito no tiene peso y dimensiones FedEx configurados. Contacta a soporte para completar esos datos antes de pedir envio.";
+      case "FEDEX_PRODUCT_LIMITS_EXCEEDED":
+        return "Un producto del carrito excede los limites de tamano o peso permitidos por FedEx. Contacta a soporte para revisar el envio.";
+      default:
+        if (error.status === 429) {
+          return "FedEx recibio demasiadas solicitudes. Espera unos segundos antes de reintentar.";
+        }
+        if (isRecoverableFedExQuoteError(error)) {
+          return `${getApiErrorMessage(error)} Puedes reintentar o cambiar la direccion de entrega.`;
+        }
+    }
+  }
+
+  return getApiErrorMessage(error);
+}
+
+function isQuoteExpired(quote?: FedExShippingQuote) {
+  if (!quote?.expiresAt) {
+    return false;
+  }
+
+  const expiresAt = new Date(quote.expiresAt).getTime();
+  return Number.isFinite(expiresAt) && expiresAt <= Date.now();
+}
+
+function requiresFedExSelection(quote?: FedExShippingQuote | null) {
+  return quote?.requiresShipping !== false;
+}
+
+function getDeliveryShippingSelection(values: CheckoutValues) {
+  return values.fulfillmentMethod === "DELIVERY"
+    ? values.shippingSelection
+    : null;
+}
+
+function getDeliveryShippingAmount(values: CheckoutValues) {
+  return getDeliveryShippingSelection(values)?.selectedOption.amount ?? 0;
+}
+
+function assertDeliveryShippingReady(values: CheckoutValues) {
+  if (values.fulfillmentMethod !== "DELIVERY") {
+    return;
+  }
+
+  if (!canUseAddressForFedExQuote(values.addressValidationStatus)) {
+    throw new Error(
+      "Valida o confirma tu direccion de entrega antes de continuar con el pago.",
+    );
+  }
+
+  if (values.shippingSelection === undefined) {
+    throw new Error(
+      "Cotiza el envio FedEx antes de continuar con el pago.",
+    );
+  }
+
+  if (values.shippingSelection && isQuoteExpired(values.shippingSelection.quote)) {
+    throw new Error(
+      "La cotizacion FedEx expiro. Vuelve al paso de entrega y recotiza.",
+    );
+  }
 }
 
 function getSanitizedAplazoCustomer(values: CheckoutValues): SanitizedAplazoCustomer {
@@ -302,7 +554,9 @@ function getSanitizedAplazoCustomer(values: CheckoutValues): SanitizedAplazoCust
 
   const name = getSanitizedCheckoutName(values.name);
   const addressLine = normalizeWhitespace(
-    [values.calle, values.numero, values.colonia].filter(Boolean).join(" "),
+    [values.calle, values.numero, values.numeroInterior, values.colonia]
+      .filter(Boolean)
+      .join(" "),
   );
 
   return {
@@ -377,6 +631,80 @@ function getOrderIdFromCheckoutResult(payload: unknown): string {
   return typeof orderId === "string" ? orderId : "";
 }
 
+function getCheckoutErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    switch (error.code) {
+      case "SHIPPING_RATE_CHANGED":
+        return "El costo de envio cambio. Vuelve a confirmar tu envio.";
+      case "FEDEX_SERVICE_NOT_AVAILABLE":
+        return "Ese servicio FedEx ya no esta disponible para tu direccion.";
+      case "FEDEX_RATE_UNAVAILABLE":
+        return "FedEx no devolvio tarifas para esta direccion.";
+      case "FEDEX_SERVICE_UNAVAILABLE":
+        return "FedEx no esta disponible temporalmente. Intenta nuevamente.";
+      case "PRODUCT_SHIPPING_DATA_MISSING":
+        return "Uno de los productos no tiene datos de envio configurados.";
+      case "CHECKOUT_STOCK_UNAVAILABLE":
+        return error.message || "Hay productos sin stock suficiente.";
+      case "SHIPPING_ADDRESS_REQUIRED":
+        return "Completa la direccion de entrega para continuar.";
+      case "CHECKOUT_CART_EMPTY":
+        return "Tu carrito esta vacio. Regresa al carrito para continuar.";
+      default:
+        if (error.status === 429) {
+          return "Espera unos segundos antes de reintentar el checkout.";
+        }
+    }
+  }
+
+  return getApiErrorMessage(error);
+}
+
+function buildRetryDeliveryValuesFromCheckoutError(
+  values: CheckoutValues,
+  error: unknown,
+): DeliveryCheckoutValues | null {
+  if (!(error instanceof ApiError) || values.fulfillmentMethod !== "DELIVERY") {
+    return null;
+  }
+
+  const errorData =
+    error.payload?.data && typeof error.payload.data === "object"
+      ? (error.payload.data as Record<string, unknown>)
+      : undefined;
+  const quotes = Array.isArray(errorData?.quotes) ? errorData.quotes : [];
+
+  if (error.code === "SHIPPING_RATE_CHANGED" && quotes.length > 0) {
+    const quote = normalizeFedExShippingQuote({
+      quoteId:
+        typeof errorData?.quoteId === "string" ? errorData.quoteId : "",
+      provider: "FEDEX",
+      currency:
+        typeof errorData?.currency === "string" ? errorData.currency : "MXN",
+      expiresAt:
+        typeof errorData?.expiresAt === "string" ? errorData.expiresAt : undefined,
+      requiresShipping: true,
+      options: quotes.map(normalizeFedExShippingOption),
+    });
+
+    return {
+      ...values,
+      shippingQuote: quote,
+      shippingSelection: undefined,
+    };
+  }
+
+  if (error.code === "FEDEX_SERVICE_NOT_AVAILABLE") {
+    return {
+      ...values,
+      shippingQuote: null,
+      shippingSelection: undefined,
+    };
+  }
+
+  return null;
+}
+
 function buildCheckoutPayload(
   values: CheckoutValues,
   metodoPago: PaymentMethod,
@@ -387,24 +715,30 @@ function buildCheckoutPayload(
       pickupLocationId: values.pickupLocation.id,
       pickupContact: values.pickupContact,
       metodoPago,
-      costoEnvio: 0,
     };
   }
 
+  const selectedOption = values.shippingSelection?.selectedOption;
+  const shippingQuoteId = values.shippingSelection?.quote.quoteId;
+  const shippingPayload = buildFedExQuotePayload(
+    toLegacyDireccionEnvio(values.shippingAddress),
+  );
+
   return {
     fulfillmentMethod: "DELIVERY" as const,
-    direccionEnvio: {
-      nombre: values.name,
-      calle: values.calle,
-      numero: values.numero,
-      colonia: values.colonia,
-      ciudad: values.city,
-      estado: values.estado,
-      codigoPostal: values.zip,
-      telefono: values.telefono,
-    },
+    direccionEnvio: shippingPayload.direccionEnvio,
+    shippingAddress: shippingPayload.shippingAddress,
+    fedexAddress: shippingPayload.fedexAddress,
     metodoPago,
-    costoEnvio: SHIPPING_COST,
+    ...(shippingQuoteId ? { shippingQuoteId } : {}),
+    ...(selectedOption
+      ? selectedOption.optionId
+        ? { selectedShippingOptionId: selectedOption.optionId }
+        : { selectedServiceType: selectedOption.serviceType }
+      : {}),
+    ...(values.shippingSelection
+      ? { shippingSelection: values.shippingSelection.shippingSelection }
+      : {}),
   };
 }
 
@@ -516,12 +850,24 @@ function MobileCheckoutActions({ children }: { children: ReactNode }) {
 
 function OrderSummaryPanel({
   fulfillmentMethod,
+  shippingSelection,
+  checkoutPricing,
 }: {
   fulfillmentMethod: FulfillmentMethod;
+  shippingSelection?: DeliveryShippingSelection | null;
+  checkoutPricing?: CheckoutPricing | null;
 }) {
   const { state, subtotal, totalItems } = useCart();
   const { getPersonalization } = useStorefront();
-  const pricing = getExpectedCheckoutPricing(subtotal, fulfillmentMethod);
+  const pricing =
+    checkoutPricing && checkoutPricing.subtotal > 0
+      ? checkoutPricing
+      :
+    getExpectedCheckoutPricing(
+      subtotal,
+      fulfillmentMethod,
+      shippingSelection?.selectedOption.amount ?? 0,
+    );
 
   return (
     <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
@@ -571,9 +917,20 @@ function OrderSummaryPanel({
             <span>
               {fulfillmentMethod === "PICKUP"
                 ? "Sin costo"
-                : formatCurrency(pricing.shipping)}
+                : shippingSelection
+                  ? formatCurrency(pricing.shipping)
+                  : "Cotizar en checkout"}
             </span>
           </div>
+          {fulfillmentMethod === "DELIVERY" && shippingSelection ? (
+            <div className="flex items-center justify-between gap-3">
+              <span>FedEx</span>
+              <span className="text-right">
+                {shippingSelection.selectedOption.serviceName ??
+                  shippingSelection.selectedOption.serviceType}
+              </span>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between">
             <span>Artículos</span>
             <span>{totalItems}</span>
@@ -618,21 +975,21 @@ function PaymentMethodSelector({
     logoWidth?: number;
     logoHeight?: number;
   }> = [
-      {
-        value: "TARJETA",
-        title: "Tarjeta",
-        description: "Pago inmediato con Stripe dentro del checkout actual.",
-        icon: CreditCard,
-      },
-      {
-        value: "APLAZO",
-        title: "Aplazo",
-        description: "Te redirigiremos para completar y validar el pago de forma asíncrona.",
-        logoSrc: "/images/iconosdepagos/aplazo.svg",
-        logoWidth: 92,
-        logoHeight: 32,
-      },
-    ];
+    {
+      value: "TARJETA",
+      title: "Tarjeta",
+      description: "Pago inmediato con Stripe Embedded Checkout dentro del flujo actual.",
+      icon: CreditCard,
+    },
+    {
+      value: "APLAZO",
+      title: "Aplazo",
+      description: "Te redirigiremos para completar y validar el pago de forma asíncrona.",
+      logoSrc: "/images/iconosdepagos/aplazo.svg",
+      logoWidth: 92,
+      logoHeight: 32,
+    },
+  ];
 
   return (
     <div className="space-y-3">
@@ -815,7 +1172,8 @@ function ShippingAddressStep({
   onSelectedPickupLocationIdChange,
   onPickupContactChange,
   isAuthenticated,
-  onAddressCaptured,
+  cartSignature,
+  initialDeliveryValues,
   onContinue,
 }: {
   form: UseFormReturn<ShippingValues>;
@@ -829,13 +1187,445 @@ function ShippingAddressStep({
   onSelectedPickupLocationIdChange: (value: string) => void;
   onPickupContactChange: (value: PickupContact) => void;
   isAuthenticated: boolean;
-  onAddressCaptured: (value: CapturedAddressValue) => void;
+  cartSignature: string;
+  initialDeliveryValues?: DeliveryCheckoutValues | null;
   onContinue: (values: CheckoutValues) => void;
 }) {
-  const elements = useElements();
   const { toast } = useToast();
   const [addressError, setAddressError] = useState<string | null>(null);
+  const [shippingError, setShippingError] = useState<string | null>(null);
   const [deliveryReferences, setDeliveryReferences] = useState("");
+  const [shippingQuote, setShippingQuote] = useState<FedExShippingQuote | null>(null);
+  const [shippingOptions, setShippingOptions] = useState<FedExShippingOption[]>([]);
+  const [selectedShippingOptionId, setSelectedShippingOptionId] = useState("");
+  const [selectedShipping, setSelectedShipping] =
+    useState<DeliveryShippingSelection | null>(null);
+  const [checkoutPricing, setCheckoutPricing] = useState<CheckoutPricing | null>(null);
+  const [isGoogleReady, setIsGoogleReady] = useState(false);
+  const [isGoogleUnavailable, setIsGoogleUnavailable] = useState(false);
+  const [googleAutocompleteMessage, setGoogleAutocompleteMessage] =
+    useState<string | null>(null);
+  const [isLoadingAddress, setIsLoadingAddress] = useState(false);
+  const [isLoadingShippingOptions, setIsLoadingShippingOptions] = useState(false);
+  const [isRecalculatingCheckout, setIsRecalculatingCheckout] = useState(false);
+  const [shippingWarnings, setShippingWarnings] = useState<string[]>([]);
+  const [formattedAddress, setFormattedAddress] = useState("");
+  const [addressValidationStatus, setAddressValidationStatus] =
+    useState<AddressValidationStatus>("NOT_VALIDATED");
+  const [isValidatingPostal, setIsValidatingPostal] = useState(false);
+  const [postalValidationMessage, setPostalValidationMessage] =
+    useState<string | null>(null);
+  const [postalValidated, setPostalValidated] = useState(false);
+  const [isValidatingAddress, setIsValidatingAddress] = useState(false);
+  const [addressValidationMessages, setAddressValidationMessages] = useState<
+    string[]
+  >([]);
+  const [suggestedShippingValues, setSuggestedShippingValues] =
+    useState<ShippingValues | null>(null);
+  const [hasPendingSuggestion, setHasPendingSuggestion] = useState(false);
+  const [lastQuotedAddressKey, setLastQuotedAddressKey] = useState<string | null>(
+    null,
+  );
+
+  const watchedName = form.watch("name");
+  const watchedTelefono = form.watch("telefono");
+  const watchedCalle = form.watch("calle");
+  const watchedNumero = form.watch("numero");
+  const watchedNumeroInterior = form.watch("numeroInterior");
+  const watchedColonia = form.watch("colonia");
+  const watchedCity = form.watch("city");
+  const watchedEstado = form.watch("estado");
+  const watchedZip = form.watch("zip");
+  const currentAddressKey = buildAddressValidationKey(
+    buildFedExDireccionEnvio(
+      {
+        name: watchedName,
+        telefono: watchedTelefono,
+        calle: watchedCalle,
+        numero: watchedNumero,
+        numeroInterior: watchedNumeroInterior,
+        colonia: watchedColonia,
+        city: watchedCity,
+        estado: watchedEstado,
+        zip: watchedZip,
+        email: form.getValues("email"),
+      },
+      deliveryReferences,
+      addressValidationStatus,
+    ),
+  );
+
+  useEffect(() => {
+    setShippingQuote(null);
+    setShippingOptions([]);
+    setSelectedShipping(null);
+    setCheckoutPricing(null);
+    setSelectedShippingOptionId("");
+    setAddressValidationStatus("NOT_VALIDATED");
+    setShippingWarnings([]);
+    setPostalValidationMessage(null);
+    setPostalValidated(false);
+    setAddressValidationMessages([]);
+    setSuggestedShippingValues(null);
+    setHasPendingSuggestion(false);
+    setFormattedAddress("");
+    setLastQuotedAddressKey(null);
+    setShippingError(null);
+  }, [cartSignature]);
+
+  useEffect(() => {
+    if (!initialDeliveryValues || fulfillmentMethod !== "DELIVERY") {
+      return;
+    }
+
+    form.reset(
+      {
+        name: initialDeliveryValues.name,
+        telefono: initialDeliveryValues.telefono,
+        calle: initialDeliveryValues.calle,
+        numero: initialDeliveryValues.numero,
+        numeroInterior: initialDeliveryValues.numeroInterior ?? "",
+        colonia: initialDeliveryValues.colonia,
+        city: initialDeliveryValues.city,
+        estado: initialDeliveryValues.estado,
+        zip: initialDeliveryValues.zip,
+        email: initialDeliveryValues.email,
+      },
+      { keepErrors: false, keepTouched: true, keepDirty: true },
+    );
+    setDeliveryReferences(initialDeliveryValues.deliveryReferences ?? "");
+    setFormattedAddress(initialDeliveryValues.formattedAddress ?? "");
+    setShippingQuote(
+      initialDeliveryValues.shippingQuote ??
+        initialDeliveryValues.shippingSelection?.quote ??
+        null,
+    );
+    setShippingOptions(
+      initialDeliveryValues.shippingQuote?.options ??
+        initialDeliveryValues.shippingSelection?.quote.options ??
+        [],
+    );
+    setSelectedShippingOptionId(
+      initialDeliveryValues.shippingSelection?.selectedOption.optionId ??
+        initialDeliveryValues.shippingSelection?.selectedOption.serviceType ??
+        "",
+    );
+    setSelectedShipping(initialDeliveryValues.shippingSelection ?? null);
+    setAddressValidationStatus(
+      initialDeliveryValues.addressValidationStatus ?? "NOT_VALIDATED",
+    );
+    setCheckoutPricing(initialDeliveryValues.checkoutPricing ?? null);
+    setPostalValidated(
+      initialDeliveryValues.addressValidationStatus === "VALIDATED" ||
+        initialDeliveryValues.addressValidationStatus === "USER_CONFIRMED",
+    );
+    if (
+      initialDeliveryValues.shippingSelection?.quote ||
+      initialDeliveryValues.shippingQuote
+    ) {
+      setLastQuotedAddressKey(
+        buildAddressValidationKey(
+          buildFedExDireccionEnvio(
+            initialDeliveryValues,
+            initialDeliveryValues.deliveryReferences,
+            initialDeliveryValues.addressValidationStatus,
+          ),
+        ),
+      );
+    }
+  }, [form, fulfillmentMethod, initialDeliveryValues]);
+
+  useEffect(() => {
+    if (!lastQuotedAddressKey || currentAddressKey === lastQuotedAddressKey) {
+      return;
+    }
+
+    setShippingQuote(null);
+    setShippingOptions([]);
+    setSelectedShippingOptionId("");
+    setSelectedShipping(null);
+    setCheckoutPricing(null);
+    setShippingWarnings([]);
+    setLastQuotedAddressKey(null);
+    setShippingError(null);
+  }, [currentAddressKey, lastQuotedAddressKey]);
+
+  useEffect(() => {
+    if (fulfillmentMethod !== "DELIVERY" || !isAuthenticated) {
+      return;
+    }
+
+    const postalCode = normalizeWhitespace(watchedZip);
+    if (!/^\d{5}$/.test(postalCode)) {
+      setPostalValidated(false);
+      setPostalValidationMessage(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsValidatingPostal(true);
+
+    void fedexApi
+      .validatePostal({
+        countryCode: "MX",
+        postalCode,
+        stateOrProvinceCode: normalizeWhitespace(watchedEstado) || undefined,
+        city: normalizeWhitespace(watchedCity) || undefined,
+      })
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+
+        setPostalValidated(result.isValid);
+        setPostalValidationMessage(
+          result.isValid
+            ? result.alerts[0] ?? null
+            : result.alerts[0] ??
+                "El codigo postal no es valido para envio FedEx.",
+        );
+
+        if (!result.isValid) {
+          setAddressValidationStatus("NOT_VALIDATED");
+          setSuggestedShippingValues(null);
+          setHasPendingSuggestion(false);
+        }
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+
+        setPostalValidated(false);
+        setAddressValidationStatus("NOT_VALIDATED");
+        setPostalValidationMessage(getFedExQuoteErrorMessage(error));
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsValidatingPostal(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fulfillmentMethod, isAuthenticated, watchedCity, watchedEstado, watchedZip]);
+
+  useEffect(() => {
+    if (fulfillmentMethod !== "DELIVERY" || !isAuthenticated || !postalValidated) {
+      return;
+    }
+
+    const currentValues = form.getValues();
+    const direccionEnvio = buildFedExDireccionEnvio(
+      {
+        ...currentValues,
+        name: watchedName,
+        telefono: watchedTelefono,
+        calle: watchedCalle,
+        numero: watchedNumero,
+        numeroInterior: watchedNumeroInterior,
+        colonia: watchedColonia,
+        city: watchedCity,
+        estado: watchedEstado,
+        zip: watchedZip,
+      },
+      deliveryReferences,
+    );
+
+    if (!isDireccionValidatable(direccionEnvio)) {
+      setAddressValidationStatus("NOT_VALIDATED");
+      setAddressValidationMessages([]);
+      return;
+    }
+
+    let cancelled = false;
+    setIsValidatingAddress(true);
+
+    void fedexApi
+      .validateAddress(toFedexRecipient(direccionEnvio))
+      .then((validation) => {
+        if (cancelled) {
+          return;
+        }
+
+        const nextMessages = [
+          ...(validation.customerMessages ?? []),
+          ...(validation.warnings ?? []),
+        ].filter(Boolean);
+        const hasSuggestion = hasAddressSuggestion(currentValues, validation);
+
+        setAddressValidationMessages(nextMessages);
+
+        if (hasSuggestion) {
+          setSuggestedShippingValues(
+            buildSuggestedShippingValues(currentValues, validation),
+          );
+          setHasPendingSuggestion(true);
+          setAddressValidationStatus("SUGGESTED");
+          return;
+        }
+
+        const nextAddressValidationStatus =
+          getNextAddressValidationStatus(validation);
+        const firstAddress =
+          validation.addresses?.[0] ?? validation.resolvedAddress;
+
+        if (IS_DEVELOPMENT) {
+          const attributes = firstAddress?.attributes ?? {};
+          console.log("[FedEx Address Validation Parsed]", {
+            validation,
+            firstAddress,
+            isLikelyValid: firstAddress?.isLikelyValid,
+            isStandardized:
+              firstAddress?.isStandardized === true ||
+              attributes.AddressType === "STANDARDIZED",
+            isMatched:
+              attributes.Matched === true || attributes.Matched === "true",
+            isValidlyFormed:
+              attributes.ValidlyFormed === true ||
+              attributes.ValidlyFormed === "true",
+            nextAddressValidationStatus,
+          });
+        }
+
+        setSuggestedShippingValues(null);
+        setHasPendingSuggestion(false);
+        setAddressValidationStatus(nextAddressValidationStatus);
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+
+        setAddressValidationStatus("NOT_VALIDATED");
+        setAddressValidationMessages([getFedExQuoteErrorMessage(error)]);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsValidatingAddress(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    deliveryReferences,
+    form,
+    fulfillmentMethod,
+    isAuthenticated,
+    postalValidated,
+    watchedCalle,
+    watchedCity,
+    watchedColonia,
+    watchedEstado,
+    watchedName,
+    watchedNumero,
+    watchedNumeroInterior,
+    watchedTelefono,
+    watchedZip,
+  ]);
+
+  const resetDeliveryQuoteState = () => {
+    setShippingQuote(null);
+    setShippingOptions([]);
+    setSelectedShippingOptionId("");
+    setSelectedShipping(null);
+    setCheckoutPricing(null);
+    setShippingWarnings([]);
+    setShippingError(null);
+    setLastQuotedAddressKey(null);
+  };
+
+  const handleGooglePlacesReady = () => {
+    setIsGoogleReady(true);
+    setIsGoogleUnavailable(false);
+    setGoogleAutocompleteMessage(null);
+  };
+
+  const handleGooglePlacesUnavailable = (message: string) => {
+    setIsGoogleReady(false);
+    setIsGoogleUnavailable(true);
+    setGoogleAutocompleteMessage(message);
+  };
+
+  const buildCurrentShippingAddress = (
+    values: ShippingValues,
+    nextValidationStatus = addressValidationStatus,
+  ) =>
+    buildCheckoutShippingAddress(
+      {
+        fullName: values.name,
+        phone: normalizeMxPhoneForAplazo(values.telefono),
+        street1: `${values.calle} ${values.numero}`.trim(),
+        street2: values.colonia,
+        interiorNumber: values.numeroInterior,
+        references: deliveryReferences,
+        city: values.city,
+        stateLabel: values.estado,
+        postalCode: values.zip,
+        countryCode: "MX",
+        formattedAddress,
+      },
+      nextValidationStatus,
+    );
+
+  const handleGoogleAddressSelected = (address: ParsedGoogleCheckoutAddress) => {
+    setIsLoadingAddress(true);
+    setAddressError(null);
+    setShippingError(null);
+    setGoogleAutocompleteMessage(null);
+    setAddressValidationStatus("NOT_VALIDATED");
+    setSuggestedShippingValues(null);
+    setHasPendingSuggestion(false);
+    resetDeliveryQuoteState();
+
+    const { calle, numero } = splitStreetAndNumber(address.street1 ?? "");
+    form.reset(
+      {
+        ...form.getValues(),
+        calle: calle || form.getValues("calle"),
+        numero: numero === "S/N" ? form.getValues("numero") : numero,
+        colonia: address.street2 || form.getValues("colonia"),
+        city: address.city || form.getValues("city"),
+        estado: address.stateLabel || form.getValues("estado"),
+        zip: address.postalCode || form.getValues("zip"),
+      },
+      {
+        keepErrors: false,
+        keepDirty: true,
+        keepTouched: true,
+      },
+    );
+    setFormattedAddress(address.formattedAddress ?? "");
+    setIsLoadingAddress(false);
+  };
+
+  const handleApplySuggestedAddress = () => {
+    if (!suggestedShippingValues) {
+      return;
+    }
+
+    form.reset(
+      {
+        ...form.getValues(),
+        ...suggestedShippingValues,
+      },
+      { keepErrors: false, keepTouched: true, keepDirty: true },
+    );
+    setSuggestedShippingValues(null);
+    setHasPendingSuggestion(false);
+    setAddressValidationStatus("VALIDATED");
+    resetDeliveryQuoteState();
+  };
+
+  const handleKeepOriginalAddress = () => {
+    setSuggestedShippingValues(null);
+    setHasPendingSuggestion(false);
+    setAddressValidationStatus("USER_CONFIRMED");
+    resetDeliveryQuoteState();
+  };
 
   const handleContinue = async () => {
     if (!isAuthenticated) {
@@ -878,43 +1668,193 @@ function ShippingAddressStep({
       return;
     }
 
-    const isEmailValid = await form.trigger("email");
-    if (!isEmailValid) {
+    const isValid = await form.trigger();
+    if (!isValid) {
       return;
     }
 
-    const addressElement = elements?.getElement("address");
-    if (!addressElement) {
-      setAddressError("No se pudo cargar el formulario de dirección. Intenta nuevamente.");
+    const shippingValues = form.getValues();
+    const direccionEnvio = buildFedExDireccionEnvio(
+      shippingValues,
+      deliveryReferences,
+      addressValidationStatus,
+    );
+    const localErrors = validateDireccionEnvio(direccionEnvio);
+    if (localErrors.length > 0) {
+      setAddressError(localErrors[0]);
       return;
     }
 
-    const { complete, value } = await addressElement.getValue();
-    if (!complete) {
-      setAddressError("Completa tu dirección de entrega para continuar.");
+    if (!postalValidated) {
+      setAddressError(
+        postalValidationMessage ||
+          "Valida un codigo postal correcto antes de continuar.",
+      );
       return;
     }
 
-    setAddressError(null);
-    onAddressCaptured(value);
+    if (hasPendingSuggestion || addressValidationStatus === "SUGGESTED") {
+      setAddressError(
+        "FedEx encontro una sugerencia para tu direccion. Elige si quieres usarla o continuar con tu captura.",
+      );
+      return;
+    }
 
-    const mappedValues = mapAddressElementToShippingValues(
-      value,
-      form.getValues("email"),
+    const addressCanBeUsedForQuote =
+      canUseAddressForFedExQuote(addressValidationStatus);
+
+    if (IS_DEVELOPMENT) {
+      console.log("[FedEx Can Quote]", {
+        postalValidationStatus: postalValidated ? "VALIDATED" : "NOT_VALIDATED",
+        addressValidationStatus,
+        canQuoteShipping: postalValidated && addressCanBeUsedForQuote,
+      });
+    }
+
+    if (!addressCanBeUsedForQuote) {
+      setAddressError(
+        "FedEx debe validar o confirmar tu direccion antes de cotizar.",
+      );
+      return;
+    }
+
+    const currentShippingAddress = buildCurrentShippingAddress(shippingValues);
+    const existingSelectedOption = shippingQuote?.options.find(
+      (option) =>
+        option.optionId === selectedShippingOptionId ||
+        option.serviceType === selectedShippingOptionId,
     );
 
-    form.reset(mappedValues, {
-      keepErrors: false,
-      keepDirty: true,
-      keepTouched: true,
-    });
-
-    const isValid = await form.trigger();
-    if (isValid) {
+    if (
+      shippingQuote &&
+      !isQuoteExpired(shippingQuote) &&
+      !requiresFedExSelection(shippingQuote)
+    ) {
+      const nextPricing = getExpectedCheckoutPricing(0, "DELIVERY", 0);
+      setCheckoutPricing(nextPricing);
       onContinue({
-        ...form.getValues(),
+        ...shippingValues,
         fulfillmentMethod: "DELIVERY",
+        formattedAddress,
+        deliveryReferences,
+        shippingAddress: currentShippingAddress,
+        addressValidationStatus,
+        shippingQuote,
+        shippingSelection: null,
+        checkoutPricing: nextPricing,
       });
+      return;
+    }
+
+    if (
+      shippingQuote &&
+      !isQuoteExpired(shippingQuote) &&
+      requiresFedExSelection(shippingQuote) &&
+      !existingSelectedOption
+    ) {
+      setShippingError("Selecciona un servicio FedEx para continuar.");
+      return;
+    }
+
+    if (shippingQuote && existingSelectedOption && !isQuoteExpired(shippingQuote)) {
+      const nextPricing = getExpectedCheckoutPricing(
+        0,
+        "DELIVERY",
+        existingSelectedOption.amount,
+      );
+      const nextSelection = {
+        quote: shippingQuote,
+        selectedOption: existingSelectedOption,
+        shippingSelection: buildCheckoutShippingSelection(
+          existingSelectedOption,
+        ) as ShippingSelection,
+      };
+      setSelectedShipping(nextSelection);
+      setCheckoutPricing(nextPricing);
+      onContinue({
+        ...shippingValues,
+        fulfillmentMethod: "DELIVERY",
+        formattedAddress,
+        deliveryReferences,
+        shippingAddress: currentShippingAddress,
+        addressValidationStatus,
+        shippingQuote,
+        shippingSelection: nextSelection,
+        checkoutPricing: nextPricing,
+      });
+      return;
+    }
+
+    setIsLoadingShippingOptions(true);
+    setIsRecalculatingCheckout(true);
+    try {
+      const quote = await fedexApi.quoteCart(direccionEnvio);
+      if (!requiresFedExSelection(quote)) {
+        const nextPricing = getExpectedCheckoutPricing(0, "DELIVERY", 0);
+        setShippingQuote(quote);
+        setShippingOptions([]);
+        setSelectedShippingOptionId("");
+        setSelectedShipping(null);
+        setCheckoutPricing(nextPricing);
+        setShippingWarnings([]);
+        setLastQuotedAddressKey(currentAddressKey);
+        toast({
+          title: "Entrega lista",
+          description: "Este carrito no requiere envio FedEx.",
+        });
+        onContinue({
+          ...shippingValues,
+          fulfillmentMethod: "DELIVERY",
+          formattedAddress,
+          deliveryReferences,
+          shippingAddress: currentShippingAddress,
+          addressValidationStatus,
+          shippingQuote: quote,
+          shippingSelection: null,
+          checkoutPricing: nextPricing,
+        });
+        return;
+      }
+
+      if (!quote.quoteId || quote.options.length === 0) {
+        setShippingError("FedEx no devolvio opciones de envio para esta direccion.");
+        return;
+      }
+
+      const defaultOption =
+        quote.options.find(
+          (option) =>
+            option.optionId === selectedShippingOptionId ||
+            option.serviceType === selectedShippingOptionId,
+        ) ?? quote.options[0];
+
+      const nextPricing = getExpectedCheckoutPricing(
+        0,
+        "DELIVERY",
+        defaultOption.amount,
+      );
+      setShippingQuote(quote);
+      setShippingOptions(quote.options);
+      setSelectedShippingOptionId(defaultOption.optionId ?? defaultOption.serviceType);
+      setSelectedShipping({
+        quote,
+        selectedOption: defaultOption,
+        shippingSelection: buildCheckoutShippingSelection(defaultOption) as ShippingSelection,
+      });
+      setCheckoutPricing(nextPricing);
+      setShippingWarnings([]);
+      setAddressError(null);
+      setShippingError(null);
+      setLastQuotedAddressKey(currentAddressKey);
+      toast({
+        title: "Opciones FedEx listas",
+        description: "Selecciona un servicio de envio para continuar.",
+      });
+    } catch (error) {
+      setShippingError(getFedExQuoteErrorMessage(error));
+    } finally {
+      setIsLoadingShippingOptions(false);
+      setIsRecalculatingCheckout(false);
     }
   };
 
@@ -931,30 +1871,334 @@ function ShippingAddressStep({
                 value={fulfillmentMethod}
                 onValueChange={(value) => {
                   setAddressError(null);
+                  setAddressValidationStatus("NOT_VALIDATED");
+                  setPostalValidated(false);
+                  setPostalValidationMessage(null);
+                  setAddressValidationMessages([]);
+                  setSuggestedShippingValues(null);
+                  setHasPendingSuggestion(false);
+                  resetDeliveryQuoteState();
                   onFulfillmentMethodChange(value);
                 }}
               />
 
               {fulfillmentMethod === "DELIVERY" ? (
-                <div className="space-y-2">
-                  <FormLabel>Dirección de entrega</FormLabel>
-                  <div
-                    className={cn(
-                      "rounded-[1.5rem] border bg-muted/45 p-4 transition-colors",
-                      addressError ? "border-destructive" : "border-border",
-                    )}
-                  >
-                    <AddressElement options={addressElementOptions} />
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <FormLabel>Buscar dirección</FormLabel>
+                    <div
+                      className={cn(
+                        "rounded-[1.5rem] border bg-muted/45 p-4 transition-colors",
+                        isGoogleUnavailable
+                          ? "border-border/70 bg-muted/30"
+                          : addressError
+                            ? "border-destructive"
+                            : "border-border",
+                      )}
+                    >
+                      {isGoogleUnavailable ? (
+                        <p className="text-sm leading-6 text-muted-foreground">
+                          El autocompletado no esta disponible en este ambiente.
+                          Captura tu direccion manualmente en los campos de abajo.
+                        </p>
+                      ) : (
+                        <GooglePlaceAutocompleteElement
+                          onAddressSelected={handleGoogleAddressSelected}
+                          onReady={handleGooglePlacesReady}
+                          onError={handleGooglePlacesUnavailable}
+                        />
+                      )}
+                    </div>
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      {isGoogleUnavailable
+                        ? "Google Places no esta disponible. Puedes continuar con captura manual y FedEx seguira validando en backend."
+                        : isGoogleReady
+                          ? "Google completa la direccion y FedEx valida el resultado antes de cotizar."
+                          : "Cargando autocompletado de Google Places..."}
+                    </p>
+                    {googleAutocompleteMessage ? (
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        {googleAutocompleteMessage}
+                      </p>
+                    ) : null}
+                    {formattedAddress ? (
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        Direccion encontrada: {formattedAddress}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nombre completo</FormLabel>
+                          <FormControl>
+                            <Input {...field} className="h-12 rounded-[1rem]" autoComplete="name" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="telefono"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Teléfono</FormLabel>
+                          <FormControl>
+                            <Input {...field} className="h-12 rounded-[1rem]" inputMode="tel" autoComplete="tel" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <Input {...field} className="h-12 rounded-[1rem]" type="email" autoComplete="email" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="calle"
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <FormLabel>Calle</FormLabel>
+                          <FormControl>
+                            <Input {...field} className="h-12 rounded-[1rem]" autoComplete="address-line1" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="numero"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Número exterior</FormLabel>
+                          <FormControl>
+                            <Input {...field} className="h-12 rounded-[1rem]" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="numeroInterior"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Número interior</FormLabel>
+                          <FormControl>
+                            <Input {...field} value={field.value ?? ""} className="h-12 rounded-[1rem]" placeholder="Opcional" autoComplete="address-line2" />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="colonia"
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <FormLabel>Colonia</FormLabel>
+                          <FormControl>
+                            <Input {...field} className="h-12 rounded-[1rem]" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="city"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Ciudad</FormLabel>
+                          <FormControl>
+                            <Input {...field} className="h-12 rounded-[1rem]" autoComplete="address-level2" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="estado"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Estado</FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecciona un estado" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {MX_STATES.map((state) => (
+                                <SelectItem key={state.fedexCode} value={state.label}>
+                                  {state.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="zip"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Código postal</FormLabel>
+                          <FormControl>
+                            <Input {...field} className="h-12 rounded-[1rem]" inputMode="numeric" autoComplete="postal-code" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
                   {addressError ? (
-                    <p className="text-sm font-medium text-destructive">
-                      {addressError}
-                    </p>
-                  ) : (
-                    <p className="text-xs leading-5 text-muted-foreground">
-                      Selecciona una dirección de México y confirma el teléfono.
-                    </p>
-                  )}
+                    <p className="text-sm font-medium text-destructive">{addressError}</p>
+                  ) : null}
+                  {shippingError ? (
+                    <p className="text-sm font-medium text-destructive">{shippingError}</p>
+                  ) : null}
+                  {isLoadingAddress || isValidatingPostal || isValidatingAddress ? (
+                    <div className="rounded-[1rem] border border-border bg-muted/35 px-4 py-3 text-xs leading-5 text-muted-foreground">
+                      {isLoadingAddress
+                        ? "Actualizando formulario con la direccion seleccionada..."
+                        : isValidatingPostal
+                          ? "Validando codigo postal con FedEx..."
+                          : "Validando direccion con FedEx..."}
+                    </div>
+                  ) : null}
+                  {postalValidationMessage ? (
+                    <div
+                      className={cn(
+                        "rounded-[1rem] border px-4 py-3 text-xs leading-5",
+                        postalValidated
+                          ? "border-primary/25 bg-primary/8 text-primary"
+                          : "border-destructive/25 bg-destructive/8 text-destructive",
+                      )}
+                    >
+                      {postalValidationMessage}
+                    </div>
+                  ) : null}
+                  {addressValidationMessages.length > 0 ? (
+                    <div className="rounded-[1rem] border border-border bg-muted/35 px-4 py-3 text-xs leading-5 text-muted-foreground">
+                      {addressValidationMessages.map((message) => (
+                        <p key={message}>{message}</p>
+                      ))}
+                    </div>
+                  ) : null}
+                  {hasPendingSuggestion && suggestedShippingValues ? (
+                    <div className="space-y-3 rounded-[1.2rem] border border-primary/25 bg-primary/8 p-4">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">
+                          FedEx sugiere ajustar tu direccion
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                          Sugerencia:{" "}
+                          {[
+                            suggestedShippingValues.calle,
+                            suggestedShippingValues.numero,
+                            suggestedShippingValues.numeroInterior,
+                            suggestedShippingValues.colonia,
+                            suggestedShippingValues.city,
+                            suggestedShippingValues.estado,
+                            suggestedShippingValues.zip,
+                          ]
+                            .filter(Boolean)
+                            .join(", ")}
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-2 md:flex-row">
+                        <Button type="button" className="h-11 rounded-full" onClick={handleApplySuggestedAddress}>
+                          Usar sugerencia FedEx
+                        </Button>
+                        <Button type="button" variant="outline" className="h-11 rounded-full" onClick={handleKeepOriginalAddress}>
+                          Continuar con mi direccion
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+                  {shippingWarnings.length > 0 ? (
+                    <div className="rounded-[1rem] border border-border bg-muted/35 px-4 py-3 text-xs leading-5 text-muted-foreground">
+                      {shippingWarnings.map((warning) => (
+                        <p key={warning}>{warning}</p>
+                      ))}
+                    </div>
+                  ) : null}
+                  {checkoutPricing && selectedShipping ? (
+                    <div className="rounded-[1.2rem] border border-primary/25 bg-primary/8 px-4 py-3 text-sm text-primary">
+                      Resumen recalculado con backend: envio {formatCurrency(selectedShipping.selectedOption.amount)}.
+                    </div>
+                  ) : null}
+                  {shippingQuote?.requiresShipping === false ? (
+                    <div className="rounded-[1.4rem] border border-primary/25 bg-primary/8 px-4 py-3 text-sm text-primary">
+                      Este carrito no requiere envio FedEx. Puedes continuar a pago.
+                    </div>
+                  ) : shippingQuote ? (
+                    <div className="space-y-3 rounded-[1.4rem] border border-border bg-muted/35 p-4">
+                      <div className="flex items-center gap-2">
+                        <Truck className="h-4 w-4 text-primary" />
+                        <p className="text-sm font-semibold text-foreground">Opciones FedEx</p>
+                      </div>
+                      {isQuoteExpired(shippingQuote) ? (
+                        <p className="text-sm text-destructive">Esta cotizacion expiro. Vuelve a cotizar para continuar.</p>
+                      ) : null}
+                      <RadioGroup
+                        value={selectedShippingOptionId}
+                        onValueChange={(value) => {
+                          setSelectedShippingOptionId(value);
+                          const option = shippingOptions.find(
+                            (item) => item.optionId === value || item.serviceType === value,
+                          );
+                          if (!option || !shippingQuote) {
+                            return;
+                          }
+                          setSelectedShipping({
+                            quote: shippingQuote,
+                            selectedOption: option,
+                            shippingSelection: buildCheckoutShippingSelection(option) as ShippingSelection,
+                          });
+                          setCheckoutPricing(
+                            getExpectedCheckoutPricing(0, "DELIVERY", option.amount),
+                          );
+                        }}
+                        className="gap-3"
+                      >
+                        {shippingOptions.map((option) => {
+                          const value = option.optionId ?? option.serviceType;
+                          return (
+                            <label key={value} htmlFor={`fedex-option-${value}`} className={cn("flex cursor-pointer items-start gap-3 rounded-[1rem] border px-4 py-3 transition-colors", selectedShippingOptionId === value ? "border-primary bg-primary/8" : "border-border bg-card hover:bg-muted/55")}>
+                              <RadioGroupItem id={`fedex-option-${value}`} value={value} className="mt-1" />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-start justify-between gap-3">
+                                  <p className="text-sm font-semibold text-foreground">{option.serviceName ?? option.serviceType}</p>
+                                  <p className="shrink-0 text-sm font-semibold text-foreground">{formatCurrency(option.amount)}</p>
+                                </div>
+                                <p className="mt-1 text-xs leading-5 text-muted-foreground">{[option.estimatedDeliveryDate ? `Entrega estimada ${option.estimatedDeliveryDate}` : "", option.transitTime].filter(Boolean).join(" | ") || "Tiempo por confirmar"}</p>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </RadioGroup>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -1119,35 +2363,38 @@ function ShippingAddressStep({
                 </p>
               </div>
 
-              {fulfillmentMethod === "DELIVERY" ? (
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
-                      <FormControl>
-                        <Input {...field} className="h-12 rounded-[1rem]" type="email" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              ) : null}
             </form>
           </Form>
         </CardContent>
       </Card>
 
       <div className="hidden md:mt-5 md:block">
-        <Button className="h-12 rounded-full px-6" onClick={() => void handleContinue()}>
-          Continuar a pago
+        <Button
+          className="h-12 rounded-full px-6"
+          onClick={() => void handleContinue()}
+          disabled={isLoadingShippingOptions || isRecalculatingCheckout}
+        >
+          {isLoadingShippingOptions || isRecalculatingCheckout
+            ? "Cotizando..."
+            : fulfillmentMethod === "DELIVERY" &&
+                (!shippingQuote || isQuoteExpired(shippingQuote))
+              ? "Cotizar envio"
+              : "Continuar a pago"}
         </Button>
       </div>
 
       <MobileCheckoutActions>
-        <Button className="h-12 w-full rounded-full" onClick={() => void handleContinue()}>
-          Continuar a pago
+        <Button
+          className="h-12 w-full rounded-full"
+          onClick={() => void handleContinue()}
+          disabled={isLoadingShippingOptions || isRecalculatingCheckout}
+        >
+          {isLoadingShippingOptions || isRecalculatingCheckout
+            ? "Cotizando..."
+            : fulfillmentMethod === "DELIVERY" &&
+                (!shippingQuote || isQuoteExpired(shippingQuote))
+              ? "Cotizar envio"
+              : "Continuar a pago"}
         </Button>
       </MobileCheckoutActions>
     </>
@@ -1160,30 +2407,36 @@ function CardPaymentStep({
   cartItems,
   total,
   onBack,
+  onRecoverableDeliveryError,
   paymentMethod,
   onPaymentMethodChange,
+  stripePromise,
 }: {
   values: CheckoutValues;
   cartId?: string;
   cartItems: CartItem[];
   total: number;
   onBack: () => void;
+  onRecoverableDeliveryError: (values: DeliveryCheckoutValues) => void;
   paymentMethod: PaymentMethod;
   onPaymentMethodChange: (value: PaymentMethod) => void;
+  stripePromise: ReturnType<typeof useStripeConfig>;
 }) {
-  const stripe = useStripe();
-  const elements = useElements();
   const router = useRouter();
   const { toast } = useToast();
-  const { clearAllItems } = useCart();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [embeddedClientSecret, setEmbeddedClientSecret] = useState<string | null>(null);
+  const [orderContext, setOrderContext] = useState<{
+    ordenId: string;
+    total: number;
+  } | null>(null);
 
-  const handlePay = async () => {
-    if (isProcessing) {
+  const handlePrepareEmbeddedCheckout = async () => {
+    if (isProcessing || typeof window === "undefined") {
       return;
     }
 
-    if (!stripe || !elements) {
+    if (!stripePromise) {
       toast({
         variant: "destructive",
         title: "Stripe no está listo",
@@ -1192,19 +2445,11 @@ function CardPaymentStep({
       return;
     }
 
-    const cardElement = elements.getElement(CardElement);
-    if (!cardElement) {
-      toast({
-        variant: "destructive",
-        title: "No se detectó la tarjeta",
-        description: "Verifica el formulario de pago.",
-      });
-      return;
-    }
-
     setIsProcessing(true);
 
     try {
+      assertDeliveryShippingReady(values);
+
       const expectedSubtotal = cartItems.reduce(
         (sum, item) => sum + item.price * item.quantity,
         0,
@@ -1241,69 +2486,39 @@ function CardPaymentStep({
       validateOrderPricing({
         order: createdOrder,
         expectedSubtotal,
-        fulfillmentMethod: values.fulfillmentMethod,
       });
 
-      const idempotencyKey = crypto.randomUUID();
-      const paymentInit = await paymentsApi.iniciar(
-        { ordenId, metodoPago: "TARJETA" },
-        idempotencyKey,
+      const successUrl = `${window.location.origin}/checkout/confirmation?ordenId=${encodeURIComponent(ordenId)}&status=processing&total=${encodeURIComponent((createdOrder.total ?? total).toFixed(2))}`;
+      const cancelUrl = `${window.location.origin}/checkout?ordenId=${encodeURIComponent(ordenId)}`;
+      const session = await paymentsApi.createEmbeddedCheckoutSession(
+        ordenId,
+        successUrl,
+        cancelUrl,
       );
 
-      if (!paymentInit.clientSecret) {
-        throw new Error("No se recibió clientSecret para confirmar el pago");
-      }
-
-      const confirmation = await stripe.confirmCardPayment(paymentInit.clientSecret, {
-        payment_method: {
-          card: cardElement,
-          billing_details: {
-            name:
-              values.fulfillmentMethod === "PICKUP"
-                ? values.pickupContact.name
-                : values.name,
-            email:
-              values.fulfillmentMethod === "PICKUP"
-                ? values.pickupContact.email
-                : values.email,
-            address:
-              values.fulfillmentMethod === "PICKUP"
-                ? {
-                  city: values.pickupLocation.city,
-                  state: values.pickupLocation.state,
-                  line1: values.pickupLocation.address,
-                  postal_code: values.pickupLocation.postalCode,
-                }
-                : {
-                  city: values.city,
-                  state: values.estado,
-                  line1: `${values.calle} ${values.numero}`,
-                  line2: values.colonia,
-                  postal_code: values.zip,
-                },
-          },
-        },
-      });
-
-      if (confirmation.error) {
-        throw new Error(
-          confirmation.error.message || "No se pudo confirmar el pago",
-        );
+      if (!session.clientSecret) {
+        throw new Error("No se recibió clientSecret para montar Stripe Embedded Checkout");
       }
 
       clearStoredAplazoCheckoutState();
       clearStoredAplazoRetryPayload();
-      await clearAllItems();
-
-      const status = confirmation.paymentIntent?.status || paymentInit.status;
-      router.push(
-        `/checkout/confirmation?ordenId=${encodeURIComponent(ordenId)}&pagoId=${encodeURIComponent(paymentInit.pagoId)}&status=${encodeURIComponent(status)}&total=${encodeURIComponent(total.toFixed(2))}`,
-      );
+      setOrderContext({
+        ordenId,
+        total: createdOrder.total ?? total,
+      });
+      setEmbeddedClientSecret(session.clientSecret);
     } catch (error) {
+      const retryValues = buildRetryDeliveryValuesFromCheckoutError(
+        values,
+        error,
+      );
+      if (retryValues) {
+        onRecoverableDeliveryError(retryValues);
+      }
       toast({
         variant: "destructive",
-        title: "No se pudo completar el pago",
-        description: getApiErrorMessage(error),
+        title: "No se pudo preparar el pago",
+        description: getCheckoutErrorMessage(error),
       });
     } finally {
       setIsProcessing(false);
@@ -1322,39 +2537,65 @@ function CardPaymentStep({
             onValueChange={onPaymentMethodChange}
           />
 
-          <div className="rounded-[1.5rem] border border-border bg-muted/45 p-4">
-            <CardElement
-              options={{
-                style: {
-                  base: {
-                    fontSize: "16px",
-                    color: "#171815",
-                    iconColor: "#0f6c49",
-                    "::placeholder": { color: "#817b71" },
-                  },
-                  invalid: {
-                    color: "#dc2626",
-                    iconColor: "#dc2626",
-                  },
-                },
-              }}
-            />
-          </div>
-          <p className="text-sm leading-6 text-muted-foreground">
-            El pago se procesa con Stripe. El total a cobrar es {formatCurrency(total)}.
-          </p>
+          {embeddedClientSecret ? (
+            <div className="space-y-4">
+              <div className="rounded-[1.4rem] border border-primary/25 bg-primary/8 px-4 py-3 text-sm text-primary">
+                Stripe Embedded Checkout validará el total final directamente desde backend para la orden {orderContext?.ordenId}.
+              </div>
+              <EmbeddedCheckoutProvider
+                stripe={stripePromise}
+                options={{ clientSecret: embeddedClientSecret }}
+              >
+                <div className="rounded-[1.5rem] border border-border bg-card p-2">
+                  <EmbeddedCheckout />
+                </div>
+              </EmbeddedCheckoutProvider>
+            </div>
+          ) : (
+            <>
+              <div className="rounded-[1.5rem] border border-border bg-muted/45 p-5">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary">
+                    <CreditCard className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">
+                      Stripe Embedded Checkout
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                      Primero crearemos tu orden y Stripe montará el checkout embebido con el total validado por backend.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <p className="text-sm leading-6 text-muted-foreground">
+                El pago se procesa con Stripe. El total estimado a validar es {formatCurrency(total)}.
+              </p>
+            </>
+          )}
+
           <div className="hidden gap-3 md:flex">
             <Button type="button" variant="outline" className="h-12 flex-1 rounded-full" onClick={onBack}>
               Volver
             </Button>
-            <Button
-              type="button"
-              className="h-12 flex-1 rounded-full"
-              onClick={() => void handlePay()}
-              disabled={isProcessing || !stripe}
-            >
-              {isProcessing ? "Procesando..." : "Pagar ahora"}
-            </Button>
+            {embeddedClientSecret ? (
+              <Button
+                type="button"
+                className="h-12 flex-1 rounded-full"
+                onClick={() => router.push(`/checkout/confirmation?ordenId=${encodeURIComponent(orderContext?.ordenId ?? "")}&status=processing`)}
+              >
+                Ver estado del pedido
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                className="h-12 flex-1 rounded-full"
+                onClick={() => void handlePrepareEmbeddedCheckout()}
+                disabled={isProcessing || !stripePromise}
+              >
+                {isProcessing ? "Preparando..." : "Continuar con Stripe"}
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -1363,24 +2604,34 @@ function CardPaymentStep({
         <Button type="button" variant="outline" className="h-12 flex-1 rounded-full" onClick={onBack}>
           Volver
         </Button>
-        <Button
-          type="button"
-          className="h-12 flex-1 rounded-full"
-          onClick={() => void handlePay()}
-          disabled={isProcessing || !stripe}
-        >
-          {isProcessing ? "Procesando..." : "Pagar ahora"}
-        </Button>
+        {embeddedClientSecret ? (
+          <Button
+            type="button"
+            className="h-12 flex-1 rounded-full"
+            onClick={() => router.push(`/checkout/confirmation?ordenId=${encodeURIComponent(orderContext?.ordenId ?? "")}&status=processing`)}
+          >
+            Ver estado
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            className="h-12 flex-1 rounded-full"
+            onClick={() => void handlePrepareEmbeddedCheckout()}
+            disabled={isProcessing || !stripePromise}
+          >
+            {isProcessing ? "Preparando..." : "Continuar con Stripe"}
+          </Button>
+        )}
       </MobileCheckoutActions>
     </>
   );
 }
-
 function AplazoPaymentStep({
   values,
   cartId,
   cartItems,
   onBack,
+  onRecoverableDeliveryError,
   paymentMethod,
   onPaymentMethodChange,
 }: {
@@ -1388,6 +2639,7 @@ function AplazoPaymentStep({
   cartId?: string;
   cartItems: CartItem[];
   onBack: () => void;
+  onRecoverableDeliveryError: (values: DeliveryCheckoutValues) => void;
   paymentMethod: PaymentMethod;
   onPaymentMethodChange: (value: PaymentMethod) => void;
 }) {
@@ -1427,11 +2679,21 @@ function AplazoPaymentStep({
     setIsProcessing(true);
 
     try {
+      assertDeliveryShippingReady(values);
+
       const origin = window.location.origin;
       const cartFingerprint = [
         getAplazoCartFingerprint(cartItems),
         values.fulfillmentMethod,
         values.fulfillmentMethod === "PICKUP" ? values.pickupLocation.id : "",
+        values.fulfillmentMethod === "DELIVERY"
+          ? (values.shippingSelection?.quote.quoteId ?? "")
+          : "",
+        values.fulfillmentMethod === "DELIVERY"
+          ? (values.shippingSelection?.selectedOption.optionId ??
+            values.shippingSelection?.selectedOption.serviceType ??
+            "")
+          : "",
       ].join("|");
       const cartSessionId = getOrCreateSessionId();
       const cartSnapshot = cartItems.map((item) => ({
@@ -1547,7 +2809,6 @@ function AplazoPaymentStep({
       validateOrderPricing({
         order: createdOrder,
         expectedSubtotal: validation.validatedSubtotal,
-        fulfillmentMethod: values.fulfillmentMethod,
       });
 
       createPayload = buildAplazoPayload({
@@ -1644,7 +2905,16 @@ function AplazoPaymentStep({
         }),
       );
     } catch (error) {
-      const description = getAplazoErrorMessage(error);
+      const retryValues = buildRetryDeliveryValuesFromCheckoutError(
+        values,
+        error,
+      );
+      if (retryValues) {
+        onRecoverableDeliveryError(retryValues);
+      }
+      const description = retryValues
+        ? getCheckoutErrorMessage(error)
+        : getAplazoErrorMessage(error);
       setSubmissionError(description);
       logAplazoDebug("Error al crear intento Aplazo", {
         description,
@@ -1699,9 +2969,7 @@ function AplazoPaymentStep({
                           (sum, item) => sum + item.price * item.quantity,
                           0,
                         ) +
-                        (values.fulfillmentMethod === "PICKUP"
-                          ? 0
-                          : SHIPPING_COST),
+                          getDeliveryShippingAmount(values),
                       )}
                     </span>
                   </p>
@@ -1775,7 +3043,6 @@ export default function CheckoutPage() {
   const [checkoutValues, setCheckoutValues] = useState<CheckoutValues | null>(
     null,
   );
-  const [, setCapturedAddress] = useState<CapturedAddressValue | null>(null);
   const router = useRouter();
   const { state, subtotal, totalItems, isLoading } = useCart();
   const { isAuthenticated, user, isLoading: isAuthLoading } = useAuth();
@@ -1795,6 +3062,7 @@ export default function CheckoutPage() {
       telefono: "",
       calle: "",
       numero: "",
+      numeroInterior: "",
       colonia: "",
       city: "",
       estado: "",
@@ -1827,8 +3095,26 @@ export default function CheckoutPage() {
   }, [fulfillmentMethod, pickupLocations.length]);
 
   const pricing = useMemo(
-    () => getExpectedCheckoutPricing(subtotal, fulfillmentMethod),
-    [fulfillmentMethod, subtotal],
+    () =>
+      getExpectedCheckoutPricing(
+        subtotal,
+        fulfillmentMethod,
+        checkoutValues?.fulfillmentMethod === "DELIVERY"
+          ? (checkoutValues.shippingSelection?.selectedOption.amount ?? 0)
+          : 0,
+      ),
+    [checkoutValues, fulfillmentMethod, subtotal],
+  );
+  const cartSignature = useMemo(
+    () =>
+      state.items
+        .map(
+          (item) =>
+            `${item.id}:${item.tallaId ?? item.size ?? ""}:${item.quantity}`,
+        )
+        .sort()
+        .join("|"),
+    [state.items],
   );
   const total = pricing.total;
   const activeCheckoutValues =
@@ -1836,7 +3122,28 @@ export default function CheckoutPage() {
     ({
       ...shippingForm.getValues(),
       fulfillmentMethod: "DELIVERY",
+      shippingAddress: buildCheckoutShippingAddress(
+        {
+          fullName: shippingForm.getValues("name"),
+          phone: normalizeMxPhoneForAplazo(shippingForm.getValues("telefono")),
+          street1: `${shippingForm.getValues("calle")} ${shippingForm.getValues("numero")}`.trim(),
+          street2: shippingForm.getValues("colonia"),
+          interiorNumber: shippingForm.getValues("numeroInterior"),
+          city: shippingForm.getValues("city"),
+          stateLabel: shippingForm.getValues("estado"),
+          postalCode: shippingForm.getValues("zip"),
+          countryCode: "MX",
+        },
+        "NOT_VALIDATED",
+      ),
     } as DeliveryCheckoutValues);
+  const handleRecoverableDeliveryError = (
+    nextValues: DeliveryCheckoutValues,
+  ) => {
+    setCheckoutValues(nextValues);
+    setFulfillmentMethod("DELIVERY");
+    setCurrentStep(0);
+  };
 
   if (isLoading) {
     return <div className="container py-14 text-center text-muted-foreground">Cargando checkout...</div>;
@@ -1908,53 +3215,45 @@ export default function CheckoutPage() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
         <div>
           {currentStep === 0 ? (
-            stripePromise ? (
-              <Elements stripe={stripePromise}>
-                <ShippingAddressStep
-                  form={shippingForm}
-                  fulfillmentMethod={fulfillmentMethod}
-                  onFulfillmentMethodChange={(value) => {
-                    setFulfillmentMethod(value);
-                    setCheckoutValues(null);
-                  }}
-                  pickupLocations={pickupLocations}
-                  selectedPickupLocationId={selectedPickupLocationId}
-                  pickupContact={pickupContact}
-                  isLoadingPickupLocations={isLoadingPickupLocations}
-                  pickupError={pickupError}
-                  onSelectedPickupLocationIdChange={setSelectedPickupLocationId}
-                  onPickupContactChange={setPickupContact}
-                  isAuthenticated={isAuthenticated}
-                  onAddressCaptured={setCapturedAddress}
-                  onContinue={(values) => {
-                    setCheckoutValues(values);
-                    setCurrentStep(1);
-                  }}
-                />
-              </Elements>
-            ) : (
-              <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
-                <CardHeader>
-                  <CardTitle>Configuración faltante</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p>No se pudo inicializar Stripe para capturar la dirección.</p>
-                </CardContent>
-              </Card>
-            )
+            <ShippingAddressStep
+              form={shippingForm}
+              fulfillmentMethod={fulfillmentMethod}
+              onFulfillmentMethodChange={(value) => {
+                setFulfillmentMethod(value);
+                setCheckoutValues(null);
+              }}
+              pickupLocations={pickupLocations}
+              selectedPickupLocationId={selectedPickupLocationId}
+              pickupContact={pickupContact}
+              isLoadingPickupLocations={isLoadingPickupLocations}
+              pickupError={pickupError}
+              cartSignature={cartSignature}
+              initialDeliveryValues={
+                checkoutValues?.fulfillmentMethod === "DELIVERY"
+                  ? checkoutValues
+                  : null
+              }
+              onSelectedPickupLocationIdChange={setSelectedPickupLocationId}
+              onPickupContactChange={setPickupContact}
+              isAuthenticated={isAuthenticated}
+              onContinue={(values) => {
+                setCheckoutValues(values);
+                setCurrentStep(1);
+              }}
+            />
           ) : paymentMethod === "TARJETA" ? (
             stripePromise ? (
-              <Elements stripe={stripePromise}>
-                <CardPaymentStep
-                  values={activeCheckoutValues}
-                  cartId={state.id}
-                  cartItems={state.items}
-                  total={total}
-                  onBack={() => setCurrentStep(0)}
-                  paymentMethod={paymentMethod}
-                  onPaymentMethodChange={setPaymentMethod}
-                />
-              </Elements>
+              <CardPaymentStep
+                values={activeCheckoutValues}
+                cartId={state.id}
+                cartItems={state.items}
+                total={total}
+                onBack={() => setCurrentStep(0)}
+                onRecoverableDeliveryError={handleRecoverableDeliveryError}
+                paymentMethod={paymentMethod}
+                onPaymentMethodChange={setPaymentMethod}
+                stripePromise={stripePromise}
+              />
             ) : (
               <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
                 <CardHeader>
@@ -1975,6 +3274,7 @@ export default function CheckoutPage() {
               cartId={state.id}
               cartItems={state.items}
               onBack={() => setCurrentStep(0)}
+              onRecoverableDeliveryError={handleRecoverableDeliveryError}
               paymentMethod={paymentMethod}
               onPaymentMethodChange={setPaymentMethod}
             />
@@ -1988,10 +3288,26 @@ export default function CheckoutPage() {
         </div>
 
         <div className="lg:sticky lg:top-[calc(var(--storefront-header-current-height,var(--storefront-header-desktop-height))+1.5rem)]">
-          <OrderSummaryPanel fulfillmentMethod={fulfillmentMethod} />
+          <OrderSummaryPanel
+            fulfillmentMethod={fulfillmentMethod}
+            shippingSelection={
+              checkoutValues?.fulfillmentMethod === "DELIVERY"
+                ? checkoutValues.shippingSelection
+                : null
+            }
+            checkoutPricing={
+              checkoutValues?.fulfillmentMethod === "DELIVERY"
+                ? checkoutValues.checkoutPricing
+                : null
+            }
+          />
         </div>
       </div>
 
     </div>
   );
 }
+
+
+
+

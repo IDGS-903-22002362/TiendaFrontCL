@@ -143,8 +143,8 @@ export default function CartPage() {
                 <span>{formatCurrency(subtotal)}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span>Envío estimado</span>
-                <span>{formatCurrency(99)}</span>
+                <span>Envio FedEx</span>
+                <span>Cotizar en checkout</span>
               </div>
               <div className="flex items-center justify-between">
                 <span>Artículos</span>
@@ -156,7 +156,7 @@ export default function CartPage() {
                 Total
               </p>
               <p className="mt-2 font-headline text-4xl font-semibold uppercase leading-none tracking-[0.03em] text-foreground">
-                {formatCurrency(subtotal + 99)}
+                {formatCurrency(subtotal)}
               </p>
             </div>
             <div className="mt-6 space-y-3">
@@ -173,3 +173,4 @@ export default function CartPage() {
     </div>
   );
 }
+

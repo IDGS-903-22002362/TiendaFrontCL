@@ -2,6 +2,7 @@ import type {
   Category,
   Product,
   ProductExtraDetail,
+  ProductFedexShipping,
   ProductRatingEligibility,
   ProductRatingSummary,
   ProductSizeStock,
@@ -254,6 +255,14 @@ function mapUserRating(input: unknown): ProductUserRating | null | undefined {
   };
 }
 
+function mapFedexShipping(input: unknown): ProductFedexShipping | undefined {
+  if (!input || typeof input !== "object") {
+    return undefined;
+  }
+
+  return input as ProductFedexShipping;
+}
+
 function mapProduct(input: unknown): Product {
   const product = (
     input && typeof input === "object" ? input : {}
@@ -384,6 +393,7 @@ function mapProduct(input: unknown): Product {
           ? product.active
           : undefined,
     ratingSummary: mapRatingSummary(product.ratingSummary),
+    fedexShipping: mapFedexShipping(product.fedexShipping),
     isFavorito:
       typeof product.isFavorito === "boolean"
         ? product.isFavorito

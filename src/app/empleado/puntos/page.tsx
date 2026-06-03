@@ -618,11 +618,11 @@ export default function AdminAssignPoints() {
                                             ) {
                                                 // Caso Timestamp serializado
                                                 if ('_seconds' in item.createdAt) {
-                                                    dateValue = new Date(item.createdAt._seconds * 1000);
+                                                    dateValue = new Date((item.createdAt as { _seconds: number })._seconds * 1000);
                                                 }
                                                 // Caso Timestamp normal de Firebase
                                                 else if ('toDate' in item.createdAt) {
-                                                    dateValue = item.createdAt.toDate();
+                                                    dateValue = (item.createdAt as { toDate: () => Date }).toDate();
                                                 }
                                             } else if (item.createdAt) {
                                                 const tempDate = new Date(item.createdAt);
