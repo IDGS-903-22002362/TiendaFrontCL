@@ -149,7 +149,7 @@ export function SearchDrawer({ isDesktop }: SearchDrawerProps) {
         <DialogTrigger asChild>
           <Button
             variant="outline"
-            className="h-11 min-w-[11.5rem] justify-between border-black/14 bg-white px-4 text-sm font-medium text-foreground"
+            className="h-[48px] w-[260px] lg:w-[340px] justify-between border-black/14 bg-white px-4 text-sm font-medium text-foreground"
           >
             <span className="flex items-center gap-3">
               <Search className="h-4.5 w-4.5 text-text-secondary" />
@@ -182,7 +182,7 @@ export function SearchDrawer({ isDesktop }: SearchDrawerProps) {
         <Button
           variant="outline"
           size="icon"
-          className="h-11 w-11 border-black/14 bg-white"
+          className="h-11 w-11 min-w-[44px] min-h-[44px] border-black/14 bg-white"
         >
           <Search className="h-4.5 w-4.5" />
           <span className="sr-only">Buscar productos</span>

@@ -190,7 +190,7 @@ export function StorefrontHeader() {
         <div
           className={cn(
             "storefront-frame flex items-center gap-4 transition-[height,padding] duration-300 lg:!pl-3 xl:!pl-4 lg:gap-8",
-            isCompact ? "h-[4.35rem]" : "h-[5rem]",
+            isCompact ? "h-[4rem]" : "h-[4.5rem] lg:h-[5rem]",
           )}
         >
           <div className="flex shrink-0 items-center gap-2 lg:w-[10rem] lg:gap-4">
@@ -221,10 +221,10 @@ export function StorefrontHeader() {
               >
                 <Logo
                   className={cn(
-                    "w-auto object-contain transition-[height] duration-300",
+                    "w-auto object-contain transition-[height,width] duration-300",
                     isCompact
-                      ? "h-14 md:h-[3.75rem] lg:h-16"
-                      : "h-16 md:h-[4.5rem] lg:h-20",
+                      ? "h-12 w-[76px] lg:h-[60px] lg:w-[88px]"
+                      : "h-14 w-[96px] lg:h-[72px] lg:w-[120px]",
                   )}
                 />
               </Link>

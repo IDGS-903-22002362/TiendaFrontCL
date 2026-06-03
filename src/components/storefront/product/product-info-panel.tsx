@@ -307,7 +307,7 @@ export function ProductInfoPanel({
               </div>
               <div className="grid gap-2 lg:min-w-[220px]">
                 <Button
-                  className="hidden h-12 rounded-[1rem] px-6 lg:inline-flex"
+                  className="hidden h-[52px] lg:h-[56px] min-w-[44px] min-h-[44px] rounded-[1rem] px-6 lg:inline-flex"
                   disabled={!canAddToCart}
                   onClick={handleAddToCart}
                 >
@@ -315,7 +315,7 @@ export function ProductInfoPanel({
                 </Button>
                 <Button
                   variant="outline"
-                  className="hidden h-12 rounded-[1rem] border-primary/30 text-primary hover:bg-primary/10 lg:inline-flex"
+                  className="hidden h-[52px] lg:h-[56px] min-w-[44px] min-h-[44px] rounded-[1rem] border-primary/30 text-primary hover:bg-primary/10 lg:inline-flex"
                   type="button"
                   onClick={handleOpenTryOn}
                 >

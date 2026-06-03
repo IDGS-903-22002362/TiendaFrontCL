@@ -39,7 +39,7 @@ export function ProductToolbar({
                 Catálogo premium
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                <h1 className="font-headline text-[2.25rem] font-semibold uppercase leading-[0.92] tracking-[0.03em] md:text-[3.2rem]">
+                <h1 className="font-headline text-[var(--font-size-catalog-title-mobile)] font-semibold uppercase leading-[var(--line-height-heading-large)] tracking-[0.03em] lg:text-[var(--font-size-catalog-title-desktop)]">
                   {searchLabel || "Todos los productos"}
                 </h1>
                 <span className="border border-black/14 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">

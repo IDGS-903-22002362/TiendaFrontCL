@@ -59,8 +59,8 @@ export function CartDrawer() {
         </Button>
       </SheetTrigger>
 
-      <SheetContent className="flex w-full flex-col border-l border-black/14 bg-white px-0 sm:max-w-lg">
-        <SheetHeader className="border-b border-black/12 px-5 pb-5">
+      <SheetContent className="flex w-full flex-col border-l border-black/14 bg-white px-0 lg:max-w-[480px]">
+        <SheetHeader className="border-b border-black/12 px-[16px] lg:px-[24px] pb-5">
           <SheetTitle>Tu carrito</SheetTitle>
         </SheetHeader>
 
