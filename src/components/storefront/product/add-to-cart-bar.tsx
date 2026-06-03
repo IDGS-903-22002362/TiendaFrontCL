@@ -68,7 +68,7 @@ export function AddToCartBar({
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <p className="editorial-label text-primary/74">Precio final</p>
-          <p className="mt-2 font-headline text-3xl font-semibold uppercase leading-none tracking-[0.02em] text-foreground">
+          <p className="mt-2 font-headline text-[var(--font-size-price-card-mobile)] font-semibold uppercase leading-none tracking-[0.02em] text-foreground lg:text-[var(--font-size-price-card-desktop)]">
             {formatCurrency(price)}
           </p>
         </div>
@@ -83,7 +83,7 @@ export function AddToCartBar({
           <Button
             variant="outline"
             type="button"
-            className="h-12 rounded-[1rem] border-primary/30 text-primary hover:bg-primary/10"
+            className="h-[52px] min-h-[44px] min-w-[44px] lg:h-[56px] rounded-[1rem] border-primary/30 text-primary hover:bg-primary/10"
             onClick={onTryOn}
           >
             <Sparkles className="mr-2 h-4 w-4" />
@@ -91,7 +91,7 @@ export function AddToCartBar({
           </Button>
         ) : null}
         <Button
-          className="h-12 rounded-[1rem]"
+          className="h-[52px] min-h-[44px] min-w-[44px] lg:h-[56px] rounded-[1rem]"
           disabled={disabled}
           onClick={onAdd}
         >
