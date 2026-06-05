@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 import { ProductFilters } from "./product-filters";
-import { fetchCategories, fetchProducts } from "@/lib/api/storefront";
+import { fetchCategories, fetchCatalogPage } from "@/lib/api/storefront";
+import type { CatalogSort } from "@/lib/types";
 import { lineasApi } from "@/lib/api/lineas";
 import { tallasApi } from "@/lib/api/tallas";
-import { isProductVisible } from "@/lib/storefront";
 
 export const dynamic = "force-dynamic";
 
@@ -32,8 +32,21 @@ export default async function ProductsPage({
 
   const queryKey = queryParams.toString() || "all";
 
-  const [products, categories, lineas, tallas] = await Promise.all([
-    fetchProducts(),
+  const initialParams = {
+    limit: 24,
+    category: queryParams.get("category") || undefined,
+    line: queryParams.get("line") || undefined,
+    talla: queryParams.get("talla") || undefined,
+    minPrice: queryParams.has("minPrice") ? Number(queryParams.get("minPrice")) : undefined,
+    maxPrice: queryParams.has("maxPrice") ? Number(queryParams.get("maxPrice")) : undefined,
+    sort: (queryParams.get("sort") as CatalogSort) || undefined,
+    q: queryParams.get("q") || undefined,
+    onlyOffers: queryParams.get("onlyOffers") === "true",
+    onlyAvailable: queryParams.get("onlyAvailable") === "true",
+  };
+
+  const [initialPage, categories, lineas, tallas] = await Promise.all([
+    fetchCatalogPage(initialParams).catch(() => ({ items: [], nextCursor: null, hasMore: false })),
     fetchCategories(),
     lineasApi.getAll(),
     tallasApi.getAll(),
@@ -44,7 +57,7 @@ export default async function ProductsPage({
       <Suspense fallback={<div>Cargando catálogo...</div>}>
         <ProductFilters
           key={queryKey}
-          allProducts={products.filter(isProductVisible)}
+          initialPage={initialPage}
           categories={categories}
           lineas={lineas}
           tallas={tallas}

@@ -1,4 +1,6 @@
+import re
 
+content = """
 "use client";
 
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
@@ -45,14 +47,14 @@ export function ProductFilters({
     const s = searchParams.get("sort");
     return s ? (s as CatalogSort) : "destacados";
   };
-  const getParam = (key: string, defaultValue: string) => searchParams.get(key) || defaultValue;
+  const getParam = (key: string, defaultValue: any) => searchParams.get(key) || defaultValue;
 
   const [sort, setSort] = useState<CatalogSort>(getSortFromUrl());
   const [category, setCategory] = useState(getParam("category", "all"));
   const [linea, setLinea] = useState(getParam("line", "all"));
   const [selectedSize, setSelectedSize] = useState(getParam("talla", "all"));
   const [priceRange, setPriceRange] = useState<[number]>([
-    Number(getParam("maxPrice", "5000"))
+    Number(getParam("maxPrice", 5000))
   ]);
   const [searchQuery, setSearchQuery] = useState(getParam("q", ""));
 
@@ -68,12 +70,12 @@ export function ProductFilters({
   );
 
   const visibleLineas = useMemo(
-    () => lineas,
+    () => lineas.filter((linea) => !linea.oculta),
     [lineas],
   );
 
   const visibleSizes = useMemo(
-    () => tallas,
+    () => tallas.filter((talla) => !talla.oculta),
     [tallas],
   );
 
@@ -149,7 +151,7 @@ export function ProductFilters({
 
     // Fetch page 1
     loadPage(null);
-  }, [category, linea, selectedSize, priceRange, sort, searchQuery, tags, router, loadPage, searchParams]);
+  }, [category, linea, selectedSize, priceRange, sort, searchQuery, tags, router]);
 
   const activeFilters = [
     category !== "all"
@@ -370,3 +372,6 @@ export function ProductFilters({
     </div>
   );
 }
+"""
+with open("src/app/products/product-filters.tsx", "w") as f:
+    f.write(content)
