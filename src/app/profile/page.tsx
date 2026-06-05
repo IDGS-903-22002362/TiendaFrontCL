@@ -10,14 +10,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { getMyPoints, getMyProfile, saveEditableProfile, usuariosApi } from "@/lib/api/users";
 import { useToast } from "@/hooks/use-toast";
 
-function resolveLevelFromPoints(points: number) {
-  if (points >= 5000) return "DIAMANTE";
-  if (points >= 2500) return "ESMERALDA";
-  if (points >= 1200) return "ORO";
-  if (points >= 500) return "PLATA";
-  return "BRONCE";
-}
-
 export default function ProfilePage() {
   const { user, role, isAuthenticated, isLoading, refreshSession } = useAuth();
   const { toast } = useToast();
@@ -55,11 +47,12 @@ export default function ProfilePage() {
   }, [profileName, user]);
 
   const displayLevel = useMemo(() => {
-    if (profileLevel.trim()) {
-      return profileLevel;
+    if (isLoadingPoints) {
+      return "...";
     }
-    return resolveLevelFromPoints(effectivePoints);
-  }, [profileLevel, effectivePoints]);
+
+    return profileLevel.trim() || "Sin nivel asignado";
+  }, [isLoadingPoints, profileLevel]);
 
   useEffect(() => {
     if (!isAuthenticated || !user) {
