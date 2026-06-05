@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import {
   fetchCategories,
-  fetchProducts,
   fetchProductById,
 } from "@/lib/api/storefront";
 import { lineasApi } from "@/lib/api/lineas";
@@ -22,9 +21,11 @@ import {
   type ProductDetailRecord,
 } from "@/lib/api/products-admin";
 import type {
+  AdminProductListItem,
+  AdminProductStatus,
   Category,
   Linea,
-  Product,
+
   ProductFedexShipping,
   ProductSizeStock,
   Proveedor,
@@ -55,6 +56,8 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type PendingImageUpload = {
   id: string;
@@ -88,6 +91,7 @@ function createDetailDraft(descripcion = "", id?: string): ProductDetailDraft {
 }
 
 const EMPTY_FORM = {
+  activo: true,
   descripcion: "",
   clave: "",
   precioPublico: "",
@@ -253,7 +257,9 @@ function normalizeDetailDrafts(details: ProductDetailDraft[]) {
 }
 
 export default function AdminProductsPage() {
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<AdminProductListItem[]>([]);
+  const [productStatus, setProductStatus] = useState<AdminProductStatus>("todos");
+
   const [lineas, setLineas] = useState<Linea[]>([]);
   const [tallas, setTallas] = useState<Talla[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
@@ -284,13 +290,13 @@ export default function AdminProductsPage() {
 
   const { toast } = useToast();
 
-  const loadProducts = useCallback(async () => {
+    const loadProducts = useCallback(async (status: AdminProductStatus = productStatus) => {
     setIsLoading(true);
     try {
-      const list = await fetchProducts();
-      setProducts(list);
+      const response = await productsAdminApi.fetchAdminProducts("cookie-session", status);
+      setProducts(response.data || []);
       setSelectedProductId((current) =>
-        current && !list.some((product) => product.id === current)
+        current && !(response.data || []).some((product: AdminProductListItem) => product.id === current)
           ? ""
           : current,
       );
@@ -303,10 +309,10 @@ export default function AdminProductsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [productStatus, toast]);
 
   useEffect(() => {
-    void loadProducts();
+    void loadProducts("todos");
   }, [loadProducts]);
 
   const loadMeta = useCallback(async () => {
@@ -352,8 +358,8 @@ export default function AdminProductsPage() {
     () =>
       products.map((product) => ({
         id: product.id,
-        label: product.name,
-        subtitle: `${product.clave ?? ""} ${product.description}`.trim(),
+        label: product.descripcion,
+        subtitle: `${product.clave ?? ""} ${""}`.trim(),
       })),
     [products],
   );
@@ -414,7 +420,7 @@ export default function AdminProductsPage() {
       }
 
       return normalizeSearchValue(
-        `${product.name} ${product.description} ${product.category} ${product.lineName ?? ""} ${product.clave ?? ""}`,
+        `${product.descripcion} ${product.clave ?? ""} ${product.categoriaId ?? ""} ${product.lineaId ?? ""}`,
       ).includes(query);
     });
   }, [productSearchQuery, products, selectedProductId]);
@@ -425,7 +431,7 @@ export default function AdminProductsPage() {
     setPendingDeletedImages([]);
   };
 
-  const openForm = async (product?: Product) => {
+  const openForm = async (product?: AdminProductListItem) => {
     if (product) {
       setEditingProductId(product.id);
       setIsDialogOpen(true);
@@ -440,42 +446,31 @@ export default function AdminProductsPage() {
 
         const detailData = extractDetailRecord(detailRes);
 
-        setFormData({
-          descripcion: toStringValue(detailData.descripcion, product.name),
-          clave: toStringValue(
-            detailData.clave,
-            product.name || `PROD-${product.id.slice(0, 6).toUpperCase()}`,
-          ),
-          precioPublico: toStringValue(
-            detailData.precioPublico,
-            String(product.price),
-          ),
+                        setFormData({
+          descripcion: product.descripcion || "",
+          clave: product.clave || `PROD-${product.id.slice(0, 6).toUpperCase()}`,
+          precioPublico: toStringValue(product.precioPublico),
           precioCompra: toStringValue(detailData.precioCompra, "0"),
-          existencias: toStringValue(
-            detailData.existencias,
-            String(product.stockTotal ?? product.stock ?? 0),
-          ),
+          existencias: toStringValue(product.existencias, "0"),
           proveedorId: toStringValue(detailData.proveedorId, ""),
-          categoriaId: toStringValue(
-            detailData.categoriaId,
-            categorias.find((cat) => cat.name === product.category)?.id ?? "",
-          ),
-          lineaId: toStringValue(
-            detailData.lineaId,
-            storefrontDetail?.lineId ?? "",
-          ),
-          tallaIds: toStringArray(detailData.tallaIds),
-          inventarioPorTalla:
-            mapSizeInventory(detailData.inventarioPorTalla).length > 0
-              ? mapSizeInventory(detailData.inventarioPorTalla)
-              : (storefrontDetail?.inventarioPorTalla ?? []),
-          fedexShipping: mapFedexShipping(detailData.fedexShipping),
-          imagenes: toStringArray(detailData.imagenes).filter(
-            (url) => !isGeneratedPlaceholderImage(url),
-          ),
-          detalles: detailItems.map((item) =>
-            createDetailDraft(item.descripcion, item.id),
-          ),
+          categoriaId: product.categoriaId || "",
+          lineaId: product.lineaId || "",
+          tallaIds: Array.isArray(detailData.tallaIds)
+            ? detailData.tallaIds.map((id: unknown) => toStringValue(id))
+            : [],
+          inventarioPorTalla: Array.isArray(detailData.inventarioPorTalla)
+            ? (detailData.inventarioPorTalla as ProductSizeStock[])
+            : [],
+          fedexShipping: {
+            enabled: typeof (detailData.fedexShipping as Record<string, unknown>)?.enabled === 'boolean' ? Boolean((detailData.fedexShipping as Record<string, unknown>)?.enabled) : true,
+            weightKg: toStringValue((detailData.fedexShipping as Record<string, unknown>)?.weightKg),
+            lengthCm: toStringValue((detailData.fedexShipping as Record<string, unknown>)?.lengthCm),
+            widthCm: toStringValue((detailData.fedexShipping as Record<string, unknown>)?.widthCm),
+            heightCm: toStringValue((detailData.fedexShipping as Record<string, unknown>)?.heightCm),
+          },
+          imagenes: Array.isArray(detailData.imagenes) ? detailData.imagenes : (product.imagenPrincipal ? [product.imagenPrincipal] : []),
+          detalles: detailItems.map((d: ProductDetailRecord) => createDetailDraft(d.descripcion, d.id)),
+          activo: product.activo ?? true,
         });
         setPersistedDetails(detailItems);
         setSelectedProductId(product.id);
@@ -818,7 +813,7 @@ export default function AdminProductsPage() {
           : "Producto creado con éxito",
       });
       resetDialogState();
-      void loadProducts();
+      void loadProducts("todos");
     } catch (error) {
       toast({
         variant: "destructive",
@@ -928,7 +923,7 @@ export default function AdminProductsPage() {
         setSelectedProductId("");
       }
       toast({ title: "Producto eliminado" });
-      void loadProducts();
+      void loadProducts("todos");
     } catch (error) {
       toast({
         variant: "destructive",
@@ -1054,61 +1049,81 @@ export default function AdminProductsPage() {
                 </TableRow>
               ) : (
                 filteredProducts.map((product) => {
-                  const stockTotal = product.stockTotal ?? product.stock;
-                  const hasSizeInventory = Boolean(product.hasSizeInventory);
-
                   return (
                     <TableRow key={product.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-3">
-                          {product.images[0] ? (
+                          {product.imagenPrincipal ? (
                             <img
-                              src={product.images[0]}
-                              alt={product.name}
-                              className="w-10 h-10 rounded-sm object-cover border"
+                              src={product.imagenPrincipal}
+                              alt={product.descripcion}
+                              className="h-10 w-10 rounded-md object-cover border bg-muted"
                             />
                           ) : (
-                            <div className="w-10 h-10 rounded-sm bg-muted flex flex-col items-center justify-center">
-                              <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                            <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center border">
+                              <ImageIcon className="h-4 w-4 text-muted-foreground opacity-50" />
                             </div>
                           )}
-                          <div className="flex flex-col">
-                            <span>{product.name}</span>
-                            <span className="text-xs text-muted-foreground truncate max-w-[150px]">
-                              {product.description}
+                          <div className="flex flex-col max-w-[200px]">
+                            <span className="truncate">{product.descripcion}</span>
+                            <span className="text-xs text-muted-foreground truncate">
+                              {product.clave || product.id.slice(0, 8)}
                             </span>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
-                          <span className="text-sm">{product.category}</span>
+                          <span className="text-sm">
+                            {categorias.find((c) => c.id === product.categoriaId)?.name || product.categoriaId || "-"}
+                          </span>
                           <span className="text-xs text-muted-foreground">
-                            {product.lineName || "-"}
+                            {lineas.find((l) => l.id === product.lineaId)?.nombre || product.lineaId || "-"}
                           </span>
                         </div>
                       </TableCell>
                       <TableCell className="font-semibold text-primary">
-                        ${product.price.toFixed(2)}
+                        ${(product.precioPublico || 0).toFixed(2)}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
                           <span
-                            className={`text-sm ${stockTotal <= 5 ? "text-destructive font-bold" : ""}`}
+                            className={`text-sm ${product.existencias <= 5 ? "text-destructive font-bold" : ""}`}
                           >
-                            {stockTotal}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {hasSizeInventory ? "Por talla" : "General"}
+                            {product.existencias}
                           </span>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${product.activo ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}>
+                          {product.activo ? "Visible en tienda" : "Oculto"}
+                        </span>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-8 px-2"
+                            onClick={async () => {
+                              const nextStatus = !product.activo;
+                              const msg = nextStatus
+                                ? "¿Este producto volverá a mostrarse en la tienda. Continuar?"
+                                : "¿Este producto se ocultará de la tienda pública. Continuar?";
+                              if (window.confirm(msg)) {
+                                try {
+                                  await productsAdminApi.setProductActiveStatus(product.id, nextStatus, "cookie-session");
+                                  loadProducts(productStatus);
+                                } catch (error) {
+                                  toast({ title: "Error", description: "No se pudo cambiar el estado", variant: "destructive" });
+                                }
+                              }
+                            }}
+                          >
+                            {product.activo ? "Ocultar" : "Activar"}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => openForm(product)}
                           >
                             <Edit className="h-4 w-4 mr-1" /> Editar

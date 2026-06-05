@@ -1,4 +1,7 @@
 import type {
+  CatalogQuery,
+  CatalogResponse,
+  CatalogProductCard,
   Category,
   Product,
   ProductExtraDetail,
@@ -662,4 +665,46 @@ export async function fetchCategories(): Promise<Category[]> {
     console.error("fetchCategories failed", error);
     return [];
   }
+}
+
+
+export function mapCatalogProductToProductCardViewModel(
+  catalogProduct: CatalogProductCard,
+): Product {
+  const tags: Product["tags"] = [];
+  if (catalogProduct.tieneOferta) tags.push("sale");
+  if (catalogProduct.destacado) tags.push("new"); // map destacado to new for badge display if needed, or customize
+
+  return {
+    id: catalogProduct.id,
+    name: catalogProduct.nombre,
+    description: "", // Public catalog card doesn't need full description
+    price: catalogProduct.precioOriginal,
+    salePrice: catalogProduct.precioFinal,
+    images: catalogProduct.imagenPrincipal ? [catalogProduct.imagenPrincipal] : [],
+    category: catalogProduct.categoriaLabel || catalogProduct.categoria,
+    lineName: catalogProduct.lineaLabel || catalogProduct.linea,
+    tags,
+    stock: catalogProduct.stockTotal,
+    stockTotal: catalogProduct.stockTotal,
+    activo: catalogProduct.disponible, // Use disponible for UI rendering if it maps closely
+  };
+}
+
+export async function fetchCatalogPage(params: CatalogQuery = {}): Promise<CatalogResponse> {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      searchParams.set(key, String(value));
+    }
+  });
+
+  const res = await fetch(`/api/productos/catalogo?${searchParams.toString()}`);
+
+  if (!res.ok) {
+    throw new Error("No se pudo cargar el catalogo");
+  }
+
+  return (await res.json()) as CatalogResponse;
 }

@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 
 const API_TOKEN_COOKIE = "tiendafront_api_token";
 const USER_DATA_COOKIE = "tiendafront_user_data";
+const BLOCKED_PAGE_IMAGE = "/images/fondopaginaporx.png";
 
 const EXCLUDED_PATH_PREFIXES = [
   "/_next",
@@ -14,8 +15,130 @@ const EXCLUDED_PATH_PREFIXES = [
   "/sitemap.xml",
 ];
 
+const STATIC_FILE_EXTENSIONS = [
+  ".avif",
+  ".css",
+  ".eot",
+  ".gif",
+  ".ico",
+  ".jpeg",
+  ".jpg",
+  ".js",
+  ".json",
+  ".map",
+  ".otf",
+  ".png",
+  ".svg",
+  ".ttf",
+  ".txt",
+  ".webmanifest",
+  ".woff",
+  ".woff2",
+  ".xml",
+];
+
 function isExcludedPath(pathname: string) {
-  return EXCLUDED_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+  return (
+    EXCLUDED_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix)) ||
+    STATIC_FILE_EXTENSIONS.some((extension) =>
+      pathname.toLowerCase().endsWith(extension),
+    )
+  );
+}
+
+function getAllowedFrontIps() {
+  return new Set(
+    (process.env.ALLOWED_FRONT_IPS ?? "")
+      .split(",")
+      .map((ip) => normalizeIp(ip))
+      .filter(Boolean),
+  );
+}
+
+function normalizeIp(ip: string) {
+  const normalized = ip.trim();
+
+  if (!normalized) {
+    return "";
+  }
+
+  return normalized.startsWith("::ffff:")
+    ? normalized.slice("::ffff:".length)
+    : normalized;
+}
+
+function getClientIp(request: NextRequest) {
+  const cfConnectingIp = request.headers.get("cf-connecting-ip");
+  if (cfConnectingIp) {
+    return normalizeIp(cfConnectingIp);
+  }
+
+  const xRealIp = request.headers.get("x-real-ip");
+  if (xRealIp) {
+    return normalizeIp(xRealIp);
+  }
+
+  const xForwardedFor = request.headers.get("x-forwarded-for");
+  if (xForwardedFor) {
+    return normalizeIp(xForwardedFor.split(",")[0] ?? "");
+  }
+
+  return "";
+}
+
+function isAllowedIp(request: NextRequest) {
+  const allowedIps = getAllowedFrontIps();
+
+  if (allowedIps.size === 0) {
+    return true;
+  }
+
+  const clientIp = getClientIp(request);
+
+  return Boolean(clientIp && allowedIps.has(clientIp));
+}
+
+function forbiddenPage() {
+  return new NextResponse(
+    `<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>403</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: #000;
+      }
+
+      body {
+        display: grid;
+        min-height: 100svh;
+        place-items: center;
+      }
+
+      img {
+        display: block;
+        width: 100%;
+        height: 100svh;
+        object-fit: cover;
+      }
+    </style>
+  </head>
+  <body>
+    <img src="${BLOCKED_PAGE_IMAGE}" alt="" />
+  </body>
+</html>`,
+    {
+      status: 403,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+      },
+    },
+  );
 }
 
 function getPerfilCompletoFromCookie(request: NextRequest): boolean | undefined {
@@ -44,6 +167,10 @@ export function middleware(request: NextRequest) {
 
   if (isExcludedPath(pathname)) {
     return NextResponse.next();
+  }
+
+  if (!isAllowedIp(request)) {
+    return forbiddenPage();
   }
 
   const token = request.cookies.get(API_TOKEN_COOKIE)?.value;
@@ -86,5 +213,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!.*\\..*).*)"],
+  matcher: ["/:path*"],
 };

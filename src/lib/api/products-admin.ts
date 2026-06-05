@@ -13,6 +13,7 @@ export type ProductCreatePayload = {
   tallaIds?: string[];
   inventarioPorTalla?: ProductSizeStock[];
   fedexShipping?: ProductFedexShipping;
+  activo?: boolean;
 };
 
 export type ProductUpdatePayload = Partial<ProductCreatePayload>;
@@ -127,6 +128,27 @@ export const productsAdminApi = {
       ...response,
       id: extractCreateId(response) ?? undefined,
     };
+  },
+
+  async fetchAdminProducts(token: string, estado: "todos" | "activo" | "inactivo" = "todos") {
+    return apiFetch<{ success: boolean; count: number; data: import("@/lib/types").AdminProductListItem[] }>(
+      `/api/productos/admin?estado=${estado}`,
+      {
+        method: "GET",
+      },
+      { local: true, token: normalizeToken(token) },
+    );
+  },
+
+  async setProductActiveStatus(id: string, activo: boolean, token?: string) {
+    return apiFetch<{ success: boolean; message: string; data: unknown }>(
+      `/api/productos/${id}/estado`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ activo }),
+      },
+      { local: true, token: normalizeToken(token) },
+    );
   },
 
   async update(id: string, payload: ProductUpdatePayload, token?: string) {
