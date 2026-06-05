@@ -10,6 +10,7 @@ import {
   getFirebaseIdTokenWithEmailPassword,
   getFirebaseIdTokenWithGooglePopup,
   registerWithEmailPassword,
+  sendPasswordReset,
 } from "@/lib/firebase/auth";
 import {
   getMissingFirebaseEnvVars,
@@ -69,6 +70,11 @@ function LoginPageContent() {
 
   // Estado para mostrar formulario de correo y contraseña
   const [showPasswordLogin, setShowPasswordLogin] = useState(false);
+
+  // Estado para mostrar pantalla de recuperación de contraseña
+  const [showPasswordRecovery, setShowPasswordRecovery] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [recoveryEmailSent, setRecoveryEmailSent] = useState(false);
   const otpInputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const firebaseReady = isFirebaseConfigured();
@@ -442,8 +448,47 @@ function LoginPageContent() {
     }
   };
 
+  const onSendPasswordReset = async () => {
+    if (!recoveryEmail.trim()) {
+      setErrorMessage("Por favor ingresa tu correo electrónico");
+      toast({
+        variant: "destructive",
+        title: "Correo requerido",
+        description: "Por favor ingresa tu correo electrónico",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage("");
+
+    try {
+      await sendPasswordReset(recoveryEmail.trim());
+      setRecoveryEmailSent(true);
+      toast({
+        title: "¡Email enviado!",
+        description: `Hemos enviado un enlace de recuperación a ${recoveryEmail.trim()}`,
+      });
+    } catch (error) {
+      const errorMsg = getApiErrorMessage(error);
+      setErrorMessage(errorMsg);
+      toast({
+        variant: "destructive",
+        title: "Error al enviar email",
+        description: errorMsg,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleGoBack = () => {
-    if (showPasswordLogin) {
+    if (showPasswordRecovery) {
+      setShowPasswordRecovery(false);
+      setRecoveryEmail("");
+      setRecoveryEmailSent(false);
+      setErrorMessage("");
+    } else if (showPasswordLogin) {
       setShowPasswordLogin(false);
       setPassword("");
       setErrorMessage("");
@@ -558,7 +603,7 @@ function LoginPageContent() {
 
           {!isSubmitting && firebaseReady && (
             <>
-              {!showVerification && !showPasswordLogin ? (
+              {!showVerification && !showPasswordLogin && !showPasswordRecovery ? (
                 // Pantalla inicial: Email + Google/Apple
                 <div className="mt-6 space-y-4 rounded-3xl border border-[#e7ece9] bg-[#f8fbf9] p-4 shadow-sm sm:mt-7 sm:p-5">
                   {/* Email Input */}
@@ -598,7 +643,7 @@ function LoginPageContent() {
                     </Link>
                   </div>
                 </div>
-              ) : showVerification && !showPasswordLogin ? (
+              ) : showVerification && !showPasswordLogin && !showPasswordRecovery ? (
                 // Formulario de verificación de código
                 <div className="mt-6 space-y-4 rounded-3xl border border-[#e7ece9] bg-[#f8fbf9] p-4 shadow-sm sm:mt-7 sm:p-5">
                   <div className="text-center">
@@ -761,6 +806,105 @@ function LoginPageContent() {
                   >
                     {isSubmitting ? "Iniciando sesión..." : "Iniciar Sesión"}
                   </Button>
+
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPasswordLogin(false);
+                        setShowPasswordRecovery(true);
+                        setRecoveryEmail(email);
+                        setErrorMessage("");
+                      }}
+                      className="text-sm font-semibold text-[#007A53] underline-offset-4 hover:underline"
+                    >
+                      ¿Olvidaste tu contraseña?
+                    </button>
+                  </div>
+                </div>
+              ) : showPasswordRecovery ? (
+                // Pantalla de recuperación de contraseña
+                <div className="mt-6 space-y-4 rounded-3xl border border-[#e7ece9] bg-[#f8fbf9] p-4 shadow-sm sm:mt-7 sm:p-5">
+                  {!recoveryEmailSent ? (
+                    <>
+                      <div className="text-center mb-4">
+                        <h2 className="text-lg font-bold text-[#007A53]">Recuperar Contraseña</h2>
+                        <p className="text-sm text-gray-600 mt-2">Ingresa tu correo para recibir un enlace de recuperación</p>
+                      </div>
+
+                      {errorMessage && (
+                        <div className="rounded-xl bg-red-50 p-3 border border-red-200">
+                          <p className="text-sm text-red-700">{errorMessage}</p>
+                        </div>
+                      )}
+
+                      {/* Recovery Email Input */}
+                      <div className="relative">
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                          <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+                            <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+                          </svg>
+                        </div>
+                        <Input
+                          type="email"
+                          inputMode="email"
+                          autoComplete="email"
+                          placeholder="Correo electrónico"
+                          value={recoveryEmail}
+                          onChange={(event) => setRecoveryEmail(event.target.value)}
+                          disabled={isSubmitting}
+                          className="h-12 rounded-2xl border border-gray-200 bg-white pl-12 pr-4 text-gray-900 placeholder-gray-500 transition-all focus:border-[#007A53] focus:ring-2 focus:ring-[#007A53]/15 sm:h-14"
+                        />
+                      </div>
+
+                      <Button
+                        className="h-12 w-full rounded-2xl bg-[#007A53] text-base font-bold text-white shadow-lg shadow-[#007A53]/30 transition-all hover:bg-[#006248] disabled:opacity-70 sm:h-14 sm:text-lg"
+                        onClick={onSendPasswordReset}
+                        disabled={isSubmitting}
+                      >
+                        {isSubmitting ? "Enviando..." : "Enviar Enlace de Recuperación"}
+                      </Button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowPasswordRecovery(false);
+                          setRecoveryEmail("");
+                          setErrorMessage("");
+                        }}
+                        className="w-full text-sm font-semibold text-[#007A53] underline-offset-4 hover:underline"
+                      >
+                        Volver al Login
+                      </button>
+                    </>
+                  ) : (
+                    <div className="text-center space-y-4">
+                      <div className="rounded-full bg-green-100 w-16 h-16 flex items-center justify-center mx-auto">
+                        <svg className="h-8 w-8 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <h3 className="text-lg font-bold text-[#007A53]">¡Email enviado!</h3>
+                      <p className="text-sm text-gray-600">
+                        Hemos enviado un enlace de recuperación a <strong>{recoveryEmail}</strong>
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        Por favor revisa tu bandeja de entrada o en spam y sigue las instrucciones para restablecer tu contraseña.
+                      </p>
+                      <Button
+                        className="h-12 w-full rounded-2xl bg-[#007A53] text-base font-bold text-white shadow-lg shadow-[#007A53]/30 transition-all hover:bg-[#006248] sm:h-14 sm:text-lg"
+                        onClick={() => {
+                          setShowPasswordRecovery(false);
+                          setRecoveryEmail("");
+                          setRecoveryEmailSent(false);
+                          setErrorMessage("");
+                        }}
+                      >
+                        Volver al Login
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ) : null}
 

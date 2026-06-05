@@ -5,6 +5,7 @@ import {
   signOut,
   createUserWithEmailAndPassword,
   OAuthProvider,
+  sendPasswordResetEmail,
 } from "firebase/auth";
 import { getFirebaseAuth } from "./client";
 
@@ -46,4 +47,9 @@ export const registerWithEmailPassword = async (
   const auth = getFirebaseAuth();
   const credential = await createUserWithEmailAndPassword(auth, email, password);
   return credential.user.getIdToken();
+};
+
+export const sendPasswordReset = async (email: string): Promise<void> => {
+  const auth = getFirebaseAuth();
+  await sendPasswordResetEmail(auth, email);
 };

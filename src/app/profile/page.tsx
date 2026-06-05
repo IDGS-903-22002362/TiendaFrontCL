@@ -10,14 +10,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { getMyPoints, getMyProfile, saveEditableProfile, usuariosApi } from "@/lib/api/users";
 import { useToast } from "@/hooks/use-toast";
 
-function resolveLevelFromPoints(points: number) {
-  if (points >= 5000) return "DIAMANTE";
-  if (points >= 2500) return "ESMERALDA";
-  if (points >= 1200) return "ORO";
-  if (points >= 500) return "PLATA";
-  return "BRONCE";
-}
-
 export default function ProfilePage() {
   const { user, role, isAuthenticated, isLoading, refreshSession } = useAuth();
   const { toast } = useToast();
@@ -55,11 +47,12 @@ export default function ProfilePage() {
   }, [profileName, user]);
 
   const displayLevel = useMemo(() => {
-    if (profileLevel.trim()) {
-      return profileLevel;
+    if (isLoadingPoints) {
+      return "...";
     }
-    return resolveLevelFromPoints(effectivePoints);
-  }, [profileLevel, effectivePoints]);
+
+    return profileLevel.trim() || "Sin nivel asignado";
+  }, [isLoadingPoints, profileLevel]);
 
   useEffect(() => {
     if (!isAuthenticated || !user) {
@@ -297,22 +290,20 @@ export default function ProfilePage() {
         <button
           type="button"
           onClick={() => setActiveSection("personal")}
-          className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-            activeSection === "personal"
+          className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${activeSection === "personal"
               ? "bg-primary text-primary-foreground"
               : "text-muted-foreground hover:text-foreground"
-          }`}
+            }`}
         >
           Datos Personales
         </button>
         <button
           type="button"
           onClick={() => setActiveSection("compras")}
-          className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-            activeSection === "compras"
+          className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${activeSection === "compras"
               ? "bg-primary text-primary-foreground"
               : "text-muted-foreground hover:text-foreground"
-          }`}
+            }`}
         >
           Mis Compras
         </button>
@@ -351,7 +342,7 @@ export default function ProfilePage() {
               </span>
               <span className="font-medium break-all">{user.email}</span>
             </div>
-            
+
             <div className="flex flex-col space-y-1">
               <span className="flex items-center text-sm text-muted-foreground">
                 <Shield className="mr-2 h-4 w-4" /> Rol
