@@ -93,7 +93,7 @@ export default function RegisterPage() {
     };
 
     return (
-        <div className="relative flex min-h-screen flex-col overflow-hidden bg-white">
+        <div className="relative flex min-h-[100svh] flex-col overflow-hidden bg-white">
             <div className="absolute inset-0 z-0" aria-hidden="true">
                 <div className="h-full w-full">
                     <Antigravity
@@ -126,17 +126,17 @@ export default function RegisterPage() {
                 </button>
             </div>
 
-            <div className="pointer-events-none relative z-10 flex flex-1 items-center justify-center overflow-y-auto px-3 py-8 sm:px-4 sm:py-10 lg:py-14">
-                <section className="pointer-events-auto relative w-full max-w-md rounded-[2rem] border border-white/55 bg-white/95 px-4 pb-6 pt-16 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-md sm:px-8 sm:pb-8 sm:pt-20 md:max-w-md md:px-9 lg:max-w-md lg:pb-12 lg:pt-24">
+            <div className="pointer-events-none relative z-10 flex flex-1 items-start justify-center overflow-y-auto px-2 pb-6 pt-16 sm:items-center sm:px-4 sm:py-10 lg:py-14">
+                <section className="pointer-events-auto relative w-full max-w-[22rem] rounded-[1.6rem] border border-white/55 bg-white/95 px-3 pb-4 pt-12 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-md sm:max-w-md sm:rounded-[2rem] sm:px-8 sm:pb-8 sm:pt-20 md:max-w-md md:px-9 lg:max-w-md lg:pb-12 lg:pt-24">
                     <img
                         src="/images/leon.png"
                         alt="Club Leon Logo"
-                        className="absolute left-1/2 top-0 h-24 w-auto -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-lg sm:h-28 md:h-32"
+                        className="absolute left-1/2 top-0 h-20 w-auto -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-lg sm:h-28 md:h-32"
                     />
 
-                    <h1 className="text-center text-3xl font-black tracking-tight text-[#06543b] sm:text-4xl">Registro manual</h1>
+                    <h1 className="text-center text-2xl font-black tracking-tight text-[#06543b] sm:text-4xl">Registro manual</h1>
 
-                    <p className="mx-auto mt-2 max-w-sm text-center text-xs leading-relaxed text-gray-600 sm:text-sm">
+                    <p className="mx-auto mt-1.5 max-w-sm text-center text-xs leading-relaxed text-gray-600 sm:mt-2 sm:text-sm">
                         Completa tus datos para ser parte del Club León.
                     </p>
 

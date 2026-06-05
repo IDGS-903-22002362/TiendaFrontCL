@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
@@ -69,6 +69,7 @@ function LoginPageContent() {
 
   // Estado para mostrar formulario de correo y contraseña
   const [showPasswordLogin, setShowPasswordLogin] = useState(false);
+  const otpInputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const firebaseReady = isFirebaseConfigured();
 
@@ -124,6 +125,92 @@ function LoginPageContent() {
     }
     return () => clearInterval(interval);
   }, [resendTimer]);
+
+  useEffect(() => {
+    if (showVerification && !isSubmitting) {
+      otpInputRefs.current[0]?.focus();
+    }
+  }, [showVerification, isSubmitting]);
+
+  const updateOtpDigit = (index: number, nextDigit: string) => {
+    const safeDigit = nextDigit.replace(/\D/g, "").slice(-1);
+    const digits = verificationCode.split("").slice(0, 6);
+
+    while (digits.length < 6) {
+      digits.push("");
+    }
+
+    digits[index] = safeDigit;
+    setVerificationCode(digits.join("").replace(/\s/g, ""));
+  };
+
+  const handleOtpChange = (index: number, value: string) => {
+    const cleanValue = value.replace(/\D/g, "");
+
+    if (!cleanValue) {
+      updateOtpDigit(index, "");
+      return;
+    }
+
+    if (cleanValue.length > 1) {
+      const pasted = cleanValue.slice(0, 6).split("");
+      const digits = ["", "", "", "", "", ""];
+      pasted.forEach((digit, digitIndex) => {
+        digits[digitIndex] = digit;
+      });
+      setVerificationCode(digits.join(""));
+
+      const focusIndex = Math.min(pasted.length, 5);
+      otpInputRefs.current[focusIndex]?.focus();
+      return;
+    }
+
+    updateOtpDigit(index, cleanValue);
+
+    if (index < 5) {
+      otpInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Backspace") {
+      const digits = verificationCode.split("");
+      const currentValue = digits[index] ?? "";
+
+      if (!currentValue && index > 0) {
+        otpInputRefs.current[index - 1]?.focus();
+      }
+      return;
+    }
+
+    if (event.key === "ArrowLeft" && index > 0) {
+      event.preventDefault();
+      otpInputRefs.current[index - 1]?.focus();
+    }
+
+    if (event.key === "ArrowRight" && index < 5) {
+      event.preventDefault();
+      otpInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (event: React.ClipboardEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const pasted = event.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+
+    if (!pasted) {
+      return;
+    }
+
+    const digits = ["", "", "", "", "", ""];
+    pasted.split("").forEach((digit, index) => {
+      digits[index] = digit;
+    });
+
+    setVerificationCode(digits.join(""));
+    const focusIndex = Math.min(pasted.length, 5);
+    otpInputRefs.current[focusIndex]?.focus();
+  };
 
   // Solicitar código de verificación
   const onRequestVerificationCode = async () => {
@@ -377,7 +464,7 @@ function LoginPageContent() {
   }
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden bg-white">
+    <div className="relative flex min-h-[100svh] flex-col overflow-hidden bg-white">
       <div className="absolute inset-0 z-0" aria-hidden="true">
         <div className="h-full w-full">
           <Antigravity
@@ -412,17 +499,17 @@ function LoginPageContent() {
       </div>
 
       {/* Main content */}
-      <div className="pointer-events-none relative z-10 flex flex-1 items-center justify-center overflow-y-auto px-3 py-8 sm:px-4 sm:py-10 lg:py-14">
-        <section className="pointer-events-auto relative w-full max-w-md rounded-[2rem] border border-white/55 bg-white/95 px-4 pb-6 pt-16 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-md sm:px-8 sm:pb-8 sm:pt-20 md:max-w-md md:px-9 lg:max-w-md lg:pb-12 lg:pt-24">
+      <div className="pointer-events-none relative z-10 flex flex-1 items-start justify-center overflow-y-auto px-2 pb-6 pt-16 sm:items-center sm:px-4 sm:py-10 lg:py-14">
+        <section className="pointer-events-auto relative w-full max-w-[22rem] rounded-[1.6rem] border border-white/55 bg-white/95 px-3 pb-4 pt-12 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-md sm:max-w-md sm:rounded-[2rem] sm:px-8 sm:pb-8 sm:pt-20 md:max-w-md md:px-9 lg:max-w-md lg:pb-12 lg:pt-24">
           <img
             src="/images/leon.png"
             alt="Club León Logo"
-            className="absolute left-1/2 top-0 h-24 w-auto -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-lg sm:h-28 md:h-32"
+            className="absolute left-1/2 top-0 h-20 w-auto -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-lg sm:h-28 md:h-32"
           />
 
-          <h1 className="text-center text-[2.2rem] font-black tracking-tight text-[#06543b] sm:text-5xl lg:text-6xl">CLUB LEÓN</h1>
+          <h1 className="text-center text-[1.85rem] font-black tracking-tight text-[#06543b] sm:text-5xl lg:text-6xl">CLUB LEÓN</h1>
 
-          <p className="mx-auto mt-3 max-w-sm text-center text-sm leading-relaxed text-gray-600 sm:text-base lg:text-lg">
+          <p className="mx-auto mt-2 max-w-sm text-center text-xs leading-relaxed text-gray-600 sm:text-base lg:text-lg">
             Consulta contenido exclusivo del Club León, regístrate, guarda tu progreso y desbloquea grandes beneficios.
           </p>
 
@@ -523,30 +610,36 @@ function LoginPageContent() {
                     </p>
                   </div>
 
-                  {/* Código Input */}
-                  <div className="relative">
-                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
-                      <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                        <path
-                          fillRule="evenodd"
-                          d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
+                  {/* Código Input estilo cubitos */}
+                  <div className="space-y-2" onPaste={handleOtpPaste}>
+                    <p className="text-center text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+                      Código de 6 dígitos
+                    </p>
+                    <div className="flex items-center justify-center gap-2 sm:gap-3">
+                      {Array.from({ length: 6 }).map((_, index) => {
+                        const digit = verificationCode[index] ?? "";
+
+                        return (
+                          <input
+                            key={index}
+                            ref={(element) => {
+                              otpInputRefs.current[index] = element;
+                            }}
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            pattern="[0-9]*"
+                            maxLength={1}
+                            value={digit}
+                            disabled={isSubmitting}
+                            onChange={(event) => handleOtpChange(index, event.target.value)}
+                            onKeyDown={(event) => handleOtpKeyDown(index, event)}
+                            className="h-12 w-11 rounded-xl border border-gray-200 bg-white text-center text-xl font-bold text-gray-900 shadow-sm transition-all focus:border-[#007A53] focus:ring-2 focus:ring-[#007A53]/20 sm:h-14 sm:w-12 sm:text-2xl"
+                            aria-label={`Dígito ${index + 1} del código`}
+                          />
+                        );
+                      })}
                     </div>
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      placeholder="Código de 6 dígitos"
-                      value={verificationCode}
-                      onChange={(e) => {
-                        const value = e.target.value.replace(/\D/g, "").slice(0, 6);
-                        setVerificationCode(value);
-                      }}
-                      disabled={isSubmitting}
-                      className="h-12 rounded-2xl border border-gray-200 bg-white pl-12 text-center text-xl tracking-widest text-gray-900 placeholder-gray-500 transition-all focus:border-[#007A53] focus:ring-2 focus:ring-[#007A53]/15 sm:h-14 sm:text-2xl"
-                      maxLength={6}
-                    />
                   </div>
 
                   {attempts < 3 && attempts > 0 && (
