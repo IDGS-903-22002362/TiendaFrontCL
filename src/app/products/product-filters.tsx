@@ -361,11 +361,11 @@ export function ProductFilters({
   const filterControls = (
     <div className="space-y-7">
       <div>
-        <h3 className="mb-4 font-headline text-2xl font-semibold uppercase leading-none tracking-[0.03em]">
+        <h3 className="mb-4 font-headline text-[var(--font-size-subtitle)] font-semibold uppercase leading-none tracking-[0.03em]">
           Categoría
         </h3>
         <div className="space-y-2">
-          <label className="flex items-center text-sm text-muted-foreground">
+          <label className="flex items-center min-h-[44px] text-[15px] lg:text-[16px] text-muted-foreground">
             <Checkbox
               checked={category === "all"}
               onCheckedChange={() => setCategory("all")}
@@ -388,7 +388,7 @@ export function ProductFilters({
       </div>
 
       <div>
-        <h3 className="mb-4 font-headline text-2xl font-semibold uppercase leading-none tracking-[0.03em]">
+        <h3 className="mb-4 font-headline text-[var(--font-size-subtitle)] font-semibold uppercase leading-none tracking-[0.03em]">
           Precio
         </h3>
         <Slider
@@ -403,11 +403,11 @@ export function ProductFilters({
       </div>
 
       <div>
-        <h3 className="mb-4 font-headline text-2xl font-semibold uppercase leading-none tracking-[0.03em]">
+        <h3 className="mb-4 font-headline text-[var(--font-size-subtitle)] font-semibold uppercase leading-none tracking-[0.03em]">
           Líneas
         </h3>
         <div className="space-y-2">
-          <label className="flex items-center text-sm text-muted-foreground">
+          <label className="flex items-center min-h-[44px] text-[15px] lg:text-[16px] text-muted-foreground">
             <Checkbox
               checked={linea === "all"}
               onCheckedChange={() => setLinea("all")}
@@ -430,11 +430,11 @@ export function ProductFilters({
       </div>
 
       <div>
-        <h3 className="mb-4 font-headline text-2xl font-semibold uppercase leading-none tracking-[0.03em]">
+        <h3 className="mb-4 font-headline text-[var(--font-size-subtitle)] font-semibold uppercase leading-none tracking-[0.03em]">
           Tallas
         </h3>
         <div className="space-y-2">
-          <label className="flex items-center text-sm text-muted-foreground">
+          <label className="flex items-center min-h-[44px] text-[15px] lg:text-[16px] text-muted-foreground">
             <Checkbox
               checked={selectedSize === "all"}
               onCheckedChange={() => setSelectedSize("all")}
@@ -460,11 +460,11 @@ export function ProductFilters({
       </div>
 
       <div>
-        <h3 className="mb-4 font-headline text-2xl font-semibold uppercase leading-none tracking-[0.03em]">
+        <h3 className="mb-4 font-headline text-[var(--font-size-subtitle)] font-semibold uppercase leading-none tracking-[0.03em]">
           Etiquetas
         </h3>
         <div className="space-y-2">
-          <label className="flex items-center text-sm text-muted-foreground">
+          <label className="flex items-center min-h-[44px] text-[15px] lg:text-[16px] text-muted-foreground">
             <Checkbox
               checked={tags.includes("new")}
               onCheckedChange={(checked) =>
@@ -473,7 +473,7 @@ export function ProductFilters({
             />
             <span className="ml-2">Novedades</span>
           </label>
-          <label className="flex items-center text-sm text-muted-foreground">
+          <label className="flex items-center min-h-[44px] text-[15px] lg:text-[16px] text-muted-foreground">
             <Checkbox
               checked={tags.includes("sale")}
               onCheckedChange={(checked) =>
@@ -486,10 +486,10 @@ export function ProductFilters({
       </div>
 
       <div>
-        <h3 className="mb-4 font-headline text-2xl font-semibold uppercase leading-none tracking-[0.03em]">
+        <h3 className="mb-4 font-headline text-[var(--font-size-subtitle)] font-semibold uppercase leading-none tracking-[0.03em]">
           Favoritos
         </h3>
-        <label className="flex items-center text-sm text-muted-foreground">
+        <label className="flex items-center min-h-[44px] text-[15px] lg:text-[16px] text-muted-foreground">
           <Checkbox
             checked={wishlistOnly}
             onCheckedChange={(checked) => setWishlistOnly(Boolean(checked))}
@@ -501,7 +501,7 @@ export function ProductFilters({
   );
 
   return (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[300px_minmax(0,1fr)] xl:gap-8">
+    <div className="grid grid-cols-1 gap-4 md:gap-6 xl:grid-cols-[minmax(260px,300px)_minmax(0,1fr)] xl:gap-8">
       <FilterSidebar>
         <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary/72">
           Refinar búsqueda

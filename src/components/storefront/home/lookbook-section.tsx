@@ -53,14 +53,14 @@ export function LookbookSection({ products }: LookbookSectionProps) {
                 <div className="mt-6 flex flex-col gap-3 sm:flex-row">
                   <Link
                     href={`/products/${leadProduct.id}`}
-                    className="inline-flex h-12 items-center justify-between gap-3 rounded-[1rem] bg-white px-5 text-sm font-semibold text-foreground transition-[background-color,transform] duration-200 hover:-translate-y-px hover:bg-white/92"
+                    className="inline-flex h-[48px] lg:h-[56px] min-w-[44px] min-h-[44px] items-center justify-between gap-3 rounded-[1rem] bg-white px-5 text-sm font-semibold text-foreground transition-[background-color,transform] duration-200 hover:-translate-y-px hover:bg-white/92"
                   >
                     Ver pieza principal
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                   <Link
                     href="/products"
-                    className="inline-flex h-12 items-center justify-between gap-3 rounded-[1rem] border border-white/14 px-5 text-sm font-semibold text-white transition-[background-color,border-color,transform] duration-200 hover:-translate-y-px hover:bg-white/8"
+                    className="inline-flex h-[48px] lg:h-[56px] min-w-[44px] min-h-[44px] items-center justify-between gap-3 rounded-[1rem] border border-white/14 px-5 text-sm font-semibold text-white transition-[background-color,border-color,transform] duration-200 hover:-translate-y-px hover:bg-white/8"
                   >
                     Ir al catálogo
                   </Link>

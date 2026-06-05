@@ -51,7 +51,7 @@ export function MobileNavDrawer({
               <Link
                 key={link.href}
                 href={link.href}
-                className="flex items-center justify-between border border-border/80 bg-card/76 px-4 py-3 text-sm font-medium text-foreground transition-[background-color,border-color,transform] hover:-translate-y-px hover:border-primary/18 hover:bg-card"
+                className="flex items-center justify-between border border-border/80 bg-card/76 px-4 py-3 min-h-[44px] text-sm font-medium text-foreground transition-[background-color,border-color,transform] hover:-translate-y-px hover:border-primary/18 hover:bg-card"
               >
                 <span>{link.label}</span>
                 <ChevronRight className="h-4 w-4 text-muted-foreground" />

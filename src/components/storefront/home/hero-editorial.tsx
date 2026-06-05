@@ -277,7 +277,7 @@ export function HeroEditorial() {
     return (
       <section className="storefront-frame pt-3 md:pt-4 lg:pt-5">
         <div className="relative isolate overflow-hidden border border-white/10 bg-[#050505]">
-          <div className="relative min-h-[58vh] sm:min-h-[62vh] md:min-h-[72vh] lg:min-h-[82vh] xl:min-h-[86vh] bg-black/40 animate-pulse" />
+          <div className="relative min-h-[520px] sm:min-h-[600px] lg:min-h-[720px] bg-black/40 animate-pulse" />
         </div>
       </section>
     );
@@ -295,7 +295,7 @@ export function HeroEditorial() {
         aria-roledescription="carousel"
         aria-label="La Guarida"
       >
-        <div className="relative min-h-[58vh] sm:min-h-[62vh] md:min-h-[72vh] lg:min-h-[82vh] xl:min-h-[86vh]">
+        <div className="relative min-h-[520px] sm:min-h-[600px] lg:min-h-[720px]">
           {slides.map((slide, index) => {
             const isActive = index === activeSlideIndex;
             const slideId = `${heroId}-slide-${index}`;
@@ -346,20 +346,20 @@ export function HeroEditorial() {
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_22%,rgba(255,255,255,0.1),transparent_26%),linear-gradient(90deg,rgba(0,0,0,0.36)_0%,rgba(0,0,0,0.1)_44%,rgba(0,0,0,0.24)_100%)]" />
 
                 <div className="relative z-10 flex h-full items-end">
-                  <div className="w-full px-5 pb-8 pt-24 sm:px-7 sm:pb-10 md:px-10 md:pb-12 lg:px-14 lg:pb-14 xl:px-16 xl:pb-16">
-                    <div className="max-w-[36rem] text-white">
-                      <h1 className="mt-4 max-w-[10ch] font-headline text-[3.15rem] font-semibold uppercase leading-[0.84] tracking-[0.02em] text-white sm:text-[3.8rem] md:text-[4.7rem] lg:text-[5.8rem] xl:text-[6.4rem]">
+                  <div className="w-full px-[20px] pb-8 pt-24 sm:px-[24px] sm:pb-10 lg:px-[64px] xl:px-[96px] lg:pb-14">
+                    <div className="max-w-[680px] xl:max-w-[760px] text-white">
+                      <h1 className="mt-4 max-w-full font-headline text-[var(--font-size-hero-mobile)] font-semibold uppercase leading-[var(--line-height-heading-large)] tracking-[0.02em] text-white lg:text-[var(--font-size-hero-desktop)]">
                         {slide.title}
                       </h1>
                       {slide.subtitle && (
-                        <p className="mt-4 max-w-[34rem] text-sm leading-6 text-white/76 sm:text-[0.95rem] sm:leading-7 md:text-base">
+                        <p className="mt-4 max-w-full text-[var(--font-size-subtitle)] leading-[var(--line-height-body)] text-white/76">
                           {slide.subtitle}
                         </p>
                       )}
                       <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
                         <Button
                           asChild
-                          className="h-12 border border-white/12 bg-white px-6 text-black shadow-none hover:bg-white/92"
+                          className="h-[48px] lg:h-[56px] min-w-[44px] min-h-[44px] border border-white/12 bg-white px-6 text-black shadow-none hover:bg-white/92"
                         >
                           <Link href={slide.ctaLink}>
                             {slide.ctaText}
@@ -370,7 +370,7 @@ export function HeroEditorial() {
                           <Button
                             asChild
                             variant="outline"
-                            className="h-12 border-white/22 bg-white/6 px-6 text-white shadow-none backdrop-blur-sm hover:border-white/38 hover:bg-white/10 hover:text-white"
+                            className="h-[48px] lg:h-[56px] min-w-[44px] min-h-[44px] border-white/22 bg-white/6 px-6 text-white shadow-none backdrop-blur-sm hover:border-white/38 hover:bg-white/10 hover:text-white"
                           >
                             <Link href={slide.secondaryCtaLink}>
                               {slide.secondaryCtaText}
@@ -405,7 +405,7 @@ export function HeroEditorial() {
             <div className="pointer-events-auto flex items-center gap-2">
               <button
                 type="button"
-                className="inline-flex h-10 w-10 items-center justify-center border border-white/16 bg-black/24 text-white backdrop-blur-sm transition-colors duration-200 hover:bg-black/40"
+                className="inline-flex h-11 w-11 min-w-[44px] min-h-[44px] items-center justify-center border border-white/16 bg-black/24 text-white backdrop-blur-sm transition-colors duration-200 hover:bg-black/40"
                 aria-label="Slide anterior"
                 onClick={() => handleManualNavigation("prev")}
               >
@@ -413,7 +413,7 @@ export function HeroEditorial() {
               </button>
               <button
                 type="button"
-                className="inline-flex h-10 w-10 items-center justify-center border border-white/16 bg-black/24 text-white backdrop-blur-sm transition-colors duration-200 hover:bg-black/40"
+                className="inline-flex h-11 w-11 min-w-[44px] min-h-[44px] items-center justify-center border border-white/16 bg-black/24 text-white backdrop-blur-sm transition-colors duration-200 hover:bg-black/40"
                 aria-label="Siguiente slide"
                 onClick={() => handleManualNavigation("next")}
               >

@@ -56,14 +56,14 @@ export function EditorialSplit({
             </div>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Button asChild className="h-12 rounded-[1rem] px-6">
+              <Button asChild className="h-[48px] lg:h-[56px] min-w-[44px] min-h-[44px] rounded-[1rem] px-6">
                 <Link href={primaryHref}>
                   {primaryLabel}
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
               {secondaryHref && secondaryLabel ? (
-                <Button asChild variant="outline" className="h-12 rounded-[1rem] px-6">
+                <Button asChild variant="outline" className="h-[48px] lg:h-[56px] min-w-[44px] min-h-[44px] rounded-[1rem] px-6">
                   <Link href={secondaryHref}>{secondaryLabel}</Link>
                 </Button>
               ) : null}
