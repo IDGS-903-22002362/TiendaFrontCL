@@ -1,3 +1,4 @@
+cat << 'EOF2' > src/app/api/productos/[[...path]]/route.ts
 import { NextRequest } from "next/server";
 import { proxyToBackend } from "@/lib/server/backend-client";
 
@@ -60,3 +61,4 @@ export function PATCH(
 ) {
   return context.params.then((params) => forward(request, params.path));
 }
+EOF2
