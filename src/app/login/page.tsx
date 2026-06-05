@@ -534,7 +534,7 @@ function LoginPageContent() {
             )}
 
             {/* Divider */}
-            <div className="my-6 flex w-full max-w-sm items-center gap-4">
+            <div className="my-2 flex w-full max-w-sm items-center gap-4">
               <div className="h-px flex-1 bg-white/20" />
               <span className="text-sm text-white/70">O inicia con</span>
               <div className="h-px flex-1 bg-white/20" />
