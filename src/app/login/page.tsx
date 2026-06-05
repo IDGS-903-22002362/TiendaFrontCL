@@ -268,6 +268,20 @@ function LoginPageContent() {
     }
   };
 
+  const resetLoginState = () => {
+    setShowVerification(false);
+    setShowPasswordLogin(false);
+    setShowPasswordRecovery(false);
+
+    setVerificationCode("");
+    setPendingEmail("");
+    setPassword("");
+    setErrorMessage("");
+
+    setAttempts(3);
+    setResendTimer(0);
+  };
+
   // Reenviar código
   const onResendCode = async () => {
     if (resendTimer > 0) return;
@@ -494,11 +508,14 @@ function LoginPageContent() {
       setErrorMessage("");
       setShowPassword(false);
     } else if (showVerification) {
+      // Volver al login inicial (primera imagen)
       setShowVerification(false);
       setVerificationCode("");
       setPendingEmail("");
       setErrorMessage("");
       setAttempts(3);
+      // Limpiar también el email para que el usuario pueda ingresar uno nuevo si quiere
+      setEmail("");
     } else {
       router.push("/");
     }
