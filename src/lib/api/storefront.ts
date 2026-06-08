@@ -697,6 +697,173 @@ export function mapCatalogProductToProductCardViewModel(
   };
 }
 
+function mapProductToCatalogCard(product: Product): CatalogProductCard {
+  const finalPrice = product.salePrice ?? product.price;
+  const isAvailable = (product.stockTotal ?? product.stock) > 0;
+
+  return {
+    id: product.id,
+    slug: product.id,
+    nombre: product.name,
+    categoria: product.category,
+    categoriaLabel: product.category,
+    linea: product.lineId ?? product.lineName ?? "",
+    lineaLabel: product.lineName ?? product.lineId ?? "",
+    precioOriginal: product.price,
+    precioFinal: finalPrice,
+    tieneOferta: Boolean(product.salePrice && product.salePrice < product.price),
+    ofertaAplicadaId: null,
+    ofertaTitulo: product.salePrice ? "Oferta" : null,
+    descuentoTotal: Math.max(product.price - finalPrice, 0),
+    imagenPrincipal: product.images[0] ?? null,
+    stockTotal: product.stockTotal ?? product.stock,
+    disponible: isAvailable,
+    destacado: product.tags.includes("new"),
+  };
+}
+
+function getCatalogCursorOffset(cursor?: string) {
+  if (!cursor) return 0;
+
+  const parsed = Number(cursor.replace(/^offset:/, ""));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function normalizeCatalogResponse(payload: unknown): CatalogResponse {
+  const unwrapped = unwrapData<unknown>(payload);
+  const data =
+    unwrapped &&
+    typeof unwrapped === "object" &&
+    "data" in unwrapped &&
+    (unwrapped as { data?: unknown }).data !== undefined
+      ? (unwrapped as { data: unknown }).data
+      : unwrapped;
+
+  if (!data || typeof data !== "object") {
+    return { items: [], nextCursor: null, hasMore: false };
+  }
+
+  const record = data as UnknownRecord;
+  const items = Array.isArray(record.items)
+    ? (record.items as CatalogProductCard[])
+    : [];
+
+  return {
+    items,
+    nextCursor:
+      typeof record.nextCursor === "string" ? record.nextCursor : null,
+    hasMore: Boolean(record.hasMore),
+  };
+}
+
+async function fetchCatalogFallbackPage(
+  params: CatalogQuery,
+): Promise<CatalogResponse> {
+  const limit = Math.min(Math.max(Number(params.limit) || 24, 1), 48);
+  const offset = getCatalogCursorOffset(params.cursor);
+  const payload = await apiFetch<unknown>(
+    "/api/productos",
+    { method: "GET", cache: "no-store" },
+    getProductReadOptions(),
+  );
+
+  let products = normalizeProductsArray(payload)
+    .map(mapProduct)
+    .filter((product) => Boolean(product.id))
+    .filter((product) => product.activo !== false);
+
+  if (params.onlyAvailable) {
+    products = products.filter(
+      (product) => (product.stockTotal ?? product.stock) > 0,
+    );
+  }
+
+  if (params.category || params.categoria) {
+    const category = normalizeStorefrontLikeText(
+      params.category ?? params.categoria ?? "",
+    );
+    products = products.filter(
+      (product) => normalizeStorefrontLikeText(product.category) === category,
+    );
+  }
+
+  if (params.line || params.linea) {
+    const line = normalizeStorefrontLikeText(params.line ?? params.linea ?? "");
+    products = products.filter(
+      (product) =>
+        normalizeStorefrontLikeText(product.lineId ?? "") === line ||
+        normalizeStorefrontLikeText(product.lineName ?? "") === line,
+    );
+  }
+
+  if (params.talla) {
+    const talla = normalizeStorefrontLikeText(params.talla);
+    products = products.filter((product) =>
+      (product.sizes ?? product.tallaIds ?? []).some(
+        (size) => normalizeStorefrontLikeText(size) === talla,
+      ),
+    );
+  }
+
+  if (typeof params.maxPrice === "number") {
+    products = products.filter(
+      (product) => (product.salePrice ?? product.price) <= params.maxPrice!,
+    );
+  }
+
+  if (typeof params.minPrice === "number") {
+    products = products.filter(
+      (product) => (product.salePrice ?? product.price) >= params.minPrice!,
+    );
+  }
+
+  if (params.q) {
+    const query = normalizeStorefrontLikeText(params.q);
+    products = products.filter((product) =>
+      normalizeStorefrontLikeText(
+        `${product.name} ${product.description} ${product.clave ?? ""} ${product.category} ${product.lineName ?? ""}`,
+      ).includes(query),
+    );
+  }
+
+  if (params.onlyOffers) {
+    products = products.filter((product) => product.tags.includes("sale"));
+  }
+
+  products = [...products].sort((a, b) => {
+    switch (params.sort) {
+      case "precio_asc":
+        return (a.salePrice ?? a.price) - (b.salePrice ?? b.price);
+      case "precio_desc":
+        return (b.salePrice ?? b.price) - (a.salePrice ?? a.price);
+      case "nombre_asc":
+        return a.name.localeCompare(b.name, "es-MX");
+      case "recientes":
+      case "destacados":
+      default:
+        return a.name.localeCompare(b.name, "es-MX");
+    }
+  });
+
+  const page = products.slice(offset, offset + limit);
+  const nextOffset = offset + page.length;
+  const hasMore = nextOffset < products.length;
+
+  return {
+    items: page.map(mapProductToCatalogCard),
+    nextCursor: hasMore ? `offset:${nextOffset}` : null,
+    hasMore,
+  };
+}
+
+function normalizeStorefrontLikeText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
+}
+
 export async function fetchCatalogPage(params: CatalogQuery = {}): Promise<CatalogResponse> {
   const searchParams = new URLSearchParams();
 
@@ -708,12 +875,19 @@ export async function fetchCatalogPage(params: CatalogQuery = {}): Promise<Catal
 
   const path = `/api/productos/catalogo${searchParams.size > 0 ? `?${searchParams.toString()}` : ""}`;
 
-  return apiFetch<CatalogResponse>(
-    path,
-    {
-      method: "GET",
-      cache: "no-store",
-    },
-    getProductReadOptions(),
-  );
+  try {
+    const payload = await apiFetch<unknown>(
+      path,
+      {
+        method: "GET",
+        cache: "no-store",
+      },
+      getProductReadOptions(),
+    );
+
+    return normalizeCatalogResponse(payload);
+  } catch (error) {
+    console.warn("fetchCatalogPage failed, using /api/productos fallback", error);
+    return fetchCatalogFallbackPage(params);
+  }
 }
