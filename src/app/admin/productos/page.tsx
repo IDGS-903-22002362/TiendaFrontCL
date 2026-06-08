@@ -56,6 +56,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+const ADMIN_PRODUCTS_PAGE_SIZE = 10;
+
 type PendingImageUpload = {
   id: string;
   file: File;
@@ -262,6 +264,7 @@ export default function AdminProductsPage() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [categorias, setCategorias] = useState<Category[]>([]);
   const [productSearchQuery, setProductSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedProductId, setSelectedProductId] = useState("");
   const [lineaQuery, setLineaQuery] = useState("");
   const [categoriaQuery, setCategoriaQuery] = useState("");
@@ -421,6 +424,25 @@ export default function AdminProductsPage() {
       ).includes(query);
     });
   }, [productSearchQuery, products, selectedProductId]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredProducts.length / ADMIN_PRODUCTS_PAGE_SIZE),
+  );
+  const paginatedProducts = useMemo(() => {
+    const start = (currentPage - 1) * ADMIN_PRODUCTS_PAGE_SIZE;
+    return filteredProducts.slice(start, start + ADMIN_PRODUCTS_PAGE_SIZE);
+  }, [currentPage, filteredProducts]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [productSearchQuery, productStatus, selectedProductId]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const clearPendingImageChanges = () => {
     pendingImageUploads.forEach((item) => URL.revokeObjectURL(item.previewUrl));
@@ -1071,7 +1093,7 @@ export default function AdminProductsPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredProducts.map((product) => {
+                paginatedProducts.map((product) => {
                   return (
                     <TableRow key={product.id}>
                       <TableCell className="font-medium">
@@ -1173,6 +1195,43 @@ export default function AdminProductsPage() {
             </TableBody>
           </Table>
         </div>
+        {filteredProducts.length > ADMIN_PRODUCTS_PAGE_SIZE ? (
+          <div className="flex flex-col gap-3 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              Mostrando {(currentPage - 1) * ADMIN_PRODUCTS_PAGE_SIZE + 1}-
+              {Math.min(
+                currentPage * ADMIN_PRODUCTS_PAGE_SIZE,
+                filteredProducts.length,
+              )}{" "}
+              de {filteredProducts.length} productos
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-[44px]"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              >
+                Anterior
+              </Button>
+              <span className="min-w-[96px] text-center text-sm font-medium">
+                {currentPage} / {totalPages}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-[44px]"
+                disabled={currentPage >= totalPages}
+                onClick={() =>
+                  setCurrentPage((page) => Math.min(totalPages, page + 1))
+                }
+              >
+                Siguiente
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

@@ -191,7 +191,7 @@ export default function AdminLayout({
         </div>
       </header>
 
-      <aside className="hidden border-r border-border bg-sidebar md:block md:w-64 lg:w-72">
+      <aside className="hidden border-r border-border bg-sidebar md:sticky md:top-0 md:block md:h-screen md:self-start md:w-64 lg:w-72">
         <div className="flex h-full max-h-screen flex-col gap-2">
           <div className="flex h-14 items-center border-b border-border px-4 lg:h-[60px] lg:px-6">
             <Link href="/" className="flex items-center gap-2 font-semibold">
