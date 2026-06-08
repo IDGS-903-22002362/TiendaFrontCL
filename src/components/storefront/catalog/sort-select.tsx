@@ -23,10 +23,11 @@ export function SortSelect({
         <SelectValue placeholder="Ordenar" />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="featured">Destacados</SelectItem>
-        <SelectItem value="newest">Más nuevos</SelectItem>
-        <SelectItem value="price-asc">Precio ascendente</SelectItem>
-        <SelectItem value="price-desc">Precio descendente</SelectItem>
+        <SelectItem value="destacados">Destacados</SelectItem>
+        <SelectItem value="recientes">Más nuevos</SelectItem>
+        <SelectItem value="precio_asc">Precio menor a mayor</SelectItem>
+        <SelectItem value="precio_desc">Precio mayor a menor</SelectItem>
+        <SelectItem value="nombre_asc">Nombre A-Z</SelectItem>
       </SelectContent>
     </Select>
   );

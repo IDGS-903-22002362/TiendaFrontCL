@@ -674,20 +674,26 @@ export function mapCatalogProductToProductCardViewModel(
   const tags: Product["tags"] = [];
   if (catalogProduct.tieneOferta) tags.push("sale");
   if (catalogProduct.destacado) tags.push("new"); // map destacado to new for badge display if needed, or customize
+  const price = catalogProduct.precioOriginal;
+  const salePrice =
+    catalogProduct.tieneOferta && catalogProduct.precioFinal < price
+      ? catalogProduct.precioFinal
+      : undefined;
+  const stock = catalogProduct.disponible ? catalogProduct.stockTotal : 0;
 
   return {
     id: catalogProduct.id,
     name: catalogProduct.nombre,
     description: "", // Public catalog card doesn't need full description
-    price: catalogProduct.precioOriginal,
-    salePrice: catalogProduct.precioFinal,
+    price,
+    salePrice,
     images: catalogProduct.imagenPrincipal ? [catalogProduct.imagenPrincipal] : [],
     category: catalogProduct.categoriaLabel || catalogProduct.categoria,
     lineName: catalogProduct.lineaLabel || catalogProduct.linea,
     tags,
-    stock: catalogProduct.stockTotal,
-    stockTotal: catalogProduct.stockTotal,
-    activo: catalogProduct.disponible, // Use disponible for UI rendering if it maps closely
+    stock,
+    stockTotal: stock,
+    activo: catalogProduct.disponible,
   };
 }
 
@@ -700,11 +706,14 @@ export async function fetchCatalogPage(params: CatalogQuery = {}): Promise<Catal
     }
   });
 
-  const res = await fetch(`/api/productos/catalogo?${searchParams.toString()}`);
+  const path = `/api/productos/catalogo${searchParams.size > 0 ? `?${searchParams.toString()}` : ""}`;
 
-  if (!res.ok) {
-    throw new Error("No se pudo cargar el catalogo");
-  }
-
-  return (await res.json()) as CatalogResponse;
+  return apiFetch<CatalogResponse>(
+    path,
+    {
+      method: "GET",
+      cache: "no-store",
+    },
+    getProductReadOptions(),
+  );
 }

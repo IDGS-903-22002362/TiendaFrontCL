@@ -1,19 +1,29 @@
-
 "use client";
 
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { Category, Linea, Product, Talla, CatalogResponse, CatalogSort } from "@/lib/types";
+import type {
+  CatalogQuery,
+  CatalogResponse,
+  CatalogSort,
+  Category,
+  Linea,
+  Product,
+  Talla,
+} from "@/lib/types";
 import { ProductGrid } from "./product-grid";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { FilterDrawer } from "@/components/storefront/catalog/filter-drawer";
 import { FilterSidebar } from "@/components/storefront/catalog/filter-sidebar";
 import { ProductToolbar } from "@/components/storefront/catalog/product-toolbar";
 import { useStorefront } from "@/hooks/use-storefront";
-import { isCategoryVisible, normalizeStorefrontText } from "@/lib/storefront";
-import { fetchCatalogPage, mapCatalogProductToProductCardViewModel } from "@/lib/api/storefront";
-import { Button } from "@/components/ui/button";
+import { isCategoryVisible } from "@/lib/storefront";
+import {
+  fetchCatalogPage,
+  mapCatalogProductToProductCardViewModel,
+} from "@/lib/api/storefront";
 
 type ProductFiltersProps = {
   initialPage: CatalogResponse;
@@ -21,6 +31,33 @@ type ProductFiltersProps = {
   lineas: Linea[];
   tallas: Talla[];
 };
+
+const DEFAULT_MAX_PRICE = 5000;
+const CATALOG_SORTS: CatalogSort[] = [
+  "destacados",
+  "precio_asc",
+  "precio_desc",
+  "recientes",
+  "nombre_asc",
+];
+
+function getCatalogSort(value: string | null): CatalogSort {
+  return CATALOG_SORTS.includes(value as CatalogSort)
+    ? (value as CatalogSort)
+    : "destacados";
+}
+
+function getUrlParam(searchParams: URLSearchParams, key: string, fallback = "") {
+  return searchParams.get(key)?.trim() || fallback;
+}
+
+function getUrlNumber(searchParams: URLSearchParams, key: string, fallback: number) {
+  const value = searchParams.get(key);
+  if (!value) return fallback;
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
 
 export function ProductFilters({
   initialPage,
@@ -33,31 +70,40 @@ export function ProductFilters({
   const { wishlistIds } = useStorefront();
 
   const [items, setItems] = useState<Product[]>(() =>
-    initialPage.items.map(mapCatalogProductToProductCardViewModel)
+    initialPage.items.map(mapCatalogProductToProductCardViewModel),
   );
-  const [nextCursor, setNextCursor] = useState<string | null>(initialPage.nextCursor);
-  const [hasMore, setHasMore] = useState<boolean>(initialPage.hasMore);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [loadingMore, setLoadingMore] = useState<boolean>(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(
+    initialPage.nextCursor,
+  );
+  const [hasMore, setHasMore] = useState(initialPage.hasMore);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Parse filters from URL
-  const getSortFromUrl = () => {
-    const s = searchParams.get("sort");
-    return s ? (s as CatalogSort) : "destacados";
-  };
-  const getParam = (key: string, defaultValue: string) => searchParams.get(key) || defaultValue;
-
-  const [sort, setSort] = useState<CatalogSort>(getSortFromUrl());
-  const [category, setCategory] = useState(getParam("category", "all"));
-  const [linea, setLinea] = useState(getParam("line", "all"));
-  const [selectedSize, setSelectedSize] = useState(getParam("talla", "all"));
-  const [priceRange, setPriceRange] = useState<[number]>([
-    Number(getParam("maxPrice", "5000"))
+  const [sort, setSort] = useState<CatalogSort>(() =>
+    getCatalogSort(searchParams.get("sort")),
+  );
+  const [category, setCategory] = useState(() =>
+    getUrlParam(searchParams, "category", "all"),
+  );
+  const [linea, setLinea] = useState(() =>
+    getUrlParam(searchParams, "line", "all"),
+  );
+  const [selectedSize, setSelectedSize] = useState(() =>
+    getUrlParam(searchParams, "talla", "all"),
+  );
+  const [priceRange, setPriceRange] = useState<[number]>(() => [
+    getUrlNumber(searchParams, "maxPrice", DEFAULT_MAX_PRICE),
   ]);
-  const [searchQuery, setSearchQuery] = useState(getParam("q", ""));
-
-  // Note: Only Offers mapped to tags.includes('sale') implicitly
-  const [tags, setTags] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState(() =>
+    getUrlParam(searchParams, "q"),
+  );
+  const [onlyOffers, setOnlyOffers] = useState(
+    () => searchParams.get("onlyOffers") === "true",
+  );
+  const [onlyAvailable, setOnlyAvailable] = useState(
+    () => searchParams.get("onlyAvailable") !== "false",
+  );
   const [wishlistOnly, setWishlistOnly] = useState(false);
 
   const initialRender = useRef(true);
@@ -66,105 +112,128 @@ export function ProductFilters({
     () => categories.filter(isCategoryVisible),
     [categories],
   );
+  const visibleLineas = useMemo(() => lineas, [lineas]);
+  const visibleSizes = useMemo(() => tallas, [tallas]);
 
-  const visibleLineas = useMemo(
-    () => lineas,
-    [lineas],
-  );
+  const catalogQuery = useCallback(
+    (cursor?: string | null): CatalogQuery => {
+      const shouldSendPriceSort =
+        priceRange[0] < DEFAULT_MAX_PRICE &&
+        sort !== "precio_asc" &&
+        sort !== "precio_desc";
 
-  const visibleSizes = useMemo(
-    () => tallas,
-    [tallas],
-  );
-
-  const loadPage = useCallback(async (cursor?: string | null) => {
-    if (!cursor) {
-      setLoading(true);
-    } else {
-      setLoadingMore(true);
-    }
-
-    try {
-      const isPriceSort = sort === "precio_asc" || sort === "precio_desc";
-      const actualSort = isPriceSort ? sort : (priceRange[0] < 5000 ? "precio_asc" : sort); // Required by API if price is used? Wait, API allows min/max with sort.
-
-      const response = await fetchCatalogPage({
+      return {
         limit: 24,
         cursor: cursor || undefined,
         category: category !== "all" ? category : undefined,
         line: linea !== "all" ? linea : undefined,
         talla: selectedSize !== "all" ? selectedSize : undefined,
-        maxPrice: priceRange[0] < 5000 ? priceRange[0] : undefined,
-        sort: actualSort,
+        maxPrice:
+          priceRange[0] < DEFAULT_MAX_PRICE ? priceRange[0] : undefined,
+        sort: shouldSendPriceSort ? "precio_asc" : sort,
         q: searchQuery || undefined,
-        onlyOffers: tags.includes("sale"),
-        onlyAvailable: true,
-      });
+        onlyOffers,
+        onlyAvailable,
+      };
+    },
+    [
+      category,
+      linea,
+      onlyAvailable,
+      onlyOffers,
+      priceRange,
+      searchQuery,
+      selectedSize,
+      sort,
+    ],
+  );
 
-      const newProducts = response.items.map(mapCatalogProductToProductCardViewModel);
-
+  const loadPage = useCallback(
+    async (cursor?: string | null) => {
       if (cursor) {
-        setItems((prev) => [...prev, ...newProducts]);
+        setLoadingMore(true);
       } else {
-        setItems(newProducts);
+        setLoading(true);
       }
-      setNextCursor(response.nextCursor);
-      setHasMore(response.hasMore);
-    } catch (error) {
-      console.error("Failed to load catalog page", error);
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-    }
-  }, [category, linea, selectedSize, priceRange, sort, searchQuery, tags]);
+      setError(null);
 
-  // Sync state to URL and fetch new data when filters change
+      try {
+        const response = await fetchCatalogPage(catalogQuery(cursor));
+        const newProducts = response.items.map(
+          mapCatalogProductToProductCardViewModel,
+        );
+
+        setItems((current) =>
+          cursor ? [...current, ...newProducts] : newProducts,
+        );
+        setNextCursor(response.nextCursor);
+        setHasMore(response.hasMore);
+      } catch (loadError) {
+        console.error("Failed to load catalog page", loadError);
+        if (!cursor) {
+          setItems([]);
+          setNextCursor(null);
+          setHasMore(false);
+        }
+        setError("No se pudo cargar el catálogo. Intenta de nuevo.");
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [catalogQuery],
+  );
+
   useEffect(() => {
     if (initialRender.current) {
       initialRender.current = false;
       return;
     }
 
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams();
 
     if (category !== "all") params.set("category", category);
-    else params.delete("category");
-
     if (linea !== "all") params.set("line", linea);
-    else params.delete("line");
-
     if (selectedSize !== "all") params.set("talla", selectedSize);
-    else params.delete("talla");
-
-    if (priceRange[0] < 5000) params.set("maxPrice", String(priceRange[0]));
-    else params.delete("maxPrice");
-
-    if (sort && sort !== "destacados") params.set("sort", sort);
-    else params.delete("sort");
-
+    if (priceRange[0] < DEFAULT_MAX_PRICE) {
+      params.set("maxPrice", String(priceRange[0]));
+    }
+    if (sort !== "destacados") params.set("sort", sort);
     if (searchQuery) params.set("q", searchQuery);
-    else params.delete("q");
+    if (onlyOffers) params.set("onlyOffers", "true");
+    if (!onlyAvailable) params.set("onlyAvailable", "false");
 
-    router.push(`?${params.toString()}`, { scroll: false });
-
-    // Fetch page 1
-    loadPage(null);
-  }, [category, linea, selectedSize, priceRange, sort, searchQuery, tags, router, loadPage, searchParams]);
+    const nextUrl = params.toString() ? `?${params.toString()}` : "/products";
+    router.push(nextUrl, { scroll: false });
+    void loadPage(null);
+  }, [
+    category,
+    linea,
+    loadPage,
+    onlyAvailable,
+    onlyOffers,
+    priceRange,
+    router,
+    searchQuery,
+    selectedSize,
+    sort,
+  ]);
 
   const activeFilters = [
     category !== "all"
-      ? (visibleCategories.find((item) => item.slug === category)?.name ??
+      ? (visibleCategories.find((item) => item.id === category)?.name ??
         category)
       : null,
     linea !== "all"
       ? (visibleLineas.find((item) => item.id === linea)?.nombre ?? linea)
       : null,
     selectedSize !== "all" ? `Talla ${selectedSize}` : null,
-    priceRange[0] < 5000
-      ? `Hasta $${priceRange[0].toLocaleString()}`
+    priceRange[0] < DEFAULT_MAX_PRICE
+      ? `Hasta $${priceRange[0].toLocaleString("es-MX")}`
       : null,
+    onlyOffers ? "Ofertas" : null,
+    !onlyAvailable ? "Incluye agotados" : null,
     wishlistOnly ? "Favoritos" : null,
-    ...tags.map((tag) => (tag === "new" ? "Novedades" : "Ofertas")),
   ].filter(Boolean) as string[];
 
   const clearFilters = () => {
@@ -172,24 +241,16 @@ export function ProductFilters({
     setCategory("all");
     setLinea("all");
     setSelectedSize("all");
-    setPriceRange([5000]);
-    setTags([]);
-    setWishlistOnly(false);
+    setPriceRange([DEFAULT_MAX_PRICE]);
     setSearchQuery("");
+    setOnlyOffers(false);
+    setOnlyAvailable(true);
+    setWishlistOnly(false);
   };
 
-  const handleTagChange = (tag: string, checked: boolean) => {
-    setTags((currentTags) =>
-      checked
-        ? [...currentTags, tag]
-        : currentTags.filter((item) => item !== tag),
-    );
-  };
-
-  let productsToShow = items;
-  if (wishlistOnly) {
-    productsToShow = items.filter((p) => wishlistIds.includes(p.id));
-  }
+  const productsToShow = wishlistOnly
+    ? items.filter((product) => wishlistIds.includes(product.id))
+    : items;
 
   const filterControls = (
     <div className="space-y-7">
@@ -198,7 +259,7 @@ export function ProductFilters({
           Categoría
         </h3>
         <div className="space-y-2">
-          <label className="flex items-center min-h-[44px] text-[15px] lg:text-[16px] text-muted-foreground">
+          <label className="flex min-h-[44px] items-center text-[15px] text-muted-foreground lg:text-[16px]">
             <Checkbox
               checked={category === "all"}
               onCheckedChange={() => setCategory("all")}
@@ -208,11 +269,11 @@ export function ProductFilters({
           {visibleCategories.map((categoryItem) => (
             <label
               key={categoryItem.id}
-              className="flex items-center text-sm text-muted-foreground"
+              className="flex min-h-[44px] items-center text-[15px] text-muted-foreground lg:text-[16px]"
             >
               <Checkbox
-                checked={category === categoryItem.slug}
-                onCheckedChange={() => setCategory(categoryItem.slug)}
+                checked={category === categoryItem.id}
+                onCheckedChange={() => setCategory(categoryItem.id)}
               />
               <span className="ml-2">{categoryItem.name}</span>
             </label>
@@ -227,11 +288,11 @@ export function ProductFilters({
         <Slider
           value={priceRange}
           onValueChange={(value) => setPriceRange(value as [number])}
-          max={5000}
+          max={DEFAULT_MAX_PRICE}
           step={100}
         />
         <p className="mt-2 text-sm text-muted-foreground">
-          Hasta ${priceRange[0].toLocaleString()}
+          Hasta ${priceRange[0].toLocaleString("es-MX")}
         </p>
       </div>
 
@@ -240,7 +301,7 @@ export function ProductFilters({
           Líneas
         </h3>
         <div className="space-y-2">
-          <label className="flex items-center min-h-[44px] text-[15px] lg:text-[16px] text-muted-foreground">
+          <label className="flex min-h-[44px] items-center text-[15px] text-muted-foreground lg:text-[16px]">
             <Checkbox
               checked={linea === "all"}
               onCheckedChange={() => setLinea("all")}
@@ -250,7 +311,7 @@ export function ProductFilters({
           {visibleLineas.map((lineaItem) => (
             <label
               key={lineaItem.id}
-              className="flex items-center text-sm text-muted-foreground"
+              className="flex min-h-[44px] items-center text-[15px] text-muted-foreground lg:text-[16px]"
             >
               <Checkbox
                 checked={linea === lineaItem.id}
@@ -267,7 +328,7 @@ export function ProductFilters({
           Tallas
         </h3>
         <div className="space-y-2">
-          <label className="flex items-center min-h-[44px] text-[15px] lg:text-[16px] text-muted-foreground">
+          <label className="flex min-h-[44px] items-center text-[15px] text-muted-foreground lg:text-[16px]">
             <Checkbox
               checked={selectedSize === "all"}
               onCheckedChange={() => setSelectedSize("all")}
@@ -277,7 +338,7 @@ export function ProductFilters({
           {visibleSizes.map((sizeItem) => (
             <label
               key={sizeItem.id}
-              className="flex items-center text-sm text-muted-foreground"
+              className="flex min-h-[44px] items-center text-[15px] text-muted-foreground lg:text-[16px]"
             >
               <Checkbox
                 checked={
@@ -294,17 +355,22 @@ export function ProductFilters({
 
       <div>
         <h3 className="mb-4 font-headline text-[var(--font-size-subtitle)] font-semibold uppercase leading-none tracking-[0.03em]">
-          Etiquetas
+          Disponibilidad
         </h3>
         <div className="space-y-2">
-          <label className="flex items-center min-h-[44px] text-[15px] lg:text-[16px] text-muted-foreground">
+          <label className="flex min-h-[44px] items-center text-[15px] text-muted-foreground lg:text-[16px]">
             <Checkbox
-              checked={tags.includes("sale")}
-              onCheckedChange={(checked) =>
-                handleTagChange("sale", Boolean(checked))
-              }
+              checked={onlyAvailable}
+              onCheckedChange={(checked) => setOnlyAvailable(Boolean(checked))}
             />
-            <span className="ml-2">Ofertas</span>
+            <span className="ml-2">Solo disponibles</span>
+          </label>
+          <label className="flex min-h-[44px] items-center text-[15px] text-muted-foreground lg:text-[16px]">
+            <Checkbox
+              checked={onlyOffers}
+              onCheckedChange={(checked) => setOnlyOffers(Boolean(checked))}
+            />
+            <span className="ml-2">Solo ofertas</span>
           </label>
         </div>
       </div>
@@ -313,7 +379,7 @@ export function ProductFilters({
         <h3 className="mb-4 font-headline text-[var(--font-size-subtitle)] font-semibold uppercase leading-none tracking-[0.03em]">
           Favoritos
         </h3>
-        <label className="flex items-center min-h-[44px] text-[15px] lg:text-[16px] text-muted-foreground">
+        <label className="flex min-h-[44px] items-center text-[15px] text-muted-foreground lg:text-[16px]">
           <Checkbox
             checked={wishlistOnly}
             onCheckedChange={(checked) => setWishlistOnly(Boolean(checked))}
@@ -335,35 +401,55 @@ export function ProductFilters({
 
       <main>
         <ProductToolbar
-          count={items.length}
+          count={productsToShow.length}
           searchLabel={
             searchQuery ? `Resultados para "${searchQuery}"` : undefined
           }
           activeFilters={activeFilters}
           onClear={clearFilters}
           sort={sort}
-          onSortChange={(val) => setSort(val as CatalogSort)}
+          onSortChange={(value) => setSort(value as CatalogSort)}
           mobileFilters={<FilterDrawer>{filterControls}</FilterDrawer>}
         />
 
+        {error ? (
+          <div className="mt-6 border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+            <p>{error}</p>
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-3 min-h-[44px]"
+              onClick={() => void loadPage(null)}
+            >
+              Reintentar
+            </Button>
+          </div>
+        ) : null}
+
         {loading ? (
-          <div className="mt-6">Cargando catálogo...</div>
+          <div
+            className="mt-6 border border-black/14 bg-white p-5 text-sm text-muted-foreground"
+            role="status"
+            aria-live="polite"
+          >
+            Cargando catálogo...
+          </div>
         ) : (
           <div className="mt-6">
             <ProductGrid products={productsToShow} />
 
-            {hasMore && (
+            {hasMore && !error ? (
               <div className="mt-8 flex justify-center">
                 <Button
-                  onClick={() => loadPage(nextCursor)}
+                  onClick={() => void loadPage(nextCursor)}
                   disabled={loadingMore}
                   variant="outline"
-                  className="min-w-[200px]"
+                  className="min-h-[44px] min-w-[200px]"
                 >
                   {loadingMore ? "Cargando..." : "Cargar más"}
                 </Button>
               </div>
-            )}
+            ) : null}
           </div>
         )}
       </main>

@@ -7,6 +7,32 @@ import { tallasApi } from "@/lib/api/tallas";
 
 export const dynamic = "force-dynamic";
 
+const CATALOG_SORTS: CatalogSort[] = [
+  "destacados",
+  "precio_asc",
+  "precio_desc",
+  "recientes",
+  "nombre_asc",
+];
+
+function getSingleParam(params: URLSearchParams, key: string) {
+  return params.get(key)?.trim() || undefined;
+}
+
+function getCatalogSort(value: string | null): CatalogSort {
+  return CATALOG_SORTS.includes(value as CatalogSort)
+    ? (value as CatalogSort)
+    : "destacados";
+}
+
+function getNumberParam(params: URLSearchParams, key: string) {
+  const value = params.get(key);
+  if (!value) return undefined;
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 export default async function ProductsPage({
   searchParams,
 }: {
@@ -34,15 +60,15 @@ export default async function ProductsPage({
 
   const initialParams = {
     limit: 24,
-    category: queryParams.get("category") || undefined,
-    line: queryParams.get("line") || undefined,
-    talla: queryParams.get("talla") || undefined,
-    minPrice: queryParams.has("minPrice") ? Number(queryParams.get("minPrice")) : undefined,
-    maxPrice: queryParams.has("maxPrice") ? Number(queryParams.get("maxPrice")) : undefined,
-    sort: (queryParams.get("sort") as CatalogSort) || undefined,
-    q: queryParams.get("q") || undefined,
+    category: getSingleParam(queryParams, "category"),
+    line: getSingleParam(queryParams, "line"),
+    talla: getSingleParam(queryParams, "talla"),
+    minPrice: getNumberParam(queryParams, "minPrice"),
+    maxPrice: getNumberParam(queryParams, "maxPrice"),
+    sort: getCatalogSort(queryParams.get("sort")),
+    q: getSingleParam(queryParams, "q"),
     onlyOffers: queryParams.get("onlyOffers") === "true",
-    onlyAvailable: queryParams.get("onlyAvailable") === "true",
+    onlyAvailable: queryParams.get("onlyAvailable") !== "false",
   };
 
   const [initialPage, categories, lineas, tallas] = await Promise.all([

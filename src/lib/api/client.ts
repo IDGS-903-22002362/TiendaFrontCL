@@ -8,6 +8,11 @@ const API_BASE =
 function joinApiUrl(base: string, path: string) {
   const sanitizedBase = base.replace(/\/+$/, "");
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const baseEndsWithApi = /\/api$/i.test(sanitizedBase);
+
+  if (baseEndsWithApi && normalizedPath.startsWith("/api/")) {
+    return `${sanitizedBase}${normalizedPath.slice(4)}`;
+  }
 
   return `${sanitizedBase}${normalizedPath}`;
 }

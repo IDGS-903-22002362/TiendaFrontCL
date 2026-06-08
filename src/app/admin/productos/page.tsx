@@ -9,10 +9,7 @@ import {
   Image as ImageIcon,
   X,
 } from "lucide-react";
-import {
-  fetchCategories,
-  fetchProductById,
-} from "@/lib/api/storefront";
+import { fetchCategories } from "@/lib/api/storefront";
 import { lineasApi } from "@/lib/api/lineas";
 import { tallasApi } from "@/lib/api/tallas";
 import { providersApi } from "@/lib/api/providers";
@@ -290,7 +287,7 @@ export default function AdminProductsPage() {
 
   const { toast } = useToast();
 
-    const loadProducts = useCallback(async (status: AdminProductStatus = productStatus) => {
+  const loadProducts = useCallback(async (status: AdminProductStatus = productStatus) => {
     setIsLoading(true);
     try {
       const response = await productsAdminApi.fetchAdminProducts("cookie-session", status);
@@ -312,8 +309,8 @@ export default function AdminProductsPage() {
   }, [productStatus, toast]);
 
   useEffect(() => {
-    void loadProducts("todos");
-  }, [loadProducts]);
+    void loadProducts(productStatus);
+  }, [loadProducts, productStatus]);
 
   const loadMeta = useCallback(async () => {
     setIsLoadingMeta(true);
@@ -438,9 +435,8 @@ export default function AdminProductsPage() {
       setIsLoadingDetail(true);
 
       try {
-        const [detailRes, storefrontDetail, detailItems] = await Promise.all([
+        const [detailRes, detailItems] = await Promise.all([
           productsAdminApi.getById(product.id),
-          fetchProductById(product.id),
           productsAdminApi.getDetails(product.id).catch(() => []),
         ]);
 
@@ -704,7 +700,9 @@ export default function AdminProductsPage() {
         tallaIds: string[];
         inventarioPorTalla?: ProductSizeStock[];
         fedexShipping?: ProductFedexShipping;
+        activo?: boolean;
       };
+      payload.activo = formData.activo;
 
       const fedexShipping = buildFedexShippingPayload(formData.fedexShipping);
       if (fedexShipping) {
@@ -909,6 +907,11 @@ export default function AdminProductsPage() {
     }
   };
 
+  const handleProductStatusChange = (status: AdminProductStatus) => {
+    setProductStatus(status);
+    setSelectedProductId("");
+  };
+
   const handleDelete = async (id: string) => {
     if (
       !window.confirm(
@@ -1016,6 +1019,25 @@ export default function AdminProductsPage() {
         </div>
       </div>
 
+      <Tabs
+        value={productStatus}
+        onValueChange={(value) =>
+          handleProductStatusChange(value as AdminProductStatus)
+        }
+      >
+        <TabsList className="grid min-h-[44px] w-full grid-cols-3 sm:w-auto">
+          <TabsTrigger value="todos" className="min-h-[40px]">
+            Todos
+          </TabsTrigger>
+          <TabsTrigger value="activo" className="min-h-[40px]">
+            Activos
+          </TabsTrigger>
+          <TabsTrigger value="inactivo" className="min-h-[40px]">
+            Ocultos
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <div className="rounded-md border bg-card">
         <div className="overflow-x-auto">
           <Table>
@@ -1025,6 +1047,7 @@ export default function AdminProductsPage() {
                 <TableHead>Categoría / Línea</TableHead>
                 <TableHead>Precio</TableHead>
                 <TableHead>Inventario</TableHead>
+                <TableHead>Estado</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -1032,7 +1055,7 @@ export default function AdminProductsPage() {
               {isLoading ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={6}
                     className="text-center py-8 text-muted-foreground"
                   >
                     Cargando productos del catálogo...
@@ -1041,7 +1064,7 @@ export default function AdminProductsPage() {
               ) : filteredProducts.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={6}
                     className="text-center py-8 text-muted-foreground"
                   >
                     No hay productos disponibles para el filtro actual.
@@ -1104,17 +1127,22 @@ export default function AdminProductsPage() {
                           <Button
                             variant="outline"
                             size="sm"
+                            className="min-h-[40px]"
                             onClick={async () => {
                               const nextStatus = !product.activo;
                               const msg = nextStatus
-                                ? "¿Este producto volverá a mostrarse en la tienda. Continuar?"
-                                : "¿Este producto se ocultará de la tienda pública. Continuar?";
+                                ? "Este producto volverá a mostrarse en la tienda. ¿Continuar?"
+                                : "Este producto se ocultará de la tienda pública. ¿Continuar?";
                               if (window.confirm(msg)) {
                                 try {
                                   await productsAdminApi.setProductActiveStatus(product.id, nextStatus, "cookie-session");
-                                  loadProducts(productStatus);
+                                  void loadProducts(productStatus);
                                 } catch (error) {
-                                  toast({ title: "Error", description: "No se pudo cambiar el estado", variant: "destructive" });
+                                  toast({
+                                    title: "Error",
+                                    description: getApiErrorMessage(error),
+                                    variant: "destructive",
+                                  });
                                 }
                               }
                             }}
@@ -1290,6 +1318,24 @@ export default function AdminProductsPage() {
                   }))
                 }
                 disabled={isLoadingMeta || isLoadingDetail}
+              />
+            </div>
+
+            <div className="flex min-h-[44px] items-center justify-between gap-4 rounded-md border p-3">
+              <div>
+                <Label htmlFor="visible-store">Visible en tienda</Label>
+                <p className="text-sm text-muted-foreground">
+                  Desactívalo si el producto está pendiente de licencia,
+                  lanzamiento o decisión comercial.
+                </p>
+              </div>
+              <Switch
+                id="visible-store"
+                checked={formData.activo}
+                onCheckedChange={(checked) =>
+                  setFormData((prev) => ({ ...prev, activo: checked }))
+                }
+                disabled={isLoadingDetail}
               />
             </div>
 

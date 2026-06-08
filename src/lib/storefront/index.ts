@@ -156,7 +156,7 @@ export function getCategoryCards(
         slug: category.slug,
         description: getCategoryDescription(category.slug),
         eyebrow: getCategoryEyebrow(category.slug),
-        href: `/products?category=${category.slug}`,
+        href: `/products?category=${category.id}`,
         count,
       };
     })

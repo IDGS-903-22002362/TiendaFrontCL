@@ -1,4 +1,9 @@
-import type { ProductFedexShipping, ProductSizeStock } from "@/lib/types";
+import type {
+  AdminProductsResponse,
+  AdminProductStatus,
+  ProductFedexShipping,
+  ProductSizeStock,
+} from "@/lib/types";
 import { apiFetch } from "./client";
 
 export type ProductCreatePayload = {
@@ -44,6 +49,7 @@ export type ProductAdminDetail = {
   inventarioPorTalla?: ProductSizeStock[];
   fedexShipping?: ProductFedexShipping;
   imagenes: string[];
+  activo?: boolean;
 };
 
 export type ProductCreateResponse = {
@@ -130,9 +136,12 @@ export const productsAdminApi = {
     };
   },
 
-  async fetchAdminProducts(token: string, estado: "todos" | "activo" | "inactivo" = "todos") {
-    return apiFetch<{ success: boolean; count: number; data: import("@/lib/types").AdminProductListItem[] }>(
-      `/api/productos/admin?estado=${estado}`,
+  async fetchAdminProducts(
+    token?: string,
+    estado: AdminProductStatus = "todos",
+  ) {
+    return apiFetch<AdminProductsResponse>(
+      `/api/productos/admin?estado=${encodeURIComponent(estado)}`,
       {
         method: "GET",
       },
