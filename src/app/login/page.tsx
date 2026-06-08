@@ -24,6 +24,7 @@ import Antigravity from "@/components/Antigravity";
 import { apiFetch } from "@/lib/api/client";
 import { createLocalSessionFromBackendToken } from "@/lib/api/auth";
 import { UserRole } from "@/lib/types";
+import { useIsFromMobileApp } from "@/hooks/use-from-mobile-app";
 
 // Definir tipos para las respuestas de la API
 interface RequestVerificationResponse {
@@ -76,6 +77,7 @@ function LoginPageContent() {
   const [recoveryEmail, setRecoveryEmail] = useState("");
   const [recoveryEmailSent, setRecoveryEmailSent] = useState(false);
   const otpInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const { isFromMobileApp } = useIsFromMobileApp();
 
   const firebaseReady = isFirebaseConfigured();
 
@@ -502,20 +504,21 @@ function LoginPageContent() {
       setRecoveryEmail("");
       setRecoveryEmailSent(false);
       setErrorMessage("");
+      setShowPasswordLogin(true);
     } else if (showPasswordLogin) {
       setShowPasswordLogin(false);
       setPassword("");
       setErrorMessage("");
       setShowPassword(false);
     } else if (showVerification) {
-      // Volver al login inicial (primera imagen)
+      // Volver a la pantalla de email/contraseña
       setShowVerification(false);
       setVerificationCode("");
       setPendingEmail("");
       setErrorMessage("");
       setAttempts(3);
-      // Limpiar también el email para que el usuario pueda ingresar uno nuevo si quiere
       setEmail("");
+      setShowPasswordLogin(true);
     } else {
       router.push("/");
     }
@@ -550,15 +553,17 @@ function LoginPageContent() {
       </div>
 
       {/* Back button */}
-      <div className="absolute left-3 top-3 z-20 sm:left-5 sm:top-5">
-        <button
-          onClick={handleGoBack}
-          className="flex items-center gap-2 rounded-full bg-black/30 px-3 py-2 text-white backdrop-blur-md transition-all hover:bg-black/45 sm:px-4"
-        >
-          <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
-          <span className="text-sm font-medium">Volver</span>
-        </button>
-      </div>
+      {!isFromMobileApp ? (
+        <div className="absolute left-3 top-3 z-20 sm:left-5 sm:top-5">
+          <button
+            onClick={handleGoBack}
+            className="flex items-center gap-2 rounded-full bg-black/30 px-3 py-2 text-white backdrop-blur-md transition-all hover:bg-black/45 sm:px-4"
+          >
+            <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+            <span className="text-sm font-medium">Volver</span>
+          </button>
+        </div>
+      ) : (null)}
 
       {/* Main content */}
       <div className="pointer-events-none relative z-10 flex flex-1 items-start justify-center overflow-y-auto px-2 pb-6 pt-16 sm:items-center sm:px-4 sm:py-10 lg:py-14">
@@ -737,10 +742,13 @@ function LoginPageContent() {
                     <Button
                       className="h-12 w-full rounded-2xl border-2 border-[#007A53] bg-white text-base font-bold text-[#007A53] transition-all hover:bg-[#f0f7f5] sm:h-14 sm:text-lg"
                       onClick={() => {
+                        setShowVerification(false);
                         setShowPasswordLogin(true);
                         setPassword("");
                         setShowPassword(false);
                         setErrorMessage("");
+                        setVerificationCode("");
+                        setPendingEmail("");
                       }}
                       disabled={isSubmitting}
                     >
@@ -752,10 +760,12 @@ function LoginPageContent() {
                     <button
                       onClick={() => {
                         setShowVerification(false);
+                        setShowPasswordLogin(true);
                         setVerificationCode("");
                         setPendingEmail("");
                         setErrorMessage("");
                         setAttempts(3);
+                        setEmail("");
                       }}
                       className="text-sm text-gray-500 hover:text-gray-700"
                     >
@@ -887,6 +897,7 @@ function LoginPageContent() {
                         type="button"
                         onClick={() => {
                           setShowPasswordRecovery(false);
+                          setShowPasswordLogin(true);
                           setRecoveryEmail("");
                           setErrorMessage("");
                         }}
@@ -913,6 +924,7 @@ function LoginPageContent() {
                         className="h-12 w-full rounded-2xl bg-[#007A53] text-base font-bold text-white shadow-lg shadow-[#007A53]/30 transition-all hover:bg-[#006248] sm:h-14 sm:text-lg"
                         onClick={() => {
                           setShowPasswordRecovery(false);
+                          setShowPasswordLogin(true);
                           setRecoveryEmail("");
                           setRecoveryEmailSent(false);
                           setErrorMessage("");
