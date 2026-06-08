@@ -16,6 +16,7 @@ import {
   Menu,
   Bot,
   Coins,
+  BadgePercent,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,6 +37,7 @@ const adminNavLinks = [
   { href: "/admin/proveedores", label: "Proveedores", icon: Truck },
   { href: "/admin/ai", label: "AI", icon: Bot, adminOnly: true },
   { href: "/admin/banners", label: "Vallas Publicitarias", icon: Ruler },
+  { href: "/admin/ofertas", label: "Ofertas", icon: BadgePercent },
   { href: "/admin/puntos", label: "Puntos", icon: Coins, empleadoOnly: true },
 ];
 

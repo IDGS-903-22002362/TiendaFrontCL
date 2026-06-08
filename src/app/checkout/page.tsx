@@ -33,6 +33,9 @@ import {
   fetchCart,
   getCartVariantKey,
   getOrCreateSessionId,
+  validarCodigoPromocionCarrito,
+  type ResultadoCodigoPromocionCarrito,
+  type ValidarCodigoPromocionCarritoItem,
 } from "@/lib/api/cart";
 import { ordersApi } from "@/lib/api/orders";
 import { paymentsApi } from "@/lib/api/payments";
@@ -91,8 +94,45 @@ import { Breadcrumbs } from "@/components/storefront/shared/breadcrumbs";
 import { PaymentMethodStrip } from "@/components/storefront/shared/payment-method-strip";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/storefront";
+import {
+  calcularPreciosOfertasPublicas,
+  type ProductOfferPricing,
+} from "@/lib/ofertas-public";
 
 const SHIPPING_COST = 99;
+
+const PROMO_CODE_STORAGE_KEY = "tiendafront_codigo_promocion";
+
+function getStringArrayFromCartItem(item: unknown, keys: string[]): string[] {
+  const record =
+    item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+
+  for (const key of keys) {
+    const value = record[key];
+
+    if (Array.isArray(value)) {
+      return value.map((entry) => String(entry)).filter(Boolean);
+    }
+
+    if (typeof value === "string" && value.trim()) {
+      return [value.trim()];
+    }
+  }
+
+  return [];
+}
+
+function getCheckoutPromoCodeField(codigoPromocion?: string) {
+  const codigo = normalizeWhitespace(codigoPromocion ?? "").toUpperCase();
+
+  if (!codigo) {
+    return {};
+  }
+
+  return {
+    codigoPromocion: codigo,
+  };
+}
 
 function roundCurrency(value: number) {
   return Math.round(value * 100) / 100;
@@ -162,6 +202,66 @@ function getExpectedCheckoutPricing(
     total: roundCurrency(total),
   };
 }
+
+function getCartOfferLine(
+  item: CartItem,
+  pricingOfertas: Record<string, ProductOfferPricing>,
+) {
+  const pricingOferta = pricingOfertas[item.id];
+  const quantity = Math.max(Number(item.quantity || 1), 1);
+
+  const precioOriginalUnitario = Number(
+    pricingOferta?.precioOriginal ?? item.price ?? 0,
+  );
+
+  const precioFinalUnitario = Number(pricingOferta?.precioFinal ?? 0);
+
+  const subtotalOriginal = Number(
+    pricingOferta?.subtotalOriginal ?? precioOriginalUnitario * quantity,
+  );
+
+  const subtotalFinal = Number(
+    pricingOferta?.subtotalFinal ?? precioFinalUnitario * quantity,
+  );
+
+  const tieneOferta =
+    subtotalFinal > 0 &&
+    subtotalFinal < subtotalOriginal &&
+    Boolean(
+      pricingOferta?.ofertaAplicadaId ||
+        pricingOferta?.ofertaTitulo ||
+        precioFinalUnitario < precioOriginalUnitario,
+    );
+
+  const totalItem = tieneOferta ? subtotalFinal : item.price * quantity;
+  const precioUnitario = totalItem / quantity;
+
+  return {
+    pricingOferta,
+    tieneOferta,
+    precioOriginalUnitario,
+    precioUnitario,
+    subtotalOriginal,
+    totalItem,
+    offerLabel: pricingOferta?.ofertaTitulo || "Oferta aplicada",
+  };
+}
+
+function buildCartItemsWithOfferPrices(
+  items: CartItem[],
+  pricingOfertas: Record<string, ProductOfferPricing>,
+): CartItem[] {
+  return items.map((item) => {
+    const offerLine = getCartOfferLine(item, pricingOfertas);
+
+    return {
+      ...item,
+      price: offerLine.precioUnitario,
+    };
+  });
+}
+
+
 
 function validateOrderPricing(params: {
   order: Pick<Orden, "subtotal" | "shippingCost" | "total">;
@@ -314,7 +414,11 @@ function getSanitizedAplazoCustomer(values: CheckoutValues): SanitizedAplazoCust
   };
 }
 
-function validateAplazoSubmission(values: CheckoutValues, items: CartItem[]) {
+function validateAplazoSubmission(
+  values: CheckoutValues,
+  items: CartItem[],
+  expectedSubtotal?: number,
+) {
   const customer = getSanitizedAplazoCustomer(values);
   const fullName = customer.name;
 
@@ -349,12 +453,14 @@ function validateAplazoSubmission(values: CheckoutValues, items: CartItem[]) {
     };
   }
 
-  return {
-    ok: true as const,
-    customer,
-    fullName,
-    validatedSubtotal: calculateAplazoItemsTotal(items),
-  };
+return {
+  ok: true as const,
+  customer,
+  fullName,
+  validatedSubtotal: roundCurrency(
+    expectedSubtotal ?? calculateAplazoItemsTotal(items),
+  ),
+};
 }
 
 function getOrderIdFromCheckoutResult(payload: unknown): string {
@@ -380,32 +486,36 @@ function getOrderIdFromCheckoutResult(payload: unknown): string {
 function buildCheckoutPayload(
   values: CheckoutValues,
   metodoPago: PaymentMethod,
+  codigoPromocion?: string,
 ) {
+  const promoCodeField = getCheckoutPromoCodeField(codigoPromocion);
   if (values.fulfillmentMethod === "PICKUP") {
-    return {
-      fulfillmentMethod: "PICKUP" as const,
-      pickupLocationId: values.pickupLocation.id,
-      pickupContact: values.pickupContact,
-      metodoPago,
-      costoEnvio: 0,
-    };
+  return {
+  fulfillmentMethod: "PICKUP" as const,
+  pickupLocationId: values.pickupLocation.id,
+  pickupContact: values.pickupContact,
+  metodoPago,
+  costoEnvio: 0,
+  ...promoCodeField,
+};
   }
 
   return {
-    fulfillmentMethod: "DELIVERY" as const,
-    direccionEnvio: {
-      nombre: values.name,
-      calle: values.calle,
-      numero: values.numero,
-      colonia: values.colonia,
-      ciudad: values.city,
-      estado: values.estado,
-      codigoPostal: values.zip,
-      telefono: values.telefono,
-    },
-    metodoPago,
-    costoEnvio: SHIPPING_COST,
-  };
+  fulfillmentMethod: "DELIVERY" as const,
+  direccionEnvio: {
+    nombre: values.name,
+    calle: values.calle,
+    numero: values.numero,
+    colonia: values.colonia,
+    ciudad: values.city,
+    estado: values.estado,
+    codigoPostal: values.zip,
+    telefono: values.telefono,
+  },
+  metodoPago,
+  costoEnvio: SHIPPING_COST,
+  ...promoCodeField,
+};
 }
 
 async function resolveCartIdForPickup(cartId?: string) {
@@ -431,6 +541,7 @@ function buildAplazoPayload(params: {
   items: CartItem[];
   order: Pick<Orden, "subtotal" | "shippingCost" | "total">;
   origin: string;
+  expectedSubtotal: number;
 }): AplazoOnlineCreatePayload {
   const { successUrl, failureUrl, cancelUrl, cartUrl } = buildAplazoReturnUrls(
     params.origin,
@@ -441,7 +552,7 @@ function buildAplazoPayload(params: {
   const orderShipping = roundCurrency(params.order.shippingCost ?? 0);
   const orderTaxes = 0;
   const orderTotal = roundCurrency(params.order.total ?? 0);
-  const productsTotal = roundCurrency(calculateAplazoItemsTotal(params.items));
+  const productsTotal = roundCurrency(params.expectedSubtotal);
   const expectedTotal = roundCurrency(productsTotal + orderShipping + orderTaxes);
 
   if (
@@ -516,44 +627,107 @@ function MobileCheckoutActions({ children }: { children: ReactNode }) {
 
 function OrderSummaryPanel({
   fulfillmentMethod,
+  pricingOfertas,
+  codigoPromocion,
+  resultadoCodigo,
+  descuentoCodigo,
+  codigoError,
+  isLoadingCodigo,
 }: {
   fulfillmentMethod: FulfillmentMethod;
+  pricingOfertas: Record<string, ProductOfferPricing>;
+  codigoPromocion: string;
+  resultadoCodigo: ResultadoCodigoPromocionCarrito | null;
+  descuentoCodigo: number;
+  codigoError: string | null;
+  isLoadingCodigo: boolean;
 }) {
-  const { state, subtotal, totalItems } = useCart();
+  const { state, totalItems } = useCart();
   const { getPersonalization } = useStorefront();
-  const pricing = getExpectedCheckoutPricing(subtotal, fulfillmentMethod);
+
+  const subtotalConOfertas = useMemo(() => {
+    return state.items.reduce((total, item) => {
+      const offerLine = getCartOfferLine(item, pricingOfertas);
+      return total + offerLine.totalItem;
+    }, 0);
+  }, [state.items, pricingOfertas]);
+
+ const subtotalFinalCodigo = Number(resultadoCodigo?.subtotalFinal);
+
+const subtotalConCodigo =
+  resultadoCodigo && descuentoCodigo > 0 && Number.isFinite(subtotalFinalCodigo)
+    ? roundCurrency(subtotalFinalCodigo)
+    : subtotalConOfertas;
+
+const pricing = getExpectedCheckoutPricing(
+  subtotalConCodigo,
+  fulfillmentMethod,
+);
 
   return (
     <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
       <CardHeader className="pb-4">
         <CardTitle>Resumen del pedido</CardTitle>
       </CardHeader>
+
       <CardContent className="space-y-4">
         <div className="space-y-3">
           {state.items.map((item) => {
             const variantKey = getCartVariantKey(item);
             const personalization = getPersonalization(variantKey);
+            const offerLine = getCartOfferLine(item, pricingOfertas);
 
             return (
-              <div key={variantKey} className="flex gap-3 rounded-[1.25rem] border border-border bg-muted/45 p-3">
+              <div
+                key={variantKey}
+                className="flex gap-3 rounded-[1.25rem] border border-border bg-muted/45 p-3"
+              >
                 <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-[1rem] border border-border bg-card">
-                  <Image src={item.image} alt={item.name} fill className="object-cover" />
+                  <Image
+                    src={item.image}
+                    alt={item.name}
+                    fill
+                    className="object-cover"
+                  />
                 </div>
+
                 <div className="min-w-0 flex-1">
-                  <p className="line-clamp-2 text-sm font-medium text-foreground">{item.name}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {item.quantity} × {formatCurrency(item.price)}
-                    {item.tallaId || item.size ? ` · ${item.tallaId ?? item.size}` : ""}
+                  <p className="line-clamp-2 text-sm font-medium text-foreground">
+                    {item.name}
                   </p>
+
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {item.quantity} × {formatCurrency(offerLine.precioUnitario)}
+                    {item.tallaId || item.size
+                      ? ` · ${item.tallaId ?? item.size}`
+                      : ""}
+                  </p>
+
+                  {offerLine.tieneOferta ? (
+                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
+                      {offerLine.offerLabel}
+                    </p>
+                  ) : null}
+
                   {personalization ? (
                     <p className="mt-1 text-xs text-primary/78">
-                      Personalización UI: {personalization.name} · {personalization.number}
+                      Personalización UI: {personalization.name} ·{" "}
+                      {personalization.number}
                     </p>
                   ) : null}
                 </div>
-                <p className="text-sm font-medium text-foreground">
-                  {formatCurrency(item.price * item.quantity)}
-                </p>
+
+                <div className="text-right">
+                  {offerLine.tieneOferta ? (
+                    <p className="text-xs text-muted-foreground line-through">
+                      {formatCurrency(offerLine.subtotalOriginal)}
+                    </p>
+                  ) : null}
+
+                  <p className="text-sm font-medium text-foreground">
+                    {formatCurrency(offerLine.totalItem)}
+                  </p>
+                </div>
               </div>
             );
           })}
@@ -561,12 +735,35 @@ function OrderSummaryPanel({
 
         <div className="space-y-2 text-sm text-muted-foreground">
           <div className="flex items-center justify-between">
-            <span>Subtotal</span>
-            <span>{formatCurrency(pricing.subtotal)}</span>
-          </div>
+  <span>Subtotal</span>
+  <span>{formatCurrency(subtotalConOfertas)}</span>
+</div>
+
+{isLoadingCodigo ? (
+  <div className="flex items-center justify-between text-primary">
+    <span>Validando código</span>
+    <span>...</span>
+  </div>
+) : null}
+
+{codigoPromocion && descuentoCodigo > 0 ? (
+  <div className="flex items-center justify-between text-primary">
+    <span>Código {codigoPromocion}</span>
+    <span>-{formatCurrency(descuentoCodigo)}</span>
+  </div>
+) : null}
+
+{codigoError ? (
+  <div className="rounded-[1rem] border border-destructive/30 bg-destructive/8 px-3 py-2 text-xs text-destructive">
+    {codigoError}
+  </div>
+) : null}
+
           <div className="flex items-center justify-between">
             <span>
-              {fulfillmentMethod === "PICKUP" ? "Recoger en tienda" : "Envío estimado"}
+              {fulfillmentMethod === "PICKUP"
+                ? "Recoger en tienda"
+                : "Envío estimado"}
             </span>
             <span>
               {fulfillmentMethod === "PICKUP"
@@ -574,6 +771,7 @@ function OrderSummaryPanel({
                 : formatCurrency(pricing.shipping)}
             </span>
           </div>
+
           <div className="flex items-center justify-between">
             <span>Artículos</span>
             <span>{totalItems}</span>
@@ -584,6 +782,7 @@ function OrderSummaryPanel({
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary/74">
             Total estimado
           </p>
+
           <p className="mt-2 font-headline text-4xl font-semibold uppercase leading-none tracking-[0.03em]">
             {formatCurrency(pricing.total)}
           </p>
@@ -593,7 +792,9 @@ function OrderSummaryPanel({
           <div className="flex items-start gap-3">
             <ShieldCheck className="mt-0.5 h-5 w-5 text-primary" />
             <p className="text-xs leading-5 text-muted-foreground">
-              La orden backend confirma el total final antes de iniciar el pago. La personalización de jersey se muestra en la UI y no modifica el total backend en esta versión.
+              La orden backend confirma el total final antes de iniciar el pago.
+              La personalización de jersey se muestra en la UI y no modifica el
+              total backend en esta versión.
             </p>
           </div>
         </div>
@@ -1159,6 +1360,8 @@ function CardPaymentStep({
   cartId,
   cartItems,
   total,
+  expectedSubtotal,
+  codigoPromocion,
   onBack,
   paymentMethod,
   onPaymentMethodChange,
@@ -1167,6 +1370,8 @@ function CardPaymentStep({
   cartId?: string;
   cartItems: CartItem[];
   total: number;
+  expectedSubtotal: number;
+  codigoPromocion?: string;
   onBack: () => void;
   paymentMethod: PaymentMethod;
   onPaymentMethodChange: (value: PaymentMethod) => void;
@@ -1205,10 +1410,7 @@ function CardPaymentStep({
     setIsProcessing(true);
 
     try {
-      const expectedSubtotal = cartItems.reduce(
-        (sum, item) => sum + item.price * item.quantity,
-        0,
-      );
+      
       if (values.fulfillmentMethod === "PICKUP") {
         const pickupCart = await resolveCartIdForPickup(cartId);
         const availability = await pickupApi.validateAvailability({
@@ -1225,8 +1427,8 @@ function CardPaymentStep({
       }
 
       const checkoutResult = await checkoutCart(
-        buildCheckoutPayload(values, "TARJETA"),
-      );
+  buildCheckoutPayload(values, "TARJETA", codigoPromocion),
+);
 
       const ordenId = getOrderIdFromCheckoutResult(checkoutResult);
       if (!ordenId) {
@@ -1380,6 +1582,9 @@ function AplazoPaymentStep({
   values,
   cartId,
   cartItems,
+  expectedSubtotal,
+  total,
+  codigoPromocion,
   onBack,
   paymentMethod,
   onPaymentMethodChange,
@@ -1387,6 +1592,9 @@ function AplazoPaymentStep({
   values: CheckoutValues;
   cartId?: string;
   cartItems: CartItem[];
+  expectedSubtotal: number;
+  total: number;
+  codigoPromocion?: string;
   onBack: () => void;
   paymentMethod: PaymentMethod;
   onPaymentMethodChange: (value: PaymentMethod) => void;
@@ -1401,7 +1609,11 @@ function AplazoPaymentStep({
       return;
     }
 
-    const validation = validateAplazoSubmission(values, cartItems);
+    const validation = validateAplazoSubmission(
+  values,
+  cartItems,
+  expectedSubtotal,
+);
     if (!validation.ok) {
       setSubmissionError(validation.message);
       logAplazoDebug("Validación Aplazo fallida antes del submit", {
@@ -1429,10 +1641,12 @@ function AplazoPaymentStep({
     try {
       const origin = window.location.origin;
       const cartFingerprint = [
-        getAplazoCartFingerprint(cartItems),
-        values.fulfillmentMethod,
-        values.fulfillmentMethod === "PICKUP" ? values.pickupLocation.id : "",
-      ].join("|");
+  getAplazoCartFingerprint(cartItems),
+  values.fulfillmentMethod,
+  values.fulfillmentMethod === "PICKUP" ? values.pickupLocation.id : "",
+  codigoPromocion ?? "",
+  expectedSubtotal.toFixed(2),
+].join("|");
       const cartSessionId = getOrCreateSessionId();
       const cartSnapshot = cartItems.map((item) => ({
         productoId: item.id,
@@ -1508,9 +1722,9 @@ function AplazoPaymentStep({
                 telefono: validation.customer.phone,
               };
 
-        const checkoutResult = await checkoutCart(
-          buildCheckoutPayload(checkoutValues, "APLAZO"),
-        );
+       const checkoutResult = await checkoutCart(
+  buildCheckoutPayload(checkoutValues, "APLAZO", codigoPromocion),
+);
 
         orderId = getOrderIdFromCheckoutResult(checkoutResult);
         if (!orderId) {
@@ -1550,30 +1764,31 @@ function AplazoPaymentStep({
         fulfillmentMethod: values.fulfillmentMethod,
       });
 
-      createPayload = buildAplazoPayload({
-        orderId,
-        values: {
-          ...(values.fulfillmentMethod === "PICKUP"
-            ? {
-                ...values,
-                pickupContact: {
-                  ...values.pickupContact,
-                  name: validation.fullName,
-                  email: validation.customer.email,
-                  phone: validation.customer.phone,
-                },
-              }
-            : {
-                ...values,
-                name: validation.fullName,
-                email: validation.customer.email,
-                telefono: validation.customer.phone,
-              }),
-        } as CheckoutValues,
-        items: cartItems,
-        order: createdOrder,
-        origin,
-      });
+createPayload = buildAplazoPayload({
+  orderId,
+  values: {
+    ...(values.fulfillmentMethod === "PICKUP"
+      ? {
+          ...values,
+          pickupContact: {
+            ...values.pickupContact,
+            name: validation.fullName,
+            email: validation.customer.email,
+            phone: validation.customer.phone,
+          },
+        }
+      : {
+          ...values,
+          name: validation.fullName,
+          email: validation.customer.email,
+          telefono: validation.customer.phone,
+        }),
+  } as CheckoutValues,
+  items: cartItems,
+  order: createdOrder,
+  origin,
+  expectedSubtotal: validation.validatedSubtotal,
+});
 
       logAplazoDebug("Payload Aplazo sanitizado", {
         orderId: createPayload.orderId,
@@ -1692,18 +1907,10 @@ function AplazoPaymentStep({
                 </div>
                 <div className="rounded-[1.2rem] border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
                   <p>
-                    Total estimado a validar con Aplazo:{" "}
-                    <span className="font-semibold text-foreground">
-                      {formatCurrency(
-                        cartItems.reduce(
-                          (sum, item) => sum + item.price * item.quantity,
-                          0,
-                        ) +
-                          (values.fulfillmentMethod === "PICKUP"
-                            ? 0
-                            : SHIPPING_COST),
-                      )}
-                    </span>
+                   Total estimado a validar con Aplazo:{" "}
+<span className="font-semibold text-foreground">
+  {formatCurrency(total)}
+</span>
                   </p>
                 </div>
               </div>
@@ -1777,9 +1984,172 @@ export default function CheckoutPage() {
   );
   const [, setCapturedAddress] = useState<CapturedAddressValue | null>(null);
   const router = useRouter();
-  const { state, subtotal, totalItems, isLoading } = useCart();
+  const { state, totalItems, isLoading } = useCart();
   const { isAuthenticated } = useAuth();
   const stripePromise = useStripeConfig();
+  const [pricingOfertas, setPricingOfertas] = useState<
+  Record<string, ProductOfferPricing>
+>({});
+  const [codigoPromocion, setCodigoPromocion] = useState("");
+const [resultadoCodigo, setResultadoCodigo] =
+  useState<ResultadoCodigoPromocionCarrito | null>(null);
+const [codigoError, setCodigoError] = useState<string | null>(null);
+const [isLoadingCodigo, setIsLoadingCodigo] = useState(false);
+
+useEffect(() => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const storedCode = localStorage.getItem(PROMO_CODE_STORAGE_KEY);
+
+  if (storedCode?.trim()) {
+    setCodigoPromocion(storedCode.trim().toUpperCase());
+  }
+}, []);
+
+const offerItemsKey = useMemo(() => {
+  return state.items
+    .map((item) => `${item.id}:${item.quantity}`)
+    .join("|");
+}, [state.items]);
+
+useEffect(() => {
+  let cancelled = false;
+
+  async function cargarOfertasCheckout() {
+    if (state.items.length === 0) {
+      setPricingOfertas({});
+      return;
+    }
+
+    const items = state.items.map((item) => ({
+      productoId: item.id,
+      cantidad: item.quantity,
+    }));
+
+    const precios = await calcularPreciosOfertasPublicas(items);
+
+    if (!cancelled) {
+      setPricingOfertas(precios);
+    }
+  }
+
+  cargarOfertasCheckout();
+
+  return () => {
+    cancelled = true;
+  };
+}, [offerItemsKey, state.items]);
+
+const cartItemsConOfertas = useMemo(() => {
+  return buildCartItemsWithOfferPrices(state.items, pricingOfertas);
+}, [state.items, pricingOfertas]);
+
+const subtotalConOfertas = useMemo(() => {
+  return cartItemsConOfertas.reduce((total, item) => {
+    return total + item.price * item.quantity;
+  }, 0);
+}, [cartItemsConOfertas]);
+
+const codigoItems = useMemo<ValidarCodigoPromocionCarritoItem[]>(() => {
+  return cartItemsConOfertas.map((item) => ({
+    productoId: item.id,
+    cantidad: item.quantity,
+    precioUnitario: item.price,
+    tallaId: item.tallaId ?? item.size ?? null,
+    categoriaIds: getStringArrayFromCartItem(item, [
+      "categoriaIds",
+      "categoriasIds",
+      "categoryIds",
+    ]),
+    lineaIds: getStringArrayFromCartItem(item, [
+      "lineaIds",
+      "lineasIds",
+      "lineIds",
+    ]),
+  }));
+}, [cartItemsConOfertas]);
+
+useEffect(() => {
+  let cancelled = false;
+
+  async function validarCodigoCheckout() {
+    const codigo = codigoPromocion.trim().toUpperCase();
+
+    if (!codigo || codigoItems.length === 0) {
+      setResultadoCodigo(null);
+      setCodigoError(null);
+      return;
+    }
+
+    try {
+      setIsLoadingCodigo(true);
+      setCodigoError(null);
+
+      const resultado = await validarCodigoPromocionCarrito({
+        codigo,
+        items: codigoItems,
+      });
+
+      const descuento = Number(resultado.descuentoTotal || 0);
+      const subtotalFinal = Number(resultado.subtotalFinal || 0);
+
+      const codigoValido =
+        resultado.valido !== false &&
+        descuento > 0 &&
+        subtotalFinal > 0 &&
+        subtotalFinal < subtotalConOfertas;
+
+      if (cancelled) {
+        return;
+      }
+
+      if (!codigoValido) {
+        setResultadoCodigo(null);
+        setCodigoError(
+          resultado.mensaje || "El código no aplica para este carrito.",
+        );
+        return;
+      }
+
+      setResultadoCodigo(resultado);
+      setCodigoError(null);
+    } catch (error) {
+      console.error("Failed to validate checkout promo code", error);
+
+      if (!cancelled) {
+        setResultadoCodigo(null);
+        setCodigoError("No se pudo validar el código promocional.");
+      }
+    } finally {
+      if (!cancelled) {
+        setIsLoadingCodigo(false);
+      }
+    }
+  }
+
+  void validarCodigoCheckout();
+
+  return () => {
+    cancelled = true;
+  };
+}, [codigoPromocion, codigoItems, subtotalConOfertas]);
+
+const descuentoCodigo = Math.max(
+  0,
+  Number(resultadoCodigo?.descuentoTotal || 0),
+);
+
+const subtotalFinalCodigo = Number(resultadoCodigo?.subtotalFinal);
+
+const subtotalConCodigo =
+  resultadoCodigo && descuentoCodigo > 0 && Number.isFinite(subtotalFinalCodigo)
+    ? roundCurrency(subtotalFinalCodigo)
+    : roundCurrency(subtotalConOfertas);
+
+const codigoPromocionAplicado =
+  resultadoCodigo && descuentoCodigo > 0 ? codigoPromocion : "";
 
   const shippingForm = useForm<ShippingValues>({
     resolver: zodResolver(shippingSchema),
@@ -1819,10 +2189,10 @@ export default function CheckoutPage() {
     void loadPickupLocations();
   }, [fulfillmentMethod, pickupLocations.length]);
 
-  const pricing = useMemo(
-    () => getExpectedCheckoutPricing(subtotal, fulfillmentMethod),
-    [fulfillmentMethod, subtotal],
-  );
+ const pricing = useMemo(
+  () => getExpectedCheckoutPricing(subtotalConCodigo, fulfillmentMethod),
+  [fulfillmentMethod, subtotalConCodigo],
+);
   const total = pricing.total;
   const activeCheckoutValues =
     checkoutValues ??
@@ -1938,15 +2308,17 @@ export default function CheckoutPage() {
           ) : paymentMethod === "TARJETA" ? (
             stripePromise ? (
               <Elements stripe={stripePromise}>
-                <CardPaymentStep
-                  values={activeCheckoutValues}
-                  cartId={state.id}
-                  cartItems={state.items}
-                  total={total}
-                  onBack={() => setCurrentStep(0)}
-                  paymentMethod={paymentMethod}
-                  onPaymentMethodChange={setPaymentMethod}
-                />
+           <CardPaymentStep
+  values={activeCheckoutValues}
+  cartId={state.id}
+  cartItems={cartItemsConOfertas}
+  total={total}
+  expectedSubtotal={pricing.subtotal}
+  codigoPromocion={codigoPromocionAplicado}
+  onBack={() => setCurrentStep(0)}
+  paymentMethod={paymentMethod}
+  onPaymentMethodChange={setPaymentMethod}
+/>
               </Elements>
             ) : (
               <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
@@ -1963,14 +2335,17 @@ export default function CheckoutPage() {
               </Card>
             )
           ) : (
-            <AplazoPaymentStep
-              values={activeCheckoutValues}
-              cartId={state.id}
-              cartItems={state.items}
-              onBack={() => setCurrentStep(0)}
-              paymentMethod={paymentMethod}
-              onPaymentMethodChange={setPaymentMethod}
-            />
+          <AplazoPaymentStep
+  values={activeCheckoutValues}
+  cartId={state.id}
+  cartItems={cartItemsConOfertas}
+  expectedSubtotal={pricing.subtotal}
+  total={total}
+  codigoPromocion={codigoPromocionAplicado}
+  onBack={() => setCurrentStep(0)}
+  paymentMethod={paymentMethod}
+  onPaymentMethodChange={setPaymentMethod}
+/>
           )}
 
           <PaymentMethodStrip
@@ -1981,7 +2356,15 @@ export default function CheckoutPage() {
         </div>
 
         <div className="lg:sticky lg:top-[calc(var(--storefront-header-current-height,var(--storefront-header-desktop-height))+1.5rem)]">
-          <OrderSummaryPanel fulfillmentMethod={fulfillmentMethod} />
+         <OrderSummaryPanel
+  fulfillmentMethod={fulfillmentMethod}
+  pricingOfertas={pricingOfertas}
+  codigoPromocion={codigoPromocionAplicado || codigoPromocion}
+  resultadoCodigo={resultadoCodigo}
+  descuentoCodigo={descuentoCodigo}
+  codigoError={codigoError}
+  isLoadingCodigo={isLoadingCodigo}
+/>
         </div>
       </div>
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Trash2 } from "lucide-react";
@@ -7,14 +8,74 @@ import { useCart } from "@/hooks/use-cart";
 import { useStorefront } from "@/hooks/use-storefront";
 import { getCartVariantKey } from "@/lib/api/cart";
 import { formatCurrency } from "@/lib/storefront";
+import {
+  calcularPreciosOfertasPublicas,
+  type ProductOfferPricing,
+} from "@/lib/ofertas-public";
 import { Button } from "@/components/ui/button";
 import { QuantitySelector } from "@/components/product/quantity-selector";
 import { EmptyState } from "@/components/storefront/shared/empty-state";
 import { Breadcrumbs } from "@/components/storefront/shared/breadcrumbs";
 
 export default function CartPage() {
-  const { state, totalItems, subtotal, removeItem, setItemQuantity, isLoading } = useCart();
+  const { state, totalItems, removeItem, setItemQuantity, isLoading } = useCart();
   const { getPersonalization } = useStorefront();
+
+  const [pricingOfertas, setPricingOfertas] = useState<
+    Record<string, ProductOfferPricing>
+  >({});
+
+  const offerItemsKey = useMemo(() => {
+    return state.items
+      .map((item) => `${item.id}:${item.quantity}`)
+      .join("|");
+  }, [state.items]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function cargarOfertasCarrito() {
+      if (state.items.length === 0) {
+        setPricingOfertas({});
+        return;
+      }
+
+      const items = state.items.map((item) => ({
+        productoId: item.id,
+        cantidad: item.quantity,
+      }));
+
+      const precios = await calcularPreciosOfertasPublicas(items);
+
+      if (!cancelled) {
+        setPricingOfertas(precios);
+      }
+    }
+
+    cargarOfertasCarrito();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [offerItemsKey, state.items]);
+
+  const subtotalConOfertas = useMemo(() => {
+    return state.items.reduce((total, item) => {
+      const pricingOferta = pricingOfertas[item.id];
+
+      const precioOriginal = Number(pricingOferta?.precioOriginal || item.price || 0);
+      const precioFinal = Number(pricingOferta?.precioFinal || 0);
+
+      const tieneOferta =
+        Boolean(pricingOferta?.ofertaAplicadaId || pricingOferta?.ofertaTitulo) &&
+        precioFinal > 0 &&
+        precioFinal < precioOriginal;
+
+      const precioUnitario = tieneOferta ? precioFinal : item.price;
+
+      return total + precioUnitario * item.quantity;
+    }, 0);
+  }, [state.items, pricingOfertas]);
 
   if (isLoading) {
     return (
@@ -61,6 +122,19 @@ export default function CartPage() {
             const variantKey = getCartVariantKey(item);
             const personalization = getPersonalization(variantKey);
 
+            const pricingOferta = pricingOfertas[item.id];
+
+            const precioOriginal = Number(pricingOferta?.precioOriginal || item.price || 0);
+            const precioFinal = Number(pricingOferta?.precioFinal || 0);
+
+            const tieneOferta =
+              Boolean(pricingOferta?.ofertaAplicadaId || pricingOferta?.ofertaTitulo) &&
+              precioFinal > 0 &&
+              precioFinal < precioOriginal;
+
+            const precioUnitario = tieneOferta ? precioFinal : item.price;
+            const totalItem = precioUnitario * item.quantity;
+
             return (
               <article
                 key={variantKey}
@@ -84,6 +158,7 @@ export default function CartPage() {
                           Talla: {item.tallaId ?? item.size ?? "Sin talla"}
                         </p>
                       </div>
+
                       <Button
                         variant="ghost"
                         size="icon"
@@ -116,13 +191,27 @@ export default function CartPage() {
                         }
                         maxQuantity={10}
                       />
+
                       <div className="text-left md:text-right">
-                        <p className="font-headline text-3xl font-semibold uppercase leading-none tracking-[0.02em] text-foreground">
-                          {formatCurrency(item.price * item.quantity)}
+                        {tieneOferta ? (
+                          <p className="mb-1 text-xs text-muted-foreground line-through">
+                            {formatCurrency(precioOriginal * item.quantity)}
+                          </p>
+                        ) : null}
+
+                        <p className="font-headline text-3xl font-semibold uppercase leading-none tracking-[0.02em] text-primary">
+                          {formatCurrency(totalItem)}
                         </p>
+
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {formatCurrency(item.price)} por pieza
+                          {formatCurrency(precioUnitario)} por pieza
                         </p>
+
+                        {tieneOferta ? (
+                          <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
+                            {pricingOferta?.ofertaTitulo || "Oferta aplicada"}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -137,32 +226,39 @@ export default function CartPage() {
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary/74">
               Resumen
             </p>
+
             <div className="mt-5 space-y-3 text-sm text-muted-foreground">
               <div className="flex items-center justify-between">
                 <span>Subtotal</span>
-                <span>{formatCurrency(subtotal)}</span>
+                <span>{formatCurrency(subtotalConOfertas)}</span>
               </div>
+
               <div className="flex items-center justify-between">
                 <span>Envío estimado</span>
                 <span>{formatCurrency(99)}</span>
               </div>
+
               <div className="flex items-center justify-between">
                 <span>Artículos</span>
                 <span>{totalItems}</span>
               </div>
             </div>
+
             <div className="mt-6 rounded-[1.5rem] border border-border bg-muted/45 px-4 py-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary/74">
                 Total
               </p>
+
               <p className="mt-2 font-headline text-4xl font-semibold uppercase leading-none tracking-[0.03em] text-foreground">
-                {formatCurrency(subtotal + 99)}
+                {formatCurrency(subtotalConOfertas + 99)}
               </p>
             </div>
+
             <div className="mt-6 space-y-3">
               <Button asChild className="h-12 w-full rounded-full">
                 <Link href="/checkout">Continuar compra</Link>
               </Button>
+
               <Button asChild variant="outline" className="h-11 w-full rounded-full">
                 <Link href="/products">Seguir comprando</Link>
               </Button>

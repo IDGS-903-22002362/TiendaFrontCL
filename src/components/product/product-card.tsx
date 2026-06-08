@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Product } from "@/lib/types";
+import type { ProductOfferPricing } from "@/lib/ofertas-public";
 import { HoverImagePreview } from "@/components/product/hover-image-preview";
 import { WishlistButton } from "@/components/storefront/shared/wishlist-button";
 import {
@@ -11,6 +12,7 @@ import { cn } from "@/lib/utils";
 
 type ProductCardProps = {
   product: Product;
+  pricingOferta?: ProductOfferPricing | null;
 };
 
 function getCatalogBadge(product: Product) {
@@ -27,19 +29,58 @@ function getCatalogBadge(product: Product) {
   return badge;
 }
 
-export function ProductCard({ product }: ProductCardProps) {
+function isProductSoldOut(product: Product): boolean {
+  const stock = product.stockTotal ?? product.stock;
+
+  return typeof stock === "number" && stock <= 0;
+}
+
+export function ProductCard({ product, pricingOferta }: ProductCardProps) {
+  const estaAgotado = isProductSoldOut(product);
+
+  const precioOriginalOferta = Number(pricingOferta?.precioOriginal || product.price || 0);
+  const precioFinalOferta = Number(pricingOferta?.precioFinal || 0);
+
+  const tieneOfertaBackend =
+  !estaAgotado &&
+  Boolean(pricingOferta?.ofertaAplicadaId || pricingOferta?.ofertaTitulo) &&
+  precioFinalOferta > 0 &&
+  precioFinalOferta < precioOriginalOferta;
+
+  const tieneOfertaLocal =
+  !estaAgotado &&
+  !tieneOfertaBackend &&
+  typeof product.salePrice === "number" &&
+  product.salePrice > 0 &&
+  product.salePrice < product.price;
+
+  const finalPrice = tieneOfertaBackend
+    ? precioFinalOferta
+    : product.salePrice || product.price;
+
+  const originalPrice = tieneOfertaBackend
+    ? precioOriginalOferta
+    : tieneOfertaLocal
+      ? product.price
+      : null;
+
+  const offerLabel = pricingOferta?.ofertaTitulo || "Oferta";
+
   const badge = getCatalogBadge(product);
+  const displayBadge = badge || (tieneOfertaBackend ? { label: "Oferta" } : null);
+
   const eyebrow = product.lineName || product.category;
-  const finalPrice = product.salePrice || product.price;
+
   const imagePosition = normalizeStorefrontText(`${product.category} ${product.name}`).includes(
     "gorra",
   )
     ? "object-[center_18%]"
     : "object-center";
+
   const badgeTone =
-    badge?.label === "Agotado"
+    displayBadge?.label === "Agotado"
       ? "border-black bg-black text-white"
-      : badge?.label === "Oferta"
+      : displayBadge?.label === "Oferta"
         ? "border-black bg-white text-black"
         : "border-black bg-black text-white";
 
@@ -54,14 +95,14 @@ export function ProductCard({ product }: ProductCardProps) {
             className="aspect-square border border-black/12"
             imageClassName={cn("p-3 md:p-4", imagePosition)}
             overlay={
-              badge ? (
+              displayBadge ? (
                 <span
                   className={cn(
                     "absolute left-0 top-0 z-[1] inline-flex min-h-9 items-center border px-3 text-[10px] font-semibold uppercase tracking-[0.18em]",
                     badgeTone,
                   )}
                 >
-                  {badge.label}
+                  {displayBadge.label}
                 </span>
               ) : null
             }
@@ -77,14 +118,30 @@ export function ProductCard({ product }: ProductCardProps) {
       </div>
 
       <div className="mt-3 flex flex-1 flex-col md:mt-4">
-        <div className="flex items-baseline gap-2.5">
-          <p className="text-[1.45rem] font-semibold leading-none tracking-[-0.03em] text-foreground md:text-[1.7rem]">
-            {formatCurrency(finalPrice)}
-          </p>
-          {product.salePrice ? (
-            <p className="text-[0.9rem] leading-none text-text-muted line-through md:text-[0.95rem]">
-              {formatCurrency(product.price)}
+        <div className="flex flex-col gap-1">
+          <div className="flex flex-wrap items-baseline gap-2.5">
+            {originalPrice ? (
+              <p className="text-[0.9rem] leading-none text-text-muted line-through md:text-[0.95rem]">
+                {formatCurrency(originalPrice)}
+              </p>
+            ) : null}
+
+            <p
+              className={cn(
+                "text-[1.45rem] font-semibold leading-none tracking-[-0.03em] md:text-[1.7rem]",
+                tieneOfertaBackend || tieneOfertaLocal
+                  ? "text-primary"
+                  : "text-foreground",
+              )}
+            >
+              {formatCurrency(finalPrice)}
             </p>
+          </div>
+
+          {tieneOfertaBackend ? (
+            <span className="w-fit border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-primary">
+              {offerLabel}
+            </span>
           ) : null}
         </div>
 

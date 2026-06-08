@@ -32,6 +32,7 @@ export default async function ProductsPage({
 
   const queryKey = queryParams.toString() || "all";
 
+
   const [products, categories, lineas, tallas] = await Promise.all([
     fetchProducts(),
     fetchCategories(),

@@ -50,7 +50,12 @@ const sections = [
     href: "/admin/puntos",
     title: "Puntos",
     description: "Gestión de puntos para promociones y colecciones.",
-  }
+  },
+  {
+  href: "/admin/ofertas",
+  title: "Ofertas",
+  description: "Crea, activa, desactiva y edita promociones aplicadas a productos, categorías o líneas.",
+}
 ];
 
 export default function AdminHomePage() {

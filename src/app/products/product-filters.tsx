@@ -11,13 +11,118 @@ import { FilterSidebar } from "@/components/storefront/catalog/filter-sidebar";
 import { ProductToolbar } from "@/components/storefront/catalog/product-toolbar";
 import { useStorefront } from "@/hooks/use-storefront";
 import { isCategoryVisible, normalizeStorefrontText } from "@/lib/storefront";
-
+import {
+  calcularPreciosOfertasPublicas,
+  type ProductOfferPricing,
+} from "@/lib/ofertas-public";
 type ProductFiltersProps = {
   allProducts: Product[];
   categories: Category[];
   lineas: Linea[];
   tallas: Talla[];
 };
+type ProductTag = NonNullable<Product["tags"]>[number];
+
+const OFFER_COLLECTION_LIMIT = 5;
+const OFFER_DISCOUNT_PAGE_SIZE = 4;
+
+type OfferCollectionHighlight = {
+  key: string;
+  label: string;
+  imageUrl: string | null;
+  type: "category" | "linea";
+  value: string;
+  count: number;
+};
+
+type OfferDiscountHighlight = {
+  percent: number;
+  count: number;
+};
+
+function withoutSaleTag(tags: Product["tags"] | undefined): Product["tags"] {
+  return ((tags ?? []) as ProductTag[]).filter(
+    (tag): tag is Exclude<ProductTag, "sale"> => tag !== "sale",
+  ) as Product["tags"];
+}
+
+function isProductSoldOut(product: Product): boolean {
+  const stock = product.stockTotal ?? product.stock;
+
+  return typeof stock === "number" && stock <= 0;
+}
+
+function getProductImageUrl(product: Product): string | null {
+  const productRecord = product as unknown as Record<string, unknown>;
+
+  const imageFields = [
+    productRecord.imageUrl,
+    productRecord.image,
+    productRecord.image_url,
+    productRecord.thumbnail,
+    productRecord.fotoUrl,
+    productRecord.foto,
+  ];
+
+  for (const field of imageFields) {
+    if (typeof field === "string" && field.trim()) {
+      return field;
+    }
+  }
+
+  const images = Array.isArray(productRecord.images)
+    ? productRecord.images
+    : Array.isArray(productRecord.imagenes)
+      ? productRecord.imagenes
+      : [];
+
+  const firstImage = images[0];
+
+  if (typeof firstImage === "string" && firstImage.trim()) {
+    return firstImage;
+  }
+
+  if (firstImage && typeof firstImage === "object") {
+    const imageRecord = firstImage as Record<string, unknown>;
+
+    if (typeof imageRecord.url === "string" && imageRecord.url.trim()) {
+      return imageRecord.url;
+    }
+
+    if (typeof imageRecord.src === "string" && imageRecord.src.trim()) {
+      return imageRecord.src;
+    }
+  }
+
+  return null;
+}
+
+function hasActiveProductOffer(product: Product): boolean {
+  const originalPrice = Number(product.price || 0);
+  const salePrice = Number(product.salePrice || 0);
+
+  return (
+    !isProductSoldOut(product) &&
+    originalPrice > 0 &&
+    salePrice > 0 &&
+    salePrice < originalPrice
+  );
+}
+
+function getProductDiscountPercent(product: Product): number | null {
+  if (!hasActiveProductOffer(product)) {
+    return null;
+  }
+
+  const originalPrice = Number(product.price || 0);
+  const salePrice = Number(product.salePrice || 0);
+
+  if (originalPrice <= 0 || salePrice <= 0 || salePrice >= originalPrice) {
+    return null;
+  }
+
+  return Math.round(((originalPrice - salePrice) / originalPrice) * 100);
+}
 
 function sortProducts(products: Product[], sort: string) {
   const sortable = [...products];
@@ -68,15 +173,19 @@ export function ProductFilters({
   const router = useRouter();
   const searchParams = useSearchParams();
   const { wishlistIds } = useStorefront();
+  const [productsWithOffers, setProductsWithOffers] =
+  useState<Product[]>(allProducts);
 
-  const maxCatalogPrice = useMemo(() => {
-    const maxPrice = allProducts.reduce((currentMax, product) => {
+const [isCalculatingOffers, setIsCalculatingOffers] = useState(true);
+
+    const maxCatalogPrice = useMemo(() => {
+    const maxPrice = productsWithOffers.reduce((currentMax, product) => {
       const effectivePrice = product.salePrice || product.price;
       return Math.max(currentMax, effectivePrice);
     }, 0);
 
     return Math.max(100, Math.ceil(maxPrice / 100) * 100);
-  }, [allProducts]);
+  }, [productsWithOffers]);
 
   const [sort, setSort] = useState(searchParams.get("sort") || "featured");
   const [category, setCategory] = useState(
@@ -95,9 +204,21 @@ export function ProductFilters({
     return [Math.min(maxPriceFromQuery, maxCatalogPrice)];
   });
   const [tags, setTags] = useState<string[]>(searchParams.getAll("tag"));
-  const [wishlistOnly, setWishlistOnly] = useState(
-    searchParams.get("wishlist") === "1",
-  );
+const [selectedOfferPercent, setSelectedOfferPercent] = useState<number | null>(
+  () => {
+    const discountParam = Number(searchParams.get("discount"));
+
+    return Number.isFinite(discountParam) && discountParam > 0
+      ? discountParam
+      : null;
+  },
+);
+
+const [offerDiscountPage, setOfferDiscountPage] = useState(0);
+
+const [wishlistOnly, setWishlistOnly] = useState(
+  searchParams.get("wishlist") === "1",
+);
 
   // Parsear IDs de productos específicos desde query string
   const productIds = useMemo(() => {
@@ -114,6 +235,84 @@ export function ProductFilters({
   }, [searchParams]);
 
   const searchQuery = searchParams.get("q")?.trim() ?? "";
+useEffect(() => {
+  let cancelled = false;
+
+  async function loadOfferPrices() {
+    setIsCalculatingOffers(true);
+
+    try {
+      if (allProducts.length === 0) {
+        if (!cancelled) {
+          setProductsWithOffers([]);
+        }
+
+        return;
+      }
+
+      const offerItems = allProducts.map((product) => ({
+        productoId: product.id,
+        cantidad: 1,
+      }));
+
+      const precios: Record<string, ProductOfferPricing> =
+        await calcularPreciosOfertasPublicas(offerItems);
+
+      const nextProducts: Product[] = allProducts.map((product) => {
+        const pricingOferta = precios[product.id];
+
+        const precioOriginal = Number(
+          pricingOferta?.precioOriginal || product.price || 0,
+        );
+
+        const precioFinal = Number(pricingOferta?.precioFinal || 0);
+
+        const tieneOferta =
+          !isProductSoldOut(product) &&
+          Boolean(pricingOferta?.ofertaAplicadaId || pricingOferta?.ofertaTitulo) &&
+          precioOriginal > 0 &&
+          precioFinal > 0 &&
+          precioFinal < precioOriginal;
+
+        const baseTags = withoutSaleTag(product.tags);
+
+        return {
+          ...product,
+          salePrice: tieneOferta ? precioFinal : undefined,
+          tags: tieneOferta
+            ? ([...baseTags, "sale"] as Product["tags"])
+            : baseTags,
+        };
+      });
+
+      if (!cancelled) {
+        setProductsWithOffers(nextProducts);
+      }
+    } catch (error) {
+      console.error("Error calculando ofertas para catálogo:", error);
+
+      if (!cancelled) {
+        const productsWithoutOffers: Product[] = allProducts.map((product) => ({
+          ...product,
+          salePrice: undefined,
+          tags: withoutSaleTag(product.tags),
+        }));
+
+        setProductsWithOffers(productsWithoutOffers);
+      }
+    } finally {
+      if (!cancelled) {
+        setIsCalculatingOffers(false);
+      }
+    }
+  }
+
+  void loadOfferPrices();
+
+  return () => {
+    cancelled = true;
+  };
+}, [allProducts]);
 
   const visibleCategories = useMemo(
     () => categories.filter((categoryItem) => isCategoryVisible(categoryItem)),
@@ -131,6 +330,136 @@ export function ProductFilters({
     [tallas],
   );
 
+  const productsOnSale = useMemo(
+  () => productsWithOffers.filter((product) => hasActiveProductOffer(product)),
+  [productsWithOffers],
+);
+
+const offerCollections = useMemo<OfferCollectionHighlight[]>(() => {
+  if (productsOnSale.length === 0) {
+    return [];
+  }
+
+  const categoryHighlights = visibleCategories
+    .map((categoryItem) => {
+      const selectedSlug = normalizeStorefrontText(categoryItem.slug);
+      const selectedName = normalizeStorefrontText(categoryItem.name);
+
+      const matchingProducts = productsOnSale.filter((product) => {
+        const productCategory = normalizeStorefrontText(product.category);
+
+        return (
+          productCategory === selectedSlug || productCategory === selectedName
+        );
+      });
+
+      if (matchingProducts.length === 0) {
+        return null;
+      }
+
+      return {
+        key: `category-${categoryItem.id}`,
+        label: categoryItem.name,
+        imageUrl: getProductImageUrl(matchingProducts[0]),
+        type: "category" as const,
+        value: categoryItem.slug,
+        count: matchingProducts.length,
+      };
+    })
+    .filter(Boolean) as OfferCollectionHighlight[];
+
+  const lineaHighlights = visibleLineas
+    .map((lineaItem) => {
+      const selectedId = normalizeStorefrontText(lineaItem.id);
+      const selectedName = normalizeStorefrontText(lineaItem.nombre);
+
+      const matchingProducts = productsOnSale.filter((product) => {
+        const productLineId = normalizeStorefrontText(product.lineId ?? "");
+        const productLineName = normalizeStorefrontText(product.lineName ?? "");
+
+        return (
+          productLineId === selectedId ||
+          productLineName === selectedId ||
+          productLineId === selectedName ||
+          productLineName === selectedName
+        );
+      });
+
+      if (matchingProducts.length === 0) {
+        return null;
+      }
+
+      return {
+        key: `linea-${lineaItem.id}`,
+        label: lineaItem.nombre,
+        imageUrl: getProductImageUrl(matchingProducts[0]),
+        type: "linea" as const,
+        value: lineaItem.id,
+        count: matchingProducts.length,
+      };
+    })
+    .filter(Boolean) as OfferCollectionHighlight[];
+
+  return [...lineaHighlights, ...categoryHighlights].slice(
+  0,
+  OFFER_COLLECTION_LIMIT,
+);
+}, [productsOnSale, visibleCategories, visibleLineas]);
+
+const offerDiscounts = useMemo<OfferDiscountHighlight[]>(() => {
+  const discountMap = new Map<number, number>();
+
+  productsOnSale.forEach((product) => {
+    const percent = getProductDiscountPercent(product);
+
+    if (!percent) {
+      return;
+    }
+
+    discountMap.set(percent, (discountMap.get(percent) ?? 0) + 1);
+  });
+
+  return Array.from(discountMap.entries())
+    .map(([percent, count]) => ({ percent, count }))
+    .sort((a, b) => b.percent - a.percent);
+}, [productsOnSale]);
+
+const hasOfferShowcase =
+  offerCollections.length > 0 || offerDiscounts.length > 0;
+
+const shouldShowOfferShowcase = tags.includes("sale") && hasOfferShowcase;
+
+const totalOfferDiscountPages = Math.max(
+  1,
+  Math.ceil(offerDiscounts.length / OFFER_DISCOUNT_PAGE_SIZE),
+);
+
+const visibleOfferDiscounts = useMemo(() => {
+  const start = offerDiscountPage * OFFER_DISCOUNT_PAGE_SIZE;
+  const end = start + OFFER_DISCOUNT_PAGE_SIZE;
+
+  return offerDiscounts.slice(start, end);
+}, [offerDiscounts, offerDiscountPage]);
+
+const canSlideOfferDiscounts =
+  offerDiscounts.length > OFFER_DISCOUNT_PAGE_SIZE;
+
+const handlePrevOfferDiscounts = () => {
+  setOfferDiscountPage((currentPage) => Math.max(0, currentPage - 1));
+};
+
+const handleNextOfferDiscounts = () => {
+  setOfferDiscountPage((currentPage) =>
+    Math.min(totalOfferDiscountPages - 1, currentPage + 1),
+  );
+};
+
+useEffect(() => {
+  setOfferDiscountPage((currentPage) =>
+    Math.min(currentPage, totalOfferDiscountPages - 1),
+  );
+}, [totalOfferDiscountPages]);
+
   useEffect(() => {
     if (priceRange[0] > maxCatalogPrice) {
       setPriceRange([maxCatalogPrice]);
@@ -147,7 +476,10 @@ export function ProductFilters({
     if (priceRange[0] < maxCatalogPrice)
       params.set("maxPrice", priceRange[0].toString());
     if (wishlistOnly) params.set("wishlist", "1");
-    tags.forEach((tag) => params.append("tag", tag));
+if (selectedOfferPercent) {
+  params.set("discount", selectedOfferPercent.toString());
+}
+tags.forEach((tag) => params.append("tag", tag));
     // Preservar IDs y limit si vienen desde URL (ej: banner con productos específicos)
     if (productIds.length > 0) params.set("ids", productIds.join(","));
     if (productLimit && productLimit > 0) params.set("limit", productLimit.toString());
@@ -170,6 +502,7 @@ export function ProductFilters({
     priceRange,
     router,
     searchQuery,
+    selectedOfferPercent,
     selectedSize,
     sort,
     tags,
@@ -214,8 +547,8 @@ export function ProductFilters({
     }
   }, [selectedSize, visibleSizes, productIds]);
 
-  const { productsToShow, searchWithoutMatches } = useMemo(() => {
-    let products = [...allProducts];
+    const { productsToShow, searchWithoutMatches } = useMemo(() => {
+    let products = [...productsWithOffers];
 
     // Si hay IDs específicos de productos, filtrar solo esos
     if (productIds.length > 0) {
@@ -266,10 +599,26 @@ export function ProductFilters({
     );
 
     if (tags.length > 0) {
-      products = products.filter((product) =>
-        tags.every((tag) => product.tags.includes(tag as "new" | "sale")),
-      );
+  products = products.filter((product) => {
+    const matchesTags = tags.every((tag) =>
+      product.tags.includes(tag as "new" | "sale"),
+    );
+
+    if (!matchesTags) return false;
+
+    if (tags.includes("sale") && isProductSoldOut(product)) {
+      return false;
     }
+
+    return true;
+  });
+}
+
+if (selectedOfferPercent) {
+  products = products.filter(
+    (product) => getProductDiscountPercent(product) === selectedOfferPercent,
+  );
+}
 
     if (wishlistOnly) {
       products = products.filter((product) => wishlistIds.includes(product.id));
@@ -308,12 +657,13 @@ export function ProductFilters({
       productsToShow: searchMatches,
       searchWithoutMatches: false,
     };
-  }, [
-    allProducts,
+    }, [
+    productsWithOffers,
     category,
     linea,
     priceRange,
     searchQuery,
+    selectedOfferPercent,
     selectedSize,
     sort,
     tags,
@@ -337,7 +687,8 @@ export function ProductFilters({
       ? `Hasta $${priceRange[0].toLocaleString()}`
       : null,
     wishlistOnly ? "Favoritos" : null,
-    ...tags.map((tag) => (tag === "new" ? "Novedades" : "Ofertas")),
+selectedOfferPercent ? `${selectedOfferPercent}% de descuento` : null,
+...tags.map((tag) => (tag === "new" ? "Novedades" : "Ofertas")),
   ].filter(Boolean) as string[];
 
   const clearFilters = () => {
@@ -347,16 +698,54 @@ export function ProductFilters({
     setSelectedSize("all");
     setPriceRange([maxCatalogPrice]);
     setTags([]);
+    setSelectedOfferPercent(null);
     setWishlistOnly(false);
   };
 
-  const handleTagChange = (tag: string, checked: boolean) => {
-    setTags((currentTags) =>
-      checked
-        ? [...currentTags, tag]
-        : currentTags.filter((item) => item !== tag),
-    );
-  };
+ const handleTagChange = (tag: string, checked: boolean) => {
+  if (tag === "sale" && !checked) {
+    setSelectedOfferPercent(null);
+  }
+
+  setTags((currentTags) =>
+    checked
+      ? [...currentTags, tag]
+      : currentTags.filter((item) => item !== tag),
+  );
+};
+
+const enableSaleTag = () => {
+  setTags((currentTags) =>
+    currentTags.includes("sale") ? currentTags : [...currentTags, "sale"],
+  );
+};
+
+const handleOfferCollectionClick = (highlight: OfferCollectionHighlight) => {
+  enableSaleTag();
+  setSelectedOfferPercent(null);
+  setSelectedSize("all");
+  setWishlistOnly(false);
+  setPriceRange([maxCatalogPrice]);
+
+  if (highlight.type === "category") {
+    setCategory(highlight.value);
+    setLinea("all");
+    return;
+  }
+
+  setLinea(highlight.value);
+  setCategory("all");
+};
+
+const handleOfferDiscountClick = (percent: number) => {
+  enableSaleTag();
+  setSelectedOfferPercent(percent);
+  setCategory("all");
+  setLinea("all");
+  setSelectedSize("all");
+  setWishlistOnly(false);
+  setPriceRange([maxCatalogPrice]);
+};
 
   const filterControls = (
     <div className="space-y-7">
@@ -510,8 +899,110 @@ export function ProductFilters({
       </FilterSidebar>
 
       <main>
+  {shouldShowOfferShowcase ? (
+    <section className="mb-8 border border-primary/15 bg-background px-5 py-8 shadow-sm md:px-8 md:py-10">
+      <div className="text-center">
+        <p className="font-headline text-xs font-semibold uppercase tracking-[0.35em] text-primary/70">
+          Promociones activas
+        </p>
+        <h2 className="mt-3 font-headline text-3xl font-semibold uppercase tracking-[0.22em] text-primary md:text-4xl">
+          Rebajas Club León
+        </h2>
+      </div>
+
+      {offerCollections.length > 0 ? (
+        <div className="mt-9 grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-5">
+          {offerCollections.map((highlight) => (
+            <button
+              key={highlight.key}
+              type="button"
+              onClick={() => handleOfferCollectionClick(highlight)}
+              className="group flex flex-col items-center text-center"
+            >
+              <span className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-muted transition-transform duration-300 group-hover:scale-105 md:h-28 md:w-28">
+                {highlight.imageUrl ? (
+                  <img
+                    src={highlight.imageUrl}
+                    alt={highlight.label}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="font-headline text-2xl font-semibold uppercase text-primary">
+                    {highlight.label.slice(0, 1)}
+                  </span>
+                )}
+              </span>
+
+              <span className="mt-4 border-b border-primary font-headline text-sm font-semibold uppercase tracking-[0.12em] text-primary">
+                {highlight.label}
+              </span>
+
+              <span className="mt-1 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                {highlight.count} producto{highlight.count === 1 ? "" : "s"}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {offerDiscounts.length > 0 ? (
+  <div className="mt-8">
+    <div className="flex items-center gap-3">
+      {canSlideOfferDiscounts ? (
+        <button
+          type="button"
+          onClick={handlePrevOfferDiscounts}
+          disabled={offerDiscountPage === 0}
+          className="flex h-12 w-12 shrink-0 items-center justify-center border border-primary text-xl font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground disabled:pointer-events-none disabled:opacity-30"
+          aria-label="Ver descuentos anteriores"
+        >
+          ‹
+        </button>
+      ) : null}
+
+      <div className="grid flex-1 grid-cols-2 gap-3 md:grid-cols-4">
+        {visibleOfferDiscounts.map((discount) => (
+          <button
+            key={discount.percent}
+            type="button"
+            onClick={() => handleOfferDiscountClick(discount.percent)}
+            className={`border px-5 py-3 text-center font-headline text-lg font-semibold uppercase tracking-[0.16em] transition-colors ${
+              selectedOfferPercent === discount.percent
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+            }`}
+          >
+            {discount.percent}%
+          </button>
+        ))}
+      </div>
+
+      {canSlideOfferDiscounts ? (
+        <button
+          type="button"
+          onClick={handleNextOfferDiscounts}
+          disabled={offerDiscountPage >= totalOfferDiscountPages - 1}
+          className="flex h-12 w-12 shrink-0 items-center justify-center border border-primary text-xl font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground disabled:pointer-events-none disabled:opacity-30"
+          aria-label="Ver más descuentos"
+        >
+          ›
+        </button>
+      ) : null}
+    </div>
+
+    {canSlideOfferDiscounts ? (
+      <p className="mt-3 text-center text-xs uppercase tracking-[0.16em] text-muted-foreground">
+        {offerDiscountPage + 1} / {totalOfferDiscountPages}
+      </p>
+    ) : null}
+  </div>
+) : null}
+    </section>
+  ) : null}
+
+  
         <ProductToolbar
-          count={productsToShow.length}
+  count={isCalculatingOffers ? productsWithOffers.length : productsToShow.length}
           searchLabel={
             searchQuery ? `Resultados para "${searchQuery}"` : undefined
           }
@@ -529,9 +1020,22 @@ export function ProductFilters({
           </div>
         ) : null}
 
-        <div className="mt-6">
-          <ProductGrid products={productsToShow} />
-        </div>
+       <div className="mt-6">
+  {isCalculatingOffers ? (
+    <div className="flex min-h-[360px] items-center justify-center border border-primary/10 bg-background px-6 py-16 text-center shadow-sm">
+      <div>
+        <p className="font-headline text-2xl font-semibold uppercase tracking-[0.18em] text-primary">
+          Cargando catálogo
+        </p>
+        <p className="mt-3 text-sm text-muted-foreground">
+          Estamos actualizando precios, descuentos y promociones disponibles.
+        </p>
+      </div>
+    </div>
+  ) : (
+    <ProductGrid products={productsToShow} />
+  )}
+</div>
       </main>
     </div>
   );
