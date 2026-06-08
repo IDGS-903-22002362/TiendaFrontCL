@@ -1,14 +1,233 @@
 "use client";
 
-import { User, Mail, Shield, ShoppingBag, Clock, ChevronRight } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { User, Mail, Shield, ShoppingBag, Clock, ChevronRight, Star, Pencil } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
+import { getMyPoints, getMyProfile, saveEditableProfile, usuariosApi } from "@/lib/api/users";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ProfilePage() {
-  const { user, role, isAuthenticated, isLoading } = useAuth();
+  const { user, role, isAuthenticated, isLoading, refreshSession } = useAuth();
+  const { toast } = useToast();
+  const [points, setPoints] = useState<number | null>(null);
+  const [profileName, setProfileName] = useState<string>("");
+  const [profileLevel, setProfileLevel] = useState<string>("");
+  const [isLoadingPoints, setIsLoadingPoints] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [activeSection, setActiveSection] = useState<"personal" | "compras">("personal");
+  const [profileForm, setProfileForm] = useState({
+    nombre: "",
+    email: "",
+    telefono: "",
+    fechaNacimiento: "",
+    genero: "",
+  });
+
+  const fallbackPoints = useMemo(() => {
+    const possiblePoints = (user as { puntosActuales?: unknown } | null)?.puntosActuales;
+    return typeof possiblePoints === "number" ? possiblePoints : 0;
+  }, [user]);
+
+  const effectivePoints = points ?? fallbackPoints;
+
+  const displayName = useMemo(() => {
+    const sessionName = (user as { nombre?: unknown } | null)?.nombre;
+    if (profileName.trim()) {
+      return profileName;
+    }
+    if (typeof sessionName === "string" && sessionName.trim().length > 0) {
+      return sessionName;
+    }
+    return "León";
+  }, [profileName, user]);
+
+  const displayLevel = useMemo(() => {
+    if (isLoadingPoints) {
+      return "...";
+    }
+
+    return profileLevel.trim() || "Sin nivel asignado";
+  }, [isLoadingPoints, profileLevel]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !user) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadSummary = async () => {
+      setIsLoadingPoints(true);
+      const uid = (user as { uid?: string } | null)?.uid;
+
+      try {
+        const [pointsResult, profileResult] = await Promise.allSettled([
+          getMyPoints(),
+          uid ? usuariosApi.getById(uid) : Promise.resolve(null),
+        ]);
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (pointsResult.status === "fulfilled") {
+          setPoints(pointsResult.value.points);
+        } else if (
+          profileResult.status === "fulfilled" &&
+          profileResult.value &&
+          typeof profileResult.value.puntosActuales === "number"
+        ) {
+          setPoints(profileResult.value.puntosActuales);
+        } else {
+          setPoints(null);
+        }
+
+        if (profileResult.status === "fulfilled" && profileResult.value) {
+          const backendUser = profileResult.value;
+          setProfileName(backendUser.nombre ?? "");
+          setProfileLevel(backendUser.nivel ?? "");
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingPoints(false);
+        }
+      }
+    };
+
+    void loadSummary();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated, user]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !user) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadEditableProfile = async () => {
+      const uid = (user as { uid?: string } | null)?.uid;
+      try {
+        const profileData = await getMyProfile(uid);
+        if (!isMounted) {
+          return;
+        }
+
+        setProfileForm({
+          nombre: profileData.nombre ?? "",
+          email: profileData.email ?? "",
+          telefono: profileData.telefono ?? "",
+          fechaNacimiento: (profileData.fechaNacimiento ?? "").slice(0, 10),
+          genero: profileData.genero ?? "",
+        });
+
+        if (profileData.nombre) {
+          setProfileName(profileData.nombre);
+        }
+
+        if (profileData.nivel) {
+          setProfileLevel(profileData.nivel);
+        }
+
+        if (typeof profileData.puntosActuales === "number") {
+          setPoints(profileData.puntosActuales);
+        }
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setProfileForm((prev) => ({
+          ...prev,
+          nombre: typeof (user as { nombre?: unknown } | null)?.nombre === "string" ? ((user as { nombre?: string } | null)?.nombre ?? "") : "",
+          email: typeof (user as { email?: unknown } | null)?.email === "string" ? ((user as { email?: string } | null)?.email ?? "") : "",
+        }));
+      }
+    };
+
+    void loadEditableProfile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated, user]);
+
+  const onSaveProfile = async () => {
+    const phone = profileForm.telefono.replace(/\D/g, "");
+    const date = profileForm.fechaNacimiento.trim();
+    const gender = profileForm.genero.trim();
+
+    if (phone.length !== 10) {
+      toast({
+        variant: "destructive",
+        title: "Telefono invalido",
+        description: "El telefono debe tener exactamente 10 digitos.",
+      });
+      return;
+    }
+
+    const today = new Date();
+    const todayKey = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()))
+      .toISOString()
+      .slice(0, 10);
+
+    if (date && date > todayKey) {
+      toast({
+        variant: "destructive",
+        title: "Fecha invalida",
+        description: "La fecha de nacimiento no puede ser futura.",
+      });
+      return;
+    }
+
+    const shouldSendExtended = Boolean(date) || Boolean(gender);
+
+    if (shouldSendExtended && (!date || !gender)) {
+      toast({
+        variant: "destructive",
+        title: "Datos incompletos",
+        description: "Para actualizar fecha o genero debes enviar telefono, fecha y genero.",
+      });
+      return;
+    }
+
+    setIsSavingProfile(true);
+    try {
+      await saveEditableProfile({
+        telefono: phone,
+        fechaNacimiento: shouldSendExtended ? date : undefined,
+        genero: shouldSendExtended ? gender : undefined,
+      });
+
+      await refreshSession();
+
+      setProfileForm((prev) => ({
+        ...prev,
+        telefono: phone,
+        fechaNacimiento: date,
+        genero: gender,
+      }));
+
+      setIsEditingProfile(false);
+      toast({ title: "Datos actualizados", description: "Tu perfil se guardo correctamente." });
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "No se pudo guardar",
+        description: "Verifica tus datos e intenta nuevamente.",
+      });
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -36,23 +255,94 @@ export default function ProfilePage() {
     <div className="container max-w-4xl py-5 md:py-8">
       <h1 className="mb-6 font-headline text-3xl font-bold md:mb-8 md:text-4xl">Mi Perfil</h1>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-6">
-        {/* User Info Card */}
-        <Card className="md:col-span-1">
-          <CardHeader className="text-center pb-2">
-            <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full border border-primary/20 bg-primary/10 md:h-24 md:w-24">
-              <User className="h-10 w-10 text-primary md:h-12 md:w-12" />
+      <Card className="mb-4 overflow-hidden border-primary/30 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent shadow-lg md:mb-6">
+        <CardContent className="p-4 md:p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-3xl font-black tracking-tight text-foreground md:text-4xl">
+                Hola {displayName}
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground md:text-base">
+                Actualmente eres nivel:
+                <span className="ml-2 inline-flex rounded-full border border-primary/30 bg-white px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-primary md:text-sm">
+                  {displayLevel}
+                </span>
+              </p>
             </div>
-            <CardTitle className="text-xl">Datos Personales</CardTitle>
+
+            <div className="flex items-center gap-3 rounded-2xl border border-primary/30 bg-white/80 px-4 py-3 shadow-sm">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 md:h-12 md:w-12">
+                <Star className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary/70">Puntos disponibles</p>
+                <p className="text-2xl font-black leading-none text-primary md:text-3xl">
+                  {isLoadingPoints ? "..." : effectivePoints.toLocaleString("es-MX")}
+                </p>
+              </div>
+            </div>
+          </div>
+
+        </CardContent>
+      </Card>
+
+      <div className="mb-4 inline-flex rounded-xl border border-border bg-background p-1 md:mb-6">
+        <button
+          type="button"
+          onClick={() => setActiveSection("personal")}
+          className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${activeSection === "personal"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:text-foreground"
+            }`}
+        >
+          Datos Personales
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveSection("compras")}
+          className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${activeSection === "compras"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:text-foreground"
+            }`}
+        >
+          Mis Compras
+        </button>
+      </div>
+
+      {activeSection === "personal" ? (
+        <Card className="w-full">
+          <CardHeader className="pb-2 pt-5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
+                  <User className="h-6 w-6 text-primary" />
+                </div>
+                <CardTitle className="text-lg">Datos Personales</CardTitle>
+              </div>
+
+              {!isEditingProfile ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => setIsEditingProfile(true)}
+                >
+                  <Pencil className="h-4 w-4" />
+                  Editar datos
+                </Button>
+              ) : null}
+            </div>
           </CardHeader>
-          <CardContent className="space-y-4 pt-4">
+          <CardContent className="space-y-3 pt-2">
+
             <div className="flex flex-col space-y-1">
               <span className="flex items-center text-sm text-muted-foreground">
                 <Mail className="mr-2 h-4 w-4" /> Email
               </span>
               <span className="font-medium break-all">{user.email}</span>
             </div>
-            
+
             <div className="flex flex-col space-y-1">
               <span className="flex items-center text-sm text-muted-foreground">
                 <Shield className="mr-2 h-4 w-4" /> Rol
@@ -63,11 +353,92 @@ export default function ProfilePage() {
                 </Badge>
               </div>
             </div>
+
+            {isEditingProfile ? (
+              <div className="space-y-3 rounded-xl border border-border/70 bg-muted/20 p-3">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Nombre</p>
+                  <input
+                    value={profileForm.nombre}
+                    readOnly
+                    disabled
+                    className="h-10 w-full rounded-lg border border-border bg-muted px-3 text-sm text-muted-foreground"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Correo</p>
+                  <input
+                    value={profileForm.email}
+                    readOnly
+                    disabled
+                    className="h-10 w-full rounded-lg border border-border bg-muted px-3 text-sm text-muted-foreground"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Telefono</p>
+                  <input
+                    value={profileForm.telefono}
+                    onChange={(event) => {
+                      const value = event.target.value.replace(/[^0-9]/g, "").slice(0, 10);
+                      setProfileForm((prev) => ({ ...prev, telefono: value }));
+                    }}
+                    inputMode="numeric"
+                    maxLength={10}
+                    className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Fecha de nacimiento</p>
+                  <input
+                    type="date"
+                    value={profileForm.fechaNacimiento}
+                    onChange={(event) => setProfileForm((prev) => ({ ...prev, fechaNacimiento: event.target.value }))}
+                    className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Genero</p>
+                  <select
+                    value={profileForm.genero}
+                    onChange={(event) => setProfileForm((prev) => ({ ...prev, genero: event.target.value }))}
+                    className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="">Selecciona</option>
+                    <option value="masculino">Masculino</option>
+                    <option value="femenino">Femenino</option>
+                    <option value="otro">Otro</option>
+                  </select>
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    type="button"
+                    className="flex-1"
+                    onClick={() => void onSaveProfile()}
+                    disabled={isSavingProfile}
+                  >
+                    {isSavingProfile ? "Guardando..." : "Guardar"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1"
+                    disabled={isSavingProfile}
+                    onClick={() => setIsEditingProfile(false)}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
-
-        {/* Quick Actions / Summary */}
-        <div className="flex flex-col gap-6 md:col-span-2">
+      ) : (
+        <div className="flex flex-col gap-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -88,7 +459,7 @@ export default function ProfilePage() {
                   <ChevronRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1" />
                 </div>
               </Link>
-              
+
               <Link href="/order-history" className="group rounded-[20px] border border-border p-4 transition-colors hover:bg-muted/50 md:rounded-[22px]">
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
@@ -100,7 +471,7 @@ export default function ProfilePage() {
               </Link>
             </CardContent>
           </Card>
-          
+
           {role === "ADMIN" && (
             <Card>
               <CardHeader>
@@ -121,7 +492,7 @@ export default function ProfilePage() {
             </Card>
           )}
         </div>
-      </div>
+      )}
     </div>
   );
 }

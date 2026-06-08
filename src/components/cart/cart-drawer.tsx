@@ -610,13 +610,143 @@ export function CartDrawer() {
         </Button>
       </SheetTrigger>
 
-      <SheetContent className="flex h-dvh w-full flex-col overflow-hidden border-l border-black/14 bg-white px-0 sm:max-w-[520px] lg:max-w-[660px]">
-        <div className="flex min-h-0 flex-1">
-          {state.items.length > 0 ? (
-            <aside className="hidden h-full w-[180px] shrink-0 flex-col border-r border-black/12 bg-white px-3 py-5 lg:flex">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-foreground">
-                  Podría interesarte
+      <SheetContent className="flex w-full flex-col border-l border-black/14 bg-white px-0 lg:max-w-[480px]">
+        <SheetHeader className="border-b border-black/12 px-[16px] lg:px-[24px] pb-5">
+          <SheetTitle>Tu carrito</SheetTitle>
+        </SheetHeader>
+
+        {state.items.length === 0 ? (
+          <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full border border-black/14 bg-white text-primary shadow-[0_18px_34px_-28px_rgb(8_12_10_/_0.14)]">
+              <ShoppingBag className="h-6 w-6" />
+            </div>
+            <h3 className="mt-6 font-headline text-3xl font-semibold uppercase leading-none">
+              Vacío por ahora
+            </h3>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              Explora el catálogo premium y añade tu próxima pieza oficial.
+            </p>
+            <Button asChild className="mt-6 h-11 rounded-full px-5">
+              <Link href="/products">Ver catálogo</Link>
+            </Button>
+          </div>
+        ) : (
+          <>
+            <ScrollArea className="flex-1 px-5">
+              <div className="space-y-4 py-5">
+                {state.items.map((item) => {
+                  const variantKey = getCartVariantKey(item);
+                  const personalization = getPersonalization(variantKey);
+
+                  return (
+                    <article
+                      key={variantKey}
+                      className="rounded-[1.15rem] border border-black/14 bg-white p-3 shadow-none"
+                    >
+                      <div className="flex gap-3">
+                        <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-[0.95rem] border border-black/12 bg-white">
+                          <Image src={item.image} alt={item.name} fill className="object-cover" />
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <Link
+                                href={`/products/${item.id}`}
+                                className="line-clamp-2 font-headline text-xl font-semibold uppercase leading-none tracking-[0.03em] text-foreground"
+                                onClick={() => setIsDrawerOpen(false)}
+                              >
+                                {item.name}
+                              </Link>
+                              <p className="mt-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                                {item.tallaId || item.size || "Sin talla"}
+                              </p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 rounded-full text-muted-foreground"
+                              onClick={() => removeItem(item.id, item.tallaId ?? item.size)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+
+                          {personalization ? (
+                            <div className="mt-3 rounded-[1rem] border border-black/12 bg-white px-3 py-2">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-primary/75">
+                                Personalización
+                              </p>
+                              <p className="mt-1 text-sm text-foreground">
+                                {personalization.name} · {personalization.number}
+                              </p>
+                            </div>
+                          ) : null}
+
+                          <div className="mt-4 flex items-end justify-between gap-3">
+                            <div className="flex items-center rounded-full border border-black/14 bg-white p-1 shadow-none">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 rounded-full"
+                                onClick={() =>
+                                  setItemQuantity(
+                                    item.id,
+                                    item.tallaId ?? item.size,
+                                    Math.max(1, item.quantity - 1),
+                                  )
+                                }
+                              >
+                                <Minus className="h-4 w-4" />
+                              </Button>
+                              <span className="w-8 text-center text-sm font-medium">
+                                {item.quantity}
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 rounded-full"
+                                onClick={() =>
+                                  setItemQuantity(
+                                    item.id,
+                                    item.tallaId ?? item.size,
+                                    item.quantity + 1,
+                                  )
+                                }
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </div>
+
+                            <div className="text-right">
+                              <p className="font-headline text-2xl font-semibold uppercase leading-none tracking-[0.02em]">
+                                {formatCurrency(item.price * item.quantity)}
+                              </p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {formatCurrency(item.price)} c/u
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+
+            <div className="border-t border-black/12 px-5 py-5">
+              <div className="flex items-center justify-between rounded-[1.2rem] border border-black/14 bg-[rgb(249_249_246)] px-4 py-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary/75">
+                    Subtotal
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {totalItems} {totalItems === 1 ? "artículo" : "artículos"}
+                  </p>
+                </div>
+                <p className="font-headline text-3xl font-semibold uppercase leading-none tracking-[0.02em] text-foreground">
+                  {formatCurrency(subtotal)}
                 </p>
               </div>
 

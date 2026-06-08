@@ -9,6 +9,8 @@ import type {
   AplazoRefundStatusResponse,
   AplazoOnlineCreatePayload,
   AplazoOnlineCreateResponse,
+  AplazoInStoreCreatePayload,
+  AplazoInStoreCreateResponse,
   AplazoPaymentStatus,
   AplazoPaymentStatusResponse,
   AplazoReturnKind,
@@ -360,6 +362,39 @@ export const paymentsApi = {
     } as AplazoOnlineCreateResponse;
   },
 
+  async createAplazoInStoreAttempt(
+    payload: AplazoInStoreCreatePayload,
+    idempotencyKey?: string,
+  ) {
+    const raw = await apiFetch<AplazoInStoreCreateResponse>(
+      "/api/payments/aplazo/in-store/create",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      { local: true, idempotencyKey },
+    );
+
+    const data = unwrapData<unknown>(raw);
+    const record =
+      data && typeof data === "object" ? (data as UnknownRecord) : {};
+
+    return {
+      ok: true,
+      paymentAttemptId: toStringValue(record.paymentAttemptId),
+      provider: toStringValue(record.provider, "aplazo"),
+      flowType: toStringValue(record.flowType, "in_store"),
+      status: normalizeAplazoStatusValue(record.status),
+      redirectUrl: toStringValue(record.redirectUrl) || undefined,
+      checkoutUrl: toStringValue(record.checkoutUrl) || undefined,
+      paymentLink: toStringValue(record.paymentLink) || undefined,
+      qrCodeUrl: toStringValue(record.qrCodeUrl) || undefined,
+      qrImageUrl: toStringValue(record.qrImageUrl) || undefined,
+      qrString: toStringValue(record.qrString) || undefined,
+      expiresAt: toStringValue(record.expiresAt) || null,
+    } as AplazoInStoreCreateResponse;
+  },
+
   async getAplazoPaymentStatus(paymentAttemptId: string) {
     const raw = await apiFetch<AplazoPaymentStatusResponse>(
       `/api/payments/${paymentAttemptId}/status`,
@@ -673,6 +708,33 @@ export const paymentsApi = {
       data && typeof data === "object" ? (data as UnknownRecord) : {};
     return {
       url: toStringValue(record.url),
+    };
+  },
+
+  async createEmbeddedCheckoutSession(
+    ordenId: string,
+    successUrl: string,
+    cancelUrl: string,
+  ) {
+    const raw = await apiFetch<unknown>(
+      "/api/stripe/checkout-sessions",
+      {
+        method: "POST",
+        body: JSON.stringify({ orderId: ordenId, successUrl, cancelUrl }),
+      },
+      { local: true },
+    );
+    const data = unwrapData<unknown>(raw);
+    const record =
+      data && typeof data === "object" ? (data as UnknownRecord) : {};
+
+    return {
+      clientSecret: toStringValue(
+        record.clientSecret ??
+          record.client_secret ??
+          record.checkoutSessionClientSecret,
+      ),
+      url: toStringValue(record.url) || undefined,
     };
   },
 

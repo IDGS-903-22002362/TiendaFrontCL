@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Heart, Menu, ShoppingBag, UserRound } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useCart } from "@/hooks/use-cart";
@@ -22,6 +22,7 @@ import { SearchDrawer } from "./search-drawer";
 import { UtilityBar } from "./utility-bar";
 import { CartDrawer } from "@/components/cart/cart-drawer";
 import { cn } from "@/lib/utils";
+import { useIsFromMobileApp } from "@/hooks/use-from-mobile-app";
 
 const navLinks = [
   { href: "/products", label: "Todos los productos" },
@@ -33,6 +34,7 @@ const navLinks = [
 
 export function StorefrontHeader() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { role, isAuthenticated, clearSession, user } = useAuth();
   const { totalItems } = useCart();
   const { wishlistIds } = useStorefront();
@@ -42,6 +44,9 @@ export function StorefrontHeader() {
   const shellRef = useRef<HTMLDivElement>(null);
   const lastScrollYRef = useRef(0);
   const tickingRef = useRef(false);
+
+  // Detectar si viene desde app móvil (Flutter)
+  const { isFromMobileApp } = useIsFromMobileApp();
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(min-width: 1024px)");
@@ -164,6 +169,8 @@ export function StorefrontHeader() {
     return null;
   }
 
+  if (isFromMobileApp) return null;
+
   return (
     <div
       ref={shellRef}
@@ -183,41 +190,45 @@ export function StorefrontHeader() {
         <div
           className={cn(
             "storefront-frame flex items-center gap-4 transition-[height,padding] duration-300 lg:!pl-3 xl:!pl-4 lg:gap-8",
-            isCompact ? "h-[4.35rem]" : "h-[5rem]",
+            isCompact ? "h-[4rem]" : "h-[4.5rem] lg:h-[5rem]",
           )}
         >
           <div className="flex shrink-0 items-center gap-2 lg:w-[10rem] lg:gap-4">
-            <MobileNavDrawer
-              trigger={
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-11 w-11 rounded-full border border-black/14 bg-white lg:hidden"
-                >
-                  <Menu className="h-5 w-5" />
-                  <span className="sr-only">Abrir menú</span>
-                </Button>
-              }
-              links={navLinks}
-              isAuthenticated={isAuthenticated}
-              role={role}
-              email={user?.email}
-              onLogout={() => void clearSession()}
-            />
-            <Link
-              href="/"
-              className="flex items-center"
-              aria-label="La Guarida inicio"
-            >
-              <Logo
-                className={cn(
-                  "w-auto object-contain transition-[height] duration-300",
-                  isCompact
-                    ? "h-14 md:h-[3.75rem] lg:h-16"
-                    : "h-16 md:h-[4.5rem] lg:h-20",
-                )}
+            {!isFromMobileApp ? (
+              <MobileNavDrawer
+                trigger={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-11 w-11 rounded-full border border-black/14 bg-white lg:hidden"
+                  >
+                    <Menu className="h-5 w-5" />
+                    <span className="sr-only">Abrir menú</span>
+                  </Button>
+                }
+                links={navLinks}
+                isAuthenticated={isAuthenticated}
+                role={role}
+                email={user?.email}
+                onLogout={() => void clearSession()}
               />
-            </Link>
+            ) : null}
+            {!isFromMobileApp ? (
+              <Link
+                href="/"
+                className="flex items-center"
+                aria-label="La Guarida inicio"
+              >
+                <Logo
+                  className={cn(
+                    "w-auto object-contain transition-[height,width] duration-300",
+                    isCompact
+                      ? "h-12 w-[76px] lg:h-[60px] lg:w-[88px]"
+                      : "h-14 w-[96px] lg:h-[72px] lg:w-[120px]",
+                  )}
+                />
+              </Link>
+            ) : null}
           </div>
 
           <DesktopNav pathname={pathname} links={desktopLinks} />

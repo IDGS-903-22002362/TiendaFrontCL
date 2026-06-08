@@ -23,6 +23,20 @@ export type Product = {
   isFavorito?: boolean;
   ratingEligibility?: ProductRatingEligibility;
   myRating?: ProductUserRating | null;
+  fedexShipping?: ProductFedexShipping;
+};
+
+export type ProductFedexShipping = {
+  enabled?: boolean;
+  weightKg?: number;
+  lengthCm?: number;
+  widthCm?: number;
+  heightCm?: number;
+  packageType?: "YOUR_PACKAGING";
+  declaredValue?: number;
+  countryOfManufacture?: "MX";
+  customsDescription?: string;
+  hsCode?: string;
 };
 
 export type ProductRatingSummary = {
@@ -337,6 +351,132 @@ export type FulfillmentStatus =
   | "EXPIRED"
   | "CANCELED";
 
+export type ShippingProvider = "FEDEX";
+export type AddressValidationStatus =
+  | "VALIDATED"
+  | "SUGGESTED"
+  | "USER_CONFIRMED"
+  | "NOT_VALIDATED"
+  | "VALIDATION_UNAVAILABLE";
+
+export type FedExShippingStatus =
+  | "QUOTE_SELECTED"
+  | "LABEL_CREATED"
+  | "IN_TRANSIT"
+  | "OUT_FOR_DELIVERY"
+  | "DELIVERED"
+  | "EXCEPTION"
+  | "CANCELED"
+  | "UNKNOWN"
+  | string;
+
+export type FedExAddress = {
+  streetLines: string[];
+  city?: string;
+  stateOrProvinceCode?: string;
+  postalCode: string;
+  countryCode: string;
+  residential?: boolean;
+};
+
+export type FedExResolvedAddress = FedExAddress & {
+  isLikelyValid?: boolean;
+  isResolved?: boolean;
+  isStandardized?: boolean;
+  isDeliveryPointValid?: boolean;
+  attributes?: Record<string, unknown>;
+};
+
+export type FedExAddressValidation = {
+  isValid: boolean;
+  success?: boolean;
+  classification?: string;
+  addressState?: string;
+  resolvedAddress?: FedExResolvedAddress;
+  addresses?: FedExResolvedAddress[];
+  changes?: Array<{ field?: string; original?: string; resolved?: string }>;
+  warnings?: string[];
+  customerMessages?: string[];
+};
+
+export type FedExShippingOption = {
+  provider: ShippingProvider;
+  optionId?: string;
+  serviceType: string;
+  serviceName?: string;
+  packagingType?: string;
+  amount: number;
+  currency: string;
+  estimatedDeliveryDate?: string;
+  transitTime?: string;
+  rateType?: string;
+  surcharges?: Array<{
+    type?: string;
+    description?: string;
+    amount: number;
+    currency: string;
+  }>;
+};
+
+export type FedExShippingQuote = {
+  provider: ShippingProvider;
+  quoteId: string;
+  currency: string;
+  requiresShipping: boolean;
+  expiresAt?: string;
+  options: FedExShippingOption[];
+};
+
+export type ShippingSelection = {
+  method: ShippingProvider;
+  provider: ShippingProvider;
+  serviceType: string;
+  serviceName?: string;
+  carrierCode?: string;
+  packagingType?: string;
+  quotedAmount?: number;
+  quotedCurrency?: string;
+  transitTime?: string;
+  deliveryTimestamp?: string;
+};
+
+export type FedExTrackingEvent = {
+  timestamp?: string;
+  status?: string;
+  statusLabel?: string;
+  description?: string;
+  location?: string;
+};
+
+export type FedExTracking = {
+  trackingNumber?: string;
+  status?: FedExShippingStatus;
+  statusLabel?: string;
+  statusDescription?: string;
+  estimatedDeliveryDate?: string;
+  deliveredAt?: string;
+  lastLocation?: string;
+  events: FedExTrackingEvent[];
+  warnings?: string[];
+};
+
+export type OrderShipping = {
+  provider?: ShippingProvider | string;
+  status?: FedExShippingStatus;
+  quoteId?: string;
+  selectedOptionId?: string;
+  serviceType?: string;
+  serviceName?: string;
+  amount?: number;
+  currency?: string;
+  trackingNumber?: string;
+  labelUrl?: string;
+  labelStoragePath?: string;
+  estimatedDeliveryDate?: string;
+  transitTime?: string;
+  warnings?: string[];
+};
+
 export type AplazoFlowType = "online" | "in_store";
 export type AplazoReturnKind = "success" | "failure" | "cancel";
 
@@ -374,6 +514,7 @@ export type Orden = {
   metodoPago?: string;
   fulfillmentMethod?: FulfillmentMethod;
   fulfillmentStatus?: FulfillmentStatus | string;
+  shipping?: OrderShipping;
   pickupLocation?: {
     id?: string;
     name?: string;
@@ -408,15 +549,50 @@ export type Pago = {
 };
 
 export type CheckoutPayload = {
-  direccionEnvio: {
+  fulfillmentMethod?: FulfillmentMethod;
+  direccionEnvio?: {
     nombre: string;
-    direccion: string;
+    calle: string;
+    numero: string;
+    numeroInterior?: string;
+    colonia: string;
     ciudad: string;
+    estado: string;
     codigoPostal: string;
-    email: string;
+    stateOrProvinceCode?: string;
+    countryCode?: "MX";
+    postalCode?: string;
+    telefono: string;
+    referencias?: string;
+    addressValidationStatus?: AddressValidationStatus;
+  };
+  shippingAddress?: {
+    streetLines: string[];
+    city?: string;
+    stateOrProvinceCode?: string;
+    postalCode: string;
+    countryCode: string;
+    residential?: boolean;
+  };
+  fedexAddress?: {
+    streetLines: string[];
+    city?: string;
+    stateOrProvinceCode?: string;
+    postalCode: string;
+    countryCode: string;
+    residential?: boolean;
+  };
+  pickupLocationId?: string;
+  pickupContact?: {
+    name: string;
+    phone?: string;
+    email?: string;
   };
   metodoPago: PaymentMethod;
-  costoEnvio: number;
+  shippingQuoteId?: string;
+  selectedShippingOptionId?: string;
+  selectedServiceType?: string;
+  shippingSelection?: ShippingSelection;
   notas?: string;
 };
 
@@ -475,6 +651,40 @@ export type AplazoOnlineCreateResponse = {
   status: AplazoPaymentStatus;
   redirectUrl?: string;
   checkoutUrl?: string;
+  expiresAt?: string | null;
+};
+
+export type AplazoInStoreCreatePayload = {
+  posSessionId: string;
+  deviceId: string;
+  cajaId: string;
+  sucursalId: string;
+  vendedorUid: string;
+  customer?: {
+    name?: string;
+    email?: string;
+    phone?: string;
+  };
+  items: Array<{
+    productoId: string;
+    cantidad: number;
+    tallaId?: string;
+  }>;
+  metadata?: Record<string, string>;
+};
+
+export type AplazoInStoreCreateResponse = {
+  ok: true;
+  paymentAttemptId: string;
+  provider: "aplazo" | string;
+  flowType: AplazoFlowType;
+  status: AplazoPaymentStatus;
+  redirectUrl?: string;
+  checkoutUrl?: string;
+  paymentLink?: string;
+  qrCodeUrl?: string;
+  qrImageUrl?: string;
+  qrString?: string;
   expiresAt?: string | null;
 };
 
@@ -623,4 +833,78 @@ export type PaymentTimelineEvent = {
   description?: string;
   createdAt: string;
   status?: AplazoPaymentStatus | string;
+};
+
+export type CatalogSort =
+  | "destacados"
+  | "precio_asc"
+  | "precio_desc"
+  | "recientes"
+  | "nombre_asc";
+
+export type CatalogQuery = {
+  limit?: number; // default 24, max 48
+  cursor?: string;
+  category?: string;
+  categoria?: string;
+  line?: string;
+  linea?: string;
+  talla?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  sort?: CatalogSort;
+  q?: string;
+  onlyOffers?: boolean;
+  onlyAvailable?: boolean;
+};
+
+export type CatalogProductCard = {
+  id: string;
+  slug: string;
+  nombre: string;
+  categoria: string;
+  categoriaLabel: string;
+  linea: string;
+  lineaLabel: string;
+  precioOriginal: number;
+  precioFinal: number;
+  tieneOferta: boolean;
+  ofertaAplicadaId: string | null;
+  ofertaTitulo: string | null;
+  descuentoTotal: number;
+  imagenPrincipal: string | null;
+  stockTotal: number;
+  disponible: boolean;
+  destacado: boolean;
+};
+
+export type CatalogResponse = {
+  items: CatalogProductCard[];
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
+export type AdminProductStatus = "todos" | "activo" | "inactivo";
+
+export type AdminProductListItem = {
+  id: string;
+  clave: string;
+  descripcion: string;
+  slug: string;
+  lineaId: string;
+  categoriaId: string;
+  precioPublico: number;
+  existencias: number;
+  disponible: boolean;
+  destacado: boolean;
+  activo: boolean;
+  imagenPrincipal: string | null;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+};
+
+export type AdminProductsResponse = {
+  success: boolean;
+  count: number;
+  data: AdminProductListItem[];
 };

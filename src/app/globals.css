@@ -113,6 +113,41 @@ body[data-storefront="true"] {
 }
 
 @theme inline {
+  /* Custom breakpoints */
+  --breakpoint-xs: 360px;
+  --breakpoint-sm: 480px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1536px;
+
+  /* Typography rules */
+  --font-size-hero-desktop: clamp(4.5rem, 6vw, 6rem); /* 72px a 96px */
+  --font-size-hero-mobile: clamp(2.375rem, 10vw, 3rem); /* 38px a 48px */
+  --font-size-catalog-title-desktop: clamp(3rem, 4vw, 4rem); /* 48px a 64px */
+  --font-size-catalog-title-mobile: clamp(2rem, 8vw, 2.5rem); /* 32px a 40px */
+  --font-size-section-title-desktop: clamp(2.5rem, 3.5vw, 3.5rem); /* 40px a 56px */
+  --font-size-section-title-mobile: clamp(1.75rem, 7vw, 2.125rem); /* 28px a 34px */
+  --font-size-body: 1rem; /* 16px */
+  --font-size-subtitle: clamp(1rem, 2vw, 1.25rem); /* 16px a 20px */
+  --font-size-product-name-desktop: clamp(1.0625rem, 1.5vw, 1.1875rem); /* 17px a 19px */
+  --font-size-product-name-mobile: clamp(0.9375rem, 4vw, 1rem); /* 15px a 16px */
+  --font-size-price-card-desktop: clamp(1.5rem, 2vw, 1.75rem); /* 24px a 28px */
+  --font-size-price-card-mobile: clamp(1.25rem, 5vw, 1.5rem); /* 20px a 24px */
+  --font-size-category-meta: clamp(0.8125rem, 1.5vw, 0.9375rem); /* 13px a 15px */
+  --font-size-eyebrow: clamp(0.6875rem, 1vw, 0.75rem); /* 11px a 12px */
+  --font-size-navbar: clamp(0.8125rem, 1vw, 0.875rem); /* 13px a 14px */
+
+  /* Custom Line heights */
+  --line-height-heading-large: 1; /* 0.95 to 1.05 */
+  --line-height-heading-normal: 1.15; /* 1.1 to 1.2 */
+  --line-height-body: 1.5;
+  --line-height-card: 1.25;
+
+  /* Standard variables for spacing */
+  --spacing-section-gap-desktop: clamp(4.5rem, 6vw, 6rem); /* 72px a 96px */
+  --spacing-section-gap-mobile: clamp(3rem, 8vw, 4rem); /* 48px a 64px */
+
   --color-background: var(--background);
   --color-background-deep: var(--background-deep);
   --color-background-contrast: var(--background-contrast);
@@ -193,19 +228,15 @@ body[data-storefront="true"] {
 @utility container {
   margin-inline: auto;
   width: 100%;
-  padding-inline: 1rem;
+  padding-inline: clamp(1rem, 5vw, 1.25rem); /* 16px a 20px mobile */
 
-  @media (width >= 48rem) {
-    padding-inline: 1.5rem;
+  @media (width >= 768px) {
+    padding-inline: 2rem; /* 32px tablet */
   }
 
-  @media (width >= 80rem) {
-    padding-inline: 2rem;
-  }
-
-  @media (width >= 90rem) {
-    max-width: 1440px;
-    padding-inline: 2.5rem;
+  @media (width >= 1024px) {
+    max-width: 1480px; /* 1440px a 1480px desktop */
+    padding-inline: clamp(3rem, 4vw, 4rem); /* 48px a 64px desktop */
   }
 }
 
@@ -213,22 +244,14 @@ body[data-storefront="true"] {
   margin-inline: auto;
   width: 100%;
   max-width: 1920px;
-  padding-inline: 1rem;
+  padding-inline: clamp(1rem, 5vw, 1.25rem);
 
-  @media (width >= 48rem) {
-    padding-inline: 1.5rem;
-  }
-
-  @media (width >= 64rem) {
+  @media (width >= 768px) {
     padding-inline: 2rem;
   }
 
-  @media (width >= 80rem) {
-    padding-inline: 2.5rem;
-  }
-
-  @media (width >= 96rem) {
-    padding-inline: 3rem;
+  @media (width >= 1024px) {
+    padding-inline: clamp(3rem, 4vw, 4rem);
   }
 }
 
@@ -246,7 +269,11 @@ body[data-storefront="true"] {
 }
 
 @utility section-shell {
-  padding-block: var(--section-space);
+  padding-block: clamp(3rem, 8vw, 4rem);
+
+  @media (width >= 1024px) {
+    padding-block: clamp(4.5rem, 6vw, 6rem);
+  }
 }
 
 @utility section-shell-tight {
@@ -288,7 +315,11 @@ body[data-storefront="true"] {
 }
 
 @utility home-section {
-  padding-block: clamp(3.25rem, 5vw, 5.5rem);
+  padding-block: clamp(3rem, 8vw, 4rem);
+
+  @media (width >= 1024px) {
+    padding-block: clamp(4.5rem, 6vw, 6rem);
+  }
 }
 
 @utility home-surface {

@@ -14,7 +14,11 @@ function requiresAuthForPath(path?: string[]) {
   }
 
   const suffix = `/${path.join("/")}`;
-  return suffix === "/checkout" || suffix === "/merge";
+  return (
+    suffix === "/checkout" ||
+    suffix === "/merge" ||
+    suffix === "/shipping/fedex/quotes"
+  );
 }
 
 function forward(request: NextRequest, path?: string[]) {

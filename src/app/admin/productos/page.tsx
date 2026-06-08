@@ -9,11 +9,7 @@ import {
   Image as ImageIcon,
   X,
 } from "lucide-react";
-import {
-  fetchCategories,
-  fetchProducts,
-  fetchProductById,
-} from "@/lib/api/storefront";
+import { fetchCategories } from "@/lib/api/storefront";
 import { lineasApi } from "@/lib/api/lineas";
 import { tallasApi } from "@/lib/api/tallas";
 import { providersApi } from "@/lib/api/providers";
@@ -22,9 +18,12 @@ import {
   type ProductDetailRecord,
 } from "@/lib/api/products-admin";
 import type {
+  AdminProductListItem,
+  AdminProductStatus,
   Category,
   Linea,
-  Product,
+
+  ProductFedexShipping,
   ProductSizeStock,
   Proveedor,
   Talla,
@@ -54,6 +53,10 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+const ADMIN_PRODUCTS_PAGE_SIZE = 10;
 
 type PendingImageUpload = {
   id: string;
@@ -87,6 +90,7 @@ function createDetailDraft(descripcion = "", id?: string): ProductDetailDraft {
 }
 
 const EMPTY_FORM = {
+  activo: true,
   descripcion: "",
   clave: "",
   precioPublico: "",
@@ -97,6 +101,13 @@ const EMPTY_FORM = {
   lineaId: "",
   tallaIds: [] as string[],
   inventarioPorTalla: [] as ProductSizeStock[],
+  fedexShipping: {
+    enabled: true,
+    weightKg: "",
+    lengthCm: "",
+    widthCm: "",
+    heightCm: "",
+  },
   imagenes: [] as string[],
   detalles: [] as ProductDetailDraft[],
 };
@@ -144,6 +155,68 @@ function mapSizeInventory(input: unknown): ProductSizeStock[] {
     .filter((entry) => Boolean(entry.tallaId));
 }
 
+function mapFedexShipping(input: unknown) {
+  const item =
+    input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+
+  return {
+    enabled: typeof item.enabled === "boolean" ? item.enabled : true,
+    weightKg: toStringValue(item.weightKg),
+    lengthCm: toStringValue(item.lengthCm),
+    widthCm: toStringValue(item.widthCm),
+    heightCm: toStringValue(item.heightCm),
+  };
+}
+
+function buildFedexShippingPayload(
+  input: typeof EMPTY_FORM.fedexShipping,
+): ProductFedexShipping | undefined {
+  const values = {
+    weightKg: input.weightKg.trim(),
+    lengthCm: input.lengthCm.trim(),
+    widthCm: input.widthCm.trim(),
+    heightCm: input.heightCm.trim(),
+  };
+  const hasValues = Object.values(values).some((value) => value.length > 0);
+
+  if (!input.enabled) {
+    return { enabled: false, packageType: "YOUR_PACKAGING" };
+  }
+
+  if (!hasValues) {
+    return undefined;
+  }
+
+  const weightKg = Number(values.weightKg);
+  const lengthCm = Number(values.lengthCm);
+  const widthCm = Number(values.widthCm);
+  const heightCm = Number(values.heightCm);
+
+  if (
+    !Number.isFinite(weightKg) ||
+    !Number.isFinite(lengthCm) ||
+    !Number.isFinite(widthCm) ||
+    !Number.isFinite(heightCm) ||
+    weightKg <= 0 ||
+    lengthCm <= 0 ||
+    widthCm <= 0 ||
+    heightCm <= 0
+  ) {
+    throw new Error(
+      "Completa peso, largo, ancho y alto con numeros mayores a 0 para activar envio FedEx.",
+    );
+  }
+
+  return {
+    enabled: input.enabled,
+    weightKg,
+    lengthCm,
+    widthCm,
+    heightCm,
+    packageType: "YOUR_PACKAGING",
+  };
+}
+
 function normalizeSearchValue(value: string): string {
   return value
     .normalize("NFD")
@@ -183,12 +256,15 @@ function normalizeDetailDrafts(details: ProductDetailDraft[]) {
 }
 
 export default function AdminProductsPage() {
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<AdminProductListItem[]>([]);
+  const [productStatus, setProductStatus] = useState<AdminProductStatus>("todos");
+
   const [lineas, setLineas] = useState<Linea[]>([]);
   const [tallas, setTallas] = useState<Talla[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [categorias, setCategorias] = useState<Category[]>([]);
   const [productSearchQuery, setProductSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedProductId, setSelectedProductId] = useState("");
   const [lineaQuery, setLineaQuery] = useState("");
   const [categoriaQuery, setCategoriaQuery] = useState("");
@@ -214,13 +290,13 @@ export default function AdminProductsPage() {
 
   const { toast } = useToast();
 
-  const loadProducts = useCallback(async () => {
+  const loadProducts = useCallback(async (status: AdminProductStatus = productStatus) => {
     setIsLoading(true);
     try {
-      const list = await fetchProducts();
-      setProducts(list);
+      const response = await productsAdminApi.fetchAdminProducts("cookie-session", status);
+      setProducts(response.data || []);
       setSelectedProductId((current) =>
-        current && !list.some((product) => product.id === current)
+        current && !(response.data || []).some((product: AdminProductListItem) => product.id === current)
           ? ""
           : current,
       );
@@ -233,11 +309,11 @@ export default function AdminProductsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [productStatus, toast]);
 
   useEffect(() => {
-    void loadProducts();
-  }, [loadProducts]);
+    void loadProducts(productStatus);
+  }, [loadProducts, productStatus]);
 
   const loadMeta = useCallback(async () => {
     setIsLoadingMeta(true);
@@ -282,8 +358,8 @@ export default function AdminProductsPage() {
     () =>
       products.map((product) => ({
         id: product.id,
-        label: product.name,
-        subtitle: `${product.clave ?? ""} ${product.description}`.trim(),
+        label: product.descripcion,
+        subtitle: `${product.clave ?? ""} ${""}`.trim(),
       })),
     [products],
   );
@@ -344,10 +420,29 @@ export default function AdminProductsPage() {
       }
 
       return normalizeSearchValue(
-        `${product.name} ${product.description} ${product.category} ${product.lineName ?? ""} ${product.clave ?? ""}`,
+        `${product.descripcion} ${product.clave ?? ""} ${product.categoriaId ?? ""} ${product.lineaId ?? ""}`,
       ).includes(query);
     });
   }, [productSearchQuery, products, selectedProductId]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredProducts.length / ADMIN_PRODUCTS_PAGE_SIZE),
+  );
+  const paginatedProducts = useMemo(() => {
+    const start = (currentPage - 1) * ADMIN_PRODUCTS_PAGE_SIZE;
+    return filteredProducts.slice(start, start + ADMIN_PRODUCTS_PAGE_SIZE);
+  }, [currentPage, filteredProducts]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [productSearchQuery, productStatus, selectedProductId]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const clearPendingImageChanges = () => {
     pendingImageUploads.forEach((item) => URL.revokeObjectURL(item.previewUrl));
@@ -355,56 +450,45 @@ export default function AdminProductsPage() {
     setPendingDeletedImages([]);
   };
 
-  const openForm = async (product?: Product) => {
+  const openForm = async (product?: AdminProductListItem) => {
     if (product) {
       setEditingProductId(product.id);
       setIsDialogOpen(true);
       setIsLoadingDetail(true);
 
       try {
-        const [detailRes, storefrontDetail, detailItems] = await Promise.all([
+        const [detailRes, detailItems] = await Promise.all([
           productsAdminApi.getById(product.id),
-          fetchProductById(product.id),
           productsAdminApi.getDetails(product.id).catch(() => []),
         ]);
 
         const detailData = extractDetailRecord(detailRes);
 
-        setFormData({
-          descripcion: toStringValue(detailData.descripcion, product.name),
-          clave: toStringValue(
-            detailData.clave,
-            product.name || `PROD-${product.id.slice(0, 6).toUpperCase()}`,
-          ),
-          precioPublico: toStringValue(
-            detailData.precioPublico,
-            String(product.price),
-          ),
+                        setFormData({
+          descripcion: product.descripcion || "",
+          clave: product.clave || `PROD-${product.id.slice(0, 6).toUpperCase()}`,
+          precioPublico: toStringValue(product.precioPublico),
           precioCompra: toStringValue(detailData.precioCompra, "0"),
-          existencias: toStringValue(
-            detailData.existencias,
-            String(product.stockTotal ?? product.stock ?? 0),
-          ),
+          existencias: toStringValue(product.existencias, "0"),
           proveedorId: toStringValue(detailData.proveedorId, ""),
-          categoriaId: toStringValue(
-            detailData.categoriaId,
-            categorias.find((cat) => cat.name === product.category)?.id ?? "",
-          ),
-          lineaId: toStringValue(
-            detailData.lineaId,
-            storefrontDetail?.lineId ?? "",
-          ),
-          tallaIds: toStringArray(detailData.tallaIds),
-          inventarioPorTalla:
-            mapSizeInventory(detailData.inventarioPorTalla).length > 0
-              ? mapSizeInventory(detailData.inventarioPorTalla)
-              : (storefrontDetail?.inventarioPorTalla ?? []),
-          imagenes: toStringArray(detailData.imagenes).filter(
-            (url) => !isGeneratedPlaceholderImage(url),
-          ),
-          detalles: detailItems.map((item) =>
-            createDetailDraft(item.descripcion, item.id),
-          ),
+          categoriaId: product.categoriaId || "",
+          lineaId: product.lineaId || "",
+          tallaIds: Array.isArray(detailData.tallaIds)
+            ? detailData.tallaIds.map((id: unknown) => toStringValue(id))
+            : [],
+          inventarioPorTalla: Array.isArray(detailData.inventarioPorTalla)
+            ? (detailData.inventarioPorTalla as ProductSizeStock[])
+            : [],
+          fedexShipping: {
+            enabled: typeof (detailData.fedexShipping as Record<string, unknown>)?.enabled === 'boolean' ? Boolean((detailData.fedexShipping as Record<string, unknown>)?.enabled) : true,
+            weightKg: toStringValue((detailData.fedexShipping as Record<string, unknown>)?.weightKg),
+            lengthCm: toStringValue((detailData.fedexShipping as Record<string, unknown>)?.lengthCm),
+            widthCm: toStringValue((detailData.fedexShipping as Record<string, unknown>)?.widthCm),
+            heightCm: toStringValue((detailData.fedexShipping as Record<string, unknown>)?.heightCm),
+          },
+          imagenes: Array.isArray(detailData.imagenes) ? detailData.imagenes : (product.imagenPrincipal ? [product.imagenPrincipal] : []),
+          detalles: detailItems.map((d: ProductDetailRecord) => createDetailDraft(d.descripcion, d.id)),
+          activo: product.activo ?? true,
         });
         setPersistedDetails(detailItems);
         setSelectedProductId(product.id);
@@ -637,7 +721,15 @@ export default function AdminProductsPage() {
         lineaId?: string;
         tallaIds: string[];
         inventarioPorTalla?: ProductSizeStock[];
+        fedexShipping?: ProductFedexShipping;
+        activo?: boolean;
       };
+      payload.activo = formData.activo;
+
+      const fedexShipping = buildFedexShippingPayload(formData.fedexShipping);
+      if (fedexShipping) {
+        payload.fedexShipping = fedexShipping;
+      }
 
       if (formData.tallaIds.length > 0) {
         const normalizedInventory = formData.tallaIds.map((tallaId) => {
@@ -741,7 +833,7 @@ export default function AdminProductsPage() {
           : "Producto creado con éxito",
       });
       resetDialogState();
-      void loadProducts();
+      void loadProducts("todos");
     } catch (error) {
       toast({
         variant: "destructive",
@@ -837,6 +929,11 @@ export default function AdminProductsPage() {
     }
   };
 
+  const handleProductStatusChange = (status: AdminProductStatus) => {
+    setProductStatus(status);
+    setSelectedProductId("");
+  };
+
   const handleDelete = async (id: string) => {
     if (
       !window.confirm(
@@ -851,7 +948,7 @@ export default function AdminProductsPage() {
         setSelectedProductId("");
       }
       toast({ title: "Producto eliminado" });
-      void loadProducts();
+      void loadProducts("todos");
     } catch (error) {
       toast({
         variant: "destructive",
@@ -944,6 +1041,25 @@ export default function AdminProductsPage() {
         </div>
       </div>
 
+      <Tabs
+        value={productStatus}
+        onValueChange={(value) =>
+          handleProductStatusChange(value as AdminProductStatus)
+        }
+      >
+        <TabsList className="grid min-h-[44px] w-full grid-cols-3 sm:w-auto">
+          <TabsTrigger value="todos" className="min-h-[40px]">
+            Todos
+          </TabsTrigger>
+          <TabsTrigger value="activo" className="min-h-[40px]">
+            Activos
+          </TabsTrigger>
+          <TabsTrigger value="inactivo" className="min-h-[40px]">
+            Ocultos
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <div className="rounded-md border bg-card">
         <div className="overflow-x-auto">
           <Table>
@@ -953,6 +1069,7 @@ export default function AdminProductsPage() {
                 <TableHead>Categoría / Línea</TableHead>
                 <TableHead>Precio</TableHead>
                 <TableHead>Inventario</TableHead>
+                <TableHead>Estado</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -960,7 +1077,7 @@ export default function AdminProductsPage() {
               {isLoading ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={6}
                     className="text-center py-8 text-muted-foreground"
                   >
                     Cargando productos del catálogo...
@@ -969,69 +1086,94 @@ export default function AdminProductsPage() {
               ) : filteredProducts.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={6}
                     className="text-center py-8 text-muted-foreground"
                   >
                     No hay productos disponibles para el filtro actual.
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredProducts.map((product) => {
-                  const stockTotal = product.stockTotal ?? product.stock;
-                  const hasSizeInventory = Boolean(product.hasSizeInventory);
-
+                paginatedProducts.map((product) => {
                   return (
                     <TableRow key={product.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-3">
-                          {product.images[0] ? (
+                          {product.imagenPrincipal ? (
                             <img
-                              src={product.images[0]}
-                              alt={product.name}
-                              className="w-10 h-10 rounded-sm object-cover border"
+                              src={product.imagenPrincipal}
+                              alt={product.descripcion}
+                              className="h-10 w-10 rounded-md object-cover border bg-muted"
                             />
                           ) : (
-                            <div className="w-10 h-10 rounded-sm bg-muted flex flex-col items-center justify-center">
-                              <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                            <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center border">
+                              <ImageIcon className="h-4 w-4 text-muted-foreground opacity-50" />
                             </div>
                           )}
-                          <div className="flex flex-col">
-                            <span>{product.name}</span>
-                            <span className="text-xs text-muted-foreground truncate max-w-[150px]">
-                              {product.description}
+                          <div className="flex flex-col max-w-[200px]">
+                            <span className="truncate">{product.descripcion}</span>
+                            <span className="text-xs text-muted-foreground truncate">
+                              {product.clave || product.id.slice(0, 8)}
                             </span>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
-                          <span className="text-sm">{product.category}</span>
+                          <span className="text-sm">
+                            {categorias.find((c) => c.id === product.categoriaId)?.name || product.categoriaId || "-"}
+                          </span>
                           <span className="text-xs text-muted-foreground">
-                            {product.lineName || "-"}
+                            {lineas.find((l) => l.id === product.lineaId)?.nombre || product.lineaId || "-"}
                           </span>
                         </div>
                       </TableCell>
                       <TableCell className="font-semibold text-primary">
-                        ${product.price.toFixed(2)}
+                        ${(product.precioPublico || 0).toFixed(2)}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
                           <span
-                            className={`text-sm ${stockTotal <= 5 ? "text-destructive font-bold" : ""}`}
+                            className={`text-sm ${product.existencias <= 5 ? "text-destructive font-bold" : ""}`}
                           >
-                            {stockTotal}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {hasSizeInventory ? "Por talla" : "General"}
+                            {product.existencias}
                           </span>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${product.activo ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}>
+                          {product.activo ? "Visible en tienda" : "Oculto"}
+                        </span>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-8 px-2"
+                            className="min-h-[40px]"
+                            onClick={async () => {
+                              const nextStatus = !product.activo;
+                              const msg = nextStatus
+                                ? "Este producto volverá a mostrarse en la tienda. ¿Continuar?"
+                                : "Este producto se ocultará de la tienda pública. ¿Continuar?";
+                              if (window.confirm(msg)) {
+                                try {
+                                  await productsAdminApi.setProductActiveStatus(product.id, nextStatus, "cookie-session");
+                                  void loadProducts(productStatus);
+                                } catch (error) {
+                                  toast({
+                                    title: "Error",
+                                    description: getApiErrorMessage(error),
+                                    variant: "destructive",
+                                  });
+                                }
+                              }
+                            }}
+                          >
+                            {product.activo ? "Ocultar" : "Activar"}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => openForm(product)}
                           >
                             <Edit className="h-4 w-4 mr-1" /> Editar
@@ -1053,6 +1195,43 @@ export default function AdminProductsPage() {
             </TableBody>
           </Table>
         </div>
+        {filteredProducts.length > ADMIN_PRODUCTS_PAGE_SIZE ? (
+          <div className="flex flex-col gap-3 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              Mostrando {(currentPage - 1) * ADMIN_PRODUCTS_PAGE_SIZE + 1}-
+              {Math.min(
+                currentPage * ADMIN_PRODUCTS_PAGE_SIZE,
+                filteredProducts.length,
+              )}{" "}
+              de {filteredProducts.length} productos
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-[44px]"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              >
+                Anterior
+              </Button>
+              <span className="min-w-[96px] text-center text-sm font-medium">
+                {currentPage} / {totalPages}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-[44px]"
+                disabled={currentPage >= totalPages}
+                onClick={() =>
+                  setCurrentPage((page) => Math.min(totalPages, page + 1))
+                }
+              >
+                Siguiente
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -1201,6 +1380,24 @@ export default function AdminProductsPage() {
               />
             </div>
 
+            <div className="flex min-h-[44px] items-center justify-between gap-4 rounded-md border p-3">
+              <div>
+                <Label htmlFor="visible-store">Visible en tienda</Label>
+                <p className="text-sm text-muted-foreground">
+                  Desactívalo si el producto está pendiente de licencia,
+                  lanzamiento o decisión comercial.
+                </p>
+              </div>
+              <Switch
+                id="visible-store"
+                checked={formData.activo}
+                onCheckedChange={(checked) =>
+                  setFormData((prev) => ({ ...prev, activo: checked }))
+                }
+                disabled={isLoadingDetail}
+              />
+            </div>
+
             <div className="space-y-2">
               <Label>Tallas por producto</Label>
               <Input
@@ -1231,6 +1428,118 @@ export default function AdminProductsPage() {
                     </label>
                   ))
                 )}
+              </div>
+            </div>
+
+            <div className="space-y-3 rounded-md border p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label>Paquete FedEx</Label>
+                </div>
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={formData.fedexShipping.enabled}
+                    onCheckedChange={(checked) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        fedexShipping:
+                          checked === true
+                            ? { ...prev.fedexShipping, enabled: true }
+                            : {
+                                enabled: false,
+                                weightKg: "",
+                                lengthCm: "",
+                                widthCm: "",
+                                heightCm: "",
+                              },
+                      }))
+                    }
+                    disabled={isLoadingDetail}
+                  />
+                  <span>Requiere envío</span>
+                </label>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-4">
+                <div className="space-y-2">
+                  <Label htmlFor="fedex-weight">Peso kg</Label>
+                  <Input
+                    id="fedex-weight"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.fedexShipping.weightKg}
+                    onChange={(event) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        fedexShipping: {
+                          ...prev.fedexShipping,
+                          weightKg: event.target.value,
+                        },
+                      }))
+                    }
+                    disabled={isLoadingDetail || !formData.fedexShipping.enabled}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fedex-length">Largo cm</Label>
+                  <Input
+                    id="fedex-length"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={formData.fedexShipping.lengthCm}
+                    onChange={(event) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        fedexShipping: {
+                          ...prev.fedexShipping,
+                          lengthCm: event.target.value,
+                        },
+                      }))
+                    }
+                    disabled={isLoadingDetail || !formData.fedexShipping.enabled}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fedex-width">Ancho cm</Label>
+                  <Input
+                    id="fedex-width"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={formData.fedexShipping.widthCm}
+                    onChange={(event) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        fedexShipping: {
+                          ...prev.fedexShipping,
+                          widthCm: event.target.value,
+                        },
+                      }))
+                    }
+                    disabled={isLoadingDetail || !formData.fedexShipping.enabled}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fedex-height">Alto cm</Label>
+                  <Input
+                    id="fedex-height"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={formData.fedexShipping.heightCm}
+                    onChange={(event) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        fedexShipping: {
+                          ...prev.fedexShipping,
+                          heightCm: event.target.value,
+                        },
+                      }))
+                    }
+                    disabled={isLoadingDetail || !formData.fedexShipping.enabled}
+                  />
+                </div>
               </div>
             </div>
 

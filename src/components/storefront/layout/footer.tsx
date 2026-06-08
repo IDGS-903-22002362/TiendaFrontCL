@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { Logo } from "@/components/icons";
+import { useIsFromMobileApp } from "@/hooks/use-from-mobile-app";
 
 const footerColumns = [
   {
@@ -24,6 +25,9 @@ const footerColumns = [
 ];
 
 export function StorefrontFooter() {
+  const { isFromMobileApp } = useIsFromMobileApp();
+
+  if (isFromMobileApp) return null;
   return (
     <footer className="border-t border-[#1c2420] bg-[#111715] text-white">
       <div className="container py-12 md:py-16">

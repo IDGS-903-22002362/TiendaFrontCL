@@ -1,6 +1,7 @@
-import type { Cart, CartItem, PaymentMethod } from "@/lib/types";
+import type { Cart, CartItem, CheckoutPayload, PaymentMethod } from "@/lib/types";
 import type { FulfillmentMethod, PickupContact } from "./pickup";
 import { apiFetch, unwrapData } from "./client";
+import type { AddressValidationStatus, ShippingSelection } from "@/lib/types";
 
 type UnknownRecord = Record<string, unknown>;
 type ProductSnapshot = { name?: string; image?: string; price?: number };
@@ -460,18 +461,43 @@ export async function checkoutCart(payload: {
     nombre: string;
     calle: string;
     numero: string;
+    numeroInterior?: string;
     colonia: string;
     ciudad: string;
     estado: string;
     codigoPostal: string;
+    stateOrProvinceCode?: string;
+    countryCode?: "MX";
+    postalCode?: string;
     telefono: string;
+    referencias?: string;
+    addressValidationStatus?: AddressValidationStatus;
+  };
+  shippingAddress?: {
+    streetLines: string[];
+    city?: string;
+    stateOrProvinceCode?: string;
+    postalCode: string;
+    countryCode: string;
+    residential?: boolean;
+  };
+  fedexAddress?: {
+    streetLines: string[];
+    city?: string;
+    stateOrProvinceCode?: string;
+    postalCode: string;
+    countryCode: string;
+    residential?: boolean;
   };
   pickupLocationId?: string;
   pickupContact?: PickupContact;
   metodoPago: PaymentMethod;
-  costoEnvio: number;
+  shippingQuoteId?: string;
+  selectedShippingOptionId?: string;
+  selectedServiceType?: string;
+  shippingSelection?: ShippingSelection;
   notas?: string;
-}) {
+} | CheckoutPayload) {
   return apiFetch<unknown>(
     "/api/carrito/checkout",
     {

@@ -1,11 +1,37 @@
 import { Suspense } from "react";
 import { ProductFilters } from "./product-filters";
-import { fetchCategories, fetchProducts } from "@/lib/api/storefront";
+import { fetchCategories, fetchCatalogPage } from "@/lib/api/storefront";
+import type { CatalogSort } from "@/lib/types";
 import { lineasApi } from "@/lib/api/lineas";
 import { tallasApi } from "@/lib/api/tallas";
-import { isProductVisible } from "@/lib/storefront";
 
 export const dynamic = "force-dynamic";
+
+const CATALOG_SORTS: CatalogSort[] = [
+  "destacados",
+  "precio_asc",
+  "precio_desc",
+  "recientes",
+  "nombre_asc",
+];
+
+function getSingleParam(params: URLSearchParams, key: string) {
+  return params.get(key)?.trim() || undefined;
+}
+
+function getCatalogSort(value: string | null): CatalogSort {
+  return CATALOG_SORTS.includes(value as CatalogSort)
+    ? (value as CatalogSort)
+    : "destacados";
+}
+
+function getNumberParam(params: URLSearchParams, key: string) {
+  const value = params.get(key);
+  if (!value) return undefined;
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
 
 export default async function ProductsPage({
   searchParams,
@@ -32,9 +58,21 @@ export default async function ProductsPage({
 
   const queryKey = queryParams.toString() || "all";
 
+  const initialParams = {
+    limit: 24,
+    category: getSingleParam(queryParams, "category"),
+    line: getSingleParam(queryParams, "line"),
+    talla: getSingleParam(queryParams, "talla"),
+    minPrice: getNumberParam(queryParams, "minPrice"),
+    maxPrice: getNumberParam(queryParams, "maxPrice"),
+    sort: getCatalogSort(queryParams.get("sort")),
+    q: getSingleParam(queryParams, "q"),
+    onlyOffers: queryParams.get("onlyOffers") === "true",
+    onlyAvailable: queryParams.get("onlyAvailable") !== "false",
+  };
 
-  const [products, categories, lineas, tallas] = await Promise.all([
-    fetchProducts(),
+  const [initialPage, categories, lineas, tallas] = await Promise.all([
+    fetchCatalogPage(initialParams).catch(() => ({ items: [], nextCursor: null, hasMore: false })),
     fetchCategories(),
     lineasApi.getAll(),
     tallasApi.getAll(),
@@ -45,7 +83,7 @@ export default async function ProductsPage({
       <Suspense fallback={<div>Cargando catálogo...</div>}>
         <ProductFilters
           key={queryKey}
-          allProducts={products.filter(isProductVisible)}
+          initialPage={initialPage}
           categories={categories}
           lineas={lineas}
           tallas={tallas}

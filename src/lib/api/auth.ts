@@ -74,7 +74,7 @@ export async function getLocalSessionStatus() {
       isAuthenticated: boolean;
       token: string;
       role: UserRole | "";
-      user: Partial<AuthUsuario> | null;  // 👈 que esté tipado
+      user: Partial<AuthUsuario> | null;
     };
   }>("/api/auth/session", { method: "GET" }, { local: true });
 }
@@ -83,6 +83,20 @@ export async function clearLocalSession() {
   return apiFetch<{ success: true }>(
     "/api/auth/session",
     { method: "DELETE" },
+    { local: true },
+  );
+}
+
+export async function createLocalSessionFromBackendToken(
+  backendToken: string,
+  user: Partial<AuthUsuario>,
+) {
+  return apiFetch<SessionStatusResponse>(
+    "/api/auth/session",
+    {
+      method: "POST",
+      body: JSON.stringify({ backendToken, user }),
+    },
     { local: true },
   );
 }

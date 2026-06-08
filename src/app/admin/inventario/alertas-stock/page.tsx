@@ -11,7 +11,7 @@ import { EntityPicker, type EntityOption } from "@/components/admin/entity-picke
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -21,6 +21,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { Skeleton } from "@/components/ui/skeleton";
+import Link from "next/link";
+import { ArrowRightLeft } from "lucide-react";
 
 export default function InventoryLowStockAlertsPage() {
   const { token, role } = useAuth();
@@ -133,15 +136,10 @@ export default function InventoryLowStockAlertsPage() {
     }
   };
 
-  return (
-    <div className="container mx-auto space-y-6 px-4 py-8">
-      <header>
-        <h1 className="font-headline text-3xl font-bold">Alertas de stock</h1>
-        <p className="text-sm text-muted-foreground">
-          Consulta de inventario bajo y alertas críticas.
-        </p>
-      </header>
+  const isFiltered = Boolean(productoId || lineaId || categoriaId || soloCriticas);
 
+  return (
+    <div className="space-y-6">
       {!canUseInventory ? (
         <Card>
           <CardContent className="py-6 text-sm text-muted-foreground">
@@ -152,105 +150,148 @@ export default function InventoryLowStockAlertsPage() {
       ) : (
         <>
           <Card>
-            <CardHeader>
-              <CardTitle>Filtros</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-4">
-              <EntityPicker
-                label="Producto"
-                searchLabel="Buscar producto por nombre o clave"
-                selectLabel="Filtrar por producto"
-                query={productQuery}
-                value={productoId}
-                options={productOptions}
-                onQueryChange={setProductQuery}
-                onValueChange={setProductoId}
-                allowEmpty
-                disabled={catalogLoading}
-              />
-
-              <EntityPicker
-                label="Línea"
-                searchLabel="Buscar línea por nombre"
-                selectLabel="Filtrar por línea"
-                query={lineaQuery}
-                value={lineaId}
-                options={lineOptions}
-                onQueryChange={setLineaQuery}
-                onValueChange={setLineaId}
-                allowEmpty
-                disabled={catalogLoading}
-              />
-
-              <EntityPicker
-                label="Categoría"
-                searchLabel="Buscar categoría por nombre"
-                selectLabel="Filtrar por categoría"
-                query={categoriaQuery}
-                value={categoriaId}
-                options={categoryOptions}
-                onQueryChange={setCategoriaQuery}
-                onValueChange={setCategoriaId}
-                allowEmpty
-                disabled={catalogLoading}
-              />
-
-              <div className="flex items-center gap-2 rounded-md border px-3 py-2 self-end">
-                <Checkbox
-                  id="solo-criticas"
-                  checked={soloCriticas}
-                  onCheckedChange={(checked) => setSoloCriticas(Boolean(checked))}
-                />
-                <label htmlFor="solo-criticas" className="text-sm">
-                  Solo críticas
-                </label>
+            <CardHeader className="pb-3 border-b border-border/50 mb-4">
+              <div className="flex items-center justify-between">
+                <CardTitle>Historial de Alertas</CardTitle>
               </div>
-
-              <div className="md:col-span-4">
-                <Button onClick={() => void onSearch()} disabled={loading}>
-                  {loading ? "Consultando..." : "Consultar alertas"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Resultados</CardTitle>
             </CardHeader>
             <CardContent>
+
+              <div className="flex flex-wrap items-center gap-3 mb-6 bg-muted/30 p-3 rounded-lg border border-border/50">
+                <div className="w-[200px]">
+                  <EntityPicker
+                    label=""
+                    searchLabel="Buscar producto"
+                    selectLabel="Producto (Todos)"
+                    query={productQuery}
+                    value={productoId}
+                    options={productOptions}
+                    onQueryChange={setProductQuery}
+                    onValueChange={setProductoId}
+                    allowEmpty
+                    disabled={catalogLoading}
+                  />
+                </div>
+
+                <div className="w-[180px]">
+                  <EntityPicker
+                    label=""
+                    searchLabel="Buscar línea"
+                    selectLabel="Línea (Todas)"
+                    query={lineaQuery}
+                    value={lineaId}
+                    options={lineOptions}
+                    onQueryChange={setLineaQuery}
+                    onValueChange={setLineaId}
+                    allowEmpty
+                    disabled={catalogLoading}
+                  />
+                </div>
+
+                <div className="w-[180px]">
+                  <EntityPicker
+                    label=""
+                    searchLabel="Buscar categoría"
+                    selectLabel="Categoría (Todas)"
+                    query={categoriaQuery}
+                    value={categoriaId}
+                    options={categoryOptions}
+                    onQueryChange={setCategoriaQuery}
+                    onValueChange={setCategoriaId}
+                    allowEmpty
+                    disabled={catalogLoading}
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 bg-background border rounded-md px-3 h-12 ml-2">
+                  <Switch
+                    id="solo-criticas"
+                    checked={soloCriticas}
+                    onCheckedChange={(checked) => setSoloCriticas(Boolean(checked))}
+                  />
+                  <label htmlFor="solo-criticas" className="text-sm cursor-pointer select-none">
+                    Críticas
+                  </label>
+                </div>
+
+                <Button
+                  variant="secondary"
+                  onClick={() => void onSearch()}
+                  disabled={loading}
+                >
+                  Buscar
+                </Button>
+
+                {isFiltered && (
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setProductQuery("");
+                      setProductoId("");
+                      setLineaQuery("");
+                      setLineaId("");
+                      setCategoriaQuery("");
+                      setCategoriaId("");
+                      setSoloCriticas(false);
+                      void onSearch();
+                    }}
+                  >
+                    Limpiar
+                  </Button>
+                )}
+              </div>
+
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Producto</TableHead>
                     <TableHead>Talla</TableHead>
-                    <TableHead>Stock actual</TableHead>
-                    <TableHead>Stock mínimo</TableHead>
+                    <TableHead>Stock Actual</TableHead>
+                    <TableHead>Stock Mín.</TableHead>
                     <TableHead>Estado</TableHead>
+                    <TableHead className="text-right">Acción</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={5}>Cargando...</TableCell>
-                    </TableRow>
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={i}>
+                        <TableCell><Skeleton className="h-4 w-[200px]" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-12" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-8" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-8" /></TableCell>
+                        <TableCell><Skeleton className="h-6 w-16 rounded-full" /></TableCell>
+                        <TableCell className="text-right"><Skeleton className="h-8 w-24 inline-block" /></TableCell>
+                      </TableRow>
+                    ))
                   ) : rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5}>
-                        Sin alertas para los filtros actuales.
+                      <TableCell colSpan={6} className="text-center py-8 text-text-muted">
+                        No hay alertas para los filtros actuales.
                       </TableCell>
                     </TableRow>
                   ) : (
                     rows.map((row) => (
                       <TableRow key={`${row.productoId}-${row.tallaId ?? "na"}`}>
-                        <TableCell>{row.productoNombre ?? row.productoId}</TableCell>
+                        <TableCell>
+                          {row.productoNombre ?? row.productoId}
+                          <span className="block text-[10px] text-text-muted font-mono">{row.productoId}</span>
+                        </TableCell>
                         <TableCell>{row.tallaCodigo ?? row.tallaId ?? "-"}</TableCell>
-                        <TableCell>{row.stockActual}</TableCell>
-                        <TableCell>{row.stockMinimo ?? "-"}</TableCell>
+                        <TableCell className="font-semibold">{row.stockActual}</TableCell>
+                        <TableCell className="text-text-muted">{row.stockMinimo ?? "-"}</TableCell>
                         <TableCell>
                           <Badge variant={row.esCritica ? "destructive" : "secondary"}>
-                            {row.esCritica ? "Crítica" : "Baja"}
+                            {row.esCritica ? "Crítico" : "Bajo"}
                           </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button asChild variant="outline" size="sm" className="gap-2">
+                            <Link href="/admin/inventario/ajustes">
+                              <ArrowRightLeft className="h-3 w-3" />
+                              Ajustar
+                            </Link>
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))

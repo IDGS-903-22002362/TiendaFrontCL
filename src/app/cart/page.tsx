@@ -234,8 +234,8 @@ export default function CartPage() {
               </div>
 
               <div className="flex items-center justify-between">
-                <span>Envío estimado</span>
-                <span>{formatCurrency(99)}</span>
+                <span>Envio FedEx</span>
+                <span>Cotizar en checkout</span>
               </div>
 
               <div className="flex items-center justify-between">
@@ -250,7 +250,7 @@ export default function CartPage() {
               </p>
 
               <p className="mt-2 font-headline text-4xl font-semibold uppercase leading-none tracking-[0.03em] text-foreground">
-                {formatCurrency(subtotalConOfertas + 99)}
+                {formatCurrency(subtotal)}
               </p>
             </div>
 
@@ -269,3 +269,4 @@ export default function CartPage() {
     </div>
   );
 }
+

@@ -1,4 +1,9 @@
-import type { ProductSizeStock } from "@/lib/types";
+import type {
+  AdminProductsResponse,
+  AdminProductStatus,
+  ProductFedexShipping,
+  ProductSizeStock,
+} from "@/lib/types";
 import { apiFetch } from "./client";
 
 export type ProductCreatePayload = {
@@ -12,6 +17,8 @@ export type ProductCreatePayload = {
   lineaId?: string;
   tallaIds?: string[];
   inventarioPorTalla?: ProductSizeStock[];
+  fedexShipping?: ProductFedexShipping;
+  activo?: boolean;
 };
 
 export type ProductUpdatePayload = Partial<ProductCreatePayload>;
@@ -40,7 +47,9 @@ export type ProductAdminDetail = {
   lineaId?: string;
   tallaIds: string[];
   inventarioPorTalla?: ProductSizeStock[];
+  fedexShipping?: ProductFedexShipping;
   imagenes: string[];
+  activo?: boolean;
 };
 
 export type ProductCreateResponse = {
@@ -125,6 +134,30 @@ export const productsAdminApi = {
       ...response,
       id: extractCreateId(response) ?? undefined,
     };
+  },
+
+  async fetchAdminProducts(
+    token?: string,
+    estado: AdminProductStatus = "todos",
+  ) {
+    return apiFetch<AdminProductsResponse>(
+      `/api/productos/admin?estado=${encodeURIComponent(estado)}`,
+      {
+        method: "GET",
+      },
+      { local: true, token: normalizeToken(token) },
+    );
+  },
+
+  async setProductActiveStatus(id: string, activo: boolean, token?: string) {
+    return apiFetch<{ success: boolean; message: string; data: unknown }>(
+      `/api/productos/${id}/estado`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ activo }),
+      },
+      { local: true, token: normalizeToken(token) },
+    );
   },
 
   async update(id: string, payload: ProductUpdatePayload, token?: string) {

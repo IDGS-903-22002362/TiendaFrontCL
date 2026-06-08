@@ -93,12 +93,12 @@ export function ProductCard({ product, pricingOferta }: ProductCardProps) {
             alt={product.name}
             sizes="(max-width: 640px) 48vw, (max-width: 1024px) 34vw, (max-width: 1440px) 25vw, 20vw"
             className="aspect-square border border-black/12"
-            imageClassName={cn("p-3 md:p-4", imagePosition)}
+            imageClassName={cn("p-[12px] md:p-[16px] lg:p-[24px]", imagePosition)}
             overlay={
               displayBadge ? (
                 <span
                   className={cn(
-                    "absolute left-0 top-0 z-[1] inline-flex min-h-9 items-center border px-3 text-[10px] font-semibold uppercase tracking-[0.18em]",
+                    "absolute left-0 top-0 z-[1] inline-flex min-h-[36px] items-center border px-3 text-[var(--font-size-eyebrow)] font-semibold uppercase tracking-[0.18em]",
                     badgeTone,
                   )}
                 >
@@ -109,32 +109,22 @@ export function ProductCard({ product, pricingOferta }: ProductCardProps) {
           />
         </Link>
 
-        <div className="absolute right-3 top-3 md:right-4 md:top-4">
+        <div className="absolute right-[10px] top-[10px] md:right-[12px] md:top-[12px] lg:right-[16px] lg:top-[16px]">
           <WishlistButton
             productId={product.id}
-            className="h-10 w-10 rounded-none border-black/12 bg-white text-foreground shadow-none hover:border-black hover:bg-white md:h-11 md:w-11"
+            className="h-11 w-11 min-h-[44px] min-w-[44px] rounded-none border-black/12 bg-white text-foreground shadow-none hover:border-black hover:bg-white"
           />
         </div>
       </div>
 
-      <div className="mt-3 flex flex-1 flex-col md:mt-4">
-        <div className="flex flex-col gap-1">
-          <div className="flex flex-wrap items-baseline gap-2.5">
-            {originalPrice ? (
-              <p className="text-[0.9rem] leading-none text-text-muted line-through md:text-[0.95rem]">
-                {formatCurrency(originalPrice)}
-              </p>
-            ) : null}
-
-            <p
-              className={cn(
-                "text-[1.45rem] font-semibold leading-none tracking-[-0.03em] md:text-[1.7rem]",
-                tieneOfertaBackend || tieneOfertaLocal
-                  ? "text-primary"
-                  : "text-foreground",
-              )}
-            >
-              {formatCurrency(finalPrice)}
+      <div className="mt-[10px] md:mt-[12px] lg:mt-[16px] flex flex-1 flex-col">
+        <div className="flex items-baseline gap-2.5">
+          <p className="text-[var(--font-size-price-card-mobile)] font-semibold leading-none tracking-[-0.03em] text-foreground lg:text-[var(--font-size-price-card-desktop)]">
+            {formatCurrency(finalPrice)}
+          </p>
+          {product.salePrice ? (
+            <p className="text-[0.9rem] leading-none text-text-muted line-through md:text-[0.95rem]">
+              {formatCurrency(product.price)}
             </p>
           </div>
 
@@ -146,12 +136,12 @@ export function ProductCard({ product, pricingOferta }: ProductCardProps) {
         </div>
 
         <Link href={`/products/${product.id}`} className="mt-3 block">
-          <h3 className="line-clamp-2 text-[1rem] font-medium leading-[1.28] text-foreground md:text-[1.08rem]">
+          <h3 className="line-clamp-2 text-[var(--font-size-product-name-mobile)] font-medium leading-[var(--line-height-card)] text-foreground lg:text-[var(--font-size-product-name-desktop)]">
             {product.name}
           </h3>
         </Link>
 
-        <p className="mt-3 text-[0.95rem] leading-5 text-text-muted">{eyebrow}</p>
+        <p className="mt-3 text-[var(--font-size-category-meta)] leading-[var(--line-height-body)] text-text-muted">{eyebrow}</p>
       </div>
     </article>
   );

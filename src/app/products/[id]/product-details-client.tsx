@@ -183,8 +183,8 @@ export function ProductDetailsClient({
 
   return (
     <>
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(400px,440px)] lg:items-stretch xl:gap-10">
-        <div className="min-w-0 space-y-8 xl:space-y-10">
+      <div className="grid gap-8 lg:grid-cols-[58%_42%] lg:items-stretch xl:gap-10">
+        <div className="min-w-0 space-y-8 xl:space-y-10 lg:max-w-[760px]">
           <ProductGallery product={currentProduct} />
           <PaymentMethodStrip
             compact

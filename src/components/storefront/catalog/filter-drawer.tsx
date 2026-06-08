@@ -19,7 +19,7 @@ export function FilterDrawer({
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button variant="outline" className="h-11 flex-1 xl:hidden">
+        <Button variant="outline" className="h-11 min-h-[44px] flex-1 xl:hidden">
           <Filter className="mr-2 h-4 w-4" />
           Filtros
         </Button>

@@ -29,18 +29,28 @@ export default function SuperAdminLayout({
 }: {
     children: React.ReactNode;
 }) {
-    const { isAuthenticated, isLoading, role, clearSession } = useAuth();
+    const { isAuthenticated, isLoading, role, user, clearSession } = useAuth();
     const router = useRouter();
     const pathname = usePathname();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     useEffect(() => {
         if (!isLoading) {
-            if (!isAuthenticated || role !== "SUPER_ADMIN") {
+            if (!isAuthenticated) {
+                router.replace("/login?redirect=/super-admin");
+                return;
+            }
+
+            if (user && user.perfilCompleto === false) {
+                router.replace("/complete-profile");
+                return;
+            }
+
+            if (role !== "SUPER_ADMIN") {
                 router.replace("/login?redirect=/super-admin");
             }
         }
-    }, [isAuthenticated, isLoading, role, router]);
+    }, [isAuthenticated, isLoading, role, user, router]);
 
     if (isLoading || !isAuthenticated || role !== "SUPER_ADMIN") {
         return (

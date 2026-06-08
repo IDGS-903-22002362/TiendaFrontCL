@@ -1,4 +1,4 @@
-import type { AplazoRefundItem, Orden, Pago } from "@/lib/types";
+import type { AplazoRefundItem, Orden, OrderShipping, Pago } from "@/lib/types";
 import { apiFetch, unwrapData } from "./client";
 
 type UnknownRecord = Record<string, unknown>;
@@ -16,6 +16,45 @@ function toStringValue(value: unknown, fallback = "") {
 function toNumber(value: unknown, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => toStringValue(item)).filter(Boolean);
+  }
+  if (typeof value === "string" && value) {
+    return [value];
+  }
+  return [];
+}
+
+function mapShipping(input: unknown): OrderShipping | undefined {
+  if (!input || typeof input !== "object") {
+    return undefined;
+  }
+
+  const item = input as UnknownRecord;
+  return {
+    provider: toStringValue(item.provider) || undefined,
+    status: toStringValue(item.status) || undefined,
+    quoteId: toStringValue(item.quoteId) || undefined,
+    selectedOptionId:
+      toStringValue(item.selectedOptionId ?? item.optionId) || undefined,
+    serviceType: toStringValue(item.serviceType) || undefined,
+    serviceName: toStringValue(item.serviceName) || undefined,
+    amount:
+      item.amount === undefined && item.costoEnvio === undefined
+        ? undefined
+        : toNumber(item.amount ?? item.costoEnvio, 0),
+    currency: toStringValue(item.currency, "MXN") || "MXN",
+    trackingNumber: toStringValue(item.trackingNumber) || undefined,
+    labelUrl: toStringValue(item.labelUrl) || undefined,
+    labelStoragePath: toStringValue(item.labelStoragePath) || undefined,
+    estimatedDeliveryDate:
+      toStringValue(item.estimatedDeliveryDate ?? item.eta) || undefined,
+    transitTime: toStringValue(item.transitTime) || undefined,
+    warnings: toStringArray(item.warnings),
+  };
 }
 
 function mapOrden(input: unknown): Orden {
@@ -41,6 +80,7 @@ function mapOrden(input: unknown): Orden {
           ? "DELIVERY"
           : undefined,
     fulfillmentStatus: toStringValue(item.fulfillmentStatus) || undefined,
+    shipping: mapShipping(item.shipping),
     pickupLocation: pickupLocation
       ? {
           id: toStringValue(pickupLocation.id ?? pickupLocation._id) || undefined,

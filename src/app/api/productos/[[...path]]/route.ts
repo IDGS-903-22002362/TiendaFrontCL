@@ -9,7 +9,10 @@ function getSuffix(path?: string[]) {
   return `/${path.join("/")}`;
 }
 
-function shouldRequireAuth(method: string) {
+function shouldRequireAuth(method: string, path?: string[]) {
+  if (path && path[0] === "admin") {
+    return true; // Force auth for admin endpoints even if GET
+  }
   return method !== "GET";
 }
 
@@ -19,7 +22,7 @@ function forward(request: NextRequest, path?: string[]) {
   return proxyToBackend({
     request,
     backendPath: `/api/productos${suffix}`,
-    requireAuth: shouldRequireAuth(request.method),
+    requireAuth: shouldRequireAuth(request.method, path),
   });
 }
 
@@ -45,6 +48,13 @@ export function PUT(
 }
 
 export function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ path?: string[] }> },
+) {
+  return context.params.then((params) => forward(request, params.path));
+}
+
+export function PATCH(
   request: NextRequest,
   context: { params: Promise<{ path?: string[] }> },
 ) {

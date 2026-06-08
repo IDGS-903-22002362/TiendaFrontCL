@@ -15,6 +15,7 @@ function joinApiUrl(base: string, path: string) {
 type ApiErrorPayload = {
   ok?: boolean;
   success?: false;
+  code?: string;
   message?: string;
   error?: string | { code?: string; message?: string };
   errors?: Array<{ campo?: string; mensaje?: string; codigo?: string }>;
@@ -119,6 +120,10 @@ function getPayloadMessage(payload?: ApiErrorPayload, fallback = "") {
 }
 
 function getPayloadCode(payload?: ApiErrorPayload) {
+  if (typeof payload?.code === "string" && payload.code) {
+    return payload.code;
+  }
+
   const nestedError = getPayloadErrorObject(payload);
   return typeof nestedError?.code === "string" ? nestedError.code : undefined;
 }
