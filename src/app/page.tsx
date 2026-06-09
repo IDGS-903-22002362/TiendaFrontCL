@@ -111,7 +111,7 @@ export default async function Home() {
   const collectionIsPersonalizable = isPersonalizableProduct(collectionProduct);
   const collectionTitle = collectionIsPersonalizable
     ? "Personaliza la prenda oficial sin romper el ritmo de compra."
-    : "Colección oficial con más aire, mejor foco y menos ruido.";
+    : "Colección oficial con más agua, mejor foco y menos ruido.";
   const collectionDescription = collectionIsPersonalizable
     ? "La personalización sigue conectada al PDP y al carrito actual, pero ahora entra en una composición más limpia, más directa y más centrada en la pieza."
     : "La navegación comercial se apoya en bloques más sobrios para que el producto destaque antes que la interfaz.";
