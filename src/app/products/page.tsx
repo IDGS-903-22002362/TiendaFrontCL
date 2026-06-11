@@ -68,7 +68,7 @@ export default async function ProductsPage({
     sort: getCatalogSort(queryParams.get("sort")),
     q: getSingleParam(queryParams, "q"),
     onlyOffers: queryParams.get("onlyOffers") === "true",
-    onlyAvailable: queryParams.get("onlyAvailable") !== "false",
+    onlyAvailable: queryParams.get("onlyAvailable") === "true",
   };
 
   const [initialPage, categories, lineas, tallas] = await Promise.all([
