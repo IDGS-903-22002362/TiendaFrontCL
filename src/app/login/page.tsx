@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { ChangeEvent, Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
@@ -81,6 +81,9 @@ function LoginPageContent() {
 
   const firebaseReady = isFirebaseConfigured();
 
+
+  const esOtpValido = verificationCode.length === 6;
+
   if (!firebaseReady) {
     console.warn(
       "Firebase no configurado. Variables faltantes:",
@@ -139,6 +142,26 @@ function LoginPageContent() {
       otpInputRefs.current[0]?.focus();
     }
   }, [showVerification, isSubmitting]);
+
+  const hasAutoSubmitted = useRef(false);
+
+  useEffect(() => {
+    if (
+      showVerification &&
+      verificationCode.length === 6 &&
+      !isSubmitting &&
+      !hasAutoSubmitted.current
+    ) {
+      hasAutoSubmitted.current = true;
+      void onVerifyAndLogin();
+    }
+  }, [verificationCode, showVerification, isSubmitting]);
+
+  useEffect(() => {
+    if (verificationCode.length < 6) {
+      hasAutoSubmitted.current = false;
+    }
+  }, [verificationCode]);
 
   const updateOtpDigit = (index: number, nextDigit: string) => {
     const safeDigit = nextDigit.replace(/\D/g, "").slice(-1);
@@ -718,7 +741,7 @@ function LoginPageContent() {
                   <Button
                     className="h-12 w-full rounded-2xl bg-[#007A53] text-base font-bold text-white shadow-lg shadow-[#007A53]/30 transition-all hover:bg-[#006248] disabled:opacity-70 sm:h-14 sm:text-lg"
                     onClick={onVerifyAndLogin}
-                    disabled={isSubmitting || verificationCode.length !== 6}
+                    disabled={isSubmitting || verificationCode.length !== 6 || !esOtpValido}
                   >
                     {isSubmitting ? "Verificando..." : "Verificar e Iniciar Sesión"}
                   </Button>
