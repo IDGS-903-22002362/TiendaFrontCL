@@ -681,13 +681,19 @@ export function mapCatalogProductToProductCardViewModel(
       : undefined;
   const stock = catalogProduct.disponible ? catalogProduct.stockTotal : 0;
 
+  const images = catalogProduct.imagenes?.length
+    ? catalogProduct.imagenes
+    : catalogProduct.imagenPrincipal
+      ? [catalogProduct.imagenPrincipal]
+      : [];
+
   return {
     id: catalogProduct.id,
     name: catalogProduct.nombre,
     description: "", // Public catalog card doesn't need full description
     price,
     salePrice,
-    images: catalogProduct.imagenPrincipal ? [catalogProduct.imagenPrincipal] : [],
+    images,
     category: catalogProduct.categoriaLabel || catalogProduct.categoria,
     lineName: catalogProduct.lineaLabel || catalogProduct.linea,
     tags,
@@ -716,6 +722,7 @@ function mapProductToCatalogCard(product: Product): CatalogProductCard {
     ofertaTitulo: product.salePrice ? "Oferta" : null,
     descuentoTotal: Math.max(product.price - finalPrice, 0),
     imagenPrincipal: product.images[0] ?? null,
+    imagenes: product.images,
     stockTotal: product.stockTotal ?? product.stock,
     disponible: isAvailable,
     destacado: product.tags.includes("new"),

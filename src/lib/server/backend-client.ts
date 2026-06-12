@@ -119,14 +119,33 @@ export async function proxyToBackend({
   const nextMethod = method ?? (request.method as ProxyOptions["method"]);
   const url = `${joinUrl(resolveBackendBase(), backendPath)}${request.nextUrl.search}`;
   const hasBody = nextMethod !== "GET";
-  const rawBody = hasBody ? await request.arrayBuffer() : undefined;
-  const body = rawBody && rawBody.byteLength > 0 ? rawBody : undefined;
+
+  // ✅ Para multipart/form-data, pasar el stream directamente sin leerlo
+  // ❌ NO usar arrayBuffer() porque consume el stream
+  let body: any = undefined;
+  if (hasBody) {
+    const isMultipart = contentType?.includes("multipart/form-data");
+    if (isMultipart) {
+      // Pasar el stream directamente para multipart
+      body = request.body;
+    } else {
+      // Para JSON/otros, leer como ArrayBuffer
+      const rawBody = await request.arrayBuffer();
+      body = rawBody && rawBody.byteLength > 0 ? rawBody : undefined;
+    }
+  }
+
+  console.log("Proxy URL:", url);
+  console.log("Method:", nextMethod);
+  console.log("Content-Type:", contentType);
+  console.log("Content-Length:", request.headers.get("content-length"));
 
   try {
     const response = await fetch(url, {
       method: nextMethod,
       headers,
       body,
+      duplex: "half", // Necesario para streams
       cache: "no-store",
     });
 

@@ -275,7 +275,7 @@ export function HeroEditorial() {
   // Estados de carga y vacío
   if (isLoading) {
     return (
-      <section className="storefront-frame pt-3 md:pt-4 lg:pt-5">
+      <section className="w-full -mt-px">
         <div className="relative isolate overflow-hidden border border-white/10 bg-[#050505]">
           <div className="relative min-h-[520px] sm:min-h-[600px] lg:min-h-[720px] bg-black/40 animate-pulse" />
         </div>
@@ -288,7 +288,7 @@ export function HeroEditorial() {
   }
 
   return (
-    <section className="storefront-frame pt-3 md:pt-4 lg:pt-5">
+    <section className="w-full -mt-px">
       <div
         className="relative isolate overflow-hidden border border-white/10 bg-[#050505]"
         role="region"

@@ -220,7 +220,7 @@ const [selectedOfferPercent, setSelectedOfferPercent] = useState<number | null>(
     () => searchParams.get("onlyOffers") === "true",
   );
   const [onlyAvailable, setOnlyAvailable] = useState(
-    () => searchParams.get("onlyAvailable") !== "false",
+    () => searchParams.get("onlyAvailable") === "true",
   );
   const [wishlistOnly, setWishlistOnly] = useState(false);
 
