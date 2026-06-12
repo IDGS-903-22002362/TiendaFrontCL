@@ -421,6 +421,9 @@ function mapCategory(input: unknown): Category {
     ),
     name,
     slug,
+    imagenPrincipal: category.imagenPrincipal ? toStringValue(category.imagenPrincipal) : null,
+    lineaId: category.lineaId ? toStringValue(category.lineaId) : null,
+    orden: typeof category.orden === "number" ? category.orden : null,
   };
 }
 

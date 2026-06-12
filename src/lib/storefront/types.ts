@@ -24,4 +24,5 @@ export type StorefrontCategoryCard = {
   eyebrow: string;
   href: string;
   count: number;
+  imagenPrincipal?: string | null;
 };

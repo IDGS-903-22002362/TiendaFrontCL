@@ -1,7 +1,36 @@
+"use client";
+
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { StorefrontCategoryCard } from "@/lib/storefront/types";
+import { useState } from "react";
+
+function CategoryImage({
+  src,
+  alt,
+  lazy = true,
+}: {
+  src?: string | null;
+  alt: string;
+  lazy?: boolean;
+}) {
+  const [error, setError] = useState(false);
+
+  if (!src || error) {
+    return <div aria-hidden="true" className="catalog-tile__placeholder absolute inset-0 bg-black/10" />;
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      loading={lazy ? "lazy" : "eager"}
+      onError={() => setError(true)}
+      className="absolute inset-0 h-full w-full object-cover opacity-60 transition-opacity duration-500 group-hover:opacity-80"
+    />
+  );
+}
 
 export function CategoryGrid({ categories }: { categories: StorefrontCategoryCard[] }) {
   if (categories.length === 0) {
@@ -22,6 +51,7 @@ export function CategoryGrid({ categories }: { categories: StorefrontCategoryCar
           href={leadCategory.href}
           className="group home-dark-surface relative flex min-h-[20rem] flex-col justify-between overflow-hidden rounded-[1.9rem] px-6 py-7 md:px-8 md:py-8"
         >
+          <CategoryImage src={leadCategory.imagenPrincipal} alt={leadCategory.name} lazy={false} />
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(185,145,69,0.18),transparent_36%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.06),transparent_28%)]" />
           <div className="relative z-10">
             <div className="flex items-center gap-3">
@@ -51,9 +81,14 @@ export function CategoryGrid({ categories }: { categories: StorefrontCategoryCar
           <Link
             key={category.id}
             href={category.href}
-            className="group home-surface min-h-[16.5rem] rounded-[1.6rem] px-5 py-6 transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 hover:border-black/28 hover:shadow-[0_22px_44px_-36px_rgb(8_12_10_/_0.22)] md:px-6 md:py-7"
+            className="group relative home-surface min-h-[16.5rem] overflow-hidden rounded-[1.6rem] px-5 py-6 transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 hover:border-black/28 hover:shadow-[0_22px_44px_-36px_rgb(8_12_10_/_0.22)] md:px-6 md:py-7"
           >
-            <div className="flex h-full flex-col justify-between gap-7">
+            {category.imagenPrincipal && (
+              <div className="absolute inset-0 z-0 opacity-10 transition-opacity duration-500 group-hover:opacity-20">
+                <CategoryImage src={category.imagenPrincipal} alt={category.name} lazy={true} />
+              </div>
+            )}
+            <div className="relative z-10 flex h-full flex-col justify-between gap-7">
               <div>
                 <div className="flex items-center gap-3">
                   <p className="home-kicker text-primary/66">{category.eyebrow}</p>

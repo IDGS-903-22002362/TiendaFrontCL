@@ -28,7 +28,7 @@ function shouldRequireAuth(path?: string[]) {
     return !isPublic; // Si no es pública, requiere auth
 }
 
-function forward(request: NextRequest, path?: string[]) {
+async function forward(request: NextRequest, path?: string[]) {
     const suffix = getSuffix(path);
 
     // Lógica especial para POST / (crear noticia requiere auth)
@@ -49,33 +49,37 @@ function forward(request: NextRequest, path?: string[]) {
     });
 }
 
-export function GET(
+export async function GET(
     request: NextRequest,
     context: { params: Promise<{ path?: string[] }> },
 ) {
     console.log("🔵 GET /api/galeria - params:", context.params);
-    return context.params.then((params) => forward(request, params.path));
+    const params = await context.params; // ✅ await primero
+    return forward(request, params.path);
 }
 
-export function POST(
+export async function POST(
     request: NextRequest,
     context: { params: Promise<{ path?: string[] }> },
 ) {
     console.log("🟢 POST /api/galeria - params:", context.params);
-    return context.params.then((params) => forward(request, params.path));
+    const params = await context.params; // ✅ await primero
+    return forward(request, params.path);
 }
 // similar para PUT, DELETE
 
-export function PUT(
+export async function PUT(
     request: NextRequest,
     context: { params: Promise<{ path?: string[] }> },
 ) {
-    return context.params.then((params) => forward(request, params.path));
+    const params = await context.params;
+    return forward(request, params.path);
 }
 
-export function DELETE(
+export async function DELETE(
     request: NextRequest,
     context: { params: Promise<{ path?: string[] }> },
 ) {
-    return context.params.then((params) => forward(request, params.path));
+    const params = await context.params;
+    return forward(request, params.path);
 }

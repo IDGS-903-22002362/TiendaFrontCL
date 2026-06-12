@@ -1,0 +1,654 @@
+
+> nextn@0.1.0 dev
+> next dev --turbopack -p 9002
+
+   ▲ Next.js 15.5.9 (Turbopack)
+   - Local:        http://localhost:9002
+   - Network:      http://192.168.0.2:9002
+
+ ✓ Starting...
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+
+ ✓ Compiled middleware in 465ms
+ ✓ Ready in 2.1s
+ ○ Compiling /admin/categorias ...
+ ✓ Compiled /admin/categorias in 9.2s
+ GET /admin/categorias 200 in 10504ms
+ ○ Compiling /api/auth/session ...
+ ✓ Compiled /api/auth/session in 923ms
+ GET /api/auth/session 200 in 1406ms
+ ○ Compiling /login ...
+Proxy URL: http://localhost:3000/api/api/carrito
+Method: GET
+Content-Type: null
+Content-Length: null
+ GET /api/carrito 502 in 3179ms
+ ✓ Compiled /login in 3.1s
+ GET /login?redirect=%2Fadmin 200 in 3268ms
+ GET /admin/categorias 200 in 375ms
+ GET /api/auth/session 200 in 358ms
+Proxy URL: http://localhost:3000/api/api/carrito
+Method: GET
+Content-Type: null
+Content-Length: null
+ GET /api/carrito 502 in 393ms
+ GET /login?redirect=%2Fadmin 200 in 159ms
+ ○ Compiling /admin/lineas ...
+ ✓ Compiled /admin/lineas in 1343ms
+ GET /admin/lineas 200 in 1534ms
+ GET /api/auth/session 200 in 362ms
+Proxy URL: http://localhost:3000/api/api/carrito
+Method: GET
+Content-Type: null
+Content-Length: null
+ GET /api/carrito 502 in 396ms
+ GET /login?redirect=%2Fadmin 200 in 208ms
+ GET /admin/categorias 200 in 304ms
+ GET /api/auth/session 200 in 367ms
+Proxy URL: http://localhost:3000/api/api/carrito
+Method: GET
+Content-Type: null
+Content-Length: null
+ GET /api/carrito 502 in 397ms
+ GET /login?redirect=%2Fadmin 200 in 207ms
+ GET /admin/lineas 200 in 226ms
+ GET /api/auth/session 200 in 364ms
+Proxy URL: http://localhost:3000/api/api/carrito
+Method: GET
+Content-Type: null
+Content-Length: null
+ GET /api/carrito 502 in 411ms
+ GET /login?redirect=%2Fadmin 200 in 221ms
+Firebase no configurado. Variables faltantes: [
+  'NEXT_PUBLIC_AUTH_FIREBASE_API_KEY o NEXT_PUBLIC_FIREBASE_API_KEY',
+  'NEXT_PUBLIC_AUTH_FIREBASE_PROJECT_ID o NEXT_PUBLIC_FIREBASE_PROJECT_ID'
+]
+ GET /login 200 in 507ms
+ GET /api/auth/session 200 in 387ms
+Proxy URL: http://localhost:3000/api/api/carrito
+Method: GET
+Content-Type: null
+Content-Length: null
+ GET /api/carrito 502 in 417ms
+ GET /admin/categorias 200 in 219ms
+ GET /api/auth/session 200 in 335ms
+ GET /api/carrito 200 in 319ms
+ GET /admin/lineas 200 in 272ms
+Proxy URL: http://localhost:3000/api/api/carrito
+Method: GET
+Content-Type: null
+Content-Length: null
+ GET /api/auth/session 200 in 342ms
+Proxy URL: http://localhost:3000/api/api/carrito
+Method: GET
+Content-Type: null
+Content-Length: null
+ GET /api/carrito 502 in 355ms
+ GET /login?redirect=%2Fadmin 200 in 187ms
+ GET /admin/categorias 200 in 293ms
+Proxy URL: http://localhost:3000/api/api/carrito
+Method: GET
+Content-Type: null
+Content-Length: null
+ GET /api/auth/session 200 in 418ms
+ GET /api/carrito 502 in 402ms
+ ○ Compiling / ...
+ ✓ Compiled / in 1334ms
+ ⨯ ./src/components/storefront/home/category-grid.tsx:5:10
+Ecmascript file had an error
+[0m [90m 3 |[39m [36mimport[39m { cn } [36mfrom[39m [32m"@/lib/utils"[39m[33m;[39m
+ [90m 4 |[39m [36mimport[39m type { [33mStorefrontCategoryCard[39m } [36mfrom[39m [32m"@/lib/storefront/types"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 5 |[39m [36mimport[39m { useState } [36mfrom[39m [32m"react"[39m[33m;[39m
+ [90m   |[39m          [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 6 |[39m
+ [90m 7 |[39m [36mfunction[39m [33mCategoryImage[39m({
+ [90m 8 |[39m   src[33m,[39m[0m
+
+You're importing a component that needs `useState`. This React Hook only works in a Client Component. To fix, mark the file (or its parent) with the `"use client"` directive.
+
+ Learn more: https://nextjs.org/docs/app/api-reference/directives/use-client
+
+
+
+Import trace:
+  Server Component:
+    ./src/components/storefront/home/category-grid.tsx
+    ./src/app/page.tsx
+
+
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 2.6s
+ GET / 500 in 4196ms
+ ⨯ ./src/components/storefront/home/category-grid.tsx:5:10
+Ecmascript file had an error
+[0m [90m 3 |[39m [36mimport[39m { cn } [36mfrom[39m [32m"@/lib/utils"[39m[33m;[39m
+ [90m 4 |[39m [36mimport[39m type { [33mStorefrontCategoryCard[39m } [36mfrom[39m [32m"@/lib/storefront/types"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 5 |[39m [36mimport[39m { useState } [36mfrom[39m [32m"react"[39m[33m;[39m
+ [90m   |[39m          [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 6 |[39m
+ [90m 7 |[39m [36mfunction[39m [33mCategoryImage[39m({
+ [90m 8 |[39m   src[33m,[39m[0m
+
+You're importing a component that needs `useState`. This React Hook only works in a Client Component. To fix, mark the file (or its parent) with the `"use client"` directive.
+
+ Learn more: https://nextjs.org/docs/app/api-reference/directives/use-client
+
+
+
+Import trace:
+  Server Component:
+    ./src/components/storefront/home/category-grid.tsx
+    ./src/app/page.tsx
+
+
+ GET / 500 in 125ms
+ ⨯ ./src/components/storefront/home/category-grid.tsx:5:10
+Ecmascript file had an error
+[0m [90m 3 |[39m [36mimport[39m { cn } [36mfrom[39m [32m"@/lib/utils"[39m[33m;[39m
+ [90m 4 |[39m [36mimport[39m type { [33mStorefrontCategoryCard[39m } [36mfrom[39m [32m"@/lib/storefront/types"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 5 |[39m [36mimport[39m { useState } [36mfrom[39m [32m"react"[39m[33m;[39m
+ [90m   |[39m          [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 6 |[39m
+ [90m 7 |[39m [36mfunction[39m [33mCategoryImage[39m({
+ [90m 8 |[39m   src[33m,[39m[0m
+
+You're importing a component that needs `useState`. This React Hook only works in a Client Component. To fix, mark the file (or its parent) with the `"use client"` directive.
+
+ Learn more: https://nextjs.org/docs/app/api-reference/directives/use-client
+
+
+
+Import trace:
+  Server Component:
+    ./src/components/storefront/home/category-grid.tsx
+    ./src/app/page.tsx
+
+
+ GET / 500 in 123ms
+ GET /admin/categorias 200 in 329ms
+ GET /api/auth/session 500 in 260ms
+ GET /api/carrito 500 in 259ms
+ ⨯ ./src/components/storefront/home/category-grid.tsx:5:10
+Ecmascript file had an error
+[0m [90m 3 |[39m [36mimport[39m { cn } [36mfrom[39m [32m"@/lib/utils"[39m[33m;[39m
+ [90m 4 |[39m [36mimport[39m type { [33mStorefrontCategoryCard[39m } [36mfrom[39m [32m"@/lib/storefront/types"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 5 |[39m [36mimport[39m { useState } [36mfrom[39m [32m"react"[39m[33m;[39m
+ [90m   |[39m          [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 6 |[39m
+ [90m 7 |[39m [36mfunction[39m [33mCategoryImage[39m({
+ [90m 8 |[39m   src[33m,[39m[0m
+
+You're importing a component that needs `useState`. This React Hook only works in a Client Component. To fix, mark the file (or its parent) with the `"use client"` directive.
+
+ Learn more: https://nextjs.org/docs/app/api-reference/directives/use-client
+
+
+
+Import trace:
+  Server Component:
+    ./src/components/storefront/home/category-grid.tsx
+    ./src/app/page.tsx
+
+
+ GET / 500 in 102ms
+ ⨯ ./src/components/storefront/home/category-grid.tsx:5:10
+Ecmascript file had an error
+[0m [90m 3 |[39m [36mimport[39m { cn } [36mfrom[39m [32m"@/lib/utils"[39m[33m;[39m
+ [90m 4 |[39m [36mimport[39m type { [33mStorefrontCategoryCard[39m } [36mfrom[39m [32m"@/lib/storefront/types"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 5 |[39m [36mimport[39m { useState } [36mfrom[39m [32m"react"[39m[33m;[39m
+ [90m   |[39m          [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 6 |[39m
+ [90m 7 |[39m [36mfunction[39m [33mCategoryImage[39m({
+ [90m 8 |[39m   src[33m,[39m[0m
+
+You're importing a component that needs `useState`. This React Hook only works in a Client Component. To fix, mark the file (or its parent) with the `"use client"` directive.
+
+ Learn more: https://nextjs.org/docs/app/api-reference/directives/use-client
+
+
+
+Import trace:
+  Server Component:
+    ./src/components/storefront/home/category-grid.tsx
+    ./src/app/page.tsx
+
+
+ GET / 500 in 113ms
+ GET /admin/lineas 200 in 210ms
+ GET /api/auth/session 500 in 238ms
+ GET /api/carrito 500 in 241ms
+ ⨯ ./src/components/storefront/home/category-grid.tsx:5:10
+Ecmascript file had an error
+[0m [90m 3 |[39m [36mimport[39m { cn } [36mfrom[39m [32m"@/lib/utils"[39m[33m;[39m
+ [90m 4 |[39m [36mimport[39m type { [33mStorefrontCategoryCard[39m } [36mfrom[39m [32m"@/lib/storefront/types"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 5 |[39m [36mimport[39m { useState } [36mfrom[39m [32m"react"[39m[33m;[39m
+ [90m   |[39m          [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 6 |[39m
+ [90m 7 |[39m [36mfunction[39m [33mCategoryImage[39m({
+ [90m 8 |[39m   src[33m,[39m[0m
+
+You're importing a component that needs `useState`. This React Hook only works in a Client Component. To fix, mark the file (or its parent) with the `"use client"` directive.
+
+ Learn more: https://nextjs.org/docs/app/api-reference/directives/use-client
+
+
+
+Import trace:
+  Server Component:
+    ./src/components/storefront/home/category-grid.tsx
+    ./src/app/page.tsx
+
+
+ GET / 500 in 97ms
+ ⨯ ./src/components/storefront/home/category-grid.tsx:5:10
+Ecmascript file had an error
+[0m [90m 3 |[39m [36mimport[39m { cn } [36mfrom[39m [32m"@/lib/utils"[39m[33m;[39m
+ [90m 4 |[39m [36mimport[39m type { [33mStorefrontCategoryCard[39m } [36mfrom[39m [32m"@/lib/storefront/types"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 5 |[39m [36mimport[39m { useState } [36mfrom[39m [32m"react"[39m[33m;[39m
+ [90m   |[39m          [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 6 |[39m
+ [90m 7 |[39m [36mfunction[39m [33mCategoryImage[39m({
+ [90m 8 |[39m   src[33m,[39m[0m
+
+You're importing a component that needs `useState`. This React Hook only works in a Client Component. To fix, mark the file (or its parent) with the `"use client"` directive.
+
+ Learn more: https://nextjs.org/docs/app/api-reference/directives/use-client
+
+
+
+Import trace:
+  Server Component:
+    ./src/components/storefront/home/category-grid.tsx
+    ./src/app/page.tsx
+
+
+ GET / 500 in 107ms
+ ✓ Compiled in 322ms
+ ✓ Compiled / in 55ms
+fetchProductsFromEndpoint failed for /api/productos Error [ApiError]: No se pudo conectar con la API (http://localhost:3000/api/api/productos): fetch failed
+    at apiFetch (src/lib/api/client.ts:231:11)
+    at async fetchProductsFromEndpoint (src/lib/api/storefront.ts:432:21)
+    at async Home (src/app/page.tsx:40:34)
+  229 |         : "Error de red al conectar con el backend";
+  230 |
+> 231 |     throw new ApiError(
+      |           ^
+  232 |       0,
+  233 |       `No se pudo conectar con la API (${endpoint}): ${message}`,
+  234 |     ); {
+  status: 0,
+  code: undefined,
+  payload: undefined
+}
+fetchCategories failed Error [ApiError]: No se pudo conectar con la API (http://localhost:3000/api/api/categorias): fetch failed
+    at apiFetch (src/lib/api/client.ts:231:11)
+    at async fetchCategories (src/lib/api/storefront.ts:660:21)
+    at async Home (src/app/page.tsx:40:34)
+  229 |         : "Error de red al conectar con el backend";
+  230 |
+> 231 |     throw new ApiError(
+      |           ^
+  232 |       0,
+  233 |       `No se pudo conectar con la API (${endpoint}): ${message}`,
+  234 |     ); {
+  status: 0,
+  code: undefined,
+  payload: undefined
+}
+ GET / 200 in 1025ms
+ GET /api/auth/session 200 in 392ms
+Proxy URL: http://localhost:3000/api/api/carrito
+Method: GET
+Content-Type: null
+Content-Length: null
+ GET /api/carrito 502 in 497ms
+ GET /admin/categorias 200 in 208ms
+Proxy URL: http://localhost:3000/api/api/carrito
+Method: GET
+Content-Type: null
+Content-Length: null
+ GET /api/auth/session 200 in 389ms
+ GET /api/carrito 502 in 387ms
+fetchProductsFromEndpoint failed for /api/productos Error [ApiError]: No se pudo conectar con la API (http://localhost:3000/api/api/productos): fetch failed
+    at apiFetch (src/lib/api/client.ts:231:11)
+    at async fetchProductsFromEndpoint (src/lib/api/storefront.ts:432:21)
+    at async Home (src/app/page.tsx:40:34)
+  229 |         : "Error de red al conectar con el backend";
+  230 |
+> 231 |     throw new ApiError(
+      |           ^
+  232 |       0,
+  233 |       `No se pudo conectar con la API (${endpoint}): ${message}`,
+  234 |     ); {
+  status: 0,
+  code: undefined,
+  payload: undefined
+}
+fetchCategories failed Error [ApiError]: No se pudo conectar con la API (http://localhost:3000/api/api/categorias): fetch failed
+    at apiFetch (src/lib/api/client.ts:231:11)
+    at async fetchCategories (src/lib/api/storefront.ts:660:21)
+    at async Home (src/app/page.tsx:40:34)
+  229 |         : "Error de red al conectar con el backend";
+  230 |
+> 231 |     throw new ApiError(
+      |           ^
+  232 |       0,
+  233 |       `No se pudo conectar con la API (${endpoint}): ${message}`,
+  234 |     ); {
+  status: 0,
+  code: undefined,
+  payload: undefined
+}
+ GET / 200 in 226ms
+ GET /admin/lineas 200 in 260ms
+Proxy URL: http://localhost:3000/api/api/carrito
+Method: GET
+Content-Type: null
+Content-Length: null
+ GET /api/auth/session 200 in 398ms
+ GET /api/carrito 502 in 385ms
+fetchProductsFromEndpoint failed for /api/productos Error [ApiError]: No se pudo conectar con la API (http://localhost:3000/api/api/productos): fetch failed
+    at apiFetch (src/lib/api/client.ts:231:11)
+    at async fetchProductsFromEndpoint (src/lib/api/storefront.ts:432:21)
+    at async Home (src/app/page.tsx:40:34)
+  229 |         : "Error de red al conectar con el backend";
+  230 |
+> 231 |     throw new ApiError(
+      |           ^
+  232 |       0,
+  233 |       `No se pudo conectar con la API (${endpoint}): ${message}`,
+  234 |     ); {
+  status: 0,
+  code: undefined,
+  payload: undefined
+}
+fetchCategories failed Error [ApiError]: No se pudo conectar con la API (http://localhost:3000/api/api/categorias): fetch failed
+    at apiFetch (src/lib/api/client.ts:231:11)
+    at async fetchCategories (src/lib/api/storefront.ts:660:21)
+    at async Home (src/app/page.tsx:40:34)
+  229 |         : "Error de red al conectar con el backend";
+  230 |
+> 231 |     throw new ApiError(
+      |           ^
+  232 |       0,
+  233 |       `No se pudo conectar con la API (${endpoint}): ${message}`,
+  234 |     ); {
+  status: 0,
+  code: undefined,
+  payload: undefined
+}
+ GET / 200 in 180ms
+ GET /api/auth/session 200 in 310ms
+ GET /admin/categorias 200 in 254ms
+Proxy URL: http://localhost:3000/api/api/carrito
+Method: GET
+Content-Type: null
+Content-Length: null
+ GET /api/auth/session 200 in 412ms
+ GET /api/carrito 502 in 400ms
+fetchProductsFromEndpoint failed for /api/productos Error [ApiError]: No se pudo conectar con la API (http://localhost:3000/api/api/productos): fetch failed
+    at apiFetch (src/lib/api/client.ts:231:11)
+    at async fetchProductsFromEndpoint (src/lib/api/storefront.ts:432:21)
+    at async Home (src/app/page.tsx:40:34)
+  229 |         : "Error de red al conectar con el backend";
+  230 |
+> 231 |     throw new ApiError(
+      |           ^
+  232 |       0,
+  233 |       `No se pudo conectar con la API (${endpoint}): ${message}`,
+  234 |     ); {
+  status: 0,
+  code: undefined,
+  payload: undefined
+}
+fetchCategories failed Error [ApiError]: No se pudo conectar con la API (http://localhost:3000/api/api/categorias): fetch failed
+    at apiFetch (src/lib/api/client.ts:231:11)
+    at async fetchCategories (src/lib/api/storefront.ts:660:21)
+    at async Home (src/app/page.tsx:40:34)
+  229 |         : "Error de red al conectar con el backend";
+  230 |
+> 231 |     throw new ApiError(
+      |           ^
+  232 |       0,
+  233 |       `No se pudo conectar con la API (${endpoint}): ${message}`,
+  234 |     ); {
+  status: 0,
+  code: undefined,
+  payload: undefined
+}
+ GET / 200 in 225ms
+ GET /api/auth/session 200 in 309ms
+ GET /admin/categorias 200 in 787ms
+Proxy URL: http://localhost:3000/api/api/carrito
+Method: GET
+Content-Type: null
+Content-Length: null
+ GET /api/auth/session 200 in 409ms
+ GET /api/carrito 502 in 396ms
+fetchProductsFromEndpoint failed for /api/productos Error [ApiError]: No se pudo conectar con la API (http://localhost:3000/api/api/productos): fetch failed
+    at apiFetch (src/lib/api/client.ts:231:11)
+    at async fetchProductsFromEndpoint (src/lib/api/storefront.ts:432:21)
+    at async Home (src/app/page.tsx:40:34)
+  229 |         : "Error de red al conectar con el backend";
+  230 |
+> 231 |     throw new ApiError(
+      |           ^
+  232 |       0,
+  233 |       `No se pudo conectar con la API (${endpoint}): ${message}`,
+  234 |     ); {
+  status: 0,
+  code: undefined,
+  payload: undefined
+}
+fetchCategories failed Error [ApiError]: No se pudo conectar con la API (http://localhost:3000/api/api/categorias): fetch failed
+    at apiFetch (src/lib/api/client.ts:231:11)
+    at async fetchCategories (src/lib/api/storefront.ts:660:21)
+    at async Home (src/app/page.tsx:40:34)
+  229 |         : "Error de red al conectar con el backend";
+  230 |
+> 231 |     throw new ApiError(
+      |           ^
+  232 |       0,
+  233 |       `No se pudo conectar con la API (${endpoint}): ${message}`,
+  234 |     ); {
+  status: 0,
+  code: undefined,
+  payload: undefined
+}
+ GET / 200 in 232ms
+fetchProductsFromEndpoint failed for /api/productos Error [ApiError]: No se pudo conectar con la API (http://localhost:3000/api/api/productos): fetch failed
+    at apiFetch (src/lib/api/client.ts:231:11)
+    at async fetchProductsFromEndpoint (src/lib/api/storefront.ts:432:21)
+    at async Home (src/app/page.tsx:40:34)
+  229 |         : "Error de red al conectar con el backend";
+  230 |
+> 231 |     throw new ApiError(
+      |           ^
+  232 |       0,
+  233 |       `No se pudo conectar con la API (${endpoint}): ${message}`,
+  234 |     ); {
+  status: 0,
+  code: undefined,
+  payload: undefined
+}
+fetchCategories failed Error [ApiError]: No se pudo conectar con la API (http://localhost:3000/api/api/categorias): fetch failed
+    at apiFetch (src/lib/api/client.ts:231:11)
+    at async fetchCategories (src/lib/api/storefront.ts:660:21)
+    at async Home (src/app/page.tsx:40:34)
+  229 |         : "Error de red al conectar con el backend";
+  230 |
+> 231 |     throw new ApiError(
+      |           ^
+  232 |       0,
+  233 |       `No se pudo conectar con la API (${endpoint}): ${message}`,
+  234 |     ); {
+  status: 0,
+  code: undefined,
+  payload: undefined
+}
+ GET / 200 in 494ms
+ GET /api/auth/session 200 in 582ms
+Proxy URL: http://localhost:3000/api/api/carrito
+Method: GET
+Content-Type: null
+Content-Length: null
+ GET /api/carrito 502 in 582ms
+ GET /admin/categorias 200 in 294ms
+Proxy URL: http://localhost:3000/api/api/carrito
+Method: GET
+Content-Type: null
+Content-Length: null
+ GET /api/auth/session 200 in 408ms
+ GET /api/carrito 502 in 393ms
+fetchProductsFromEndpoint failed for /api/productos Error [ApiError]: No se pudo conectar con la API (http://localhost:3000/api/api/productos): fetch failed
+    at apiFetch (src/lib/api/client.ts:231:11)
+    at async fetchProductsFromEndpoint (src/lib/api/storefront.ts:432:21)
+    at async Home (src/app/page.tsx:40:34)
+  229 |         : "Error de red al conectar con el backend";
+  230 |
+> 231 |     throw new ApiError(
+      |           ^
+  232 |       0,
+  233 |       `No se pudo conectar con la API (${endpoint}): ${message}`,
+  234 |     ); {
+  status: 0,
+  code: undefined,
+  payload: undefined
+}
+fetchCategories failed Error [ApiError]: No se pudo conectar con la API (http://localhost:3000/api/api/categorias): fetch failed
+    at apiFetch (src/lib/api/client.ts:231:11)
+    at async fetchCategories (src/lib/api/storefront.ts:660:21)
+    at async Home (src/app/page.tsx:40:34)
+  229 |         : "Error de red al conectar con el backend";
+  230 |
+> 231 |     throw new ApiError(
+      |           ^
+  232 |       0,
+  233 |       `No se pudo conectar con la API (${endpoint}): ${message}`,
+  234 |     ); {
+  status: 0,
+  code: undefined,
+  payload: undefined
+}
+ GET / 200 in 229ms
+fetchProductsFromEndpoint failed for /api/productos Error [ApiError]: No se pudo conectar con la API (http://localhost:3000/api/api/productos): fetch failed
+    at apiFetch (src/lib/api/client.ts:231:11)
+    at async fetchProductsFromEndpoint (src/lib/api/storefront.ts:432:21)
+    at async Home (src/app/page.tsx:40:34)
+  229 |         : "Error de red al conectar con el backend";
+  230 |
+> 231 |     throw new ApiError(
+      |           ^
+  232 |       0,
+  233 |       `No se pudo conectar con la API (${endpoint}): ${message}`,
+  234 |     ); {
+  status: 0,
+  code: undefined,
+  payload: undefined
+}
+fetchCategories failed Error [ApiError]: No se pudo conectar con la API (http://localhost:3000/api/api/categorias): fetch failed
+    at apiFetch (src/lib/api/client.ts:231:11)
+    at async fetchCategories (src/lib/api/storefront.ts:660:21)
+    at async Home (src/app/page.tsx:40:34)
+  229 |         : "Error de red al conectar con el backend";
+  230 |
+> 231 |     throw new ApiError(
+      |           ^
+  232 |       0,
+  233 |       `No se pudo conectar con la API (${endpoint}): ${message}`,
+  234 |     ); {
+  status: 0,
+  code: undefined,
+  payload: undefined
+}
+ GET / 200 in 383ms
+ GET /api/auth/session 200 in 375ms
+Proxy URL: http://localhost:3000/api/api/carrito
+Method: GET
+Content-Type: null
+Content-Length: null
+ GET /api/carrito 502 in 400ms
+ GET /admin/categorias 200 in 505ms
+Proxy URL: http://localhost:3000/api/api/carrito
+Method: GET
+Content-Type: null
+Content-Length: null
+ GET /api/auth/session 200 in 417ms
+ GET /api/carrito 502 in 407ms
+fetchProductsFromEndpoint failed for /api/productos Error [ApiError]: No se pudo conectar con la API (http://localhost:3000/api/api/productos): fetch failed
+    at apiFetch (src/lib/api/client.ts:231:11)
+    at async fetchProductsFromEndpoint (src/lib/api/storefront.ts:432:21)
+    at async Home (src/app/page.tsx:40:34)
+  229 |         : "Error de red al conectar con el backend";
+  230 |
+> 231 |     throw new ApiError(
+      |           ^
+  232 |       0,
+  233 |       `No se pudo conectar con la API (${endpoint}): ${message}`,
+  234 |     ); {
+  status: 0,
+  code: undefined,
+  payload: undefined
+}
+fetchCategories failed Error [ApiError]: No se pudo conectar con la API (http://localhost:3000/api/api/categorias): fetch failed
+    at apiFetch (src/lib/api/client.ts:231:11)
+    at async fetchCategories (src/lib/api/storefront.ts:660:21)
+    at async Home (src/app/page.tsx:40:34)
+  229 |         : "Error de red al conectar con el backend";
+  230 |
+> 231 |     throw new ApiError(
+      |           ^
+  232 |       0,
+  233 |       `No se pudo conectar con la API (${endpoint}): ${message}`,
+  234 |     ); {
+  status: 0,
+  code: undefined,
+  payload: undefined
+}
+ GET / 200 in 215ms
+ GET /admin/categorias 200 in 273ms
+Proxy URL: http://localhost:3000/api/api/carrito
+Method: GET
+Content-Type: null
+Content-Length: null
+ GET /api/carrito 502 in 338ms
+ ✓ Compiled /api/favoritos/[[...path]] in 473ms
+Proxy URL: http://localhost:3000/api/api/carrito/merge
+Method: POST
+Content-Type: application/json
+Content-Length: 52
+Proxy URL: http://localhost:3000/api/api/carrito
+Method: GET
+Content-Type: null
+Content-Length: null
+ POST /api/carrito/merge 502 in 683ms
+ GET /api/carrito 502 in 688ms
+ GET /api/favoritos?limit=100&offset=0 200 in 1079ms
+ GET /admin/lineas 200 in 384ms
+Proxy URL: http://localhost:3000/api/api/favoritos?limit=100&offset=0
+Method: GET
+Content-Type: null
+Content-Length: null
+Proxy URL: http://localhost:3000/api/api/carrito
+Method: GET
+Content-Type: null
+Content-Length: null
+ GET /api/carrito 502 in 365ms
+Proxy URL: http://localhost:3000/api/api/carrito
+Method: GET
+Content-Type: null
+Content-Length: null
+Proxy URL: http://localhost:3000/api/api/carrito/merge
+Method: POST
+Content-Type: application/json
+Content-Length: 52
+Proxy URL: http://localhost:3000/api/api/favoritos?limit=100&offset=0
+Method: GET
+Content-Type: null
+Content-Length: null
+ GET /api/carrito 502 in 480ms
+ POST /api/carrito/merge 502 in 481ms
+ GET /api/favoritos?limit=100&offset=0 502 in 484ms

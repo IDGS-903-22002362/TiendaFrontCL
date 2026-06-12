@@ -79,6 +79,9 @@ export type Category = {
   id: string;
   name: string;
   slug: string;
+  imagenPrincipal?: string | null;
+  lineaId?: string | null;
+  orden?: number | null;
 };
 
 export type CartItem = {
@@ -102,6 +105,7 @@ export type Linea = {
   codigo: number;
   nombre: string;
   activo: boolean;
+  imagenPrincipal?: string | null;
 };
 
 export type Talla = {

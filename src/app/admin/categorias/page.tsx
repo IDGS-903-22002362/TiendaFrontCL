@@ -1,13 +1,13 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { categoriasApi } from "@/lib/api/categorias";
 import { lineasApi } from "@/lib/api/lineas";
 import { getApiErrorMessage } from "@/lib/api/errors";
-import type { Linea } from "@/lib/types";
+import type { Category, Linea } from "@/lib/types";
 import { EntityPicker, type EntityOption } from "@/components/admin/entity-picker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -22,9 +22,9 @@ import { X } from "lucide-react";
 
 type FormState = {
   id: string;
-  codigo: string;
   nombre: string;
-  activo: boolean;
+  lineaId: string;
+  orden: string;
   imagenPrincipal: string | null;
   file: File | null;
   imageDeleted: boolean;
@@ -32,9 +32,9 @@ type FormState = {
 
 const EMPTY_FORM: FormState = {
   id: "",
-  codigo: "",
   nombre: "",
-  activo: true,
+  lineaId: "",
+  orden: "",
   imagenPrincipal: null,
   file: null,
   imageDeleted: false,
@@ -48,28 +48,33 @@ function normalizeSearch(value: string): string {
     .trim();
 }
 
-export default function AdminLineasPage() {
+export default function AdminCategoriasPage() {
+  const [categorias, setCategorias] = useState<Category[]>([]);
   const [lineas, setLineas] = useState<Linea[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedLineaId, setSelectedLineaId] = useState("");
+  const [selectedCategoriaId, setSelectedCategoriaId] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const loadLineas = useCallback(async () => {
+  const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await lineasApi.getAll();
-      setLineas(data);
-      setSelectedLineaId((current) =>
-        current && !data.some((linea) => linea.id === current) ? "" : current,
+      const [categoriasData, lineasData] = await Promise.all([
+        categoriasApi.getAll(),
+        lineasApi.getAll(),
+      ]);
+      setCategorias(categoriasData);
+      setLineas(lineasData);
+      setSelectedCategoriaId((current) =>
+        current && !categoriasData.some((c) => c.id === current) ? "" : current,
       );
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "No se pudieron cargar las líneas",
+        title: "No se pudieron cargar los datos",
         description: getApiErrorMessage(error),
       });
     } finally {
@@ -78,20 +83,28 @@ export default function AdminLineasPage() {
   }, [toast]);
 
   useEffect(() => {
-    loadLineas();
-  }, [loadLineas]);
+    loadData();
+  }, [loadData]);
 
-  const lineOptions = useMemo<EntityOption[]>(() => {
+  const categoryOptions = useMemo<EntityOption[]>(() => {
+    return categorias.map((cat) => ({
+      id: cat.id,
+      label: cat.name,
+      subtitle: cat.slug,
+    }));
+  }, [categorias]);
+
+  const lineaOptions = useMemo<EntityOption[]>(() => {
     return lineas.map((linea) => ({
       id: linea.id,
       label: linea.nombre,
-      subtitle: `Código: ${linea.codigo}`,
+      subtitle: `Línea: ${linea.codigo}`,
     }));
   }, [lineas]);
 
-  const filteredLineas = useMemo(() => {
-    return lineas.filter((linea) => {
-      if (selectedLineaId && linea.id !== selectedLineaId) {
+  const filteredCategorias = useMemo(() => {
+    return categorias.filter((cat) => {
+      if (selectedCategoriaId && cat.id !== selectedCategoriaId) {
         return false;
       }
 
@@ -101,30 +114,30 @@ export default function AdminLineasPage() {
         return true;
       }
 
-      return normalizeSearch(`${linea.nombre} ${linea.codigo}`).includes(query);
+      return normalizeSearch(`${cat.name} ${cat.slug}`).includes(query);
     });
-  }, [lineas, searchQuery, selectedLineaId]);
+  }, [categorias, searchQuery, selectedCategoriaId]);
 
   const resetForm = () => {
     setForm(EMPTY_FORM);
-    setSelectedLineaId("");
+    setSelectedCategoriaId("");
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
 
-  const selectLineaForEdit = (lineaId: string) => {
-    setSelectedLineaId(lineaId);
-    const selected = lineas.find((linea) => linea.id === lineaId);
+  const selectCategoriaForEdit = (categoriaId: string) => {
+    setSelectedCategoriaId(categoriaId);
+    const selected = categorias.find((c) => c.id === categoriaId);
     if (!selected) {
       return;
     }
 
     setForm({
       id: selected.id,
-      codigo: String(selected.codigo),
-      nombre: selected.nombre,
-      activo: selected.activo,
+      nombre: selected.name,
+      lineaId: selected.lineaId ?? "",
+      orden: selected.orden !== null && selected.orden !== undefined ? String(selected.orden) : "",
       imagenPrincipal: selected.imagenPrincipal ?? null,
       file: null,
       imageDeleted: false,
@@ -138,36 +151,37 @@ export default function AdminLineasPage() {
     event.preventDefault();
 
     const payload = {
-      codigo: Number(form.codigo),
       nombre: form.nombre.trim(),
-      activo: form.activo,
+      lineaId: form.lineaId ? form.lineaId : undefined,
+      orden: form.orden ? Number(form.orden) : undefined,
       imagenPrincipal: form.imageDeleted ? null : undefined, // Send null to clear image on update
     };
 
     setIsSaving(true);
     try {
-      let savedLineaId = form.id;
+      let savedCategoriaId = form.id;
 
       if (form.id) {
         if (form.imageDeleted && form.imagenPrincipal) {
-           await lineasApi.deleteImage(form.id);
+           await categoriasApi.deleteImage(form.id);
         }
-        await lineasApi.update(form.id, payload);
+        // @ts-ignore
+        await categoriasApi.update(form.id, payload);
       } else {
-        const result = await lineasApi.create(payload);
-        savedLineaId = result.data?.id ?? "";
+        const result = await categoriasApi.create(payload);
+        savedCategoriaId = result.data?.id ?? "";
       }
 
-      if (form.file && savedLineaId) {
-        await lineasApi.uploadImage(savedLineaId, form.file);
+      if (form.file && savedCategoriaId) {
+        await categoriasApi.uploadImage(savedCategoriaId, form.file);
       }
 
       toast({
-        title: form.id ? "Línea actualizada" : "Línea creada",
+        title: form.id ? "Categoría actualizada" : "Categoría creada",
       });
 
       resetForm();
-      await loadLineas();
+      await loadData();
     } catch (error) {
       toast({
         variant: "destructive",
@@ -181,16 +195,16 @@ export default function AdminLineasPage() {
 
   const onDelete = async (id: string) => {
     try {
-      await lineasApi.remove(id);
-      toast({ title: "Línea inactivada" });
-      if (selectedLineaId === id) {
+      await categoriasApi.remove(id);
+      toast({ title: "Categoría eliminada" });
+      if (selectedCategoriaId === id) {
         resetForm();
       }
-      await loadLineas();
+      await loadData();
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "Error al inactivar",
+        title: "Error al eliminar",
         description: getApiErrorMessage(error),
       });
     }
@@ -219,23 +233,23 @@ export default function AdminLineasPage() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Buscar línea</CardTitle>
+          <CardTitle>Buscar categoría</CardTitle>
         </CardHeader>
         <CardContent>
           <EntityPicker
-            label="Buscar línea"
-            searchLabel="Buscar por nombre o código"
-            selectLabel="Selecciona línea para editar"
+            label="Buscar categoría"
+            searchLabel="Buscar por nombre o slug"
+            selectLabel="Selecciona categoría para editar"
             query={searchQuery}
-            value={selectedLineaId}
-            options={lineOptions}
+            value={selectedCategoriaId}
+            options={categoryOptions}
             onQueryChange={setSearchQuery}
             onValueChange={(value) => {
               if (!value) {
                 resetForm();
                 return;
               }
-              selectLineaForEdit(value);
+              selectCategoriaForEdit(value);
             }}
             allowEmpty
             emptyLabel="Sin selección"
@@ -246,7 +260,7 @@ export default function AdminLineasPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>{form.id ? "Editar línea" : "Crear línea"}</CardTitle>
+          <CardTitle>{form.id ? "Editar categoría" : "Crear categoría"}</CardTitle>
         </CardHeader>
         <CardContent>
           <form className="grid gap-3 md:grid-cols-3" onSubmit={onSubmit}>
@@ -282,34 +296,32 @@ export default function AdminLineasPage() {
 
             <Input
               required
-              type="number"
-              min={1}
-              placeholder="Código"
-              value={form.codigo}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, codigo: event.target.value }))
-              }
-            />
-            <Input
-              required
               placeholder="Nombre"
               value={form.nombre}
               onChange={(event) =>
                 setForm((prev) => ({ ...prev, nombre: event.target.value }))
               }
             />
-            <div className="flex items-center gap-2 rounded-md border px-3 py-2">
-              <Checkbox
-                id="activo-linea"
-                checked={form.activo}
-                onCheckedChange={(checked) =>
-                  setForm((prev) => ({ ...prev, activo: Boolean(checked) }))
-                }
-              />
-              <label htmlFor="activo-linea" className="text-sm">
-                Activa
-              </label>
-            </div>
+
+            <EntityPicker
+              label="Línea asociada"
+              selectLabel="Selecciona línea (Opcional)"
+              value={form.lineaId}
+              options={lineaOptions}
+              onValueChange={(val) => setForm((prev) => ({ ...prev, lineaId: val }))}
+              allowEmpty
+              emptyLabel="Ninguna"
+            />
+
+            <Input
+              type="number"
+              min={0}
+              placeholder="Orden"
+              value={form.orden}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, orden: event.target.value }))
+              }
+            />
 
             <div className="md:col-span-3 flex flex-wrap gap-2">
               <Button type="submit" disabled={isSaving}>
@@ -332,51 +344,53 @@ export default function AdminLineasPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Imagen</TableHead>
-                <TableHead>Código</TableHead>
                 <TableHead>Nombre</TableHead>
-                <TableHead>Activa</TableHead>
+                <TableHead>Slug</TableHead>
+                <TableHead>Línea</TableHead>
+                <TableHead>Orden</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5}>Cargando...</TableCell>
+                  <TableCell colSpan={6}>Cargando...</TableCell>
                 </TableRow>
-              ) : filteredLineas.length === 0 ? (
+              ) : filteredCategorias.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5}>
-                    Sin líneas disponibles para el filtro actual.
+                  <TableCell colSpan={6}>
+                    Sin categorías disponibles para el filtro actual.
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredLineas.map((linea) => (
-                  <TableRow key={linea.id}>
+                filteredCategorias.map((cat) => (
+                  <TableRow key={cat.id}>
                     <TableCell>
-                       {linea.imagenPrincipal ? (
-                          <img src={linea.imagenPrincipal} alt={linea.nombre} className="h-10 w-10 object-cover rounded" />
+                       {cat.imagenPrincipal ? (
+                          <img src={cat.imagenPrincipal} alt={cat.name} className="h-10 w-10 object-cover rounded" />
                        ) : (
                           <div className="h-10 w-10 bg-muted rounded flex items-center justify-center text-[10px] text-muted-foreground">N/A</div>
                        )}
                     </TableCell>
-                    <TableCell>{linea.codigo}</TableCell>
-                    <TableCell>{linea.nombre}</TableCell>
-                    <TableCell>{linea.activo ? "Sí" : "No"}</TableCell>
+                    <TableCell>{cat.name}</TableCell>
+                    <TableCell>{cat.slug}</TableCell>
+                    <TableCell>{lineas.find((l) => l.id === cat.lineaId)?.nombre || "-"}</TableCell>
+                    <TableCell>{cat.orden ?? "-"}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => selectLineaForEdit(linea.id)}
+                          onClick={() => selectCategoriaForEdit(cat.id)}
                         >
                           Editar
                         </Button>
                         <Button
                           size="sm"
                           variant="destructive"
-                          onClick={() => onDelete(linea.id)}
+                          onClick={() => onDelete(cat.id)}
                         >
-                          Inactivar
+                          Eliminar
                         </Button>
                       </div>
                     </TableCell>
