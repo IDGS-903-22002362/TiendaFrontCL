@@ -127,7 +127,10 @@ export async function proxyToBackend({
     const isMultipart = contentType?.includes("multipart/form-data");
     if (isMultipart) {
       // Pasar el stream directamente para multipart
-      body = request.body;
+      body = await request.arrayBuffer();
+      if (body && body.byteLength > 0) {
+        headers.set("Content-Length", body.byteLength.toString());
+      }
     } else {
       // Para JSON/otros, leer como ArrayBuffer
       const rawBody = await request.arrayBuffer();
@@ -145,7 +148,7 @@ export async function proxyToBackend({
       method: nextMethod,
       headers,
       body,
-      duplex: "half", // Necesario para streams
+      //duplex: "half", // Necesario para streams
       cache: "no-store",
     });
 
