@@ -102,7 +102,7 @@ export function ProductFilters({
     () => searchParams.get("onlyOffers") === "true",
   );
   const [onlyAvailable, setOnlyAvailable] = useState(
-    () => searchParams.get("onlyAvailable") !== "false",
+    () => searchParams.get("onlyAvailable") === "true",
   );
   const [wishlistOnly, setWishlistOnly] = useState(false);
 
@@ -201,7 +201,7 @@ export function ProductFilters({
     if (sort !== "destacados") params.set("sort", sort);
     if (searchQuery) params.set("q", searchQuery);
     if (onlyOffers) params.set("onlyOffers", "true");
-    if (!onlyAvailable) params.set("onlyAvailable", "false");
+    if (onlyAvailable) params.set("onlyAvailable", "true");
 
     const nextUrl = params.toString() ? `?${params.toString()}` : "/products";
     router.push(nextUrl, { scroll: false });
@@ -232,7 +232,7 @@ export function ProductFilters({
       ? `Hasta $${priceRange[0].toLocaleString("es-MX")}`
       : null,
     onlyOffers ? "Ofertas" : null,
-    !onlyAvailable ? "Incluye agotados" : null,
+    onlyAvailable ? "Solo disponibles" : null,
     wishlistOnly ? "Favoritos" : null,
   ].filter(Boolean) as string[];
 
@@ -244,7 +244,7 @@ export function ProductFilters({
     setPriceRange([DEFAULT_MAX_PRICE]);
     setSearchQuery("");
     setOnlyOffers(false);
-    setOnlyAvailable(true);
+    setOnlyAvailable(false);
     setWishlistOnly(false);
   };
 

@@ -873,6 +873,7 @@ export type CatalogProductCard = {
   ofertaTitulo: string | null;
   descuentoTotal: number;
   imagenPrincipal: string | null;
+  imagenes?: string[];
   stockTotal: number;
   disponible: boolean;
   destacado: boolean;
