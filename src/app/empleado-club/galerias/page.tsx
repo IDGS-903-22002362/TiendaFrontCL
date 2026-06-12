@@ -514,7 +514,7 @@ export default function EmpleadoClubGaleriaPage() {
             {/* Cabecera */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="font-headline text-3xl font-bold">Módulo de Galerías</h1>
+                    <h1 className="font-headline text-3xl font-bold">Gestión de Galerías</h1>
                     <p className="text-sm text-muted-foreground">
                         Administra las galerías de imágenes y videos.
                     </p>
