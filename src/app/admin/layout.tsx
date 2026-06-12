@@ -39,6 +39,7 @@ const navGroups = [
     title: "Catálogo",
     links: [
       { href: "/admin/productos", label: "Productos", icon: Package, adminOnly: false, empleadoOnly: false },
+      { href: "/admin/categorias", label: "Categorías", icon: Tags, adminOnly: false, empleadoOnly: false },
       { href: "/admin/lineas", label: "Líneas", icon: Tags, adminOnly: false, empleadoOnly: false },
       { href: "/admin/tallas", label: "Tallas", icon: Ruler, adminOnly: false, empleadoOnly: false },
       { href: "/admin/proveedores", label: "Proveedores", icon: Truck, adminOnly: false, empleadoOnly: false },
