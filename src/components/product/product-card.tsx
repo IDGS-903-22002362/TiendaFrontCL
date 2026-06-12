@@ -117,32 +117,35 @@ export function ProductCard({ product, pricingOferta }: ProductCardProps) {
         </div>
       </div>
 
-      <div className="mt-[10px] md:mt-[12px] lg:mt-[16px] flex flex-1 flex-col">
-        <div className="flex items-baseline gap-2.5">
-          <p className="text-[var(--font-size-price-card-mobile)] font-semibold leading-none tracking-[-0.03em] text-foreground lg:text-[var(--font-size-price-card-desktop)]">
-            {formatCurrency(finalPrice)}
-          </p>
-          {product.salePrice ? (
-            <p className="text-[0.9rem] leading-none text-text-muted line-through md:text-[0.95rem]">
-              {formatCurrency(product.price)}
-            </p>
-          </div>
+      <div className="mt-[10px] flex flex-1 flex-col md:mt-[12px] lg:mt-[16px]">
+  <div className="flex items-baseline gap-2.5">
+    <p className="text-[var(--font-size-price-card-mobile)] font-semibold leading-none tracking-[-0.03em] text-foreground lg:text-[var(--font-size-price-card-desktop)]">
+      {formatCurrency(finalPrice)}
+    </p>
 
-          {tieneOfertaBackend ? (
-            <span className="w-fit border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-primary">
-              {offerLabel}
-            </span>
-          ) : null}
-        </div>
+    {originalPrice ? (
+      <p className="text-[0.9rem] leading-none text-text-muted line-through md:text-[0.95rem]">
+        {formatCurrency(originalPrice)}
+      </p>
+    ) : null}
+  </div>
 
-        <Link href={`/products/${product.id}`} className="mt-3 block">
-          <h3 className="line-clamp-2 text-[var(--font-size-product-name-mobile)] font-medium leading-[var(--line-height-card)] text-foreground lg:text-[var(--font-size-product-name-desktop)]">
-            {product.name}
-          </h3>
-        </Link>
+  {tieneOfertaBackend ? (
+    <span className="mt-2 w-fit border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-primary">
+      {offerLabel}
+    </span>
+  ) : null}
 
-        <p className="mt-3 text-[var(--font-size-category-meta)] leading-[var(--line-height-body)] text-text-muted">{eyebrow}</p>
-      </div>
+  <Link href={`/products/${product.id}`} className="mt-3 block">
+    <h3 className="line-clamp-2 text-[var(--font-size-product-name-mobile)] font-medium leading-[var(--line-height-card)] text-foreground lg:text-[var(--font-size-product-name-desktop)]">
+      {product.name}
+    </h3>
+  </Link>
+
+  <p className="mt-3 text-[var(--font-size-category-meta)] leading-[var(--line-height-body)] text-text-muted">
+    {eyebrow}
+  </p>
+</div>
     </article>
   );
 }

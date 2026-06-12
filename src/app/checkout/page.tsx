@@ -134,6 +134,38 @@ function roundCurrency(value: number) {
 
 const IS_DEVELOPMENT = process.env.NODE_ENV !== "production";
 
+const PROMO_CODE_STORAGE_KEY = "tiendafront_codigo_promocion";
+
+function getCheckoutPromoCodeField(codigoPromocion?: string) {
+  const codigo = normalizeWhitespace(codigoPromocion ?? "").toUpperCase();
+
+  return codigo ? { codigoPromocion: codigo } : {};
+}
+
+function getStringArrayFromCartItem(
+  item: CartItem,
+  keys: string[],
+): string[] {
+  const record = item as unknown as Record<string, unknown>;
+
+  for (const key of keys) {
+    const value = record[key];
+
+    if (Array.isArray(value)) {
+      return value.filter(
+        (entry): entry is string =>
+          typeof entry === "string" && entry.trim().length > 0,
+      );
+    }
+
+    if (typeof value === "string" && value.trim().length > 0) {
+      return [value];
+    }
+  }
+
+  return [];
+}
+
 if (IS_DEVELOPMENT && typeof window !== "undefined") {
   console.log(
     "Google Maps key loaded:",
@@ -785,12 +817,13 @@ function buildCheckoutPayload(
 ) {
   const promoCodeField = getCheckoutPromoCodeField(codigoPromocion);
   if (values.fulfillmentMethod === "PICKUP") {
-    return {
-      fulfillmentMethod: "PICKUP" as const,
-      pickupLocationId: values.pickupLocation.id,
-      pickupContact: values.pickupContact,
-      metodoPago,
-    };
+   return {
+  fulfillmentMethod: "PICKUP" as const,
+  pickupLocationId: values.pickupLocation.id,
+  pickupContact: values.pickupContact,
+  metodoPago,
+  ...promoCodeField,
+};
   }
 
   const selectedOption = values.shippingSelection?.selectedOption;
@@ -800,11 +833,12 @@ function buildCheckoutPayload(
   );
 
   return {
-    fulfillmentMethod: "DELIVERY" as const,
-    direccionEnvio: shippingPayload.direccionEnvio,
-    shippingAddress: shippingPayload.shippingAddress,
-    fedexAddress: shippingPayload.fedexAddress,
-    metodoPago,
+  fulfillmentMethod: "DELIVERY" as const,
+  direccionEnvio: shippingPayload.direccionEnvio,
+  shippingAddress: shippingPayload.shippingAddress,
+  fedexAddress: shippingPayload.fedexAddress,
+  metodoPago,
+  ...promoCodeField,
     ...(shippingQuoteId ? { shippingQuoteId } : {}),
     ...(selectedOption
       ? selectedOption.optionId
@@ -876,22 +910,26 @@ function buildAplazoPayload(params: {
     throw new Error("No fue posible preparar el pago con Aplazo");
   }
 
-  return {
-    orderId: params.orderId,
-    customer: {
-      name: customer.name,
-      email: customer.email,
-      phone: customer.phone,
-    },
-    currency: "MXN",
-    successUrl,
-    failureUrl,
-    cancelUrl,
-    cartUrl,
-    metadata: {
-      cartId: params.orderId,
-    },
-  };
+ return {
+  orderId: params.orderId,
+  customer: {
+    name: customer.name,
+    email: customer.email,
+    phone: customer.phone,
+  },
+  subtotal: orderSubtotal,
+  shipping: orderShipping,
+  tax: orderTaxes,
+  total: orderTotal,
+  currency: "MXN",
+  successUrl,
+  failureUrl,
+  cancelUrl,
+  cartUrl,
+  metadata: {
+  cartId: params.orderId,
+},
+};
 }
 
 function getAplazoErrorMessage(error: unknown) {
@@ -928,22 +966,38 @@ function OrderSummaryPanel({
   fulfillmentMethod,
   shippingSelection,
   checkoutPricing,
+  pricingOfertas,
+  subtotalConOfertas,
+  subtotalConCodigo,
+  codigoPromocion,
+  descuentoCodigo,
+  codigoError,
+  isLoadingCodigo,
 }: {
   fulfillmentMethod: FulfillmentMethod;
   shippingSelection?: DeliveryShippingSelection | null;
   checkoutPricing?: CheckoutPricing | null;
+  pricingOfertas: Record<string, ProductOfferPricing>;
+  subtotalConOfertas: number;
+  subtotalConCodigo: number;
+  codigoPromocion: string;
+  descuentoCodigo: number;
+  codigoError: string | null;
+  isLoadingCodigo: boolean;
 }) {
   const { state, totalItems } = useCart();
   const { getPersonalization } = useStorefront();
-  const pricing =
-    checkoutPricing && checkoutPricing.subtotal > 0
-      ? checkoutPricing
-      :
-    getExpectedCheckoutPricing(
-      subtotal,
-      fulfillmentMethod,
-      shippingSelection?.selectedOption.amount ?? 0,
-    );
+
+  const shippingAmount =
+    checkoutPricing?.shipping ??
+    shippingSelection?.selectedOption.amount ??
+    0;
+
+  const pricing = getExpectedCheckoutPricing(
+    subtotalConCodigo,
+    fulfillmentMethod,
+    shippingAmount,
+  );
 
   return (
     <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
@@ -2589,10 +2643,7 @@ function CardPaymentStep({
     try {
       assertDeliveryShippingReady(values);
 
-      const expectedSubtotal = cartItems.reduce(
-        (sum, item) => sum + item.price * item.quantity,
-        0,
-      );
+      
       if (values.fulfillmentMethod === "PICKUP") {
         const pickupCart = await resolveCartIdForPickup(cartId);
         const availability = await pickupApi.validateAvailability({
@@ -2608,7 +2659,10 @@ function CardPaymentStep({
         }
       }
 
-      const checkoutResult = await checkoutCart(
+    clearStoredAplazoCheckoutState();
+clearStoredAplazoRetryPayload();
+
+const checkoutResult = await checkoutCart(
   buildCheckoutPayload(values, "TARJETA", codigoPromocion),
 );
 
@@ -2831,19 +2885,22 @@ function AplazoPaymentStep({
       assertDeliveryShippingReady(values);
 
       const origin = window.location.origin;
-      const cartFingerprint = [
-        getAplazoCartFingerprint(cartItems),
-        values.fulfillmentMethod,
-        values.fulfillmentMethod === "PICKUP" ? values.pickupLocation.id : "",
-        values.fulfillmentMethod === "DELIVERY"
-          ? (values.shippingSelection?.quote.quoteId ?? "")
-          : "",
-        values.fulfillmentMethod === "DELIVERY"
-          ? (values.shippingSelection?.selectedOption.optionId ??
-            values.shippingSelection?.selectedOption.serviceType ??
-            "")
-          : "",
-      ].join("|");
+     const cartFingerprint = [
+  getAplazoCartFingerprint(cartItems),
+  codigoPromocion ?? "",
+  validation.validatedSubtotal.toFixed(2),
+  total.toFixed(2),
+  values.fulfillmentMethod,
+  values.fulfillmentMethod === "PICKUP" ? values.pickupLocation.id : "",
+  values.fulfillmentMethod === "DELIVERY"
+    ? (values.shippingSelection?.quote.quoteId ?? "")
+    : "",
+  values.fulfillmentMethod === "DELIVERY"
+    ? (values.shippingSelection?.selectedOption.optionId ??
+      values.shippingSelection?.selectedOption.serviceType ??
+      "")
+    : "",
+].join("|");
       const cartSessionId = getOrCreateSessionId();
       const cartSnapshot = cartItems.map((item) => ({
         productoId: item.id,
@@ -2919,9 +2976,28 @@ function AplazoPaymentStep({
               telefono: validation.customer.phone,
             };
 
-       const checkoutResult = await checkoutCart(
-  buildCheckoutPayload(checkoutValues, "APLAZO", codigoPromocion),
+       const checkoutPayload = buildCheckoutPayload(
+  checkoutValues,
+  "APLAZO",
+  codigoPromocion,
 );
+
+logAplazoDebug("CHECKOUT_CART_PAYLOAD_BEFORE_CREATE_ORDER", {
+  codigoPromocionProp: codigoPromocion,
+  validationSubtotal: validation.validatedSubtotal,
+  expectedSubtotal,
+  total,
+  checkoutPayload,
+  cartItems: cartItems.map((item) => ({
+    id: item.id,
+    name: item.name,
+    quantity: item.quantity,
+    price: item.price,
+    tallaId: item.tallaId ?? item.size,
+  })),
+});
+
+const checkoutResult = await checkoutCart(checkoutPayload);
 
         orderId = getOrderIdFromCheckoutResult(checkoutResult);
         if (!orderId) {
@@ -2932,6 +3008,36 @@ function AplazoPaymentStep({
         if (!createdOrder) {
           throw new Error("No se pudo consultar la orden creada para validar montos con Aplazo");
         }
+        logAplazoDebug("ORDER_CREATED_FOR_APLAZO_DEBUG", {
+  orderId,
+  expectedSubtotal: validation.validatedSubtotal,
+  frontendTotal: total,
+  codigoPromocionProp: codigoPromocion,
+  createdOrder: {
+    subtotal: createdOrder.subtotal,
+    shippingCost: createdOrder.shippingCost,
+    costoEnvio: (createdOrder as any).costoEnvio,
+    total: createdOrder.total,
+    codigoPromocion: (createdOrder as any).codigoPromocion,
+    codigoPromocionId: (createdOrder as any).codigoPromocionId,
+    codigoPromocionTitulo: (createdOrder as any).codigoPromocionTitulo,
+    descuentoCodigoPromocion: (createdOrder as any).descuentoCodigoPromocion,
+    discountTotal: (createdOrder as any).discountTotal,
+    subtotalOriginal: (createdOrder as any).subtotalOriginal,
+    subtotalFinal: (createdOrder as any).subtotalFinal,
+    items: (createdOrder as any).items?.map((item: any) => ({
+      productoId: item.productoId,
+      nombre: item.nombre,
+      cantidad: item.cantidad,
+      precioUnitario: item.precioUnitario,
+      subtotal: item.subtotal,
+      precioOriginal: item.precioOriginal,
+      precioFinal: item.precioFinal,
+      ofertaAplicadaId: item.ofertaAplicadaId,
+      codigoPromocionAplicadoId: item.codigoPromocionAplicadoId,
+    })),
+  },
+});
       } else if (storedState && isAplazoRetryableStatus(storedState.lastKnownStatus)) {
         idempotencyKey = crypto.randomUUID();
         writeStoredAplazoCheckoutState({
@@ -2955,35 +3061,51 @@ function AplazoPaymentStep({
         throw new Error("No se pudo preparar el pago con Aplazo");
       }
 
-      validateOrderPricing({
-        order: createdOrder,
-        expectedSubtotal: validation.validatedSubtotal,
-      });
+      logAplazoDebug("VALIDATE_ORDER_PRICING_BEFORE_APLAZO", {
+  orderId,
+  expectedSubtotal: validation.validatedSubtotal,
+  orderSubtotal: createdOrder.subtotal,
+  orderShippingCost: createdOrder.shippingCost,
+  orderTotal: createdOrder.total,
+  expectedTotal: roundCurrency(
+    validation.validatedSubtotal + Number(createdOrder.shippingCost ?? 0),
+  ),
+});
 
-      createPayload = buildAplazoPayload({
-        orderId,
-        values: {
-          ...(values.fulfillmentMethod === "PICKUP"
-            ? {
-              ...values,
-              pickupContact: {
-                ...values.pickupContact,
-                name: validation.fullName,
-                email: validation.customer.email,
-                phone: validation.customer.phone,
-              },
-            }
-            : {
-              ...values,
-              name: validation.fullName,
-              email: validation.customer.email,
-              telefono: validation.customer.phone,
-            }),
-        } as CheckoutValues,
-        items: cartItems,
-        order: createdOrder,
-        origin,
-      });
+validateOrderPricing({
+  order: createdOrder,
+  expectedSubtotal: validation.validatedSubtotal,
+});
+
+logAplazoDebug("VALIDATE_ORDER_PRICING_OK", {
+  orderId,
+});
+
+createPayload = buildAplazoPayload({
+  orderId,
+  values: {
+    ...(values.fulfillmentMethod === "PICKUP"
+      ? {
+        ...values,
+        pickupContact: {
+          ...values.pickupContact,
+          name: validation.fullName,
+          email: validation.customer.email,
+          phone: validation.customer.phone,
+        },
+      }
+      : {
+        ...values,
+        name: validation.fullName,
+        email: validation.customer.email,
+        telefono: validation.customer.phone,
+      }),
+  } as CheckoutValues,
+  items: cartItems,
+  order: createdOrder,
+  origin,
+  expectedSubtotal: validation.validatedSubtotal,
+});
 
       logAplazoDebug("Payload Aplazo sanitizado", {
         orderId: createPayload.orderId,
@@ -3009,6 +3131,22 @@ function AplazoPaymentStep({
       if (!createPayload || !orderId) {
         throw new Error("No se pudo preparar el intento de pago con Aplazo");
       }
+
+      logAplazoDebug("APLAZO_ONLINE_PAYLOAD_BEFORE_PAYMENT_API", {
+  idempotencyKey,
+  orderId,
+  codigoPromocionProp: codigoPromocion,
+  expectedSubtotal: validation.validatedSubtotal,
+  frontendTotal: total,
+  createdOrder: {
+    subtotal: createdOrder.subtotal,
+    shippingCost: createdOrder.shippingCost,
+    total: createdOrder.total,
+    codigoPromocion: (createdOrder as any).codigoPromocion,
+    descuentoCodigoPromocion: (createdOrder as any).descuentoCodigoPromocion,
+  },
+  createPayload,
+});
 
       const attempt = await paymentsApi.createAplazoOnlineAttempt(
         createPayload,
@@ -3113,13 +3251,7 @@ function AplazoPaymentStep({
                   <p>
                     Total estimado a validar con Aplazo:{" "}
                     <span className="font-semibold text-foreground">
-                      {formatCurrency(
-                        cartItems.reduce(
-                          (sum, item) => sum + item.price * item.quantity,
-                          0,
-                        ) +
-                          getDeliveryShippingAmount(values),
-                      )}
+                     {formatCurrency(total)}
                     </span>
                   </p>
                 </div>
@@ -3360,6 +3492,7 @@ const subtotalConCodigo =
 const codigoPromocionAplicado =
   resultadoCodigo && descuentoCodigo > 0 ? codigoPromocion : "";
 
+
   // Validación: verificar que el perfil esté completo antes de continuar
   useEffect(() => {
     if (!isAuthLoading && isAuthenticated && user && !user.perfilCompleto) {
@@ -3406,17 +3539,17 @@ const codigoPromocionAplicado =
     void loadPickupLocations();
   }, [fulfillmentMethod, pickupLocations.length]);
 
-  const pricing = useMemo(
-    () =>
-      getExpectedCheckoutPricing(
-        subtotal,
-        fulfillmentMethod,
-        checkoutValues?.fulfillmentMethod === "DELIVERY"
-          ? (checkoutValues.shippingSelection?.selectedOption.amount ?? 0)
-          : 0,
-      ),
-    [checkoutValues, fulfillmentMethod, subtotal],
-  );
+ const pricing = useMemo(
+  () =>
+    getExpectedCheckoutPricing(
+      subtotalConCodigo,
+      fulfillmentMethod,
+      checkoutValues?.fulfillmentMethod === "DELIVERY"
+        ? (checkoutValues.shippingSelection?.selectedOption.amount ?? 0)
+        : 0,
+    ),
+  [checkoutValues, fulfillmentMethod, subtotalConCodigo],
+);
   const cartSignature = useMemo(
     () =>
       state.items
@@ -3429,6 +3562,43 @@ const codigoPromocionAplicado =
     [state.items],
   );
   const total = pricing.total;
+
+  useEffect(() => {
+  logAplazoDebug("CHECKOUT_PRICING_STATE", {
+    codigoPromocion,
+    codigoPromocionAplicado,
+    descuentoCodigo,
+    subtotalConOfertas,
+    subtotalConCodigo,
+    total: pricing.total,
+    resultadoCodigo: resultadoCodigo
+      ? {
+          valido: resultadoCodigo.valido,
+          codigoPromocionId: resultadoCodigo.codigoPromocionId,
+          descuentoTotal: resultadoCodigo.descuentoTotal,
+          subtotalOriginal: resultadoCodigo.subtotalOriginal,
+          subtotalFinal: resultadoCodigo.subtotalFinal,
+          mensaje: resultadoCodigo.mensaje,
+        }
+      : null,
+    items: cartItemsConOfertas.map((item) => ({
+      id: item.id,
+      name: item.name,
+      quantity: item.quantity,
+      price: item.price,
+      tallaId: item.tallaId ?? item.size,
+    })),
+  });
+}, [
+  codigoPromocion,
+  codigoPromocionAplicado,
+  descuentoCodigo,
+  subtotalConOfertas,
+  subtotalConCodigo,
+  pricing.total,
+  resultadoCodigo,
+  cartItemsConOfertas,
+]);
   const activeCheckoutValues =
     checkoutValues ??
     ({
@@ -3556,16 +3726,18 @@ const codigoPromocionAplicado =
           ) : paymentMethod === "TARJETA" ? (
             stripePromise ? (
               <CardPaymentStep
-                values={activeCheckoutValues}
-                cartId={state.id}
-                cartItems={state.items}
-                total={total}
-                onBack={() => setCurrentStep(0)}
-                onRecoverableDeliveryError={handleRecoverableDeliveryError}
-                paymentMethod={paymentMethod}
-                onPaymentMethodChange={setPaymentMethod}
-                stripePromise={stripePromise}
-              />
+  values={activeCheckoutValues}
+  cartId={state.id}
+  cartItems={cartItemsConOfertas}
+  total={total}
+  expectedSubtotal={subtotalConCodigo}
+  codigoPromocion={codigoPromocionAplicado || undefined}
+  onBack={() => setCurrentStep(0)}
+  onRecoverableDeliveryError={handleRecoverableDeliveryError}
+  paymentMethod={paymentMethod}
+  onPaymentMethodChange={setPaymentMethod}
+  stripePromise={stripePromise}
+/>
             ) : (
               <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
                 <CardHeader>
@@ -3582,14 +3754,17 @@ const codigoPromocionAplicado =
             )
           ) : (
             <AplazoPaymentStep
-              values={activeCheckoutValues}
-              cartId={state.id}
-              cartItems={state.items}
-              onBack={() => setCurrentStep(0)}
-              onRecoverableDeliveryError={handleRecoverableDeliveryError}
-              paymentMethod={paymentMethod}
-              onPaymentMethodChange={setPaymentMethod}
-            />
+  values={activeCheckoutValues}
+  cartId={state.id}
+  cartItems={cartItemsConOfertas}
+  expectedSubtotal={subtotalConCodigo}
+  total={total}
+  codigoPromocion={codigoPromocionAplicado || undefined}
+  onBack={() => setCurrentStep(0)}
+  onRecoverableDeliveryError={handleRecoverableDeliveryError}
+  paymentMethod={paymentMethod}
+  onPaymentMethodChange={setPaymentMethod}
+/>
           )}
 
           <PaymentMethodStrip
@@ -3601,18 +3776,25 @@ const codigoPromocionAplicado =
 
         <div className="lg:sticky lg:top-[calc(var(--storefront-header-current-height,var(--storefront-header-desktop-height))+1.5rem)]">
           <OrderSummaryPanel
-            fulfillmentMethod={fulfillmentMethod}
-            shippingSelection={
-              checkoutValues?.fulfillmentMethod === "DELIVERY"
-                ? checkoutValues.shippingSelection
-                : null
-            }
-            checkoutPricing={
-              checkoutValues?.fulfillmentMethod === "DELIVERY"
-                ? checkoutValues.checkoutPricing
-                : null
-            }
-          />
+  fulfillmentMethod={fulfillmentMethod}
+  shippingSelection={
+    checkoutValues?.fulfillmentMethod === "DELIVERY"
+      ? checkoutValues.shippingSelection
+      : null
+  }
+  checkoutPricing={
+    checkoutValues?.fulfillmentMethod === "DELIVERY"
+      ? checkoutValues.checkoutPricing
+      : null
+  }
+  pricingOfertas={pricingOfertas}
+  subtotalConOfertas={subtotalConOfertas}
+  subtotalConCodigo={subtotalConCodigo}
+  codigoPromocion={codigoPromocionAplicado}
+  descuentoCodigo={descuentoCodigo}
+  codigoError={codigoError}
+  isLoadingCodigo={isLoadingCodigo}
+/>
         </div>
       </div>
 

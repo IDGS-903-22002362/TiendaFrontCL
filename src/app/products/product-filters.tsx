@@ -19,7 +19,10 @@ import { FilterDrawer } from "@/components/storefront/catalog/filter-drawer";
 import { FilterSidebar } from "@/components/storefront/catalog/filter-sidebar";
 import { ProductToolbar } from "@/components/storefront/catalog/product-toolbar";
 import { useStorefront } from "@/hooks/use-storefront";
-import { isCategoryVisible } from "@/lib/storefront";
+import {
+  isCategoryVisible,
+  normalizeStorefrontText,
+} from "@/lib/storefront";
 import {
   fetchCatalogPage,
   mapCatalogProductToProductCardViewModel,
@@ -169,9 +172,20 @@ export function ProductFilters({
 }: ProductFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { wishlistIds } = useStorefront();
-  const [productsWithOffers, setProductsWithOffers] =
-  useState<Product[]>(allProducts);
+const { wishlistIds } = useStorefront();
+
+const [productsWithOffers, setProductsWithOffers] = useState<Product[]>(() =>
+  initialPage.items.map(mapCatalogProductToProductCardViewModel),
+);
+
+const [offerDiscountPage, setOfferDiscountPage] = useState(0);
+
+const [selectedOfferPercent, setSelectedOfferPercent] = useState<number | null>(
+  () => {
+    const value = Number(searchParams.get("offerPercent"));
+    return Number.isFinite(value) && value > 0 ? value : null;
+  },
+);
 
   const [items, setItems] = useState<Product[]>(() =>
     initialPage.items.map(mapCatalogProductToProductCardViewModel),
@@ -268,10 +282,15 @@ export function ProductFilters({
         );
 
         setItems((current) =>
-          cursor ? [...current, ...newProducts] : newProducts,
-        );
-        setNextCursor(response.nextCursor);
-        setHasMore(response.hasMore);
+  cursor ? [...current, ...newProducts] : newProducts,
+);
+
+setProductsWithOffers((current) =>
+  cursor ? [...current, ...newProducts] : newProducts,
+);
+
+setNextCursor(response.nextCursor);
+setHasMore(response.hasMore);
       } catch (loadError) {
         console.error("Failed to load catalog page", loadError);
         if (!cursor) {
@@ -385,8 +404,12 @@ const offerDiscounts = useMemo<OfferDiscountHighlight[]>(() => {
 const hasOfferShowcase =
   offerCollections.length > 0 || offerDiscounts.length > 0;
 
-const shouldShowOfferShowcase = tags.includes("sale") && hasOfferShowcase;
+const isOfferView =
+  onlyOffers ||
+  searchParams.get("tag") === "sale" ||
+  searchParams.get("tags")?.split(",").includes("sale");
 
+const shouldShowOfferShowcase = Boolean(isOfferView && hasOfferShowcase);
 const totalOfferDiscountPages = Math.max(
   1,
   Math.ceil(offerDiscounts.length / OFFER_DISCOUNT_PAGE_SIZE),
@@ -418,6 +441,28 @@ useEffect(() => {
   );
 }, [totalOfferDiscountPages]);
 
+const handleOfferCollectionClick = (highlight: OfferCollectionHighlight) => {
+  if (highlight.type === "category") {
+    setCategory(highlight.value);
+    setLinea("all");
+  } else {
+    setLinea(highlight.value);
+    setCategory("all");
+  }
+
+  setOnlyOffers(true);
+  setSelectedOfferPercent(null);
+  setOfferDiscountPage(0);
+};
+
+const handleOfferDiscountClick = (percent: number) => {
+  setSelectedOfferPercent((currentPercent: number | null) =>
+    currentPercent === percent ? null : percent,
+  );
+
+  setOnlyOffers(true);
+};
+
   useEffect(() => {
     if (initialRender.current) {
       initialRender.current = false;
@@ -435,7 +480,10 @@ useEffect(() => {
     if (sort !== "destacados") params.set("sort", sort);
     if (searchQuery) params.set("q", searchQuery);
     if (onlyOffers) params.set("onlyOffers", "true");
-    if (!onlyAvailable) params.set("onlyAvailable", "false");
+if (selectedOfferPercent) {
+  params.set("offerPercent", String(selectedOfferPercent));
+}
+if (!onlyAvailable) params.set("onlyAvailable", "false");
 
     const nextUrl = params.toString() ? `?${params.toString()}` : "/products";
     router.push(nextUrl, { scroll: false });
@@ -467,8 +515,9 @@ useEffect(() => {
       ? `Hasta $${priceRange[0].toLocaleString("es-MX")}`
       : null,
     onlyOffers ? "Ofertas" : null,
-    !onlyAvailable ? "Incluye agotados" : null,
-    wishlistOnly ? "Favoritos" : null,
+selectedOfferPercent ? `${selectedOfferPercent}% descuento` : null,
+!onlyAvailable ? "Incluye agotados" : null,
+wishlistOnly ? "Favoritos" : null,
   ].filter(Boolean) as string[];
 
   const clearFilters = () => {
@@ -479,13 +528,21 @@ useEffect(() => {
     setPriceRange([DEFAULT_MAX_PRICE]);
     setSearchQuery("");
     setOnlyOffers(false);
-    setOnlyAvailable(true);
-    setWishlistOnly(false);
+setSelectedOfferPercent(null);
+setOfferDiscountPage(0);
+setOnlyAvailable(true);
+setWishlistOnly(false);
   };
 
-  const productsToShow = wishlistOnly
-    ? items.filter((product) => wishlistIds.includes(product.id))
-    : items;
+const productsBase = wishlistOnly
+  ? items.filter((product) => wishlistIds.includes(product.id))
+  : items;
+
+const productsToShow = selectedOfferPercent
+  ? productsBase.filter(
+      (product) => getProductDiscountPercent(product) === selectedOfferPercent,
+    )
+  : productsBase;
 
   const filterControls = (
     <div className="space-y-7">
@@ -737,8 +794,8 @@ useEffect(() => {
   ) : null}
 
   
-        <ProductToolbar
-  count={isCalculatingOffers ? productsWithOffers.length : productsToShow.length}
+       <ProductToolbar
+  count={productsToShow.length}
           searchLabel={
             searchQuery ? `Resultados para "${searchQuery}"` : undefined
           }

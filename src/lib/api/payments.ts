@@ -711,32 +711,87 @@ export const paymentsApi = {
     };
   },
 
-  async createEmbeddedCheckoutSession(
-    ordenId: string,
-    successUrl: string,
-    cancelUrl: string,
-  ) {
-    const raw = await apiFetch<unknown>(
-      "/api/stripe/checkout-sessions",
-      {
-        method: "POST",
-        body: JSON.stringify({ orderId: ordenId, successUrl, cancelUrl }),
-      },
-      { local: true },
-    );
-    const data = unwrapData<unknown>(raw);
-    const record =
-      data && typeof data === "object" ? (data as UnknownRecord) : {};
+ async createEmbeddedCheckoutSession(
+  ordenId: string,
+  successUrl: string,
+  cancelUrl: string,
+) {
+  const raw = await apiFetch<unknown>(
+    "/api/stripe/checkout-sessions",
+    {
+      method: "POST",
+      body: JSON.stringify({ orderId: ordenId, successUrl, cancelUrl }),
+    },
+    { local: true },
+  );
 
-    return {
-      clientSecret: toStringValue(
-        record.clientSecret ??
-          record.client_secret ??
-          record.checkoutSessionClientSecret,
-      ),
-      url: toStringValue(record.url) || undefined,
-    };
-  },
+  const data = unwrapData<unknown>(raw);
+  const record =
+    data && typeof data === "object" ? (data as UnknownRecord) : {};
+
+  const nestedData =
+    record.data && typeof record.data === "object"
+      ? (record.data as UnknownRecord)
+      : {};
+
+  const session =
+    record.session && typeof record.session === "object"
+      ? (record.session as UnknownRecord)
+      : nestedData.session && typeof nestedData.session === "object"
+        ? (nestedData.session as UnknownRecord)
+        : {};
+
+  const clientSecret = toStringValue(
+    record.clientSecret ??
+      record.client_secret ??
+      record.checkoutSessionClientSecret ??
+      nestedData.clientSecret ??
+      nestedData.client_secret ??
+      nestedData.checkoutSessionClientSecret ??
+      session.clientSecret ??
+      session.client_secret ??
+      session.checkoutSessionClientSecret,
+  );
+
+  const normalizedSession = {
+    sessionId: toStringValue(
+      record.sessionId ??
+        record.id ??
+        nestedData.sessionId ??
+        nestedData.id ??
+        session.sessionId ??
+        session.id,
+    ),
+    clientSecret,
+    url:
+      toStringValue(record.url ?? nestedData.url ?? session.url) || undefined,
+    pagoId: toStringValue(
+      record.pagoId ??
+        nestedData.pagoId ??
+        session.pagoId,
+    ),
+    stripeCustomerId: toStringValue(
+      record.stripeCustomerId ??
+        nestedData.stripeCustomerId ??
+        session.stripeCustomerId,
+    ),
+    created:
+      typeof record.created === "boolean"
+        ? record.created
+        : typeof nestedData.created === "boolean"
+          ? nestedData.created
+          : typeof session.created === "boolean"
+            ? session.created
+            : undefined,
+  };
+
+  if (process.env.NODE_ENV !== "production") {
+    console.log("[STRIPE_EMBEDDED_SESSION_API_RAW]", raw);
+    console.log("[STRIPE_EMBEDDED_SESSION_API_NORMALIZED]", normalizedSession);
+  }
+
+  return normalizedSession;
+},
 
   async createSetupIntent(customerId?: string) {
     const raw = await apiFetch<unknown>(
