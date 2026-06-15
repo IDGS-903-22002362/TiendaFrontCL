@@ -1,9 +1,9 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { galeriaApi } from "@/lib/api/galeria";
 import { getApiErrorMessage } from "@/lib/api/errors";
-import { Plus, RefreshCw, X, RotateCcw, Image as ImageIcon, Video } from "lucide-react";
+import { Plus, RefreshCw, X, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     Table,
@@ -53,6 +53,10 @@ export interface Galeria {
 const EMPTY_FORM = {
     descripcion: "",
 };
+
+const MB = 1024 * 1024;
+const MAX_IMAGE_SIZE_BYTES = 20 * MB;
+const MAX_VIDEO_SIZE_BYTES = 32 * MB;
 
 // Utilidades
 type DateValue = Date | string | { toDate: () => Date } | null | undefined;
@@ -399,7 +403,22 @@ export default function EmpleadoClubGaleriaPage() {
             return;
         }
 
-        const newPending = files.map((file) => ({
+        const oversized = files.filter((f) => f.size > MAX_IMAGE_SIZE_BYTES);
+        if (oversized.length > 0) {
+            toast({
+                variant: "destructive",
+                title: "Imagen demasiado grande",
+                description: "Cada imagen debe pesar menos de 20MB.",
+            });
+        }
+
+        const validFiles = files.filter((f) => f.size <= MAX_IMAGE_SIZE_BYTES);
+        if (validFiles.length === 0) {
+            e.target.value = "";
+            return;
+        }
+
+        const newPending = validFiles.map((file) => ({
             id: `${file.name}-${file.size}-${Date.now()}-${Math.random()}`,
             file,
             previewUrl: URL.createObjectURL(file),
@@ -439,7 +458,22 @@ export default function EmpleadoClubGaleriaPage() {
             return;
         }
 
-        const newPending = files.map((file) => ({
+        const oversized = files.filter((f) => f.size > MAX_VIDEO_SIZE_BYTES);
+        if (oversized.length > 0) {
+            toast({
+                variant: "destructive",
+                title: "Video demasiado grande",
+                description: "Los videos mayores a 32MB requieren subida directa a Storage.",
+            });
+        }
+
+        const validFiles = files.filter((f) => f.size <= MAX_VIDEO_SIZE_BYTES);
+        if (validFiles.length === 0) {
+            e.target.value = "";
+            return;
+        }
+
+        const newPending = validFiles.map((file) => ({
             id: `${file.name}-${file.size}-${Date.now()}-${Math.random()}`,
             file,
             name: file.name,
