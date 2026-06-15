@@ -2,6 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { galeriaApi } from "@/lib/api/galeria";
+import {
+    ALLOWED_IMAGE_TYPES,
+    ALLOWED_VIDEO_TYPES,
+    uploadAndRegisterGalleryMedia,
+    validateGalleryFile,
+    type GalleryMediaType,
+} from "@/lib/api/gallery-media";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import { Plus, RefreshCw, X, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -53,10 +60,6 @@ export interface Galeria {
 const EMPTY_FORM = {
     descripcion: "",
 };
-
-const MB = 1024 * 1024;
-const MAX_IMAGE_SIZE_BYTES = 20 * MB;
-const MAX_VIDEO_SIZE_BYTES = 32 * MB;
 
 // Utilidades
 type DateValue = Date | string | { toDate: () => Date } | null | undefined;
@@ -230,6 +233,33 @@ export default function EmpleadoClubGaleriaPage() {
         setSavingProgress(0);
     };
 
+    const uploadPendingMedia = async (params: {
+        targetId: string;
+        files: File[];
+        tipo: GalleryMediaType;
+        startProgress: number;
+        endProgress: number;
+    }) => {
+        const { targetId, files, tipo, startProgress, endProgress } = params;
+        const total = files.length;
+
+        for (const [index, file] of files.entries()) {
+            await uploadAndRegisterGalleryMedia({
+                galeriaId: targetId,
+                file,
+                tipo,
+                onProgress: (fileProgress) => {
+                    const batchProgress = (index + fileProgress / 100) / total;
+                    const nextProgress =
+                        startProgress + batchProgress * (endProgress - startProgress);
+                    setSavingProgress(Math.round(nextProgress));
+                },
+            });
+        }
+
+        setSavingProgress(endProgress);
+    };
+
     // Guardar (crear o actualizar descripción y archivos)
     const handleSave = async () => {
         if (!formData.descripcion.trim()) {
@@ -282,12 +312,13 @@ export default function EmpleadoClubGaleriaPage() {
             if (pendingImageUploads.length > 0) {
                 setSavingStage('uploadingImages');
                 setSavingProgress(25);
-                // Podríamos subir una a una para progreso granular, pero usamos el batch actual
-                await galeriaApi.uploadImages(
+                await uploadPendingMedia({
                     targetId,
-                    pendingImageUploads.map((p) => p.file)
-                );
-                setSavingProgress(50);
+                    files: pendingImageUploads.map((p) => p.file),
+                    tipo: "imagen",
+                    startProgress: 25,
+                    endProgress: 50,
+                });
             } else {
                 setSavingProgress(50);
             }
@@ -299,11 +330,13 @@ export default function EmpleadoClubGaleriaPage() {
                 setSavingStage('uploadingVideos');
                 setSavingProgress(55);
 
-                await galeriaApi.uploadVideos(
+                await uploadPendingMedia({
                     targetId,
-                    pendingVideoUploads.map((p) => p.file)
-                );
-                setSavingProgress(75);
+                    files: pendingVideoUploads.map((p) => p.file),
+                    tipo: "video",
+                    startProgress: 55,
+                    endProgress: 75,
+                });
             } else {
                 setSavingProgress(75);
             }
@@ -393,26 +426,31 @@ export default function EmpleadoClubGaleriaPage() {
         const files = Array.from(e.target.files || []);
         if (files.length === 0) return;
 
-        const invalid = files.filter((f) => !f.type.startsWith("image/"));
-        if (invalid.length > 0) {
+        const validFiles: File[] = [];
+        let firstError = "";
+
+        files.forEach((file) => {
+            try {
+                validateGalleryFile(file, "imagen");
+                validFiles.push(file);
+            } catch (error) {
+                if (!firstError) {
+                    firstError =
+                        error instanceof Error
+                            ? error.message
+                            : "No se pudo validar la imagen";
+                }
+            }
+        });
+
+        if (firstError) {
             toast({
                 variant: "destructive",
-                title: "Archivos inválidos",
-                description: "Solo se permiten imágenes",
-            });
-            return;
-        }
-
-        const oversized = files.filter((f) => f.size > MAX_IMAGE_SIZE_BYTES);
-        if (oversized.length > 0) {
-            toast({
-                variant: "destructive",
-                title: "Imagen demasiado grande",
-                description: "Cada imagen debe pesar menos de 20MB.",
+                title: "Imagen no permitida",
+                description: firstError,
             });
         }
 
-        const validFiles = files.filter((f) => f.size <= MAX_IMAGE_SIZE_BYTES);
         if (validFiles.length === 0) {
             e.target.value = "";
             return;
@@ -448,26 +486,31 @@ export default function EmpleadoClubGaleriaPage() {
         const files = Array.from(e.target.files || []);
         if (files.length === 0) return;
 
-        const invalid = files.filter((f) => !f.type.startsWith("video/"));
-        if (invalid.length > 0) {
+        const validFiles: File[] = [];
+        let firstError = "";
+
+        files.forEach((file) => {
+            try {
+                validateGalleryFile(file, "video");
+                validFiles.push(file);
+            } catch (error) {
+                if (!firstError) {
+                    firstError =
+                        error instanceof Error
+                            ? error.message
+                            : "No se pudo validar el video";
+                }
+            }
+        });
+
+        if (firstError) {
             toast({
                 variant: "destructive",
-                title: "Archivos inválidos",
-                description: "Solo se permiten videos",
-            });
-            return;
-        }
-
-        const oversized = files.filter((f) => f.size > MAX_VIDEO_SIZE_BYTES);
-        if (oversized.length > 0) {
-            toast({
-                variant: "destructive",
-                title: "Video demasiado grande",
-                description: "Los videos mayores a 32MB requieren subida directa a Storage.",
+                title: "Video no permitido",
+                description: firstError,
             });
         }
 
-        const validFiles = files.filter((f) => f.size <= MAX_VIDEO_SIZE_BYTES);
         if (validFiles.length === 0) {
             e.target.value = "";
             return;
@@ -753,7 +796,7 @@ export default function EmpleadoClubGaleriaPage() {
                             <Label>Imágenes</Label>
                             <Input
                                 type="file"
-                                accept="image/*"
+                                accept={ALLOWED_IMAGE_TYPES.join(",")}
                                 multiple
                                 onChange={handleImageSelect}
                                 disabled={isSaving}
@@ -807,7 +850,7 @@ export default function EmpleadoClubGaleriaPage() {
                             <Label>Videos</Label>
                             <Input
                                 type="file"
-                                accept="video/*"
+                                accept={ALLOWED_VIDEO_TYPES.join(",")}
                                 multiple
                                 onChange={handleVideoSelect}
                                 disabled={isSaving}
