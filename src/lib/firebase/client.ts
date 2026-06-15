@@ -62,7 +62,7 @@ function normalizeFirebaseConfig() {
       (projectId ? `${projectId}.firebaseapp.com` : undefined),
     storageBucket:
       firebaseConfig.storageBucket ||
-      (projectId ? `${projectId}.appspot.com` : undefined),
+      (projectId ? `${projectId}.firebasestorage.app` : undefined),
   };
 }
 

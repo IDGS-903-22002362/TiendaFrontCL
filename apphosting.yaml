@@ -31,7 +31,7 @@ env:
     value: 1:795182473270:web:c1c8f15ead939e2d6a7897
 
   - variable: NEXT_PUBLIC_AUTH_FIREBASE_STORAGE_BUCKET
-    value: app-oficial-leon.appspot.com
+    value: app-oficial-leon.firebasestorage.app
 
   - variable: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
     value: pk_test_51SxZMWAcXWVVDBOGSUddGSABMplWjSCqbyq1LC0WTwRlZ20JSRXI1GjXtlDglZhm5Cvhv4dYcMxMpZU57xdaAyzO000OF4wNKD
