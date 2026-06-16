@@ -69,6 +69,7 @@ type ProxyOptions = {
   requireAuth?: boolean;
   method?: "GET" | "POST" | "PUT" | "DELETE";
   rawResponse?: boolean;
+  streamMultipart?: boolean;
 };
 
 export async function proxyToBackend({
@@ -77,6 +78,7 @@ export async function proxyToBackend({
   requireAuth = false,
   method,
   rawResponse = false,
+  streamMultipart = false,
 }: ProxyOptions) {
   const tokenFromCookie = getApiTokenFromRequest(request);
   const authorization =
@@ -122,15 +124,14 @@ export async function proxyToBackend({
 
   // ✅ Para multipart/form-data, pasar el stream directamente sin leerlo
   // ❌ NO usar arrayBuffer() porque consume el stream
-  let body: any = undefined;
+  let body: BodyInit | undefined = undefined;
+  let duplex: "half" | undefined;
   if (hasBody) {
     const isMultipart = contentType?.includes("multipart/form-data");
-    if (isMultipart) {
-      // Pasar el stream directamente para multipart
-      body = await request.arrayBuffer();
-      if (body && body.byteLength > 0) {
-        headers.set("Content-Length", body.byteLength.toString());
-      }
+    if (isMultipart && streamMultipart && request.body) {
+      body = request.body;
+      duplex = "half";
+      headers.delete("Content-Length");
     } else {
       // Para JSON/otros, leer como ArrayBuffer
       const rawBody = await request.arrayBuffer();
@@ -148,9 +149,9 @@ export async function proxyToBackend({
       method: nextMethod,
       headers,
       body,
-      //duplex: "half", // Necesario para streams
+      duplex,
       cache: "no-store",
-    });
+    } as RequestInit & { duplex?: "half" });
 
     const responseHeaders = copyPassthroughHeaders(response.headers);
     const isSseResponse =
