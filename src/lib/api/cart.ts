@@ -6,6 +6,27 @@ import type { AddressValidationStatus, ShippingSelection } from "@/lib/types";
 type UnknownRecord = Record<string, unknown>;
 type ProductSnapshot = { name?: string; image?: string; price?: number };
 
+export type ValidarCodigoPromocionCarritoItem = {
+  productoId: string;
+  cantidad: number;
+  precioUnitario: number;
+  categoriaIds?: string[];
+  lineaIds?: string[];
+  tallaId?: string | null;
+};
+
+export type ResultadoCodigoPromocionCarrito = {
+  valido: boolean;
+  codigo?: string;
+  codigoPromocionId?: string;
+  titulo?: string;
+  mensaje?: string;
+  subtotalOriginal: number;
+  descuentoTotal: number;
+  subtotalFinal: number;
+  items?: unknown[];
+};
+
 const SESSION_STORAGE_KEY = "tiendafront_session_id";
 
 function toStringValue(value: unknown, fallback = ""): string {
@@ -350,6 +371,88 @@ export async function clearCart(
   );
 
   return enrichCart(mapCart(payload), token);
+}
+
+function mapResultadoCodigoPromocion(
+  payload: unknown,
+): ResultadoCodigoPromocionCarrito {
+  const data = unwrapData<unknown>(payload);
+  const record =
+    data && typeof data === "object" ? (data as UnknownRecord) : {};
+
+  const source =
+    record.resultado && typeof record.resultado === "object"
+      ? (record.resultado as UnknownRecord)
+      : record.validacion && typeof record.validacion === "object"
+        ? (record.validacion as UnknownRecord)
+        : record;
+
+  const subtotalOriginal = toNumber(
+    source.subtotalOriginal ?? source.subtotal,
+    0,
+  );
+
+  const descuentoTotal = toNumber(
+    source.descuentoTotal ?? source.descuento,
+    0,
+  );
+
+  const subtotalFinal = toNumber(
+    source.subtotalFinal ?? source.totalFinal ?? source.total,
+    Math.max(subtotalOriginal - descuentoTotal, 0),
+  );
+
+  return {
+    valido:
+      source.valido === false
+        ? false
+        : Boolean(source.valido ?? source.aplicado ?? source.success) ||
+          descuentoTotal > 0,
+    codigo: toStringValue(source.codigo) || undefined,
+    codigoPromocionId:
+      toStringValue(
+        source.codigoPromocionId ?? source.codigoId ?? source.id,
+      ) || undefined,
+    titulo:
+      toStringValue(source.titulo ?? source.codigoTitulo ?? source.nombre) ||
+      undefined,
+    mensaje:
+      toStringValue(source.mensaje ?? source.message ?? source.error) ||
+      undefined,
+    subtotalOriginal,
+    descuentoTotal,
+    subtotalFinal,
+    items: Array.isArray(source.items) ? source.items : [],
+  };
+}
+
+export async function validarCodigoPromocionCarrito(payload: {
+  codigo: string;
+  items: ValidarCodigoPromocionCarritoItem[];
+}): Promise<ResultadoCodigoPromocionCarrito> {
+  const codigo = payload.codigo.trim().toUpperCase();
+
+  const items = payload.items.map((item) => ({
+    productoId: item.productoId,
+    cantidad: Math.max(1, Number(item.cantidad || 1)),
+    precioUnitario: Number(item.precioUnitario || 0),
+    categoriaIds: item.categoriaIds ?? [],
+    lineaIds: item.lineaIds ?? [],
+    ...(item.tallaId ? { tallaId: item.tallaId } : {}),
+  }));
+
+  const response = await apiFetch<unknown>(
+  "/api/codigos-promocion/validar",
+  {
+    method: "POST",
+    body: JSON.stringify({
+      codigo,
+      items,
+    }),
+  },
+);
+
+return mapResultadoCodigoPromocion(response);
 }
 
 export async function checkoutCart(payload: {
