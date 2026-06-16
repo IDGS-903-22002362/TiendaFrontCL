@@ -250,7 +250,7 @@ export default function CartPage() {
               </p>
 
               <p className="mt-2 font-headline text-4xl font-semibold uppercase leading-none tracking-[0.03em] text-foreground">
-                {formatCurrency(subtotal)}
+                {formatCurrency(subtotalConOfertas)}
               </p>
             </div>
 
