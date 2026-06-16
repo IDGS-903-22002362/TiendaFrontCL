@@ -16,7 +16,7 @@ env:
 
   # Frontend IP allowlist. Empty disables the restriction until real IPs are set.
   - variable: ALLOWED_FRONT_IPS
-    value: "127.0.0.1,::1,189.162.86.69,172.18.2.131,189.162.72.157,189.162.106.172,189.162.86.60"
+    value: "127.0.0.1,::1,189.162.86.69,172.18.2.131,189.162.72.157,189.162.106.172,189.162.86.60,189.162.42.0"
 
   - variable: NEXT_PUBLIC_AUTH_FIREBASE_API_KEY
     value: AIzaSyBq_lNV0ZXJdvaHAhw8eC5diGRafuqs6Do
@@ -29,6 +29,9 @@ env:
 
   - variable: NEXT_PUBLIC_AUTH_FIREBASE_APP_ID
     value: 1:795182473270:web:c1c8f15ead939e2d6a7897
+
+  - variable: NEXT_PUBLIC_AUTH_FIREBASE_STORAGE_BUCKET
+    value: app-oficial-leon.firebasestorage.app
 
   - variable: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
     value: pk_test_51SxZMWAcXWVVDBOGSUddGSABMplWjSCqbyq1LC0WTwRlZ20JSRXI1GjXtlDglZhm5Cvhv4dYcMxMpZU57xdaAyzO000OF4wNKD

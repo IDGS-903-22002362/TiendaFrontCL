@@ -158,6 +158,7 @@ export function getCategoryCards(
         eyebrow: getCategoryEyebrow(category.slug),
         href: `/products?category=${category.id}`,
         count,
+        imagenPrincipal: category.imagenPrincipal ?? null,
       };
     })
     .filter((category) => category.count > 0);

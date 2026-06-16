@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
+import { getStorage } from "firebase/storage";
 
 function pickValue(...values: Array<string | undefined>) {
   for (const value of values) {
@@ -26,6 +27,10 @@ const firebaseConfig = {
   appId: pickValue(
     process.env.NEXT_PUBLIC_AUTH_FIREBASE_APP_ID,
     process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  ),
+  storageBucket: pickValue(
+    process.env.NEXT_PUBLIC_AUTH_FIREBASE_STORAGE_BUCKET,
+    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   ),
 };
 
@@ -55,6 +60,9 @@ function normalizeFirebaseConfig() {
     authDomain:
       firebaseConfig.authDomain ||
       (projectId ? `${projectId}.firebaseapp.com` : undefined),
+    storageBucket:
+      firebaseConfig.storageBucket ||
+      (projectId ? `${projectId}.firebasestorage.app` : undefined),
   };
 }
 
@@ -76,4 +84,8 @@ function getFirebaseApp() {
 
 export function getFirebaseAuth() {
   return getAuth(getFirebaseApp());
+}
+
+export function getFirebaseStorage() {
+  return getStorage(getFirebaseApp());
 }

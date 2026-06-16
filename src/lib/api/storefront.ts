@@ -421,6 +421,9 @@ function mapCategory(input: unknown): Category {
     ),
     name,
     slug,
+    imagenPrincipal: category.imagenPrincipal ? toStringValue(category.imagenPrincipal) : null,
+    lineaId: category.lineaId ? toStringValue(category.lineaId) : null,
+    orden: typeof category.orden === "number" ? category.orden : null,
   };
 }
 
@@ -763,6 +766,74 @@ function normalizeCatalogResponse(payload: unknown): CatalogResponse {
   };
 }
 
+let productImageLookupPromise: Promise<Map<string, string[]>> | null = null;
+
+async function getProductImageLookup() {
+  productImageLookupPromise ??= fetchProductsFromEndpoint("/api/productos").then(
+    (products) => {
+      const lookup = new Map<string, string[]>();
+
+      products.forEach((product) => {
+        if (product.images.length > 0) {
+          lookup.set(product.id, product.images);
+        }
+      });
+
+      return lookup;
+    },
+  );
+
+  return productImageLookupPromise;
+}
+
+function getCatalogImageCount(item: CatalogProductCard) {
+  return item.imagenes?.length ?? (item.imagenPrincipal ? 1 : 0);
+}
+
+async function hydrateCatalogImages(
+  response: CatalogResponse,
+): Promise<CatalogResponse> {
+  if (response.items.length === 0) {
+    return response;
+  }
+
+  const needsImageHydration = response.items.some(
+    (item) => getCatalogImageCount(item) < 2,
+  );
+
+  if (!needsImageHydration) {
+    return response;
+  }
+
+  try {
+    const imageLookup = await getProductImageLookup();
+
+    return {
+      ...response,
+      items: response.items.map((item) => {
+        const productImages = imageLookup.get(item.id);
+
+        if (!productImages || productImages.length === 0) {
+          return item;
+        }
+
+        return {
+          ...item,
+          imagenPrincipal: item.imagenPrincipal ?? productImages[0] ?? null,
+          imagenes: uniqueStrings([
+            item.imagenPrincipal ?? "",
+            ...(item.imagenes ?? []),
+            ...productImages,
+          ].filter(Boolean)),
+        };
+      }),
+    };
+  } catch (error) {
+    console.warn("hydrateCatalogImages failed", error);
+    return response;
+  }
+}
+
 async function fetchCatalogFallbackPage(
   params: CatalogQuery,
 ): Promise<CatalogResponse> {
@@ -892,7 +963,7 @@ export async function fetchCatalogPage(params: CatalogQuery = {}): Promise<Catal
       getProductReadOptions(),
     );
 
-    return normalizeCatalogResponse(payload);
+    return hydrateCatalogImages(normalizeCatalogResponse(payload));
   } catch (error) {
     console.warn("fetchCatalogPage failed, using /api/productos fallback", error);
     return fetchCatalogFallbackPage(params);

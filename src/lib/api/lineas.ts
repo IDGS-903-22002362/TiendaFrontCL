@@ -37,6 +37,7 @@ function mapLinea(input: unknown): Linea {
     codigo: toNumber(item.codigo),
     nombre: toStringValue(item.nombre ?? item.name, "Línea"),
     activo: toBoolean(item.activo, true),
+    imagenPrincipal: item.imagenPrincipal ? toStringValue(item.imagenPrincipal) : null,
   };
 }
 
@@ -82,7 +83,7 @@ export const lineasApi = {
     return mapLineasList(payload);
   },
 
-  create(payload: { codigo: number; nombre: string; activo?: boolean }) {
+  create(payload: { codigo: number; nombre: string; activo?: boolean; imagenPrincipal?: string | null }) {
     return apiFetch<ApiEnvelope<Linea>>("/api/lineas", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -91,7 +92,7 @@ export const lineasApi = {
 
   update(
     id: string,
-    payload: Partial<{ codigo: number; nombre: string; activo: boolean }>,
+    payload: Partial<{ codigo: number; nombre: string; activo: boolean; imagenPrincipal: string | null }>,
   ) {
     return apiFetch<ApiEnvelope<Linea>>(`/api/lineas/${id}`, {
       method: "PUT",
@@ -103,5 +104,39 @@ export const lineasApi = {
     return apiFetch<ApiEnvelope<null>>(`/api/lineas/${id}`, {
       method: "DELETE",
     });
+  },
+
+  async uploadImage(id: string, file: File) {
+    const formData = new FormData();
+    formData.append("imagen", file);
+
+    const res = await fetch(`/api/lineas/${id}/imagen`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!res.ok) {
+      throw new Error("No se pudo subir la imagen de la línea");
+    }
+
+    return res.json() as Promise<{
+      success: true;
+      data: {
+        url: string;
+        linea: Linea;
+      };
+    }>;
+  },
+
+  async deleteImage(id: string) {
+    const res = await fetch(`/api/lineas/${id}/imagen`, {
+      method: "DELETE",
+    });
+
+    if (!res.ok) {
+      throw new Error("No se pudo eliminar la imagen de la línea");
+    }
+
+    return res.json() as Promise<{ success: true; data: Linea }>;
   },
 };
