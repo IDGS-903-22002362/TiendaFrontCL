@@ -35,6 +35,10 @@ const navLinks = [
 export function StorefrontHeader() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const currentPath = useMemo(() => {
+  const query = searchParams.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}, [pathname, searchParams]);
   const { role, isAuthenticated, clearSession, user } = useAuth();
   const { totalItems } = useCart();
   const { wishlistIds } = useStorefront();
@@ -231,8 +235,7 @@ export function StorefrontHeader() {
             ) : null}
           </div>
 
-          <DesktopNav pathname={pathname} links={desktopLinks} />
-
+<DesktopNav pathname={currentPath} links={desktopLinks} />
           <div className="ml-auto flex shrink-0 items-center gap-1.5 md:gap-2 lg:min-w-[20rem] lg:justify-end">
             <SearchDrawer isDesktop={isDesktop} />
 

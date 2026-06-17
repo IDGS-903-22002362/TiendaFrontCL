@@ -16,6 +16,10 @@ import { bannersAdminApi } from "@/lib/api/banners";
 import { fetchCategories, fetchProducts } from "@/lib/api/storefront";
 import { lineasApi } from "@/lib/api/lineas";
 import { tallasApi } from "@/lib/api/tallas";
+import {
+  fetchOfertasActivasAdmin,
+  type OfertaBannerOption,
+} from "@/lib/api/ofertas";
 import { useToast } from "@/hooks/use-toast";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import {
@@ -45,6 +49,7 @@ import { ContentConfigBuilder } from "./content-config-builder";
 
 type ButtonDraft = BannerButton & { draftId: string };
 
+
 const EMPTY_CONFIG: BannerContentConfig = {
     type: "novedades",
     limit: 8,
@@ -69,6 +74,7 @@ export default function AdminBannersPage() {
     const [lineas, setLineas] = useState<Linea[]>([]);
     const [tallas, setTallas] = useState<Talla[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
+    const [ofertas, setOfertas] = useState<OfertaBannerOption[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isLoadingMeta, setIsLoadingMeta] = useState(true);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -102,16 +108,19 @@ export default function AdminBannersPage() {
     const loadMeta = useCallback(async () => {
         setIsLoadingMeta(true);
         try {
-            const [cats, lines, sizes, prods] = await Promise.all([
-                fetchCategories(),
-                lineasApi.getAll(),
-                tallasApi.getAll(),
-                fetchProducts(),
-            ]);
-            setCategories(cats);
-            setLineas(lines);
-            setTallas(sizes);
-            setProducts(prods);
+        const [cats, lines, sizes, prods, offers] = await Promise.all([
+    fetchCategories(),
+    lineasApi.getAll(),
+    tallasApi.getAll(),
+    fetchProducts(),
+    fetchOfertasActivasAdmin(),
+]);
+
+setCategories(cats);
+setLineas(lines);
+setTallas(sizes);
+setProducts(prods);
+setOfertas(offers);
         } catch (error) {
             toast({
                 variant: "destructive",
@@ -415,6 +424,7 @@ export default function AdminBannersPage() {
                                                 {banner.contentConfig.type === "productos" && "Productos específicos"}
                                                 {banner.contentConfig.type === "novedades" && "Novedades"}
                                                 {banner.contentConfig.type === "mas_vendidos" && "Más vendidos"}
+                                                {banner.contentConfig.type === "oferta" && "Oferta"}
                                             </Badge>
                                         </TableCell>
                                         <TableCell>
@@ -534,14 +544,15 @@ export default function AdminBannersPage() {
                         </TabsContent>
 
                         <TabsContent value="content" className="space-y-4">
-                            <ContentConfigBuilder
-                                value={formData.contentConfig}
-                                onChange={(config) => setFormData((p) => ({ ...p, contentConfig: config }))}
-                                categories={categories}
-                                lineas={lineas}
-                                tallas={tallas}
-                                isLoading={isLoadingMeta}
-                            />
+                         <ContentConfigBuilder
+    value={formData.contentConfig}
+    onChange={(config) => setFormData((p) => ({ ...p, contentConfig: config }))}
+    categories={categories}
+    lineas={lineas}
+    tallas={tallas}
+    ofertas={ofertas}
+    isLoading={isLoadingMeta}
+/>
                         </TabsContent>
 
                         <TabsContent value="media" className="space-y-4">
