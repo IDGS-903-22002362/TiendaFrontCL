@@ -343,8 +343,12 @@ export type PaymentStatus =
   | "FALLIDO"
   | "REEMBOLSADO";
 
-export type PaymentMethod = "TARJETA" | "APLAZO";
+export type PaymentMethod = "TARJETA";
 export type FulfillmentMethod = "DELIVERY" | "PICKUP";
+export type CheckoutFulfillmentMethod =
+  | FulfillmentMethod
+  | "pickup"
+  | "home_delivery";
 
 export type FulfillmentStatus =
   | "PENDING_PAYMENT"
@@ -354,6 +358,37 @@ export type FulfillmentStatus =
   | "PICKED_UP"
   | "EXPIRED"
   | "CANCELED";
+
+// Estado de pago a nivel de orden (espejo simplificado del backend)
+export type OrderPaymentState =
+  | "PENDIENTE"
+  | "PAGADO"
+  | "FALLIDO"
+  | "REEMBOLSADO";
+
+// Estado granular de preparacion/fulfillment (fuente de verdad para UI)
+export type PreparationStatus =
+  | "WAITING_PAYMENT"
+  | "PENDING_PREPARATION"
+  | "PREPARING"
+  | "READY_TO_SHIP"
+  | "SHIPPED"
+  | "READY_FOR_PICKUP"
+  | "PICKED_UP"
+  | "DELIVERED"
+  | "INCIDENT"
+  | "RETURNED";
+
+// Estado del envio manual (FedEx manual) almacenado en shipping.status
+export type ManualShippingStatus =
+  | "pending_manual_shipment"
+  | "PREPARING"
+  | "READY_TO_SHIP"
+  | "DELIVERED_TO_CARRIER"
+  | "IN_TRANSIT"
+  | "DELIVERED"
+  | "INCIDENT"
+  | "RETURNED";
 
 export type ShippingProvider = "FEDEX";
 export type AddressValidationStatus =
@@ -466,7 +501,7 @@ export type FedExTracking = {
 
 export type OrderShipping = {
   provider?: ShippingProvider | string;
-  status?: FedExShippingStatus;
+  status?: ManualShippingStatus | FedExShippingStatus;
   quoteId?: string;
   selectedOptionId?: string;
   serviceType?: string;
@@ -474,39 +509,61 @@ export type OrderShipping = {
   amount?: number;
   currency?: string;
   trackingNumber?: string;
+  trackingUrl?: string;
   labelUrl?: string;
   labelStoragePath?: string;
   estimatedDeliveryDate?: string;
+  shippedAt?: string;
+  deliveredAt?: string;
   transitTime?: string;
+  manualEvidence?: {
+    realShippingCost?: number;
+    receiptUrl?: string;
+    guidePdfUrl?: string;
+    notes?: string;
+  };
   warnings?: string[];
 };
 
-export type AplazoFlowType = "online" | "in_store";
-export type AplazoReturnKind = "success" | "failure" | "cancel";
+export type OrdenItem = {
+  productoId: string;
+  cantidad: number;
+  precioUnitario: number;
+  subtotal: number;
+  tallaId?: string;
+  producto?: {
+    clave?: string;
+    descripcion?: string;
+    imagenes?: string[];
+  };
+};
 
-export type AplazoPaymentStatus =
-  | "created"
-  | "pending_provider"
-  | "pending_customer"
-  | "authorized"
-  | "paid"
-  | "canceled"
-  | "failed"
-  | "expired"
-  | "refunded"
-  | "partially_refunded";
+export type OrderStatusHistoryEntry = {
+  type?: string;
+  from?: string;
+  to?: string;
+  changedBy?: string;
+  changedAt?: string;
+  note?: string;
+};
 
-export type AplazoLegacyPaymentStatus =
-  | Uppercase<AplazoPaymentStatus>
-  | "PENDING"
-  | "APPROVED"
-  | "COMPLETED"
-  | "CANCELLED"
-  | "pending"
-  | "approved"
-  | "completed"
-  | "AUTHORIZED"
-  | "authorized";
+export type OrderDireccionEnvio = {
+  nombre?: string;
+  nombreCompleto?: string;
+  telefono?: string;
+  calle?: string;
+  numero?: string;
+  numeroExterior?: string;
+  numeroInterior?: string;
+  colonia?: string;
+  ciudad?: string;
+  estado?: string;
+  codigoPostal?: string;
+  pais?: string;
+  referencias?: string;
+  instruccionesEntrega?: string;
+  email?: string;
+};
 
 export type Orden = {
   id: string;
@@ -514,11 +571,24 @@ export type Orden = {
   estado: OrderStatus | string;
   total: number;
   subtotal?: number;
+  subtotalOriginal?: number;
   shippingCost?: number;
+  impuestos?: number;
+  discountTotal?: number;
+  descuentoCodigoPromocion?: number;
+  codigoPromocion?: string;
+  codigoPromocionTitulo?: string;
   metodoPago?: string;
+  paymentStatus?: OrderPaymentState | string;
+  preparationStatus?: PreparationStatus | string;
   fulfillmentMethod?: FulfillmentMethod;
   fulfillmentStatus?: FulfillmentStatus | string;
+  items?: OrdenItem[];
+  direccionEnvio?: OrderDireccionEnvio;
+  numeroGuia?: string;
+  transportista?: string;
   shipping?: OrderShipping;
+  shippingHistory?: OrderStatusHistoryEntry[];
   pickupLocation?: {
     id?: string;
     name?: string;
@@ -529,10 +599,13 @@ export type Orden = {
     phone?: string;
   };
   pickupInstructions?: string;
+  pickupContact?: { name?: string; phone?: string; email?: string };
   pickupCodeLast4?: string;
   pickupQrPayload?: string;
   readyForPickupAt?: string;
+  pickedUpAt?: string;
   pickupExpiresAt?: string;
+  deliveredAt?: string;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -540,20 +613,19 @@ export type Orden = {
 export type Pago = {
   id: string;
   ordenId: string;
-  provider?: "stripe" | "aplazo" | string;
-  paymentAttemptId?: string;
+  provider?: "stripe" | string;
   paymentIntentId?: string;
   clientSecret?: string;
   status: PaymentStatus | string;
   monto?: number;
   moneda?: string;
   totalRefundedAmount?: number;
-  refunds?: AplazoRefundItem[];
+  refunds?: RefundItem[];
   createdAt?: string;
 };
 
 export type CheckoutPayload = {
-  fulfillmentMethod?: FulfillmentMethod;
+  fulfillmentMethod?: CheckoutFulfillmentMethod;
   direccionEnvio?: {
     nombre: string;
     calle: string;
@@ -618,183 +690,12 @@ export type PaymentInitResponse = {
   status: string;
 };
 
-export type AplazoOnlineCreatePayload = {
-  orderId: string;
-  customer?: {
-    name?: string;
-    email?: string;
-    phone?: string;
-  };
-  total?: number;
-  currency?: "MXN";
-  items?: Array<{
-    productoId?: string;
-    id?: string;
-    cantidad?: number;
-    quantity?: number;
-    tallaId?: string;
-    [key: string]: unknown;
-  }>;
-  subtotal?: number;
-  tax?: number;
-  shipping?: number;
-  successUrl?: string;
-  failureUrl?: string;
-  cancelUrl?: string;
-  cartUrl?: string;
-  metadata?: {
-    cartId?: string;
-  };
-};
-
-export type AplazoOnlineCreateResponse = {
-  ok: true;
-  paymentAttemptId: string;
-  provider: "aplazo" | string;
-  flowType: AplazoFlowType;
-  status: AplazoPaymentStatus;
-  redirectUrl?: string;
-  checkoutUrl?: string;
-  expiresAt?: string | null;
-};
-
-export type AplazoInStoreCreatePayload = {
-  posSessionId: string;
-  deviceId: string;
-  cajaId: string;
-  sucursalId: string;
-  vendedorUid: string;
-  customer?: {
-    name?: string;
-    email?: string;
-    phone?: string;
-  };
-  items: Array<{
-    productoId: string;
-    cantidad: number;
-    tallaId?: string;
-  }>;
-  metadata?: Record<string, string>;
-};
-
-export type AplazoInStoreCreateResponse = {
-  ok: true;
-  paymentAttemptId: string;
-  provider: "aplazo" | string;
-  flowType: AplazoFlowType;
-  status: AplazoPaymentStatus;
-  redirectUrl?: string;
-  checkoutUrl?: string;
-  paymentLink?: string;
-  qrCodeUrl?: string;
-  qrImageUrl?: string;
-  qrString?: string;
-  expiresAt?: string | null;
-};
-
-export type AplazoPaymentStatusResponse = {
-  ok: true;
-  paymentAttemptId: string;
-  provider: "aplazo" | string;
-  status: AplazoPaymentStatus;
-  providerStatus?: string;
-  amount?: number;
-  currency?: string;
-  paidAt?: string | null;
-  expiresAt?: string | null;
-  isTerminal: boolean;
-  nextPollAfterMs?: number;
-};
-
-export type AplazoReturnResponse = {
-  ok: true;
-  paymentAttemptId?: string;
-  provider: "aplazo" | string;
-  status: AplazoPaymentStatus;
-  message?: string;
-  isTerminal: boolean;
-  nextPollAfterMs?: number;
-};
-
-export type AplazoAdminActionResponse = {
-  ok: true;
-  paymentAttemptId: string;
-  provider: "aplazo";
-  status: AplazoPaymentStatus;
-  providerStatus?: string;
-};
-
-export type AplazoRefundRequestPayload = {
-  reason?: string;
-  refundAmountMinor?: number;
-};
-
-export type AplazoRefundRequestStatus =
-  | "pending"
-  | "approved"
-  | "rejected"
-  | "processed";
-
-export type AplazoRefundRequest = {
-  id: string;
-  provider: "aplazo";
-  orderId: string;
-  paymentAttemptId: string;
-  userId: string;
-  reason: string;
-  status: AplazoRefundRequestStatus;
-  refundAmount?: number;
-  refundAmountMinor?: number;
-  providerRefundId?: string;
-  providerStatus?: string;
-  rejectionReason?: string;
-  lastProcessingError?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  approvedAt?: string;
-  processedAt?: string;
-  rejectedAt?: string;
-};
-
-export type AplazoRefundRequestResponse = {
-  ok: true;
-  data: AplazoRefundRequest;
-};
-
-export type AplazoRefundRequestListResponse = {
-  ok: true;
-  count: number;
-  data: AplazoRefundRequest[];
-};
-
-export type AplazoRefundItem = {
+export type RefundItem = {
   id?: string;
   status?: string;
   refundState?: "requested" | "processing" | "succeeded" | "failed" | string;
   refundDate?: string | null;
   amount?: number;
-};
-
-export type AplazoRefundStatusResponse = {
-  ok: true;
-  paymentAttemptId: string;
-  provider: "aplazo";
-  status: AplazoPaymentStatus;
-  refundState?: string;
-  providerStatus?: string;
-  refundId?: string;
-  refundAmount?: number;
-  totalRefundedAmount: number;
-  currency: string;
-  refunds: AplazoRefundItem[];
-};
-
-export type AplazoRefundCreateResponse = AplazoRefundStatusResponse;
-
-export type AplazoActionResult = {
-  ok: boolean;
-  message: string;
-  technicalMessage?: string;
 };
 
 export type RefundRequest = {
@@ -836,7 +737,7 @@ export type PaymentTimelineEvent = {
   title: string;
   description?: string;
   createdAt: string;
-  status?: AplazoPaymentStatus | string;
+  status?: string;
 };
 
 export type CatalogSort =

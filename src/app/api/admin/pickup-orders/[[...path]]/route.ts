@@ -2,18 +2,13 @@ import { NextRequest } from "next/server";
 import { proxyToBackend } from "@/lib/server/backend-client";
 
 function getSuffix(path?: string[]) {
-  if (!path || path.length === 0) {
-    return "";
-  }
-
-  return `/${path.join("/")}`;
+  return path && path.length > 0 ? `/${path.join("/")}` : "";
 }
 
 function forward(request: NextRequest, path?: string[]) {
-  const suffix = getSuffix(path);
   return proxyToBackend({
     request,
-    backendPath: `/api/admin/payments/aplazo${suffix}`,
+    backendPath: `/api/admin/pickup-orders${getSuffix(path)}`,
     requireAuth: true,
   });
 }

@@ -1,5 +1,11 @@
-import type { Cart, CartItem, CheckoutPayload, PaymentMethod } from "@/lib/types";
-import type { FulfillmentMethod, PickupContact } from "./pickup";
+import type {
+  Cart,
+  CartItem,
+  CheckoutFulfillmentMethod,
+  CheckoutPayload,
+  PaymentMethod,
+} from "@/lib/types";
+import type { PickupContact } from "./pickup";
 import { apiFetch, unwrapData } from "./client";
 import type { AddressValidationStatus, ShippingSelection } from "@/lib/types";
 
@@ -353,7 +359,7 @@ export async function clearCart(
 }
 
 export async function checkoutCart(payload: {
-  fulfillmentMethod?: FulfillmentMethod;
+  fulfillmentMethod?: CheckoutFulfillmentMethod;
   direccionEnvio?: {
     nombre: string;
     calle: string;
