@@ -119,6 +119,26 @@ export const paymentsApi = {
     return mapPago(data);
   },
 
+  async getCheckoutSession(sessionId: string) {
+    const payload = await apiFetch<unknown>(
+      `/api/stripe/checkout-sessions/${sessionId}`,
+      { method: "GET" },
+      { local: true },
+    );
+    const data = unwrapData<unknown>(payload);
+    const record =
+      data && typeof data === "object" ? (data as UnknownRecord) : {};
+
+    return {
+      id: toStringValue(record.id),
+      paymentStatus: toStringValue(record.paymentStatus) || null,
+      status: toStringValue(record.status) || null,
+      orderId: toStringValue(record.orderId) || undefined,
+      paymentIntentId: toStringValue(record.paymentIntentId) || undefined,
+      paymentId: toStringValue(record.paymentId) || undefined,
+    };
+  },
+
   reembolsoAdmin(
     id: string,
     body?: { refundAmount?: number; refundReason?: string },

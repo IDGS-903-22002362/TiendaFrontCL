@@ -554,7 +554,7 @@ function OrderSummaryPanel({
       ? checkoutPricing
       :
     getExpectedCheckoutPricing(
-      subtotal,
+      subtotalConCodigo,
       fulfillmentMethod,
       shippingSelection?.selectedOption.amount ?? MANUAL_FEDEX_SHIPPING_COST,
     );
@@ -1835,9 +1835,6 @@ function CardPaymentStep({
         }
       }
 
-    clearStoredAplazoCheckoutState();
-clearStoredAplazoRetryPayload();
-
 const checkoutResult = await checkoutCart(
   buildCheckoutPayload(values, "TARJETA", codigoPromocion),
 );
@@ -1857,7 +1854,7 @@ const checkoutResult = await checkoutCart(
         expectedSubtotal,
       });
 
-      const successUrl = `${window.location.origin}/checkout/confirmation?ordenId=${encodeURIComponent(ordenId)}&status=processing&total=${encodeURIComponent((createdOrder.total ?? total).toFixed(2))}`;
+      const successUrl = `${window.location.origin}/checkout/confirmation?ordenId=${encodeURIComponent(ordenId)}&session_id={CHECKOUT_SESSION_ID}&status=processing&total=${encodeURIComponent((createdOrder.total ?? total).toFixed(2))}`;
       const cancelUrl = `${window.location.origin}/checkout?ordenId=${encodeURIComponent(ordenId)}`;
       const session = await paymentsApi.createEmbeddedCheckoutSession(
         ordenId,
@@ -2320,42 +2317,6 @@ const codigoPromocionAplicado =
   );
   const total = pricing.total;
 
-  useEffect(() => {
-  logAplazoDebug("CHECKOUT_PRICING_STATE", {
-    codigoPromocion,
-    codigoPromocionAplicado,
-    descuentoCodigo,
-    subtotalConOfertas,
-    subtotalConCodigo,
-    total: pricing.total,
-    resultadoCodigo: resultadoCodigo
-      ? {
-          valido: resultadoCodigo.valido,
-          codigoPromocionId: resultadoCodigo.codigoPromocionId,
-          descuentoTotal: resultadoCodigo.descuentoTotal,
-          subtotalOriginal: resultadoCodigo.subtotalOriginal,
-          subtotalFinal: resultadoCodigo.subtotalFinal,
-          mensaje: resultadoCodigo.mensaje,
-        }
-      : null,
-    items: cartItemsConOfertas.map((item) => ({
-      id: item.id,
-      name: item.name,
-      quantity: item.quantity,
-      price: item.price,
-      tallaId: item.tallaId ?? item.size,
-    })),
-  });
-}, [
-  codigoPromocion,
-  codigoPromocionAplicado,
-  descuentoCodigo,
-  subtotalConOfertas,
-  subtotalConCodigo,
-  pricing.total,
-  resultadoCodigo,
-  cartItemsConOfertas,
-]);
   const activeCheckoutValues =
     checkoutValues ??
     ({
@@ -2494,6 +2455,8 @@ const codigoPromocionAplicado =
               cartId={state.id}
               cartItems={state.items}
               total={total}
+              expectedSubtotal={subtotalConCodigo}
+              codigoPromocion={codigoPromocion}
               onBack={() => setCurrentStep(0)}
               onRecoverableDeliveryError={handleRecoverableDeliveryError}
               stripePromise={stripePromise}
