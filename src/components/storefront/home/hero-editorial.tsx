@@ -8,46 +8,172 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { bannersAdminApi } from "@/lib/api/banners";
 import { Banner, BannerContentConfig } from "@/lib/ai/types";
+import type { Product } from "@/lib/types";
 
 /**
  * Genera URL dinámica basada en contentConfig del banner
  * Mapea tipos de contenido a parámetros de query para /products
  * Si es un solo producto, redirije directamente a /products/[productId]
  */
-function generateProductsUrlFromBannerConfig(config: BannerContentConfig): string {
-  // Si es un solo producto, ir directamente al detalle
+function generateProductsUrlFromBannerConfig(
+  config: BannerContentConfig,
+  activeProducts: Product[] = [],
+): string {
+  const configRecord = config as unknown as Record<string, unknown>;
+
+  const getStringValue = (keys: string[]): string => {
+    for (const key of keys) {
+      const value = configRecord[key];
+
+      if (typeof value === "string" && value.trim()) {
+        return value.trim();
+      }
+
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return String(value);
+      }
+    }
+
+    return "";
+  };
+
+  const getStringArrayValue = (keys: string[]): string[] => {
+    for (const key of keys) {
+      const value = configRecord[key];
+
+      if (Array.isArray(value)) {
+        return value
+          .map((item) => String(item).trim())
+          .filter(Boolean);
+      }
+
+      if (typeof value === "string" && value.trim()) {
+        return value
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean);
+      }
+    }
+
+    return [];
+  };
+    const getStringValueFromProducts = (keys: string[]): string => {
+    for (const product of activeProducts) {
+      const productRecord = product as unknown as Record<string, unknown>;
+
+      for (const key of keys) {
+        const value = productRecord[key];
+
+        if (typeof value === "string" && value.trim()) {
+          return value.trim();
+        }
+
+        if (typeof value === "number" && Number.isFinite(value)) {
+          return String(value);
+        }
+      }
+    }
+
+    return "";
+  };
+
+  const ofertaId = getStringValue(["ofertaId", "idOferta"]);
+
+  const productIds = [
+    ...getStringArrayValue(["productIds", "productoIds", "productosIds"]),
+    getStringValue(["productId", "productoId"]),
+  ].filter(Boolean);
+
+  const categoryIds = [
+    ...getStringArrayValue(["categoryIds", "categoriaIds", "categoriasIds"]),
+    getStringValue(["categoryId", "categoriaId"]),
+  ].filter(Boolean);
+
+  const lineIds = [
+    ...getStringArrayValue(["lineIds", "lineaIds", "lineasIds"]),
+    getStringValue(["lineId", "lineaId"]),
+  ].filter(Boolean);
+
+  const tallaIds = [
+    ...getStringArrayValue(["sizeIds", "tallaIds", "tallasIds"]),
+    getStringValue(["sizeId", "tallaId"]),
+  ].filter(Boolean);
+
+    const inferredCategoryFromProducts = getStringValueFromProducts([
+    "categoryId",
+    "categoriaId",
+    "categorySlug",
+    "categoriaSlug",
+    "category",
+    "categoria",
+  ]);
+
+  const inferredLineFromProducts = getStringValueFromProducts([
+    "lineId",
+    "lineaId",
+    "lineSlug",
+    "lineaSlug",
+    "line",
+    "linea",
+  ]);
+
+  const inferredTallaFromProducts = getStringValueFromProducts([
+    "tallaId",
+    "sizeId",
+    "talla",
+    "size",
+  ]);
+
+  const hasOfferContext = config.type === "oferta" || Boolean(ofertaId);
+
+  // Si es un solo producto normal, ir directamente al detalle
   if (
+    !hasOfferContext &&
     config.type === "productos" &&
-    config.productIds &&
-    config.productIds.length === 1
+    productIds.length === 1
   ) {
-    return `/products/${config.productIds[0]}`;
+    return `/products/${productIds[0]}`;
   }
 
   const params = new URLSearchParams();
 
+  // Si es una oferta, siempre mantener el contexto de ofertas
+  if (hasOfferContext) {
+    params.set("tag", "sale");
+    params.set("onlyOffers", "true");
+    params.set("onlyAvailable", "false");
+
+    if (ofertaId) {
+      params.set("ofertaId", ofertaId);
+    }
+  }
+
   switch (config.type) {
     case "categoria":
-      if (config.categoriaId) {
-        params.set("category", config.categoriaId);
+      if (categoryIds.length > 0) {
+        params.set("category", categoryIds[0]);
       }
       break;
 
     case "linea":
-      if (config.lineaId) {
-        params.set("linea", config.lineaId);
+      if (lineIds.length > 0) {
+        params.set("line", lineIds[0]);
       }
       break;
 
     case "talla":
-      if (config.tallaId) {
-        params.set("size", config.tallaId);
+      if (tallaIds.length > 0) {
+        params.set("talla", tallaIds[0]);
       }
       break;
 
     case "productos":
-      if (config.productIds && config.productIds.length > 0) {
-        params.set("ids", config.productIds.join(","));
+      if (productIds.length === 1) {
+        return `/products/${productIds[0]}`;
+      }
+
+      if (productIds.length > 1) {
+        params.set("ids", productIds.join(","));
       }
       break;
 
@@ -59,11 +185,45 @@ function generateProductsUrlFromBannerConfig(config: BannerContentConfig): strin
       params.set("sort", "featured");
       break;
 
+    case "oferta":
+      break;
+
     default:
       break;
   }
 
-  // Añadir límite si está configurado
+  // Si el banner viene de una oferta seleccionada, también respetar su alcance
+  // Ejemplo: oferta de Chamarras => /products?tag=sale&onlyOffers=true&category=...
+  if (hasOfferContext) {
+        if (!params.has("category")) {
+      if (categoryIds.length > 0) {
+        params.set("category", categoryIds[0]);
+      } else if (inferredCategoryFromProducts) {
+        params.set("category", inferredCategoryFromProducts);
+      }
+    }
+
+    if (!params.has("line")) {
+      if (lineIds.length > 0) {
+        params.set("line", lineIds[0]);
+      } else if (inferredLineFromProducts) {
+        params.set("line", inferredLineFromProducts);
+      }
+    }
+
+    if (!params.has("talla")) {
+      if (tallaIds.length > 0) {
+        params.set("talla", tallaIds[0]);
+      } else if (inferredTallaFromProducts) {
+        params.set("talla", inferredTallaFromProducts);
+      }
+    }
+
+    if (!params.has("ids") && productIds.length > 1) {
+      params.set("ids", productIds.join(","));
+    }
+  }
+
   if (config.limit && config.limit > 0) {
     params.set("limit", config.limit.toString());
   }
@@ -90,8 +250,11 @@ type HeroSlide = {
 };
 
 // Función para mapear un banner individual (sin los productos)
-function mapBannerToSlide(banner: Banner): HeroSlide | null {
-  const isVideo = !!banner.videoUrl?.trim();
+function mapBannerToSlide(
+  banner: Banner,
+  activeProducts: Product[] = [],
+): HeroSlide | null {
+    const isVideo = !!banner.videoUrl?.trim();
   const src = isVideo ? banner.videoUrl! : banner.backgroundImage;
 
   // Si no hay ni imagen ni video, no podemos mostrar el slide
@@ -103,10 +266,20 @@ function mapBannerToSlide(banner: Banner): HeroSlide | null {
 
   // Generar URL dinámica basada en contentConfig
   // Si el botón no tiene URL custom, usar la generada desde contentConfig
-  const ctaLink =
-    primary?.url && primary.url !== "/" && primary.url.trim()
+const generatedCtaLink = generateProductsUrlFromBannerConfig(
+  banner.contentConfig,
+  activeProducts,
+);
+
+const shouldUseGeneratedOfferLink =
+  banner.contentConfig.type === "oferta" || Boolean(banner.contentConfig.ofertaId);
+
+const ctaLink =
+  shouldUseGeneratedOfferLink
+    ? generatedCtaLink
+    : primary?.url && primary.url !== "/" && primary.url.trim()
       ? primary.url
-      : generateProductsUrlFromBannerConfig(banner.contentConfig);
+      : generatedCtaLink;
 
   const secondaryCtaLink = secondary?.url?.trim() || "";
 
@@ -146,7 +319,7 @@ export function HeroEditorial() {
         if (!isMounted) return;
         // activeItems es Array<{ banner: Banner; products: Product[] }>
         const validSlides = activeItems
-          .map((item) => mapBannerToSlide(item.banner))
+          .map((item) => mapBannerToSlide(item.banner, item.products ?? []))
           .filter((slide): slide is HeroSlide => slide !== null)
           .sort((a, b) => {
             // Encontrar el order original desde los banners (podría no estar en el slide)

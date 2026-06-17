@@ -178,7 +178,8 @@ export type BannerContentType =
   | "talla"
   | "productos"
   | "novedades"
-  | "mas_vendidos";
+  | "mas_vendidos"
+  | "oferta";
 
 export interface BannerButton {
   text: string;
@@ -191,6 +192,7 @@ export interface BannerContentConfig {
   categoriaId?: string;
   lineaId?: string;
   tallaId?: string;
+  ofertaId?: string;
   productIds?: string[];
   limit?: number;           // 1-50, default 10
   sortBy?: "createdAt" | "precioPublico" | "mas_vendidos";

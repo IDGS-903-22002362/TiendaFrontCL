@@ -64,7 +64,26 @@ export function POST(
   request: NextRequest,
   context: { params: Promise<{ path?: string[] }> },
 ) {
-  return context.params.then((params) => forward(request, params.path));
+  return context.params.then(async (params) => {
+    const suffix = getSuffix(params.path);
+    const response = await forward(request, params.path);
+
+    if (suffix === "/checkout-sessions") {
+      try {
+        const clonedResponse = response.clone();
+        const text = await clonedResponse.text();
+
+        console.log("[FRONT_PROXY_STRIPE_CHECKOUT_SESSION_RESPONSE]", {
+          status: response.status,
+          body: text,
+        });
+      } catch (error) {
+        console.error("[FRONT_PROXY_STRIPE_CHECKOUT_SESSION_LOG_ERROR]", error);
+      }
+    }
+
+    return response;
+  });
 }
 
 export function PUT(

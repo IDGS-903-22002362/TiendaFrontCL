@@ -4,6 +4,7 @@ import { fetchCategories, fetchCatalogPage } from "@/lib/api/storefront";
 import type { CatalogSort } from "@/lib/types";
 import { lineasApi } from "@/lib/api/lineas";
 import { tallasApi } from "@/lib/api/tallas";
+import { OffersHero } from "@/components/storefront/catalog/offers-hero";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +72,11 @@ export default async function ProductsPage({
     onlyAvailable: queryParams.get("onlyAvailable") === "true",
   };
 
+  const isOffersPage =
+  initialParams.onlyOffers || queryParams.get("tag") === "sale";
+
+const currentDiscount = getNumberParam(queryParams, "discount");
+
   const [initialPage, categories, lineas, tallas] = await Promise.all([
     fetchCatalogPage(initialParams).catch(() => ({ items: [], nextCursor: null, hasMore: false })),
     fetchCategories(),
@@ -78,17 +84,25 @@ export default async function ProductsPage({
     tallasApi.getAll(),
   ]);
 
-  return (
-    <div className="container py-6 md:py-8 lg:py-10">
-      <Suspense fallback={<div>Cargando catálogo...</div>}>
-        <ProductFilters
-          key={queryKey}
-          initialPage={initialPage}
-          categories={categories}
-          lineas={lineas}
-          tallas={tallas}
-        />
-      </Suspense>
-    </div>
-  );
+ return (
+  <div className="container py-6 md:py-8 lg:py-10">
+    {isOffersPage && (
+      <OffersHero
+  products={initialPage.items}
+  categories={categories}
+  currentDiscount={currentDiscount}
+/>
+    )}
+
+    <Suspense fallback={<div>Cargando catálogo...</div>}>
+      <ProductFilters
+        key={queryKey}
+        initialPage={initialPage}
+        categories={categories}
+        lineas={lineas}
+        tallas={tallas}
+      />
+    </Suspense>
+  </div>
+);
 }

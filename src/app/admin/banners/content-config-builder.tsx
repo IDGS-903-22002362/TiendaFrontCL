@@ -15,12 +15,39 @@ import { EntityPicker } from "@/components/admin/entity-picker";
 import { fetchProducts } from "@/lib/api/storefront";
 import { BannerContentConfig } from "@/lib/ai/types";
 
+type OfertaBannerOption = {
+    id: string;
+    nombre?: string;
+    titulo?: string;
+    descripcion?: string;
+    badgeTexto?: string;
+    estado?: boolean;
+    activa?: boolean;
+    tipoDescuento?: "porcentaje" | "monto" | "precio_fijo";
+    valor?: number;
+    valorDescuento?: number;
+    aplicaA?: "productos" | "categorias" | "lineas" | "todo";
+
+    productoIds?: string[];
+    productIds?: string[];
+
+    categoriaIds?: string[];
+    categoryIds?: string[];
+
+    lineaIds?: string[];
+    lineIds?: string[];
+
+    tallaIds?: string[];
+    sizeIds?: string[];
+};
+
 interface ContentConfigBuilderProps {
     value: BannerContentConfig;
     onChange: (config: BannerContentConfig) => void;
     categories: Category[];
     lineas: Linea[];
     tallas: Talla[];
+    ofertas?: OfertaBannerOption[];
     isLoading?: boolean;
 }
 
@@ -30,6 +57,7 @@ export function ContentConfigBuilder({
     categories,
     lineas,
     tallas,
+    ofertas = [],
     isLoading,
 }: ContentConfigBuilderProps) {
     const [productSearchQuery, setProductSearchQuery] = useState("");
@@ -43,13 +71,113 @@ export function ContentConfigBuilder({
     }, []);
 
     useEffect(() => {
-        onChange({ ...value, productIds: selectedProductIds });
-    }, [selectedProductIds, value.type]);
+    if (value.type !== "productos") {
+        return;
+    }
+
+    onChange({ ...value, productIds: selectedProductIds });
+}, [selectedProductIds, value.type]);
+
+    const getIdsFromOferta = (
+        oferta: OfertaBannerOption | undefined,
+        keys: Array<keyof OfertaBannerOption>,
+    ): string[] => {
+        if (!oferta) {
+            return [];
+        }
+
+        for (const key of keys) {
+            const rawValue = oferta[key];
+
+            if (Array.isArray(rawValue)) {
+                return rawValue
+                    .map((item) => String(item).trim())
+                    .filter(Boolean);
+            }
+
+            if (typeof rawValue === "string" && rawValue.trim()) {
+                return rawValue
+                    .split(",")
+                    .map((item) => item.trim())
+                    .filter(Boolean);
+            }
+        }
+
+        return [];
+    };
+
+    const handleOfertaChange = (ofertaId: string) => {
+        const selectedOferta = ofertas.find((oferta) => oferta.id === ofertaId);
+
+        const productIds = getIdsFromOferta(selectedOferta, [
+            "productIds",
+            "productoIds",
+        ]);
+
+        const categoryIds = getIdsFromOferta(selectedOferta, [
+            "categoryIds",
+            "categoriaIds",
+        ]);
+
+        const lineIds = getIdsFromOferta(selectedOferta, [
+            "lineIds",
+            "lineaIds",
+        ]);
+
+        const tallaIds = getIdsFromOferta(selectedOferta, [
+            "sizeIds",
+            "tallaIds",
+        ]);
+
+        const nextConfig: BannerContentConfig & Record<string, unknown> = {
+            type: "oferta",
+            limit: value.limit,
+            sortBy: value.sortBy,
+            sortOrder: value.sortOrder,
+            ofertaId,
+            aplicaA: selectedOferta?.aplicaA,
+        };
+
+        if (productIds.length > 0) {
+            nextConfig.productIds = productIds;
+            nextConfig.productoIds = productIds;
+        }
+
+        if (categoryIds.length > 0) {
+            nextConfig.categoriaId = categoryIds[0];
+            nextConfig.categoriaIds = categoryIds;
+            nextConfig.categoryId = categoryIds[0];
+            nextConfig.categoryIds = categoryIds;
+        }
+
+        if (lineIds.length > 0) {
+            nextConfig.lineaId = lineIds[0];
+            nextConfig.lineaIds = lineIds;
+            nextConfig.lineId = lineIds[0];
+            nextConfig.lineIds = lineIds;
+        }
+
+        if (tallaIds.length > 0) {
+            nextConfig.tallaId = tallaIds[0];
+            nextConfig.tallaIds = tallaIds;
+            nextConfig.sizeId = tallaIds[0];
+            nextConfig.sizeIds = tallaIds;
+        }
+
+        onChange(nextConfig);
+    };
 
     const handleTypeChange = (type: string) => {
         const validTypes: BannerContentConfig["type"][] = [
-            "categoria", "linea", "talla", "productos", "novedades", "mas_vendidos"
+            "categoria",
+            "linea",
+            "talla",
+            "productos",
+            "novedades",
+            "mas_vendidos",
+            "oferta",
         ];
+
         if (validTypes.includes(type as BannerContentConfig["type"])) {
             onChange({
                 type: type as BannerContentConfig["type"],
@@ -131,6 +259,50 @@ export function ContentConfigBuilder({
                     </div>
                 );
 
+            case "oferta":
+                return (
+                    <div className="space-y-2">
+                        <Label>Oferta</Label>
+                        <Select
+                            value={value.ofertaId}
+                            onValueChange={handleOfertaChange}
+                            disabled={isLoading}
+                        >
+                            <SelectTrigger>
+                                <SelectValue placeholder="Selecciona una oferta activa" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {ofertas.length === 0 ? (
+                                    <SelectItem value="sin-ofertas" disabled>
+                                        No hay ofertas activas
+                                    </SelectItem>
+                                ) : (
+                                    ofertas
+                                        .filter((oferta) => Boolean(oferta.id))
+                                        .map((oferta) => {
+                                            const descuento =
+                                                oferta.valorDescuento ?? oferta.valor ?? null;
+
+                                            const titulo =
+                                                oferta.titulo ||
+                                                oferta.nombre ||
+                                                oferta.badgeTexto ||
+                                                "Oferta";
+
+                                            return (
+                                                <SelectItem key={oferta.id} value={oferta.id}>
+                                                    {descuento
+                                                        ? `${titulo} · ${descuento}%`
+                                                        : titulo}
+                                                </SelectItem>
+                                            );
+                                        })
+                                )}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                );
+
             case "productos":
                 return (
                     <div className="space-y-2">
@@ -190,6 +362,7 @@ export function ContentConfigBuilder({
                         <SelectItem value="productos">Productos específicos</SelectItem>
                         <SelectItem value="novedades">Novedades (más recientes)</SelectItem>
                         <SelectItem value="mas_vendidos">Más vendidos</SelectItem>
+                        <SelectItem value="oferta">Productos por oferta</SelectItem>
                     </SelectContent>
                 </Select>
             </div>
