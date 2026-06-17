@@ -16,6 +16,7 @@ import { HeroEditorial } from "@/components/storefront/home/hero-editorial";
 import { LookbookSection } from "@/components/storefront/home/lookbook-section";
 import { ProductRail } from "@/components/storefront/home/product-rail";
 import { SectionHeader } from "@/components/storefront/home/section-header";
+import LineaCategorySection from "@/components/storefront/home/lineCategory-section";
 
 export const metadata: Metadata = {
   title: "Inicio",
@@ -187,6 +188,15 @@ export default async function Home() {
           <LookbookSection products={lookbookProducts} />
         </div>
       ) : null}
+
+      {/* Sección de Líneas */}
+      <section className="home-section">
+        <div className="container">
+        </div>
+        <div className="mt-8">
+          <LineaCategorySection />
+        </div>
+      </section>
 
       {secondaryRailProducts.length > 0 ? (
         <div className="home-section">
