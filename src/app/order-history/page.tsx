@@ -18,6 +18,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { useToast } from "@/hooks/use-toast";
 import { ordersApi } from "@/lib/api/orders";
 import { getApiErrorMessage } from "@/lib/api/errors";
@@ -31,6 +39,8 @@ import {
   getPickupStatusLabel,
   getShippingStatusLabel,
 } from "@/lib/orders/status";
+
+const CLIENT_ORDERS_PER_PAGE = 6;
 
 function getDeliveryStatusLabel(order: Orden) {
   if (order.fulfillmentMethod === "PICKUP") {
@@ -52,9 +62,19 @@ function formatDate(value?: string) {
   });
 }
 
+function getVisiblePages(currentPage: number, totalPages: number) {
+  if (totalPages <= 5) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const start = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
+  return Array.from({ length: 5 }, (_, index) => start + index);
+}
+
 export default function OrderHistoryPage() {
   const [orders, setOrders] = useState<Orden[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast();
 
   const loadOrders = useCallback(async () => {
@@ -87,6 +107,33 @@ export default function OrderHistoryPage() {
     [orders],
   );
 
+  const totalPages = Math.max(
+    1,
+    Math.ceil(sortedOrders.length / CLIENT_ORDERS_PER_PAGE),
+  );
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStart = (safeCurrentPage - 1) * CLIENT_ORDERS_PER_PAGE;
+  const paginatedOrders = sortedOrders.slice(
+    pageStart,
+    pageStart + CLIENT_ORDERS_PER_PAGE,
+  );
+  const visiblePages = getVisiblePages(safeCurrentPage, totalPages);
+  const showingFrom = sortedOrders.length === 0 ? 0 : pageStart + 1;
+  const showingTo = Math.min(
+    pageStart + CLIENT_ORDERS_PER_PAGE,
+    sortedOrders.length,
+  );
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.min(Math.max(1, page), totalPages));
+  };
+
   return (
     <div className="container py-5 md:py-8">
       <div className="mb-6 rounded-[26px] border border-border bg-card/90 p-5 shadow-[var(--shadow-card)] md:mb-8 md:rounded-[30px] md:p-6">
@@ -113,7 +160,7 @@ export default function OrderHistoryPage() {
                 Aún no tienes pedidos.
               </div>
             ) : (
-              sortedOrders.map((order) => (
+              paginatedOrders.map((order) => (
                 <article
                   key={order.id}
                   className="rounded-[22px] border border-border bg-muted/30 p-4"
@@ -188,7 +235,7 @@ export default function OrderHistoryPage() {
                     <TableCell colSpan={7} className="text-text-secondary">Aún no tienes pedidos.</TableCell>
                   </TableRow>
                 ) : (
-                  sortedOrders.map((order) => (
+                  paginatedOrders.map((order) => (
                     <TableRow key={order.id}>
                       <TableCell className="font-medium">{order.id}</TableCell>
                       <TableCell>{formatDate(order.createdAt)}</TableCell>
@@ -229,6 +276,73 @@ export default function OrderHistoryPage() {
               </TableBody>
             </Table>
           </div>
+
+          {!isLoading && sortedOrders.length > 0 ? (
+            <div className="flex flex-col gap-3 rounded-[1.4rem] border border-border bg-muted/30 px-4 py-3 md:flex-row md:items-center md:justify-between">
+              <p className="text-xs text-muted-foreground">
+                Mostrando{" "}
+                <span className="font-semibold text-foreground">
+                  {showingFrom}-{showingTo}
+                </span>{" "}
+                de{" "}
+                <span className="font-semibold text-foreground">
+                  {sortedOrders.length}
+                </span>{" "}
+                pedidos
+              </p>
+
+              <Pagination className="mx-0 w-full justify-start md:w-auto md:justify-end">
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      href="#"
+                      aria-disabled={safeCurrentPage === 1}
+                      className={
+                        safeCurrentPage === 1
+                          ? "pointer-events-none opacity-45"
+                          : undefined
+                      }
+                      onClick={(event) => {
+                        event.preventDefault();
+                        goToPage(safeCurrentPage - 1);
+                      }}
+                    />
+                  </PaginationItem>
+
+                  {visiblePages.map((page) => (
+                    <PaginationItem key={page} className="hidden sm:block">
+                      <PaginationLink
+                        href="#"
+                        isActive={page === safeCurrentPage}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          goToPage(page);
+                        }}
+                      >
+                        {page}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ))}
+
+                  <PaginationItem>
+                    <PaginationNext
+                      href="#"
+                      aria-disabled={safeCurrentPage === totalPages}
+                      className={
+                        safeCurrentPage === totalPages
+                          ? "pointer-events-none opacity-45"
+                          : undefined
+                      }
+                      onClick={(event) => {
+                        event.preventDefault();
+                        goToPage(safeCurrentPage + 1);
+                      }}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </div>

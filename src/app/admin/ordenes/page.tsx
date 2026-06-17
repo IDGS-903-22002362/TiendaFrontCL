@@ -36,6 +36,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -65,6 +73,8 @@ const badgeVariants: Record<string, "default" | "secondary" | "destructive" | "o
   ENTREGADA: "default",
   CANCELADA: "destructive",
 };
+
+const ADMIN_ORDERS_PER_PAGE = 10;
 
 type PaymentProvider = "stripe" | "unknown";
 
@@ -119,6 +129,20 @@ function formatRefundDate(dateStr?: string | null) {
   });
 }
 
+function getVisiblePages(currentPage: number, totalPages: number) {
+  if (totalPages <= 5) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const start = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
+  return Array.from({ length: 5 }, (_, index) => start + index);
+}
+
+function getShortOrderId(id: string) {
+  if (id.length <= 14) return id;
+  return `${id.slice(0, 8)}...${id.slice(-4)}`;
+}
+
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Orden[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -134,6 +158,7 @@ export default function AdminOrdersPage() {
   const [paymentError, setPaymentError] = useState("");
   const [refundFormError, setRefundFormError] = useState("");
   const [methodFilter, setMethodFilter] = useState<string>("TODOS");
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Dialogo de gestion de entrega (envio manual / pickup)
   const [isFulfillmentOpen, setIsFulfillmentOpen] = useState(false);
@@ -174,6 +199,10 @@ export default function AdminOrdersPage() {
   useEffect(() => {
     void loadOrders(estadoFilter);
   }, [loadOrders, estadoFilter]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [estadoFilter, methodFilter, searchTerm]);
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     try {
@@ -427,6 +456,33 @@ export default function AdminOrdersPage() {
            (order.usuarioId && order.usuarioId.toLowerCase().includes(searchTerm.toLowerCase()));
   });
 
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredOrders.length / ADMIN_ORDERS_PER_PAGE),
+  );
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStart = (safeCurrentPage - 1) * ADMIN_ORDERS_PER_PAGE;
+  const paginatedOrders = filteredOrders.slice(
+    pageStart,
+    pageStart + ADMIN_ORDERS_PER_PAGE,
+  );
+  const visiblePages = getVisiblePages(safeCurrentPage, totalPages);
+  const showingFrom = filteredOrders.length === 0 ? 0 : pageStart + 1;
+  const showingTo = Math.min(
+    pageStart + ADMIN_ORDERS_PER_PAGE,
+    filteredOrders.length,
+  );
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.min(Math.max(1, page), totalPages));
+  };
+
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return "-";
     const date = new Date(dateStr);
@@ -512,36 +568,35 @@ export default function AdminOrdersPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="min-w-[150px]">ID Orden</TableHead>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Total</TableHead>
-                <TableHead>Entrega</TableHead>
-                <TableHead>Pago</TableHead>
-                <TableHead>Estado Actual</TableHead>
-                <TableHead>Envío / Recolección</TableHead>
-                <TableHead className="text-right min-w-[200px]">Acciones Operativas</TableHead>
+                <TableHead className="min-w-[260px]">Pedido</TableHead>
+                <TableHead className="w-[120px]">Total</TableHead>
+                <TableHead className="min-w-[190px]">Estado</TableHead>
+                <TableHead className="min-w-[230px]">Entrega</TableHead>
+                <TableHead className="min-w-[220px] text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                     Cargando órdenes de la base de datos...
                   </TableCell>
                 </TableRow>
               ) : filteredOrders.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                     No hay órdenes con los filtros actuales.
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredOrders.map((order) => (
-                  <TableRow key={order.id}>
-                    <TableCell className="font-medium text-xs font-mono">
-                       <div className="flex items-center gap-1">
-                          {order.id}
+                paginatedOrders.map((order) => (
+                  <TableRow key={order.id} className="align-top">
+                    <TableCell className="py-4">
+                       <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-sm font-semibold" title={order.id}>
+                            {getShortOrderId(order.id)}
+                          </span>
                           <button
                             title="Copiar ID"
                             type="button" 
@@ -553,43 +608,44 @@ export default function AdminOrdersPage() {
                           >
                              <Copy className="h-3 w-3" />
                           </button>
+                        </div>
+                        <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+                          <span>{formatDate(order.createdAt)}</span>
+                          {order.usuarioId ? (
+                            <span className="max-w-[240px] truncate" title={order.usuarioId}>
+                              Cliente: {order.usuarioId}
+                            </span>
+                          ) : (
+                            <span className="italic">Cliente anónimo</span>
+                          )}
+                        </div>
                        </div>
                     </TableCell>
-                    <TableCell className="text-sm whitespace-nowrap">{formatDate(order.createdAt)}</TableCell>
-                    <TableCell className="text-sm">
-                      {order.usuarioId ? (
-                        <span className="truncate max-w-[120px] block" title={order.usuarioId}>{order.usuarioId}</span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground italic">Anónimo</span>
-                      )}
+
+                    <TableCell className="py-4">
+                      <p className="font-headline text-lg font-semibold text-secondary">
+                        ${order.total.toFixed(2)}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        MXN
+                      </p>
                     </TableCell>
-                    <TableCell className="font-semibold">${order.total.toFixed(2)}</TableCell>
-                    <TableCell className="text-xs">
-                      <Badge
-                        variant={
-                          order.fulfillmentMethod === "PICKUP"
-                            ? "secondary"
-                            : "outline"
-                        }
-                      >
-                        {order.fulfillmentMethod === "PICKUP"
-                          ? "Recoger en tienda"
-                          : "Envío a domicilio"}
-                      </Badge>
+
+                    <TableCell className="py-4">
+                      <div className="flex flex-col items-start gap-2">
+                        <Badge variant={getPaymentStateVariant(order)}>
+                          {getPaymentStateLabel(order)}
+                        </Badge>
+                        <Badge variant={badgeVariants[order.estado] || "default"}>
+                          {order.estado}
+                        </Badge>
+                      </div>
                     </TableCell>
-                    <TableCell className="text-xs">
-                      <Badge variant={getPaymentStateVariant(order)}>
-                        {getPaymentStateLabel(order)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={badgeVariants[order.estado] || "default"}>
-                        {order.estado}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs">
+
+                    <TableCell className="py-4">
                       {order.fulfillmentMethod === "PICKUP" ? (
-                        <div className="space-y-1">
+                        <div className="flex flex-col items-start gap-2">
+                          <Badge variant="secondary">Recoger en tienda</Badge>
                           <Badge variant="outline">
                             {getPickupStatusLabel(order.fulfillmentStatus)}
                           </Badge>
@@ -600,7 +656,8 @@ export default function AdminOrdersPage() {
                           ) : null}
                         </div>
                       ) : (
-                        <div className="space-y-1">
+                        <div className="flex flex-col items-start gap-2">
+                          <Badge variant="outline">Envío a domicilio</Badge>
                           <Badge variant="outline">
                             {getShippingStatusLabel(order.shipping?.status)}
                           </Badge>
@@ -612,56 +669,62 @@ export default function AdminOrdersPage() {
                         </div>
                       )}
                     </TableCell>
-                    <TableCell className="text-right flex items-center justify-end gap-2">
-                      <Select 
-                        value={order.estado} 
-                        onValueChange={(val) => void handleStatusChange(order.id, val)}
-                        disabled={order.estado === "CANCELADA" || order.estado === "ENTREGADA"}
-                      >
-                        <SelectTrigger className="w-[140px] h-8 text-xs">
-                          <SelectValue placeholder="Cambiar a..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="PENDIENTE" disabled>PENDIENTE</SelectItem>
-                          <SelectItem value="CONFIRMADA">CONFIRMADA</SelectItem>
-                          <SelectItem value="ENVIADA">ENVIADA</SelectItem>
-                          <SelectItem value="ENTREGADA">ENTREGADA</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      
-                      {(order.estado === "PENDIENTE" || order.estado === "CONFIRMADA") && (
-                        <Button 
-                          variant="destructive" 
-                          size="sm" 
-                          className="h-8 text-xs px-2"
-                          onClick={() => void handleCancelOrder(order.id)}
+
+                    <TableCell className="py-4 text-right">
+                      <div className="ml-auto flex max-w-[220px] flex-col gap-2">
+                        <Select 
+                          value={order.estado} 
+                          onValueChange={(val) => void handleStatusChange(order.id, val)}
+                          disabled={order.estado === "CANCELADA" || order.estado === "ENTREGADA"}
                         >
-                          Cancelar
-                        </Button>
-                      )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 text-xs px-2"
-                        onClick={() => void loadPaymentForOrder(order)}
-                      >
-                        <CreditCard className="mr-1 h-3.5 w-3.5" />
-                        Pago
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 text-xs px-2"
-                        onClick={() => openFulfillmentDialog(order)}
-                        disabled={order.estado === "CANCELADA"}
-                      >
-                        {order.fulfillmentMethod === "PICKUP" ? (
-                          <PackageCheck className="mr-1 h-3.5 w-3.5" />
-                        ) : (
-                          <Truck className="mr-1 h-3.5 w-3.5" />
+                          <SelectTrigger className="h-9 w-full text-xs">
+                            <SelectValue placeholder="Cambiar estado" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="PENDIENTE" disabled>PENDIENTE</SelectItem>
+                            <SelectItem value="CONFIRMADA">CONFIRMADA</SelectItem>
+                            <SelectItem value="ENVIADA">ENVIADA</SelectItem>
+                            <SelectItem value="ENTREGADA">ENTREGADA</SelectItem>
+                          </SelectContent>
+                        </Select>
+
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-9 flex-1 text-xs"
+                            onClick={() => void loadPaymentForOrder(order)}
+                          >
+                            <CreditCard className="mr-1 h-3.5 w-3.5" />
+                            Pago
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-9 flex-1 text-xs"
+                            onClick={() => openFulfillmentDialog(order)}
+                            disabled={order.estado === "CANCELADA"}
+                          >
+                            {order.fulfillmentMethod === "PICKUP" ? (
+                              <PackageCheck className="mr-1 h-3.5 w-3.5" />
+                            ) : (
+                              <Truck className="mr-1 h-3.5 w-3.5" />
+                            )}
+                            Entrega
+                          </Button>
+                        </div>
+
+                        {(order.estado === "PENDIENTE" || order.estado === "CONFIRMADA") && (
+                          <Button 
+                            variant="destructive" 
+                            size="sm" 
+                            className="h-8 w-full text-xs"
+                            onClick={() => void handleCancelOrder(order.id)}
+                          >
+                            Cancelar orden
+                          </Button>
                         )}
-                        Entrega
-                      </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -669,6 +732,73 @@ export default function AdminOrdersPage() {
             </TableBody>
           </Table>
         </div>
+
+        {!isLoading && filteredOrders.length > 0 ? (
+          <div className="flex flex-col gap-3 border-t border-border bg-muted/20 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="text-xs text-muted-foreground">
+              Mostrando{" "}
+              <span className="font-semibold text-foreground">
+                {showingFrom}-{showingTo}
+              </span>{" "}
+              de{" "}
+              <span className="font-semibold text-foreground">
+                {filteredOrders.length}
+              </span>{" "}
+              órdenes filtradas
+            </div>
+
+            <Pagination className="mx-0 w-full justify-start lg:w-auto lg:justify-end">
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    aria-disabled={safeCurrentPage === 1}
+                    className={
+                      safeCurrentPage === 1
+                        ? "pointer-events-none opacity-45"
+                        : undefined
+                    }
+                    onClick={(event) => {
+                      event.preventDefault();
+                      goToPage(safeCurrentPage - 1);
+                    }}
+                  />
+                </PaginationItem>
+
+                {visiblePages.map((page) => (
+                  <PaginationItem key={page} className="hidden sm:block">
+                    <PaginationLink
+                      href="#"
+                      isActive={page === safeCurrentPage}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        goToPage(page);
+                      }}
+                    >
+                      {page}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    aria-disabled={safeCurrentPage === totalPages}
+                    className={
+                      safeCurrentPage === totalPages
+                        ? "pointer-events-none opacity-45"
+                        : undefined
+                    }
+                    onClick={(event) => {
+                      event.preventDefault();
+                      goToPage(safeCurrentPage + 1);
+                    }}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        ) : null}
       </div>
 
       <Dialog
