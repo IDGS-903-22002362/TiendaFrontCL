@@ -36,7 +36,7 @@ export function ProductToolbar({
             />
             <div>
               <p className="editorial-label text-primary/74">
-                Catálogo premium
+                Catálogo de tienda
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <h1 className="font-headline text-[var(--font-size-catalog-title-mobile)] font-semibold uppercase leading-[var(--line-height-heading-large)] tracking-[0.03em] lg:text-[var(--font-size-catalog-title-desktop)]">

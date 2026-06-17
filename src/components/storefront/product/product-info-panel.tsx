@@ -263,10 +263,10 @@ export function ProductInfoPanel({
                         onClick={() => setSelectedSize(size)}
                         disabled={disabled}
                         className={`rounded-[0.95rem] border px-4 py-3 text-sm font-medium transition-[border-color,background-color,color,transform] ${selectedSize === size
-                            ? "border-primary bg-primary text-primary-foreground shadow-[var(--shadow-card)]"
-                            : disabled
-                              ? "cursor-not-allowed border-black/10 bg-[rgb(244_244_240)] text-muted-foreground/50"
-                              : "border-black/14 bg-white text-foreground hover:-translate-y-px hover:border-black"
+                          ? "border-primary bg-primary text-primary-foreground shadow-[var(--shadow-card)]"
+                          : disabled
+                            ? "cursor-not-allowed border-black/10 bg-[rgb(244_244_240)] text-muted-foreground/50"
+                            : "border-black/14 bg-white text-foreground hover:-translate-y-px hover:border-black"
                           }`}
                       >
                         {size}
@@ -322,10 +322,6 @@ export function ProductInfoPanel({
                 <div>
                   <p className="text-sm font-medium text-foreground">
                     {stockState.hint}
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    Personalización visible en UI, carrito y checkout visual,
-                    manteniendo payloads backend actuales.
                   </p>
                 </div>
               </div>
@@ -401,10 +397,6 @@ export function ProductInfoPanel({
                 <div>
                   <p className="text-sm font-medium text-foreground">
                     Compra segura y consistente
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    El carrito, login, favoritos y checkout siguen consumiendo
-                    la misma API actual.
                   </p>
                 </div>
               </div>

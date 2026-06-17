@@ -78,40 +78,40 @@ export function CategoryGrid({ categories }: { categories: StorefrontCategoryCar
 
         <div className="grid gap-4 sm:grid-cols-2">
           {otherCategories.map((category) => (
-          <Link
-            key={category.id}
-            href={category.href}
-            className="group relative home-surface min-h-[16.5rem] overflow-hidden rounded-[1.6rem] px-5 py-6 transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 hover:border-black/28 hover:shadow-[0_22px_44px_-36px_rgb(8_12_10_/_0.22)] md:px-6 md:py-7"
-          >
-            {category.imagenPrincipal && (
-              <div className="absolute inset-0 z-0 opacity-10 transition-opacity duration-500 group-hover:opacity-20">
-                <CategoryImage src={category.imagenPrincipal} alt={category.name} lazy={true} />
-              </div>
-            )}
-            <div className="relative z-10 flex h-full flex-col justify-between gap-7">
-              <div>
-                <div className="flex items-center gap-3">
-                  <p className="home-kicker text-primary/66">{category.eyebrow}</p>
-                  <span className="home-rule" />
+            <Link
+              key={category.id}
+              href={category.href}
+              className="group relative home-surface min-h-[16.5rem] overflow-hidden rounded-[1.6rem] px-5 py-6 transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 hover:border-black/28 hover:shadow-[0_22px_44px_-36px_rgb(8_12_10_/_0.22)] md:px-6 md:py-7"
+            >
+              {category.imagenPrincipal && (
+                <div className="absolute inset-0 z-0 opacity-10 transition-opacity duration-500 group-hover:opacity-20">
+                  <CategoryImage src={category.imagenPrincipal} alt={category.name} lazy={true} />
                 </div>
-                <h3 className="mt-4 max-w-[10ch] font-headline text-[2.1rem] font-semibold uppercase leading-[0.9] tracking-[0.03em] text-foreground">
-                  {category.name}
-                </h3>
-                <p className="mt-3 max-w-sm text-sm leading-6 text-muted-foreground">
-                  {category.description}
-                </p>
+              )}
+              <div className="relative z-10 flex h-full flex-col justify-between gap-7">
+                <div>
+                  <div className="flex items-center gap-3">
+                    <p className="home-kicker text-primary/66">{category.eyebrow}</p>
+                    <span className="home-rule" />
+                  </div>
+                  <h3 className="mt-4 max-w-[10ch] font-headline text-[2.1rem] font-semibold uppercase leading-[0.9] tracking-[0.03em] text-foreground">
+                    {category.name}
+                  </h3>
+                  <p className="mt-3 max-w-sm text-sm leading-6 text-muted-foreground">
+                    {category.description}
+                  </p>
+                </div>
+                <div className="flex items-end justify-between gap-4">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-text-muted">
+                    {category.count} piezas
+                  </span>
+                  <span className="editorial-link gap-2 text-foreground/72 group-hover:text-primary">
+                    Ver
+                    <ArrowUpRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                  </span>
+                </div>
               </div>
-              <div className="flex items-end justify-between gap-4">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-text-muted">
-                  {category.count} piezas
-                </span>
-                <span className="editorial-link gap-2 text-foreground/72 group-hover:text-primary">
-                  Ver
-                  <ArrowUpRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-                </span>
-              </div>
-            </div>
-          </Link>
+            </Link>
           ))}
         </div>
       </div>

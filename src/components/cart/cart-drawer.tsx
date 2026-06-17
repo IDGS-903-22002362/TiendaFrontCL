@@ -611,65 +611,65 @@ export function CartDrawer() {
       </SheetTrigger>
 
       <SheetContent className="flex w-full border-l border-black/14 bg-white px-0 sm:max-w-[420px] lg:max-w-[560px] xl:max-w-[620px]">
-  <div className="flex h-full min-h-0 w-full">
-    {state.items.length > 0 &&
-    (isLoadingSuggestedOffers || suggestedOfferProducts.length > 0) ? (
-      <aside className="hidden w-[180px] shrink-0 border-r border-black/12 bg-[rgb(249_249_246)] px-4 py-5 lg:flex lg:flex-col">
-        <p className="mb-4 text-[11px] font-bold uppercase tracking-[0.28em] text-foreground">
-          Podría interesarte
-        </p>
-
-        <ScrollArea className="min-h-0 flex-1 pr-2">
-          <div className="space-y-5 pb-5">
-            {isLoadingSuggestedOffers ? (
-              <p className="text-xs leading-5 text-muted-foreground">
-                Buscando productos en oferta...
+        <div className="flex h-full min-h-0 w-full">
+          {state.items.length > 0 &&
+            (isLoadingSuggestedOffers || suggestedOfferProducts.length > 0) ? (
+            <aside className="hidden w-[180px] shrink-0 border-r border-black/12 bg-[rgb(249_249_246)] px-4 py-5 lg:flex lg:flex-col">
+              <p className="mb-4 text-[11px] font-bold uppercase tracking-[0.28em] text-foreground">
+                Podría interesarte
               </p>
-            ) : suggestedOfferProducts.length === 0 ? (
-              <p className="text-xs leading-5 text-muted-foreground">
-                No hay sugerencias en oferta por ahora.
-              </p>
-            ) : (
-              suggestedOfferProducts.map((product) => (
-                <Link
-                  key={product.id}
-                  href={`/products/${product.id}`}
-                  className="block group"
-                  onClick={() => setIsDrawerOpen(false)}
-                >
-                  <div className="aspect-square overflow-hidden bg-[rgb(247_247_244)]">
-                    <img
-                      src={product.image || "/placeholder.svg"}
-                      alt={product.name}
-                      className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-                    />
-                  </div>
 
-                  <p className="mt-2 line-clamp-2 text-sm leading-5 text-foreground">
-                    {product.name}
-                  </p>
-
-                  <div className="mt-1 flex items-center gap-2">
-                    <span className="text-xs font-semibold text-red-600">
-                      {formatCurrency(product.salePrice)}
-                    </span>
-                    <span className="text-xs text-muted-foreground line-through">
-                      {formatCurrency(product.price)}
-                    </span>
-                  </div>
-
-                  {product.offerLabel ? (
-                    <p className="mt-1 line-clamp-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
-                      {product.offerLabel}
+              <ScrollArea className="min-h-0 flex-1 pr-2">
+                <div className="space-y-5 pb-5">
+                  {isLoadingSuggestedOffers ? (
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      Buscando productos en oferta...
                     </p>
-                  ) : null}
-                </Link>
-              ))
-            )}
-          </div>
-        </ScrollArea>
-      </aside>
-    ) : null}
+                  ) : suggestedOfferProducts.length === 0 ? (
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      No hay sugerencias en oferta por ahora.
+                    </p>
+                  ) : (
+                    suggestedOfferProducts.map((product) => (
+                      <Link
+                        key={product.id}
+                        href={`/products/${product.id}`}
+                        className="block group"
+                        onClick={() => setIsDrawerOpen(false)}
+                      >
+                        <div className="aspect-square overflow-hidden bg-[rgb(247_247_244)]">
+                          <img
+                            src={product.image || "/placeholder.svg"}
+                            alt={product.name}
+                            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                          />
+                        </div>
+
+                        <p className="mt-2 line-clamp-2 text-sm leading-5 text-foreground">
+                          {product.name}
+                        </p>
+
+                        <div className="mt-1 flex items-center gap-2">
+                          <span className="text-xs font-semibold text-red-600">
+                            {formatCurrency(product.salePrice)}
+                          </span>
+                          <span className="text-xs text-muted-foreground line-through">
+                            {formatCurrency(product.price)}
+                          </span>
+                        </div>
+
+                        {product.offerLabel ? (
+                          <p className="mt-1 line-clamp-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
+                            {product.offerLabel}
+                          </p>
+                        ) : null}
+                      </Link>
+                    ))
+                  )}
+                </div>
+              </ScrollArea>
+            </aside>
+          ) : null}
 
           <div className="flex min-w-0 flex-1 flex-col">
             <SheetHeader className="shrink-0 border-b border-black/12 px-5 pb-4">
@@ -711,7 +711,7 @@ export function CartDrawer() {
                         const tieneOferta =
                           Boolean(
                             pricingOferta?.ofertaAplicadaId ||
-                              pricingOferta?.ofertaTitulo,
+                            pricingOferta?.ofertaTitulo,
                           ) &&
                           precioFinal > 0 &&
                           precioFinal < precioOriginal;
@@ -727,28 +727,28 @@ export function CartDrawer() {
                         );
                         const codigoSubtotalFinal = codigoResultadoItem
                           ? getProductNumber(codigoResultadoItem, [
-                              "subtotalFinal",
-                              "subtotalConDescuento",
-                              "subtotalFinalCodigo",
-                              "totalFinal",
-                              "total",
-                            ])
+                            "subtotalFinal",
+                            "subtotalConDescuento",
+                            "subtotalFinalCodigo",
+                            "totalFinal",
+                            "total",
+                          ])
                           : 0;
                         const codigoPrecioFinal = codigoResultadoItem
                           ? getProductNumber(codigoResultadoItem, [
-                              "precioFinal",
-                              "precioUnitarioFinal",
-                              "unitPriceFinal",
-                              "precioUnitario",
-                            ])
+                            "precioFinal",
+                            "precioUnitarioFinal",
+                            "unitPriceFinal",
+                            "precioUnitario",
+                          ])
                           : 0;
                         const codigoDescuentoItem = codigoResultadoItem
                           ? getProductNumber(codigoResultadoItem, [
-                              "descuentoTotal",
-                              "descuento",
-                              "discountTotal",
-                              "discount",
-                            ])
+                            "descuentoTotal",
+                            "descuento",
+                            "discountTotal",
+                            "discount",
+                          ])
                           : 0;
                         const totalItemConCodigo =
                           codigoSubtotalFinal > 0
@@ -1020,7 +1020,7 @@ export function CartDrawer() {
                   disabled={state.items.length === 0}
                   onClick={handleCheckout}
                 >
-                  Ir a checkout
+                  Ir a detalle de compra
                 </Button>
               </div>
             </SheetFooter>
