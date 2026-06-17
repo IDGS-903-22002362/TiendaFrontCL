@@ -1,22 +1,33 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Copy, CreditCard, RefreshCw, Filter, Search, X, Truck } from "lucide-react";
-import { ordersApi } from "@/lib/api/orders";
-import { paymentsApi } from "@/lib/api/payments";
-import { fedexAdminApi } from "@/lib/api/fedex";
-import type {
-  AplazoRefundRequest,
-  AplazoRefundRequestStatus,
-  AplazoRefundStatusResponse,
-  Orden,
-  Pago,
-} from "@/lib/types";
-import { useToast } from "@/hooks/use-toast";
 import {
-  getAplazoAdminErrorMessage,
-  getApiErrorMessage,
-} from "@/lib/api/errors";
+  Copy,
+  CreditCard,
+  RefreshCw,
+  Filter,
+  Search,
+  X,
+  Truck,
+  PackageCheck,
+} from "lucide-react";
+import {
+  ordersApi,
+  fulfillmentAdminApi,
+  type ManualShippingStatusInput,
+} from "@/lib/api/orders";
+import { paymentsApi } from "@/lib/api/payments";
+import type { Orden, Pago } from "@/lib/types";
+import { useToast } from "@/hooks/use-toast";
+import { getApiErrorMessage } from "@/lib/api/errors";
+import {
+  getPaymentStateLabel,
+  getPaymentStateVariant,
+  getPreparationStatusLabel,
+  getShippingStatusLabel,
+  getPickupStatusLabel,
+  isOrderPaid,
+} from "@/lib/orders/status";
 import {
   Table,
   TableBody,
@@ -55,30 +66,10 @@ const badgeVariants: Record<string, "default" | "secondary" | "destructive" | "o
   CANCELADA: "destructive",
 };
 
-const refundRequestLabels: Record<AplazoRefundRequestStatus, string> = {
-  pending: "Pendiente",
-  approved: "Aprobada",
-  rejected: "Rechazada",
-  processed: "Procesada",
-};
-
-const refundRequestBadgeVariants: Record<
-  AplazoRefundRequestStatus,
-  "default" | "secondary" | "destructive" | "outline"
-> = {
-  pending: "outline",
-  approved: "secondary",
-  rejected: "destructive",
-  processed: "default",
-};
-
-type PaymentProvider = "stripe" | "aplazo" | "unknown";
+type PaymentProvider = "stripe" | "unknown";
 
 function getPaymentProvider(payment: Pago | null): PaymentProvider {
   const provider = payment?.provider?.toLowerCase();
-  if (provider?.includes("aplazo") || payment?.paymentAttemptId) {
-    return "aplazo";
-  }
   if (provider?.includes("stripe") || provider?.includes("tarjeta") || payment?.id) {
     return "stripe";
   }
@@ -130,36 +121,29 @@ function formatRefundDate(dateStr?: string | null) {
 
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Orden[]>([]);
-  const [refundRequests, setRefundRequests] = useState<AplazoRefundRequest[]>(
-    [],
-  );
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingRefundRequests, setIsLoadingRefundRequests] = useState(true);
   const [estadoFilter, setEstadoFilter] = useState<string>("TODOS");
-  const [refundStatusFilter, setRefundStatusFilter] =
-    useState<AplazoRefundRequestStatus | "all">("pending");
   const [searchTerm, setSearchTerm] = useState("");
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
-  const [isRefundRequestDialogOpen, setIsRefundRequestDialogOpen] =
-    useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Orden | null>(null);
   const [selectedPayment, setSelectedPayment] = useState<Pago | null>(null);
-  const [selectedRefundRequest, setSelectedRefundRequest] =
-    useState<AplazoRefundRequest | null>(null);
-  const [refundRequestAction, setRefundRequestAction] = useState<
-    "approve" | "reject"
-  >("approve");
-  const [refundStatus, setRefundStatus] =
-    useState<AplazoRefundStatusResponse | null>(null);
   const [isLoadingPayment, setIsLoadingPayment] = useState(false);
   const [isRefunding, setIsRefunding] = useState(false);
   const [refundAmount, setRefundAmount] = useState("");
   const [refundReason, setRefundReason] = useState("");
-  const [refundRequestAmount, setRefundRequestAmount] = useState("");
-  const [refundRequestReason, setRefundRequestReason] = useState("");
   const [paymentError, setPaymentError] = useState("");
   const [refundFormError, setRefundFormError] = useState("");
-  const [refundRequestError, setRefundRequestError] = useState("");
+  const [methodFilter, setMethodFilter] = useState<string>("TODOS");
+
+  // Dialogo de gestion de entrega (envio manual / pickup)
+  const [isFulfillmentOpen, setIsFulfillmentOpen] = useState(false);
+  const [fulfillmentOrder, setFulfillmentOrder] = useState<Orden | null>(null);
+  const [isFulfillmentSubmitting, setIsFulfillmentSubmitting] = useState(false);
+  const [trackingNumber, setTrackingNumber] = useState("");
+  const [serviceName, setServiceName] = useState("");
+  const [realShippingCost, setRealShippingCost] = useState("");
+  const [fulfillmentNotes, setFulfillmentNotes] = useState("");
+  const [pickupCode, setPickupCode] = useState("");
   const { toast } = useToast();
 
   const loadOrders = useCallback(async (estado?: string) => {
@@ -191,28 +175,6 @@ export default function AdminOrdersPage() {
     void loadOrders(estadoFilter);
   }, [loadOrders, estadoFilter]);
 
-  const loadRefundRequests = useCallback(async () => {
-    setIsLoadingRefundRequests(true);
-    try {
-      const response = await paymentsApi.listAdminAplazoRefundRequests({
-        status: refundStatusFilter,
-      });
-      setRefundRequests(response.data);
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error al cargar solicitudes Aplazo",
-        description: getAplazoAdminErrorMessage(error),
-      });
-    } finally {
-      setIsLoadingRefundRequests(false);
-    }
-  }, [refundStatusFilter, toast]);
-
-  useEffect(() => {
-    void loadRefundRequests();
-  }, [loadRefundRequests]);
-
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     try {
       await ordersApi.updateEstado(orderId, newStatus);
@@ -242,73 +204,11 @@ export default function AdminOrdersPage() {
     }
   }
 
-  const handleCreateFedExShipment = async (order: Orden) => {
-    try {
-      await fedexAdminApi.shipOrder(order.id);
-      toast({ title: "Guia FedEx solicitada" });
-      void loadOrders(estadoFilter);
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error FedEx",
-        description: getApiErrorMessage(error),
-      });
-    }
-  };
-
-  const handleCancelFedExShipment = async (order: Orden) => {
-    if (order.shipping?.status === "DELIVERED") {
-      toast({
-        variant: "destructive",
-        title: "Guia entregada",
-        description: "FedEx ya marco esta guia como entregada; no puede cancelarse desde la UI.",
-      });
-      return;
-    }
-
-    const reason = window.prompt("Motivo para cancelar la guia FedEx");
-    if (!reason?.trim()) return;
-
-    try {
-      await fedexAdminApi.cancelShipment(order.id, {
-        reason: reason.trim(),
-        forceRefreshTracking: true,
-      });
-      toast({ title: "Cancelacion FedEx solicitada" });
-      void loadOrders(estadoFilter);
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error FedEx",
-        description: getApiErrorMessage(error),
-      });
-    }
-  };
-
   const resetRefundForm = () => {
     setRefundAmount("");
     setRefundReason("");
     setRefundFormError("");
     setPaymentError("");
-    setRefundStatus(null);
-  };
-
-  const openRefundRequestAction = (
-    request: AplazoRefundRequest,
-    action: "approve" | "reject",
-  ) => {
-    setSelectedRefundRequest(request);
-    setRefundRequestAction(action);
-    setRefundRequestAmount(
-      request.refundAmountMinor
-        ? String(request.refundAmountMinor / 100)
-        : request.refundAmount
-        ? String(request.refundAmount)
-        : "",
-    );
-    setRefundRequestReason("");
-    setRefundRequestError("");
-    setIsRefundRequestDialogOpen(true);
   };
 
   const loadPaymentForOrder = async (order: Orden) => {
@@ -324,19 +224,6 @@ export default function AdminOrdersPage() {
 
       if (!payment) {
         setPaymentError("Pago no disponible para reembolso.");
-        return;
-      }
-
-      const provider = getPaymentProvider(payment);
-      if (provider === "aplazo" && payment.paymentAttemptId) {
-        try {
-          const status = await paymentsApi.getAplazoRefundStatus(
-            payment.paymentAttemptId,
-          );
-          setRefundStatus(status);
-        } catch {
-          setRefundStatus(null);
-        }
       }
     } catch (error) {
       setPaymentError(getApiErrorMessage(error));
@@ -351,13 +238,6 @@ export default function AdminOrdersPage() {
     try {
       const payment = await ordersApi.getPago(selectedOrder.id);
       setSelectedPayment(payment);
-
-      if (payment?.paymentAttemptId && getPaymentProvider(payment) === "aplazo") {
-        const status = await paymentsApi.getAplazoRefundStatus(
-          payment.paymentAttemptId,
-        );
-        setRefundStatus(status);
-      }
     } catch (error) {
       const message = getApiErrorMessage(error);
       setPaymentError(message);
@@ -395,48 +275,27 @@ export default function AdminOrdersPage() {
       return;
     }
 
+    if (provider !== "stripe" || !selectedPayment.id) {
+      setRefundFormError("Pago no disponible para reembolso.");
+      return;
+    }
+
     setIsRefunding(true);
     setRefundFormError("");
 
     try {
-      if (provider === "aplazo") {
-        if (!selectedOrder) {
-          throw new Error("Orden no disponible para crear solicitud.");
-        }
-
-        await paymentsApi.createAplazoRefundRequest({
-          orderId: selectedOrder.id,
-          reason,
-        });
-      } else if (provider === "stripe") {
-        if (!selectedPayment.id) {
-          throw new Error("Pago no disponible para reembolso.");
-        }
-
-        await paymentsApi.reembolsoAdmin(selectedPayment.id, {
-          refundReason: reason,
-          ...(amount !== undefined ? { refundAmount: amount } : {}),
-        });
-      } else {
-        throw new Error("Pago no disponible para reembolso.");
-      }
-
-      toast({
-        title:
-          provider === "aplazo"
-            ? "Solicitud Aplazo creada"
-            : "Reembolso solicitado exitosamente",
+      await paymentsApi.reembolsoAdmin(selectedPayment.id, {
+        refundReason: reason,
+        ...(amount !== undefined ? { refundAmount: amount } : {}),
       });
+
+      toast({ title: "Reembolso solicitado exitosamente" });
       setRefundAmount("");
       setRefundReason("");
       await refreshSelectedPayment();
-      await loadRefundRequests();
       void loadOrders(estadoFilter);
     } catch (error) {
-      const message =
-        provider === "aplazo"
-          ? getAplazoAdminErrorMessage(error)
-          : getApiErrorMessage(error);
+      const message = getApiErrorMessage(error);
       setRefundFormError(message);
       toast({
         variant: "destructive",
@@ -448,60 +307,121 @@ export default function AdminOrdersPage() {
     }
   };
 
-  const handleRefundRequestAction = async () => {
-    if (!selectedRefundRequest) return;
+  const openFulfillmentDialog = (order: Orden) => {
+    setFulfillmentOrder(order);
+    setTrackingNumber(order.shipping?.trackingNumber ?? "");
+    setServiceName(order.shipping?.serviceName ?? "");
+    setRealShippingCost(
+      typeof order.shipping?.manualEvidence?.realShippingCost === "number"
+        ? String(order.shipping.manualEvidence.realShippingCost)
+        : "",
+    );
+    setFulfillmentNotes("");
+    setPickupCode("");
+    setIsFulfillmentOpen(true);
+  };
 
-    const reason = refundRequestReason.trim();
-    if (!reason) {
-      setRefundRequestError(
-        refundRequestAction === "approve"
-          ? "Captura una nota de aprobación."
-          : "Captura el motivo de rechazo.",
-      );
-      return;
-    }
-
+  const runFulfillmentAction = async (
+    action: () => Promise<unknown>,
+    successTitle: string,
+  ) => {
+    if (!fulfillmentOrder) return;
+    setIsFulfillmentSubmitting(true);
     try {
-      setIsRefunding(true);
-      setRefundRequestError("");
-
-      if (refundRequestAction === "approve") {
-        const amount = Number(refundRequestAmount);
-        if (!Number.isFinite(amount) || amount <= 0) {
-          setRefundRequestError("El monto del reembolso debe ser mayor a 0.");
-          return;
-        }
-
-        await paymentsApi.approveAplazoRefundRequest(selectedRefundRequest.id, {
-          refundAmountMinor: Math.round(amount * 100),
-          reason,
-        });
-        toast({ title: "Solicitud Aplazo aprobada" });
-      } else {
-        await paymentsApi.rejectAplazoRefundRequest(selectedRefundRequest.id, {
-          reason,
-        });
-        toast({ title: "Solicitud Aplazo rechazada" });
+      await action();
+      toast({ title: successTitle });
+      const refreshedList = await ordersApi.list(
+        estadoFilter && estadoFilter !== "TODOS" ? { estado: estadoFilter } : {},
+      );
+      refreshedList.sort((a, b) => {
+        const first = new Date(a.createdAt ?? 0).getTime();
+        const second = new Date(b.createdAt ?? 0).getTime();
+        return second - first;
+      });
+      setOrders(refreshedList);
+      const updated = refreshedList.find((o) => o.id === fulfillmentOrder.id);
+      if (updated) {
+        setFulfillmentOrder(updated);
       }
-
-      setIsRefundRequestDialogOpen(false);
-      setSelectedRefundRequest(null);
-      await loadRefundRequests();
-      void loadOrders(estadoFilter);
     } catch (error) {
-      const message = getAplazoAdminErrorMessage(error);
-      setRefundRequestError(message);
       toast({
         variant: "destructive",
-        title: "Error en solicitud Aplazo",
-        description: message,
+        title: "No se pudo actualizar la entrega",
+        description: getApiErrorMessage(error),
       });
     } finally {
-      setIsRefunding(false);
+      setIsFulfillmentSubmitting(false);
     }
   };
 
+  const handleCaptureTracking = () => {
+    if (!fulfillmentOrder) return;
+    const trimmed = trackingNumber.trim();
+    if (!trimmed) {
+      toast({
+        variant: "destructive",
+        title: "Número de guía requerido",
+        description: "Captura el número de guía de FedEx para continuar.",
+      });
+      return;
+    }
+    const costText = realShippingCost.trim();
+    const cost = costText ? Number(costText) : undefined;
+    if (costText && (!Number.isFinite(cost) || Number(cost) < 0)) {
+      toast({
+        variant: "destructive",
+        title: "Costo inválido",
+        description: "El costo real de envío debe ser un número válido.",
+      });
+      return;
+    }
+    void runFulfillmentAction(
+      () =>
+        fulfillmentAdminApi.captureTracking(fulfillmentOrder.id, {
+          trackingNumber: trimmed,
+          serviceName: serviceName.trim() || undefined,
+          realShippingCost: cost,
+          notes: fulfillmentNotes.trim() || undefined,
+        }),
+      "Guía capturada y pedido entregado a paquetería",
+    );
+  };
+
+  const handleManualStatus = (status: ManualShippingStatusInput) => {
+    if (!fulfillmentOrder) return;
+    void runFulfillmentAction(
+      () =>
+        fulfillmentAdminApi.updateShippingStatus(
+          fulfillmentOrder.id,
+          status,
+          fulfillmentNotes.trim() || undefined,
+        ),
+      "Estado de envío actualizado",
+    );
+  };
+
+  const handlePickupComplete = () => {
+    if (!fulfillmentOrder) return;
+    const code = pickupCode.trim();
+    if (!code) {
+      toast({
+        variant: "destructive",
+        title: "Código requerido",
+        description: "Captura el código de recolección del cliente.",
+      });
+      return;
+    }
+    void runFulfillmentAction(
+      () =>
+        fulfillmentAdminApi.pickupComplete(fulfillmentOrder.id, { code }),
+      "Pedido entregado al cliente",
+    );
+  };
+
   const filteredOrders = orders.filter((order) => {
+    if (methodFilter !== "TODOS" && (order.fulfillmentMethod ?? "DELIVERY") !== methodFilter) {
+      return false;
+    }
     if (!searchTerm) return true;
     return order.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
            (order.usuarioId && order.usuarioId.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -516,13 +436,10 @@ export default function AdminOrdersPage() {
   const selectedProvider = getPaymentProvider(selectedPayment);
   const canRefundSelectedPayment =
     Boolean(selectedPayment) &&
-    selectedProvider !== "unknown" &&
-    selectedProvider !== "aplazo" &&
+    selectedProvider === "stripe" &&
     isRefundableStatus(selectedPayment?.status);
-  const selectedRefunds =
-    refundStatus?.refunds ?? selectedPayment?.refunds ?? [];
-  const selectedCurrency =
-    refundStatus?.currency ?? selectedPayment?.moneda ?? "MXN";
+  const selectedRefunds = selectedPayment?.refunds ?? [];
+  const selectedCurrency = selectedPayment?.moneda ?? "MXN";
 
   return (
     <div className="space-y-6">
@@ -565,151 +482,28 @@ export default function AdminOrdersPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="TODOS">Todas las etapas</SelectItem>
-                  <SelectItem value="PENDIENTE">PENDIENTE</SelectItem>
-                  <SelectItem value="CONFIRMADA">CONFIRMADA</SelectItem>
-                  <SelectItem value="ENVIADA">ENVIADA</SelectItem>
-                  <SelectItem value="ENTREGADA">ENTREGADA</SelectItem>
-                  <SelectItem value="CANCELADA">CANCELADA</SelectItem>
+                  <SelectItem value="PENDIENTE">Pendiente de pago</SelectItem>
+                  <SelectItem value="CONFIRMADA">Pagada / Confirmada</SelectItem>
+                  <SelectItem value="EN_PROCESO">En proceso</SelectItem>
+                  <SelectItem value="ENVIADA">Enviada</SelectItem>
+                  <SelectItem value="ENTREGADA">Entregada</SelectItem>
+                  <SelectItem value="CANCELADA">Cancelada</SelectItem>
                 </SelectContent>
               </Select>
            </div>
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader className="pb-3 border-b">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle className="text-lg">Solicitudes Aplazo</CardTitle>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Select
-                value={refundStatusFilter}
-                onValueChange={(value) =>
-                  setRefundStatusFilter(
-                    value as AplazoRefundRequestStatus | "all",
-                  )
-                }
-              >
-                <SelectTrigger className="w-full sm:w-[180px]">
-                  <SelectValue placeholder="Estado" />
+           <div className="w-full sm:w-[200px]">
+              <Select value={methodFilter} onValueChange={setMethodFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Método de entrega" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pending">Pendientes</SelectItem>
-                  <SelectItem value="approved">Aprobadas</SelectItem>
-                  <SelectItem value="processed">Procesadas</SelectItem>
-                  <SelectItem value="rejected">Rechazadas</SelectItem>
-                  <SelectItem value="all">Todas</SelectItem>
+                  <SelectItem value="TODOS">Todos los métodos</SelectItem>
+                  <SelectItem value="DELIVERY">Envío a domicilio</SelectItem>
+                  <SelectItem value="PICKUP">Recoger en tienda</SelectItem>
                 </SelectContent>
               </Select>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void loadRefundRequests()}
-              >
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Refrescar
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Solicitud</TableHead>
-                  <TableHead>Orden</TableHead>
-                  <TableHead>Motivo</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoadingRefundRequests ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={6}
-                      className="py-6 text-center text-muted-foreground"
-                    >
-                      Cargando solicitudes Aplazo...
-                    </TableCell>
-                  </TableRow>
-                ) : refundRequests.length === 0 ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={6}
-                      className="py-6 text-center text-muted-foreground"
-                    >
-                      No hay solicitudes Aplazo con este filtro.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  refundRequests.map((request) => (
-                    <TableRow key={request.id}>
-                      <TableCell className="max-w-[180px] truncate font-mono text-xs">
-                        {request.id}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {request.orderId}
-                      </TableCell>
-                      <TableCell className="max-w-[260px] truncate text-sm">
-                        {request.reason}
-                        {request.lastProcessingError ? (
-                          <p className="mt-1 truncate text-xs text-destructive">
-                            {request.lastProcessingError}
-                          </p>
-                        ) : null}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={refundRequestBadgeVariants[request.status]}
-                        >
-                          {refundRequestLabels[request.status]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-sm">
-                        {formatDate(request.createdAt)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          {request.status === "pending" ||
-                          request.status === "approved" ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="h-8 text-xs"
-                              onClick={() =>
-                                openRefundRequestAction(request, "approve")
-                              }
-                            >
-                              {request.status === "approved"
-                                ? "Reintentar"
-                                : "Aprobar"}
-                            </Button>
-                          ) : null}
-                          {request.status === "pending" ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="destructive"
-                              className="h-8 text-xs"
-                              onClick={() =>
-                                openRefundRequestAction(request, "reject")
-                              }
-                            >
-                              Rechazar
-                            </Button>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+           </div>
         </CardContent>
       </Card>
 
@@ -722,21 +516,23 @@ export default function AdminOrdersPage() {
                 <TableHead>Fecha</TableHead>
                 <TableHead>Cliente</TableHead>
                 <TableHead>Total</TableHead>
+                <TableHead>Entrega</TableHead>
+                <TableHead>Pago</TableHead>
                 <TableHead>Estado Actual</TableHead>
-                <TableHead>FedEx</TableHead>
+                <TableHead>Envío / Recolección</TableHead>
                 <TableHead className="text-right min-w-[200px]">Acciones Operativas</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     Cargando órdenes de la base de datos...
                   </TableCell>
                 </TableRow>
               ) : filteredOrders.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     No hay órdenes con los filtros actuales.
                   </TableCell>
                 </TableRow>
@@ -768,6 +564,24 @@ export default function AdminOrdersPage() {
                       )}
                     </TableCell>
                     <TableCell className="font-semibold">${order.total.toFixed(2)}</TableCell>
+                    <TableCell className="text-xs">
+                      <Badge
+                        variant={
+                          order.fulfillmentMethod === "PICKUP"
+                            ? "secondary"
+                            : "outline"
+                        }
+                      >
+                        {order.fulfillmentMethod === "PICKUP"
+                          ? "Recoger en tienda"
+                          : "Envío a domicilio"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      <Badge variant={getPaymentStateVariant(order)}>
+                        {getPaymentStateLabel(order)}
+                      </Badge>
+                    </TableCell>
                     <TableCell>
                       <Badge variant={badgeVariants[order.estado] || "default"}>
                         {order.estado}
@@ -775,18 +589,26 @@ export default function AdminOrdersPage() {
                     </TableCell>
                     <TableCell className="text-xs">
                       {order.fulfillmentMethod === "PICKUP" ? (
-                        <span className="text-muted-foreground">Pickup</span>
+                        <div className="space-y-1">
+                          <Badge variant="outline">
+                            {getPickupStatusLabel(order.fulfillmentStatus)}
+                          </Badge>
+                          {order.pickupCodeLast4 ? (
+                            <p className="text-muted-foreground">
+                              Código •••• {order.pickupCodeLast4}
+                            </p>
+                          ) : null}
+                        </div>
                       ) : (
                         <div className="space-y-1">
                           <Badge variant="outline">
-                            {order.shipping?.status ?? "Sin guia"}
+                            {getShippingStatusLabel(order.shipping?.status)}
                           </Badge>
-                          <p className="max-w-[160px] truncate text-muted-foreground">
-                            {order.shipping?.trackingNumber ??
-                              order.shipping?.serviceName ??
-                              order.shipping?.serviceType ??
-                              "FedEx"}
-                          </p>
+                          {order.shipping?.trackingNumber ? (
+                            <p className="max-w-[160px] truncate text-muted-foreground">
+                              Guía: {order.shipping.trackingNumber}
+                            </p>
+                          ) : null}
                         </div>
                       )}
                     </TableCell>
@@ -826,30 +648,20 @@ export default function AdminOrdersPage() {
                         <CreditCard className="mr-1 h-3.5 w-3.5" />
                         Pago
                       </Button>
-                      {order.fulfillmentMethod !== "PICKUP" ? (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 text-xs px-2"
-                            onClick={() => void handleCreateFedExShipment(order)}
-                          >
-                            <Truck className="mr-1 h-3.5 w-3.5" />
-                            Guia
-                          </Button>
-                          {order.shipping?.trackingNumber ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 text-xs px-2"
-                              onClick={() => void handleCancelFedExShipment(order)}
-                              disabled={order.shipping?.status === "DELIVERED"}
-                            >
-                              Cancelar guia
-                            </Button>
-                          ) : null}
-                        </>
-                      ) : null}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs px-2"
+                        onClick={() => openFulfillmentDialog(order)}
+                        disabled={order.estado === "CANCELADA"}
+                      >
+                        {order.fulfillmentMethod === "PICKUP" ? (
+                          <PackageCheck className="mr-1 h-3.5 w-3.5" />
+                        ) : (
+                          <Truck className="mr-1 h-3.5 w-3.5" />
+                        )}
+                        Entrega
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))
@@ -896,11 +708,7 @@ export default function AdminOrdersPage() {
                     Proveedor
                   </p>
                   <p className="mt-1 font-medium">
-                    {selectedProvider === "aplazo"
-                      ? "Aplazo"
-                      : selectedProvider === "stripe"
-                      ? "Stripe"
-                      : "No identificado"}
+                    {selectedProvider === "stripe" ? "Stripe" : "No identificado"}
                   </p>
                 </div>
                 <div>
@@ -921,14 +729,6 @@ export default function AdminOrdersPage() {
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase text-muted-foreground">
-                    Intento Aplazo
-                  </p>
-                  <p className="mt-1 break-all font-mono text-xs">
-                    {selectedPayment.paymentAttemptId || "-"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase text-muted-foreground">
                     Monto
                   </p>
                   <p className="mt-1 font-medium">
@@ -941,8 +741,7 @@ export default function AdminOrdersPage() {
                   </p>
                   <p className="mt-1 font-medium">
                     {formatCurrency(
-                      refundStatus?.totalRefundedAmount ??
-                        selectedPayment.totalRefundedAmount,
+                      selectedPayment.totalRefundedAmount,
                       selectedCurrency,
                     )}
                   </p>
@@ -951,9 +750,7 @@ export default function AdminOrdersPage() {
 
               {!canRefundSelectedPayment ? (
                 <div className="rounded-md border border-muted bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-                  {selectedProvider === "aplazo"
-                    ? "Los reembolsos Aplazo se gestionan desde la bandeja de solicitudes. El cliente inicia la solicitud y admin aprueba o rechaza."
-                    : "Este pago no está en un estado reembolsable o no tiene los identificadores requeridos."}
+                  Este pago no está en un estado reembolsable o no tiene los identificadores requeridos.
                 </div>
               ) : (
                 <div className="space-y-4 rounded-md border p-4">
@@ -1012,61 +809,53 @@ export default function AdminOrdersPage() {
                 </div>
               )}
 
-              {selectedProvider === "aplazo" ? (
+              {selectedRefunds.length > 0 ? (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-3">
-                    <h3 className="text-sm font-semibold">
-                      Reembolsos Aplazo
-                    </h3>
+                    <h3 className="text-sm font-semibold">Reembolsos</h3>
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
                       onClick={() => void refreshSelectedPayment()}
-                      disabled={isRefunding || !selectedPayment.paymentAttemptId}
+                      disabled={isRefunding}
                     >
                       Refrescar estado
                     </Button>
                   </div>
 
-                  {selectedRefunds.length === 0 ? (
-                    <div className="rounded-md border border-dashed px-4 py-4 text-sm text-muted-foreground">
-                      No hay reembolsos registrados para este intento.
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto rounded-md border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>ID</TableHead>
-                            <TableHead>Estado</TableHead>
-                            <TableHead>Monto</TableHead>
-                            <TableHead>Fecha</TableHead>
+                  <div className="overflow-x-auto rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>ID</TableHead>
+                          <TableHead>Estado</TableHead>
+                          <TableHead>Monto</TableHead>
+                          <TableHead>Fecha</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedRefunds.map((refund, index) => (
+                          <TableRow key={refund.id ?? `refund-${index}`}>
+                            <TableCell className="font-mono text-xs">
+                              {refund.id ?? "-"}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">
+                                {refund.refundState ?? refund.status ?? "-"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {formatCurrency(refund.amount, selectedCurrency)}
+                            </TableCell>
+                            <TableCell>
+                              {formatRefundDate(refund.refundDate)}
+                            </TableCell>
                           </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {selectedRefunds.map((refund, index) => (
-                            <TableRow key={refund.id ?? `refund-${index}`}>
-                              <TableCell className="font-mono text-xs">
-                                {refund.id ?? "-"}
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="outline">
-                                  {refund.refundState ?? refund.status ?? "-"}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                {formatCurrency(refund.amount, selectedCurrency)}
-                              </TableCell>
-                              <TableCell>
-                                {formatRefundDate(refund.refundDate)}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -1079,113 +868,432 @@ export default function AdminOrdersPage() {
       </Dialog>
 
       <Dialog
-        open={isRefundRequestDialogOpen}
+        open={isFulfillmentOpen}
         onOpenChange={(open) => {
-          setIsRefundRequestDialogOpen(open);
+          setIsFulfillmentOpen(open);
           if (!open) {
-            setSelectedRefundRequest(null);
-            setRefundRequestAmount("");
-            setRefundRequestReason("");
-            setRefundRequestError("");
+            setFulfillmentOrder(null);
           }
         }}
       >
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>
-              {refundRequestAction === "approve"
-                ? "Aprobar devolución Aplazo"
-                : "Rechazar devolución Aplazo"}
-            </DialogTitle>
+            <DialogTitle>Gestión de entrega</DialogTitle>
             <DialogDescription>
-              {selectedRefundRequest
-                ? `Solicitud ${selectedRefundRequest.id} · Orden ${selectedRefundRequest.orderId}`
-                : "Gestiona la solicitud seleccionada."}
+              {fulfillmentOrder
+                ? `Orden ${fulfillmentOrder.id}`
+                : "Administra el envío o la recolección del pedido."}
             </DialogDescription>
           </DialogHeader>
 
-          {selectedRefundRequest ? (
-            <div className="space-y-4">
-              <div className="rounded-md border bg-muted/30 p-3 text-sm">
-                <p className="text-xs font-semibold uppercase text-muted-foreground">
-                  Motivo del cliente
-                </p>
-                <p className="mt-1">{selectedRefundRequest.reason}</p>
-                {selectedRefundRequest.lastProcessingError ? (
-                  <p className="mt-2 text-destructive">
-                    Último error: {selectedRefundRequest.lastProcessingError}
-                  </p>
-                ) : null}
-              </div>
+          {fulfillmentOrder
+            ? (() => {
+                const order = fulfillmentOrder;
+                const isPickup = order.fulfillmentMethod === "PICKUP";
+                const paid = isOrderPaid(order);
+                const cancelled = order.estado === "CANCELADA";
+                const actionsDisabled =
+                  !paid || cancelled || isFulfillmentSubmitting;
+                const direccion = order.direccionEnvio;
 
-              {refundRequestAction === "approve" ? (
-                <div className="space-y-2">
-                  <Label htmlFor="refund-request-amount">
-                    Monto a reembolsar
-                  </Label>
-                  <Input
-                    id="refund-request-amount"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    inputMode="decimal"
-                    value={refundRequestAmount}
-                    onChange={(event) =>
-                      setRefundRequestAmount(event.target.value)
-                    }
-                    disabled={isRefunding}
-                  />
-                </div>
-              ) : null}
+                return (
+                  <div className="space-y-5">
+                    {/* Estado general */}
+                    <div className="grid gap-3 rounded-md border bg-muted/30 p-4 text-sm sm:grid-cols-2">
+                      <div>
+                        <p className="text-xs font-semibold uppercase text-muted-foreground">
+                          Pago
+                        </p>
+                        <Badge className="mt-1" variant={getPaymentStateVariant(order)}>
+                          {getPaymentStateLabel(order)}
+                        </Badge>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase text-muted-foreground">
+                          Preparación
+                        </p>
+                        <p className="mt-1 font-medium">
+                          {getPreparationStatusLabel(order)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase text-muted-foreground">
+                          Método
+                        </p>
+                        <p className="mt-1 font-medium">
+                          {isPickup ? "Recoger en tienda" : "Envío a domicilio"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase text-muted-foreground">
+                          Total
+                        </p>
+                        <p className="mt-1 font-medium">
+                          {formatCurrency(order.total)}
+                        </p>
+                      </div>
+                    </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="refund-request-reason">
-                  {refundRequestAction === "approve"
-                    ? "Nota de aprobación"
-                    : "Motivo de rechazo"}
-                </Label>
-                <Textarea
-                  id="refund-request-reason"
-                  value={refundRequestReason}
-                  onChange={(event) =>
-                    setRefundRequestReason(event.target.value)
-                  }
-                  disabled={isRefunding}
-                />
-              </div>
+                    {!paid ? (
+                      <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
+                        Esta orden aún no tiene el pago confirmado. Las acciones de
+                        entrega se habilitan cuando el pago esté confirmado.
+                      </div>
+                    ) : null}
+                    {cancelled ? (
+                      <div className="rounded-md border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                        Orden cancelada. No se permiten acciones de entrega.
+                      </div>
+                    ) : null}
 
-              {refundRequestError ? (
-                <div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  {refundRequestError}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
+                    {/* Productos */}
+                    {(order.items ?? []).length > 0 ? (
+                      <div className="rounded-md border p-4">
+                        <p className="mb-2 text-sm font-semibold">Productos</p>
+                        <div className="space-y-1 text-sm">
+                          {(order.items ?? []).map((item, index) => (
+                            <div
+                              key={`${item.productoId}-${item.tallaId ?? ""}-${index}`}
+                              className="flex justify-between gap-3"
+                            >
+                              <span className="min-w-0 truncate text-muted-foreground">
+                                {item.cantidad} ×{" "}
+                                {item.producto?.descripcion ||
+                                  item.producto?.clave ||
+                                  item.productoId}
+                                {item.tallaId ? ` · Talla ${item.tallaId}` : ""}
+                              </span>
+                              <span className="font-medium">
+                                {formatCurrency(item.subtotal)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsRefundRequestDialogOpen(false)}
-              disabled={isRefunding}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              variant={
-                refundRequestAction === "reject" ? "destructive" : "default"
-              }
-              onClick={() => void handleRefundRequestAction()}
-              disabled={isRefunding}
-            >
-              {isRefunding
-                ? "Procesando..."
-                : refundRequestAction === "approve"
-                ? "Aprobar y procesar"
-                : "Rechazar"}
-            </Button>
-          </DialogFooter>
+                    {/* Domicilio */}
+                    {!isPickup ? (
+                      <div className="space-y-4">
+                        {direccion ? (
+                          <div className="rounded-md border p-4 text-sm">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="font-medium">
+                                  {direccion.nombre || direccion.nombreCompleto}
+                                </p>
+                                <p className="mt-1 text-muted-foreground">
+                                  {[
+                                    direccion.calle,
+                                    direccion.numero,
+                                    direccion.numeroInterior
+                                      ? `Int. ${direccion.numeroInterior}`
+                                      : "",
+                                    direccion.colonia,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" ")}
+                                </p>
+                                <p className="text-muted-foreground">
+                                  {[
+                                    direccion.ciudad,
+                                    direccion.estado,
+                                    direccion.codigoPostal,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(", ")}
+                                </p>
+                                {direccion.telefono ? (
+                                  <p className="mt-1 text-muted-foreground">
+                                    Tel: {direccion.telefono}
+                                  </p>
+                                ) : null}
+                                {direccion.referencias ? (
+                                  <p className="mt-1 text-muted-foreground">
+                                    Ref: {direccion.referencias}
+                                  </p>
+                                ) : null}
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  const text = [
+                                    direccion.nombre || direccion.nombreCompleto,
+                                    [
+                                      direccion.calle,
+                                      direccion.numero,
+                                      direccion.numeroInterior
+                                        ? `Int. ${direccion.numeroInterior}`
+                                        : "",
+                                      direccion.colonia,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(" "),
+                                    [
+                                      direccion.ciudad,
+                                      direccion.estado,
+                                      direccion.codigoPostal,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(", "),
+                                    direccion.telefono
+                                      ? `Tel: ${direccion.telefono}`
+                                      : "",
+                                    direccion.referencias
+                                      ? `Ref: ${direccion.referencias}`
+                                      : "",
+                                  ]
+                                    .filter(Boolean)
+                                    .join("\n");
+                                  void navigator.clipboard.writeText(text);
+                                  toast({ description: "Dirección copiada" });
+                                }}
+                              >
+                                <Copy className="mr-1 h-3.5 w-3.5" /> Copiar
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">
+                            Sin dirección de envío registrada.
+                          </p>
+                        )}
+
+                        {/* Captura manual de guía */}
+                        <div className="space-y-4 rounded-md border p-4">
+                          <p className="text-sm font-semibold">
+                            Captura manual de guía FedEx
+                          </p>
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <div className="space-y-2">
+                              <Label htmlFor="ff-tracking">Número de guía</Label>
+                              <Input
+                                id="ff-tracking"
+                                value={trackingNumber}
+                                onChange={(e) => setTrackingNumber(e.target.value)}
+                                placeholder="Ej. 7948 1234 5678"
+                                disabled={actionsDisabled}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="ff-service">Servicio (opcional)</Label>
+                              <Input
+                                id="ff-service"
+                                value={serviceName}
+                                onChange={(e) => setServiceName(e.target.value)}
+                                placeholder="FedEx Express"
+                                disabled={actionsDisabled}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="ff-cost">
+                                Costo real de envío (opcional)
+                              </Label>
+                              <Input
+                                id="ff-cost"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                inputMode="decimal"
+                                value={realShippingCost}
+                                onChange={(e) =>
+                                  setRealShippingCost(e.target.value)
+                                }
+                                placeholder="150.00"
+                                disabled={actionsDisabled}
+                              />
+                            </div>
+                            <div className="space-y-2 sm:col-span-2">
+                              <Label htmlFor="ff-notes">Notas (opcional)</Label>
+                              <Textarea
+                                id="ff-notes"
+                                value={fulfillmentNotes}
+                                onChange={(e) =>
+                                  setFulfillmentNotes(e.target.value)
+                                }
+                                placeholder="Notas internas del envío"
+                                disabled={actionsDisabled}
+                              />
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            className="w-full"
+                            onClick={handleCaptureTracking}
+                            disabled={actionsDisabled}
+                          >
+                            Capturar guía (entregado a FedEx)
+                          </Button>
+                        </div>
+
+                        {/* Acciones de estado domicilio */}
+                        <div className="space-y-2 rounded-md border p-4">
+                          <p className="text-sm font-semibold">
+                            Acciones de estado
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                void runFulfillmentAction(
+                                  () =>
+                                    fulfillmentAdminApi.markPreparing(order.id),
+                                  "Pedido en preparación",
+                                )
+                              }
+                              disabled={actionsDisabled}
+                            >
+                              Preparando
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                void runFulfillmentAction(
+                                  () =>
+                                    fulfillmentAdminApi.markReadyToShip(order.id),
+                                  "Pedido listo para enviar",
+                                )
+                              }
+                              disabled={actionsDisabled}
+                            >
+                              Listo para enviar
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleManualStatus("IN_TRANSIT")}
+                              disabled={actionsDisabled}
+                            >
+                              En tránsito
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleManualStatus("DELIVERED")}
+                              disabled={actionsDisabled}
+                            >
+                              Entregado
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleManualStatus("INCIDENT")}
+                              disabled={actionsDisabled}
+                            >
+                              Incidencia
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleManualStatus("RETURNED")}
+                              disabled={actionsDisabled}
+                            >
+                              Devuelto
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Pickup */
+                      <div className="space-y-4">
+                        {order.pickupLocation ? (
+                          <div className="rounded-md border p-4 text-sm">
+                            <p className="font-medium">
+                              {order.pickupLocation.name}
+                            </p>
+                            <p className="mt-1 text-muted-foreground">
+                              {[
+                                order.pickupLocation.address,
+                                order.pickupLocation.city,
+                                order.pickupLocation.state,
+                              ]
+                                .filter(Boolean)
+                                .join(", ")}
+                            </p>
+                            {order.pickupCodeLast4 ? (
+                              <p className="mt-2 text-muted-foreground">
+                                Código termina en {order.pickupCodeLast4}
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : null}
+
+                        <div className="space-y-2 rounded-md border p-4">
+                          <p className="text-sm font-semibold">
+                            Acciones de recolección
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                void runFulfillmentAction(
+                                  () =>
+                                    fulfillmentAdminApi.pickupPrepare(order.id),
+                                  "Pedido en preparación",
+                                )
+                              }
+                              disabled={actionsDisabled}
+                            >
+                              Preparando
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                void runFulfillmentAction(
+                                  () =>
+                                    fulfillmentAdminApi.pickupReady(order.id),
+                                  "Pedido listo para recoger",
+                                )
+                              }
+                              disabled={actionsDisabled}
+                            >
+                              Listo para recoger
+                            </Button>
+                          </div>
+
+                          <div className="mt-3 space-y-2">
+                            <Label htmlFor="ff-pickup-code">
+                              Código de recolección del cliente
+                            </Label>
+                            <div className="flex gap-2">
+                              <Input
+                                id="ff-pickup-code"
+                                value={pickupCode}
+                                onChange={(e) => setPickupCode(e.target.value)}
+                                placeholder="Código completo"
+                                inputMode="numeric"
+                                disabled={actionsDisabled}
+                              />
+                              <Button
+                                type="button"
+                                onClick={handlePickupComplete}
+                                disabled={actionsDisabled}
+                              >
+                                Entregar
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()
+            : null}
         </DialogContent>
       </Dialog>
     </div>

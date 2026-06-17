@@ -40,13 +40,6 @@ const PAYMENT_METHODS = [
     className: "h-6 md:h-7",
   },
   {
-    name: "Aplazo",
-    src: "/images/iconosdepagos/aplazo.svg",
-    width: 90,
-    height: 34,
-    className: "h-6 md:h-7",
-  },
-  {
     name: "Apple Pay",
     src: "/images/iconosdepagos/ApplePay.svg",
     width: 78,

@@ -15,6 +15,7 @@ import {
   Clock3,
   CreditCard,
   Home,
+  Lock,
   ShieldCheck,
   Store,
   Truck,
@@ -40,49 +41,22 @@ import {
   type PickupContact,
   type PickupLocation,
 } from "@/lib/api/pickup";
-import {
-  buildFedExQuotePayload,
-  fedexApi,
-  getMexicoStateLabelFromFedExCode,
-  normalizeFedExShippingOption,
-  normalizeFedExShippingQuote,
-  toFedexRecipient,
-  type FedExDireccionEnvio,
-} from "@/lib/api/fedex";
-import {
-  getAplazoPaymentErrorMessage,
-  getApiErrorMessage,
-} from "@/lib/api/errors";
+import { type FedExDireccionEnvio } from "@/lib/api/fedex";
+import { getApiErrorMessage } from "@/lib/api/errors";
 import {
   buildCheckoutShippingAddress,
-  buildCheckoutShippingSelection,
   toLegacyDireccionEnvio,
 } from "@/lib/checkout/shipping";
 import {
-  buildAplazoReturnUrls,
-  calculateAplazoItemsTotal,
-  clearStoredAplazoCheckoutState,
-  clearStoredAplazoRetryPayload,
-  getAplazoCartFingerprint,
-  isValidEmail,
-  isValidMxPhoneForAplazo,
-  isAplazoRetryableStatus,
-  isAplazoTerminalStatus,
+  isValidMxPhone,
   normalizeEmail,
-  normalizeMxPhoneForAplazo,
+  normalizeMxPhone,
   normalizeWhitespace,
-  safeString,
-  readStoredAplazoCheckoutState,
-  validateAplazoProducts,
-  writeStoredAplazoRetryPayload,
-  writeStoredAplazoCheckoutState,
-} from "@/lib/aplazo";
+} from "@/lib/checkout/customer";
 import { MX_STATES } from "@/lib/shipping/mx-states";
 import type {
   AddressValidationStatus,
-  AplazoOnlineCreatePayload,
   CartItem,
-  FedExAddressValidation,
   FedExShippingOption,
   FedExShippingQuote,
   Orden,
@@ -132,6 +106,11 @@ function roundCurrency(value: number) {
   return Math.round(value * 100) / 100;
 }
 
+const MANUAL_FEDEX_SHIPPING_COST = 150;
+const MANUAL_FEDEX_CURRENCY = "MXN";
+const MANUAL_FEDEX_METHOD = "manual_fedex";
+const MANUAL_FEDEX_SERVICE_NAME = "FedEx manual";
+
 const IS_DEVELOPMENT = process.env.NODE_ENV !== "production";
 
 const PROMO_CODE_STORAGE_KEY = "tiendafront_codigo_promocion";
@@ -173,50 +152,10 @@ if (IS_DEVELOPMENT && typeof window !== "undefined") {
   );
 }
 
-function logAplazoDebug(message: string, payload?: unknown) {
-  if (!IS_DEVELOPMENT) {
-    return;
-  }
-
-  if (payload === undefined) {
-    console.info(`[aplazo] ${message}`);
-    return;
-  }
-
-  console.info(`[aplazo] ${message}`, payload);
-}
-
-function maskEmailForLog(email: string) {
-  const normalized = normalizeEmail(email);
-  const [localPart = "", domain = ""] = normalized.split("@");
-  if (!localPart || !domain) {
-    return normalized;
-  }
-
-  const visibleLocal = localPart.slice(0, 2);
-  return `${visibleLocal}${"*".repeat(Math.max(localPart.length - 2, 1))}@${domain}`;
-}
-
-function maskPhoneForLog(phone: string) {
-  if (phone.length <= 4) {
-    return phone;
-  }
-
-  return `${"*".repeat(phone.length - 4)}${phone.slice(-4)}`;
-}
-
-function sanitizeAplazoCustomerForLog(customer: SanitizedAplazoCustomer) {
-  return {
-    namePresent: Boolean(customer.name),
-    email: maskEmailForLog(customer.email),
-    phone: maskPhoneForLog(customer.phone),
-  };
-}
-
 function getExpectedCheckoutPricing(
   subtotal: number,
   fulfillmentMethod: FulfillmentMethod = "DELIVERY",
-  shippingAmount = 0,
+  shippingAmount = MANUAL_FEDEX_SHIPPING_COST,
 ) {
   const shipping = fulfillmentMethod === "PICKUP" ? 0 : shippingAmount;
   const tax = 0;
@@ -318,7 +257,7 @@ const shippingSchema = z.object({
   telefono: z
     .string()
     .refine(
-      (value) => isValidMxPhoneForAplazo(value),
+      (value) => isValidMxPhone(value),
       "El teléfono debe tener exactamente 10 dígitos",
     ),
   calle: z.string().min(2, "Calle es requerida"),
@@ -360,18 +299,6 @@ type DeliveryCheckoutValues = ShippingValues & {
 
 type CheckoutValues = DeliveryCheckoutValues | PickupCheckoutValues;
 
-type SanitizedAplazoCustomer = {
-  name: string;
-  addressLine: string;
-  email: string;
-  phone: string;
-  postalCode: string;
-};
-
-function getSanitizedCheckoutName(value: string) {
-  return normalizeWhitespace(value);
-}
-
 function splitStreetAndNumber(line1: string) {
   const normalizedLine = normalizeWhitespace(line1);
   const match = normalizedLine.match(/^(.*?)(?:\s+)?(#?\d[\w\-\/]*)$/);
@@ -398,7 +325,7 @@ function buildFedExDireccionEnvio(
     buildCheckoutShippingAddress(
       {
         fullName: values.name,
-        phone: normalizeMxPhoneForAplazo(values.telefono),
+        phone: normalizeMxPhone(values.telefono),
         street1: `${values.calle} ${values.numero}`.trim(),
         street2: values.colonia,
         interiorNumber: values.numeroInterior,
@@ -446,273 +373,47 @@ function buildAddressValidationKey(address: FedExDireccionEnvio) {
     .join("|");
 }
 
-function isDireccionValidatable(address: FedExDireccionEnvio) {
-  return validateDireccionEnvio(address).length === 0;
-}
-
-function parseResolvedAddress(streetLines: string[]) {
-  const [line1 = "", line2 = ""] = streetLines;
-  const { calle, numero } = splitStreetAndNumber(line1);
-  const interiorMatch = line2.match(/\bInt(?:\.|erior)?\s+(.+)$/i);
-
-  return {
-    calle,
-    numero,
-    numeroInterior: interiorMatch?.[1]
-      ? normalizeWhitespace(interiorMatch[1])
-      : "",
-    colonia: normalizeWhitespace(
-      interiorMatch ? line2.replace(interiorMatch[0], "") : line2,
-    ),
-  };
-}
-
-function buildSuggestedShippingValues(
-  original: ShippingValues,
-  validation: FedExAddressValidation,
-): ShippingValues | null {
-  const resolved = validation.resolvedAddress ?? validation.addresses?.[0];
-  if (!resolved) {
-    return null;
-  }
-
-  const parsed = parseResolvedAddress(resolved.streetLines);
-
-  return {
-    ...original,
-    calle: parsed.calle || original.calle,
-    numero: parsed.numero || original.numero,
-    numeroInterior: parsed.numeroInterior || original.numeroInterior || "",
-    colonia: parsed.colonia || original.colonia,
-    city: normalizeWhitespace(resolved.city ?? original.city),
-    estado:
-      getMexicoStateLabelFromFedExCode(resolved.stateOrProvinceCode) ??
-      normalizeWhitespace(original.estado),
-    zip: normalizeWhitespace(resolved.postalCode || original.zip),
-  };
-}
-
-function hasAddressSuggestion(
-  original: ShippingValues,
-  validation: FedExAddressValidation,
-) {
-  const suggested = buildSuggestedShippingValues(original, validation);
-  if (!suggested) {
-    return false;
-  }
-
-  return (
-    buildAddressValidationKey(buildFedExDireccionEnvio(original)) !==
-    buildAddressValidationKey(buildFedExDireccionEnvio(suggested))
-  );
-}
-
-function getNextAddressValidationStatus(
-  validation: FedExAddressValidation,
-): AddressValidationStatus {
-  const firstAddress = validation.addresses?.[0] ?? validation.resolvedAddress;
-  const attributes = firstAddress?.attributes ?? {};
-  const isAddressSuccess = validation.success === true || validation.isValid === true;
-  const isStandardized =
-    firstAddress?.isStandardized === true ||
-    attributes.AddressType === "STANDARDIZED";
-  const isMatched = attributes.Matched === true || attributes.Matched === "true";
-  const isValidlyFormed =
-    attributes.ValidlyFormed === true || attributes.ValidlyFormed === "true";
-
-  if (firstAddress?.isLikelyValid === true) {
-    return "VALIDATED";
-  }
-
-  // En Mexico, FedEx puede responder Address Validation con 200 y direccion
-  // estandarizada, pero `isLikelyValid` puede venir en false porque no siempre
-  // hay validacion DPV completa. Si Postal Validation paso, permitimos cotizar
-  // como USER_CONFIRMED y dejamos que Rates determine si hay tarifa disponible.
-  if (isAddressSuccess && (isStandardized || isMatched || isValidlyFormed)) {
-    return "USER_CONFIRMED";
-  }
-
-  if (isAddressSuccess) {
-    return "USER_CONFIRMED";
-  }
-
-  return "NOT_VALIDATED";
-}
-
-function canUseAddressForFedExQuote(status?: AddressValidationStatus) {
-  return (
-    status === "VALIDATED" ||
-    status === "USER_CONFIRMED" ||
-    status === "VALIDATION_UNAVAILABLE"
-  );
-}
-
-function isRecoverableFedExQuoteError(error: ApiError) {
-  const message = getApiErrorMessage(error);
-  const provider = error.payload?.provider;
-
-  return (
-    error.status === 422 ||
-    error.status === 502 ||
-    (error.status === 500 &&
-      (provider === "FEDEX" ||
-        /invalid service and packaging combination/i.test(message)))
-  );
-}
-
-function getFedExQuoteErrorMessage(error: unknown) {
-  if (error instanceof ApiError) {
-    switch (error.code) {
-      case "SHIPPING_ADDRESS_REQUIRED":
-        return "Completa la direccion de entrega antes de cotizar.";
-      case "FEDEX_RATE_UNAVAILABLE":
-        return "FedEx no devolvio tarifas para esta direccion.";
-      case "FEDEX_SERVICE_UNAVAILABLE":
-        return "FedEx no esta disponible por el momento. Intenta nuevamente en unos segundos.";
-      case "FEDEX_PRODUCT_DIMENSIONS_MISSING":
-        return "Un producto del carrito no tiene peso y dimensiones FedEx configurados. Contacta a soporte para completar esos datos antes de pedir envio.";
-      case "FEDEX_PRODUCT_LIMITS_EXCEEDED":
-        return "Un producto del carrito excede los limites de tamano o peso permitidos por FedEx. Contacta a soporte para revisar el envio.";
-      default:
-        if (error.status === 429) {
-          return "FedEx recibio demasiadas solicitudes. Espera unos segundos antes de reintentar.";
-        }
-        if (isRecoverableFedExQuoteError(error)) {
-          return `${getApiErrorMessage(error)} Puedes reintentar o cambiar la direccion de entrega.`;
-        }
-    }
-  }
-
-  return getApiErrorMessage(error);
-}
-
-function isQuoteExpired(quote?: FedExShippingQuote) {
-  if (!quote?.expiresAt) {
-    return false;
-  }
-
-  const expiresAt = new Date(quote.expiresAt).getTime();
-  return Number.isFinite(expiresAt) && expiresAt <= Date.now();
-}
-
-function requiresFedExSelection(quote?: FedExShippingQuote | null) {
-  return quote?.requiresShipping !== false;
-}
-
-function getDeliveryShippingSelection(values: CheckoutValues) {
-  return values.fulfillmentMethod === "DELIVERY"
-    ? values.shippingSelection
-    : null;
-}
-
-function getDeliveryShippingAmount(values: CheckoutValues) {
-  return getDeliveryShippingSelection(values)?.selectedOption.amount ?? 0;
-}
-
 function assertDeliveryShippingReady(values: CheckoutValues) {
   if (values.fulfillmentMethod !== "DELIVERY") {
     return;
   }
 
-  if (!canUseAddressForFedExQuote(values.addressValidationStatus)) {
-    throw new Error(
-      "Valida o confirma tu direccion de entrega antes de continuar con el pago.",
-    );
-  }
-
-  if (values.shippingSelection === undefined) {
-    throw new Error(
-      "Cotiza el envio FedEx antes de continuar con el pago.",
-    );
-  }
-
-  if (values.shippingSelection && isQuoteExpired(values.shippingSelection.quote)) {
-    throw new Error(
-      "La cotizacion FedEx expiro. Vuelve al paso de entrega y recotiza.",
-    );
-  }
-}
-
-function getSanitizedAplazoCustomer(values: CheckoutValues): SanitizedAplazoCustomer {
-  if (values.fulfillmentMethod === "PICKUP") {
-    const location = values.pickupLocation;
-
-    return {
-      name: getSanitizedCheckoutName(values.pickupContact.name),
-      addressLine: safeString(
-        [location.address, location.city, location.state]
-          .filter(Boolean)
-          .join(" "),
-        "Recoger en tienda",
-      ),
-      email: normalizeEmail(values.pickupContact.email ?? ""),
-      phone: normalizeMxPhoneForAplazo(values.pickupContact.phone ?? ""),
-      postalCode: normalizeWhitespace(location.postalCode),
-    };
-  }
-
-  const name = getSanitizedCheckoutName(values.name);
-  const addressLine = normalizeWhitespace(
-    [values.calle, values.numero, values.numeroInterior, values.colonia]
-      .filter(Boolean)
-      .join(" "),
+  const localErrors = validateDireccionEnvio(
+    toLegacyDireccionEnvio(values.shippingAddress),
   );
-
-  return {
-    name,
-    addressLine: safeString(addressLine, "Pendiente por confirmar"),
-    email: normalizeEmail(values.email),
-    phone: normalizeMxPhoneForAplazo(values.telefono),
-    postalCode: normalizeWhitespace(values.zip),
-  };
+  if (localErrors.length > 0) {
+    throw new Error(localErrors[0]);
+  }
 }
 
-function validateAplazoSubmission(
-  values: CheckoutValues,
-  items: CartItem[],
-  expectedSubtotal?: number,
-) {
-  const customer = getSanitizedAplazoCustomer(values);
-  const fullName = customer.name;
-
-  if (!fullName) {
-    return { ok: false as const, message: "Ingresa un nombre válido" };
-  }
-
-  if (!isValidEmail(customer.email)) {
-    return { ok: false as const, message: "Ingresa un correo válido" };
-  }
-
-  if (!isValidMxPhoneForAplazo(customer.phone)) {
-    return {
-      ok: false as const,
-      message: "Ingresa un teléfono válido de 10 dígitos",
-    };
-  }
-
-  const productsValidation = validateAplazoProducts(items);
-  if (!productsValidation.ok) {
-    return {
-      ok: false as const,
-      message:
-        productsValidation.message ?? "No hay productos válidos en el carrito",
-    };
-  }
-
-  if (productsValidation.totalPrice <= 0) {
-    return {
-      ok: false as const,
-      message: "No fue posible preparar el pago con Aplazo",
-    };
-  }
+function buildManualFedExShippingSelection(): DeliveryShippingSelection {
+  const selectedOption: FedExShippingOption = {
+    provider: "FEDEX",
+    optionId: MANUAL_FEDEX_METHOD,
+    serviceType: MANUAL_FEDEX_METHOD,
+    serviceName: MANUAL_FEDEX_SERVICE_NAME,
+    amount: MANUAL_FEDEX_SHIPPING_COST,
+    currency: MANUAL_FEDEX_CURRENCY,
+  };
 
   return {
-    ok: true as const,
-    customer,
-    fullName,
-    validatedSubtotal: roundCurrency(
-      expectedSubtotal ?? calculateAplazoItemsTotal(items),
-    ),
+    quote: {
+      provider: "FEDEX",
+      quoteId: MANUAL_FEDEX_METHOD,
+      currency: MANUAL_FEDEX_CURRENCY,
+      requiresShipping: true,
+      options: [selectedOption],
+    },
+    selectedOption,
+    shippingSelection: {
+      method: "FEDEX",
+      provider: "FEDEX",
+      serviceType: MANUAL_FEDEX_METHOD,
+      serviceName: MANUAL_FEDEX_SERVICE_NAME,
+      carrierCode: "FEDEX",
+      quotedAmount: MANUAL_FEDEX_SHIPPING_COST,
+      quotedCurrency: MANUAL_FEDEX_CURRENCY,
+    },
   };
 }
 
@@ -740,13 +441,13 @@ function getCheckoutErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case "SHIPPING_RATE_CHANGED":
-        return "El costo de envio cambio. Vuelve a confirmar tu envio.";
+        return "El costo de envio no coincide con el esperado. Vuelve a confirmar tu entrega.";
       case "FEDEX_SERVICE_NOT_AVAILABLE":
-        return "Ese servicio FedEx ya no esta disponible para tu direccion.";
+        return "El envio a domicilio no esta disponible para esta direccion.";
       case "FEDEX_RATE_UNAVAILABLE":
-        return "FedEx no devolvio tarifas para esta direccion.";
+        return "No fue posible confirmar el envio a domicilio para esta direccion.";
       case "FEDEX_SERVICE_UNAVAILABLE":
-        return "FedEx no esta disponible temporalmente. Intenta nuevamente.";
+        return "El envio a domicilio no esta disponible temporalmente. Intenta nuevamente.";
       case "PRODUCT_SHIPPING_DATA_MISSING":
         return "Uno de los productos no tiene datos de envio configurados.";
       case "CHECKOUT_STOCK_UNAVAILABLE":
@@ -769,44 +470,8 @@ function buildRetryDeliveryValuesFromCheckoutError(
   values: CheckoutValues,
   error: unknown,
 ): DeliveryCheckoutValues | null {
-  if (!(error instanceof ApiError) || values.fulfillmentMethod !== "DELIVERY") {
-    return null;
-  }
-
-  const errorData =
-    error.payload?.data && typeof error.payload.data === "object"
-      ? (error.payload.data as Record<string, unknown>)
-      : undefined;
-  const quotes = Array.isArray(errorData?.quotes) ? errorData.quotes : [];
-
-  if (error.code === "SHIPPING_RATE_CHANGED" && quotes.length > 0) {
-    const quote = normalizeFedExShippingQuote({
-      quoteId:
-        typeof errorData?.quoteId === "string" ? errorData.quoteId : "",
-      provider: "FEDEX",
-      currency:
-        typeof errorData?.currency === "string" ? errorData.currency : "MXN",
-      expiresAt:
-        typeof errorData?.expiresAt === "string" ? errorData.expiresAt : undefined,
-      requiresShipping: true,
-      options: quotes.map(normalizeFedExShippingOption),
-    });
-
-    return {
-      ...values,
-      shippingQuote: quote,
-      shippingSelection: undefined,
-    };
-  }
-
-  if (error.code === "FEDEX_SERVICE_NOT_AVAILABLE") {
-    return {
-      ...values,
-      shippingQuote: null,
-      shippingSelection: undefined,
-    };
-  }
-
+  void values;
+  void error;
   return null;
 }
 
@@ -818,36 +483,19 @@ function buildCheckoutPayload(
   const promoCodeField = getCheckoutPromoCodeField(codigoPromocion);
   if (values.fulfillmentMethod === "PICKUP") {
     return {
-      fulfillmentMethod: "PICKUP" as const,
+      fulfillmentMethod: "pickup" as const,
       pickupLocationId: values.pickupLocation.id,
       pickupContact: values.pickupContact,
       metodoPago,
-      ...promoCodeField,
     };
   }
 
-  const selectedOption = values.shippingSelection?.selectedOption;
-  const shippingQuoteId = values.shippingSelection?.quote.quoteId;
-  const shippingPayload = buildFedExQuotePayload(
-    toLegacyDireccionEnvio(values.shippingAddress),
-  );
+  const direccionEnvio = toLegacyDireccionEnvio(values.shippingAddress);
 
   return {
-    fulfillmentMethod: "DELIVERY" as const,
-    direccionEnvio: shippingPayload.direccionEnvio,
-    shippingAddress: shippingPayload.shippingAddress,
-    fedexAddress: shippingPayload.fedexAddress,
+    fulfillmentMethod: "home_delivery" as const,
+    direccionEnvio,
     metodoPago,
-    ...promoCodeField,
-    ...(shippingQuoteId ? { shippingQuoteId } : {}),
-    ...(selectedOption
-      ? selectedOption.optionId
-        ? { selectedShippingOptionId: selectedOption.optionId }
-        : { selectedServiceType: selectedOption.serviceType }
-      : {}),
-    ...(values.shippingSelection
-      ? { shippingSelection: values.shippingSelection.shippingSelection }
-      : {}),
   };
 }
 
@@ -866,92 +514,6 @@ async function resolveCartIdForPickup(cartId?: string) {
   }
 
   return { cartId: cart.id, sessionId };
-}
-
-function buildAplazoPayload(params: {
-  orderId: string;
-  values: CheckoutValues;
-  items: CartItem[];
-  order: Pick<Orden, "subtotal" | "shippingCost" | "total">;
-  origin: string;
-  expectedSubtotal: number;
-}): AplazoOnlineCreatePayload {
-  const { successUrl, failureUrl, cancelUrl, cartUrl } = buildAplazoReturnUrls(
-    params.origin,
-  );
-  const customer = getSanitizedAplazoCustomer(params.values);
-  const productsValidation = validateAplazoProducts(params.items);
-  const orderSubtotal = roundCurrency(params.order.subtotal ?? 0);
-  const orderShipping = roundCurrency(params.order.shippingCost ?? 0);
-  const orderTaxes = 0;
-  const orderTotal = roundCurrency(params.order.total ?? 0);
-  const productsTotal = roundCurrency(params.expectedSubtotal);
-  const expectedTotal = roundCurrency(productsTotal + orderShipping + orderTaxes);
-
-  if (
-    !customer.name ||
-    !isValidEmail(customer.email) ||
-    !isValidMxPhoneForAplazo(customer.phone)
-  ) {
-    throw new Error("No fue posible preparar el pago con Aplazo");
-  }
-
-  if (!productsValidation.ok || productsValidation.products.length === 0) {
-    throw new Error(
-      productsValidation.message ?? "No fue posible preparar el pago con Aplazo",
-    );
-  }
-
-  if (orderSubtotal <= 0 || orderTotal <= 0 || orderShipping < 0) {
-    throw new Error("No fue posible preparar el pago con Aplazo");
-  }
-
-  if (expectedTotal !== orderTotal) {
-    throw new Error("No fue posible preparar el pago con Aplazo");
-  }
-
-  return {
-    orderId: params.orderId,
-    customer: {
-      name: customer.name,
-      email: customer.email,
-      phone: customer.phone,
-    },
-    subtotal: orderSubtotal,
-    shipping: orderShipping,
-    tax: orderTaxes,
-    total: orderTotal,
-    currency: "MXN",
-    successUrl,
-    failureUrl,
-    cancelUrl,
-    cartUrl,
-    metadata: {
-      cartId: params.orderId,
-    },
-  };
-}
-
-function getAplazoErrorMessage(error: unknown) {
-  return getAplazoPaymentErrorMessage(error, "online");
-}
-
-function omitAplazoUrls(payload: AplazoOnlineCreatePayload) {
-  return {
-    orderId: payload.orderId,
-    customer: payload.customer,
-    currency: payload.currency,
-    metadata: payload.metadata,
-  };
-}
-
-function buildAplazoReturnHref(params: {
-  paymentAttemptId: string;
-  orderId: string;
-  path?: "success" | "failure" | "cancel";
-}) {
-  const targetPath = params.path ?? "success";
-  return `/payments/aplazo/${targetPath}?paymentAttemptId=${encodeURIComponent(params.paymentAttemptId)}&ordenId=${encodeURIComponent(params.orderId)}`;
 }
 
 function MobileCheckoutActions({ children }: { children: ReactNode }) {
@@ -987,17 +549,15 @@ function OrderSummaryPanel({
 }) {
   const { state, totalItems } = useCart();
   const { getPersonalization } = useStorefront();
-
-  const shippingAmount =
-    checkoutPricing?.shipping ??
-    shippingSelection?.selectedOption.amount ??
-    0;
-
-  const pricing = getExpectedCheckoutPricing(
-    subtotalConCodigo,
-    fulfillmentMethod,
-    shippingAmount,
-  );
+  const pricing =
+    checkoutPricing && checkoutPricing.subtotal > 0
+      ? checkoutPricing
+      :
+      getExpectedCheckoutPricing(
+        subtotalConCodigo,
+        fulfillmentMethod,
+        shippingSelection?.selectedOption.amount ?? MANUAL_FEDEX_SHIPPING_COST,
+      );
 
   return (
     <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
@@ -1096,24 +656,20 @@ function OrderSummaryPanel({
 
           <div className="flex items-center justify-between">
             <span>
-              {fulfillmentMethod === "PICKUP"
-                ? "Recoger en tienda"
-                : "Envío estimado"}
+              {fulfillmentMethod === "PICKUP" ? "Recoger en tienda" : "Envio FedEx manual"}
             </span>
             <span>
               {fulfillmentMethod === "PICKUP"
                 ? "Sin costo"
-                : shippingSelection
-                  ? formatCurrency(pricing.shipping)
-                  : "Cotizar en checkout"}
+                : formatCurrency(pricing.shipping)}
             </span>
           </div>
-          {fulfillmentMethod === "DELIVERY" && shippingSelection ? (
+          {fulfillmentMethod === "DELIVERY" ? (
             <div className="flex items-center justify-between gap-3">
-              <span>FedEx</span>
+              <span>Mensajeria</span>
               <span className="text-right">
-                {shippingSelection.selectedOption.serviceName ??
-                  shippingSelection.selectedOption.serviceType}
+                {shippingSelection?.selectedOption.serviceName ??
+                  MANUAL_FEDEX_SERVICE_NAME}
               </span>
             </div>
           ) : null}
@@ -1145,106 +701,6 @@ function OrderSummaryPanel({
         </div>
       </CardContent>
     </Card>
-  );
-}
-
-function PaymentMethodSelector({
-  value,
-  onValueChange,
-}: {
-  value: PaymentMethod;
-  onValueChange: (value: PaymentMethod) => void;
-}) {
-  const options: Array<{
-    value: PaymentMethod;
-    title: string;
-    description: string;
-    icon?: typeof CreditCard;
-    logoSrc?: string;
-    logoWidth?: number;
-    logoHeight?: number;
-  }> = [
-      {
-        value: "TARJETA",
-        title: "Tarjeta",
-        description: "Pago inmediato con Stripe Embedded Checkout dentro del flujo actual.",
-        icon: CreditCard,
-      },
-      {
-        value: "APLAZO",
-        title: "Aplazo",
-        description: "Te redirigiremos para completar y validar el pago de forma asíncrona.",
-        logoSrc: "/images/iconosdepagos/aplazo.svg",
-        logoWidth: 92,
-        logoHeight: 32,
-      },
-    ];
-
-  return (
-    <div className="space-y-3">
-      <div>
-        <p className="text-sm font-medium text-foreground">Método de pago</p>
-        <p className="mt-1 text-sm leading-6 text-muted-foreground">
-          Elige cómo quieres completar tu compra sin salir del flujo actual del checkout.
-        </p>
-      </div>
-      <RadioGroup
-        value={value}
-        onValueChange={(nextValue) => onValueChange(nextValue as PaymentMethod)}
-        className="gap-3"
-      >
-        {options.map((option) => {
-          const isActive = value === option.value;
-
-          return (
-            <label
-              key={option.value}
-              htmlFor={`payment-method-${option.value}`}
-              className={cn(
-                "flex cursor-pointer gap-3 rounded-[1.4rem] border px-4 py-4 transition-colors",
-                isActive
-                  ? "border-primary bg-primary/8"
-                  : "border-border bg-muted/35 hover:bg-muted/55",
-              )}
-            >
-              <RadioGroupItem
-                id={`payment-method-${option.value}`}
-                value={option.value}
-                className="mt-1"
-              />
-              <div className="flex min-w-0 flex-1 items-start gap-3">
-                <div
-                  className={cn(
-                    "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border",
-                    isActive
-                      ? "border-primary/20 bg-primary/10 text-primary"
-                      : "border-border bg-card text-muted-foreground",
-                  )}
-                >
-                  {option.logoSrc ? (
-                    <Image
-                      src={option.logoSrc}
-                      alt={`${option.title} logo`}
-                      width={option.logoWidth ?? 72}
-                      height={option.logoHeight ?? 24}
-                      className="h-auto w-7 object-contain"
-                    />
-                  ) : option.icon ? (
-                    <option.icon className="h-4 w-4" />
-                  ) : null}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-foreground">{option.title}</p>
-                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                    {option.description}
-                  </p>
-                </div>
-              </div>
-            </label>
-          );
-        })}
-      </RadioGroup>
-    </div>
   );
 }
 
@@ -1332,6 +788,28 @@ function FulfillmentSelector({
           );
         })}
       </RadioGroup>
+
+      {value === "DELIVERY" ? (
+        <div className="rounded-[1.2rem] border border-border bg-muted/40 px-4 py-3 text-xs leading-5 text-muted-foreground">
+          <p className="font-semibold text-foreground">
+            Costo de envío: {formatCurrency(MANUAL_FEDEX_SHIPPING_COST)} MXN
+          </p>
+          <p className="mt-1">
+            El envío se procesa manualmente por paquetería. La guía de rastreo
+            estará disponible cuando el pedido sea entregado a FedEx.
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-[1.2rem] border border-border bg-muted/40 px-4 py-3 text-xs leading-5 text-muted-foreground">
+          <p className="font-semibold text-foreground">
+            Sin costo de envío
+          </p>
+          <p className="mt-1">
+            Recibirás un aviso cuando tu pedido esté listo para recoger en la
+            sucursal.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -1384,19 +862,19 @@ function ShippingAddressStep({
   const [addressError, setAddressError] = useState<string | null>(null);
   const [shippingError, setShippingError] = useState<string | null>(null);
   const [deliveryReferences, setDeliveryReferences] = useState("");
-  const [shippingQuote, setShippingQuote] = useState<FedExShippingQuote | null>(null);
-  const [shippingOptions, setShippingOptions] = useState<FedExShippingOption[]>([]);
-  const [selectedShippingOptionId, setSelectedShippingOptionId] = useState("");
-  const [selectedShipping, setSelectedShipping] =
+  const [, setShippingQuote] = useState<FedExShippingQuote | null>(null);
+  const [, setShippingOptions] = useState<FedExShippingOption[]>([]);
+  const [, setSelectedShippingOptionId] = useState("");
+  const [, setSelectedShipping] =
     useState<DeliveryShippingSelection | null>(null);
-  const [checkoutPricing, setCheckoutPricing] = useState<CheckoutPricing | null>(null);
+  const [, setCheckoutPricing] = useState<CheckoutPricing | null>(null);
   const [isGoogleReady, setIsGoogleReady] = useState(false);
   const [isGoogleUnavailable, setIsGoogleUnavailable] = useState(false);
   const [googleAutocompleteMessage, setGoogleAutocompleteMessage] =
     useState<string | null>(null);
   const [isLoadingAddress, setIsLoadingAddress] = useState(false);
-  const [isLoadingShippingOptions, setIsLoadingShippingOptions] = useState(false);
-  const [isRecalculatingCheckout, setIsRecalculatingCheckout] = useState(false);
+  const isLoadingShippingOptions = false;
+  const isRecalculatingCheckout = false;
   const [shippingWarnings, setShippingWarnings] = useState<string[]>([]);
   const [formattedAddress, setFormattedAddress] = useState("");
   const [addressValidationStatus, setAddressValidationStatus] =
@@ -1540,171 +1018,29 @@ function ShippingAddressStep({
   }, [currentAddressKey, lastQuotedAddressKey]);
 
   useEffect(() => {
-    if (fulfillmentMethod !== "DELIVERY" || !isAuthenticated) {
+    if (fulfillmentMethod !== "DELIVERY") {
       return;
     }
 
     const postalCode = normalizeWhitespace(watchedZip);
-    if (!/^\d{5}$/.test(postalCode)) {
-      setPostalValidated(false);
-      setPostalValidationMessage(null);
-      return;
-    }
-
-    let cancelled = false;
-    setIsValidatingPostal(true);
-
-    void fedexApi
-      .validatePostal({
-        countryCode: "MX",
-        postalCode,
-        stateOrProvinceCode: normalizeWhitespace(watchedEstado) || undefined,
-        city: normalizeWhitespace(watchedCity) || undefined,
-      })
-      .then((result) => {
-        if (cancelled) {
-          return;
-        }
-
-        setPostalValidated(result.isValid);
-        setPostalValidationMessage(
-          result.isValid
-            ? result.alerts[0] ?? null
-            : result.alerts[0] ??
-            "El codigo postal no es valido para envio FedEx.",
-        );
-
-        if (!result.isValid) {
-          setAddressValidationStatus("NOT_VALIDATED");
-          setSuggestedShippingValues(null);
-          setHasPendingSuggestion(false);
-        }
-      })
-      .catch((error) => {
-        if (cancelled) {
-          return;
-        }
-
-        setPostalValidated(false);
-        setAddressValidationStatus("NOT_VALIDATED");
-        setPostalValidationMessage(getFedExQuoteErrorMessage(error));
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setIsValidatingPostal(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [fulfillmentMethod, isAuthenticated, watchedCity, watchedEstado, watchedZip]);
+    setIsValidatingPostal(false);
+    setPostalValidated(/^\d{5}$/.test(postalCode));
+    setPostalValidationMessage(null);
+  }, [fulfillmentMethod, watchedZip]);
 
   useEffect(() => {
-    if (fulfillmentMethod !== "DELIVERY" || !isAuthenticated || !postalValidated) {
+    if (fulfillmentMethod !== "DELIVERY") {
       return;
     }
 
-    const currentValues = form.getValues();
-    const direccionEnvio = buildFedExDireccionEnvio(
-      {
-        ...currentValues,
-        name: watchedName,
-        telefono: watchedTelefono,
-        calle: watchedCalle,
-        numero: watchedNumero,
-        numeroInterior: watchedNumeroInterior,
-        colonia: watchedColonia,
-        city: watchedCity,
-        estado: watchedEstado,
-        zip: watchedZip,
-      },
-      deliveryReferences,
-    );
-
-    if (!isDireccionValidatable(direccionEnvio)) {
-      setAddressValidationStatus("NOT_VALIDATED");
-      setAddressValidationMessages([]);
-      return;
-    }
-
-    let cancelled = false;
-    setIsValidatingAddress(true);
-
-    void fedexApi
-      .validateAddress(toFedexRecipient(direccionEnvio))
-      .then((validation) => {
-        if (cancelled) {
-          return;
-        }
-
-        const nextMessages = [
-          ...(validation.customerMessages ?? []),
-          ...(validation.warnings ?? []),
-        ].filter(Boolean);
-        const hasSuggestion = hasAddressSuggestion(currentValues, validation);
-
-        setAddressValidationMessages(nextMessages);
-
-        if (hasSuggestion) {
-          setSuggestedShippingValues(
-            buildSuggestedShippingValues(currentValues, validation),
-          );
-          setHasPendingSuggestion(true);
-          setAddressValidationStatus("SUGGESTED");
-          return;
-        }
-
-        const nextAddressValidationStatus =
-          getNextAddressValidationStatus(validation);
-        const firstAddress =
-          validation.addresses?.[0] ?? validation.resolvedAddress;
-
-        if (IS_DEVELOPMENT) {
-          const attributes = firstAddress?.attributes ?? {};
-          console.log("[FedEx Address Validation Parsed]", {
-            validation,
-            firstAddress,
-            isLikelyValid: firstAddress?.isLikelyValid,
-            isStandardized:
-              firstAddress?.isStandardized === true ||
-              attributes.AddressType === "STANDARDIZED",
-            isMatched:
-              attributes.Matched === true || attributes.Matched === "true",
-            isValidlyFormed:
-              attributes.ValidlyFormed === true ||
-              attributes.ValidlyFormed === "true",
-            nextAddressValidationStatus,
-          });
-        }
-
-        setSuggestedShippingValues(null);
-        setHasPendingSuggestion(false);
-        setAddressValidationStatus(nextAddressValidationStatus);
-      })
-      .catch((error) => {
-        if (cancelled) {
-          return;
-        }
-
-        setAddressValidationStatus("NOT_VALIDATED");
-        setAddressValidationMessages([getFedExQuoteErrorMessage(error)]);
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setIsValidatingAddress(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
+    setIsValidatingAddress(false);
+    setAddressValidationMessages([]);
+    setSuggestedShippingValues(null);
+    setHasPendingSuggestion(false);
   }, [
     deliveryReferences,
     form,
     fulfillmentMethod,
-    isAuthenticated,
-    postalValidated,
     watchedCalle,
     watchedCity,
     watchedColonia,
@@ -1746,7 +1082,7 @@ function ShippingAddressStep({
     buildCheckoutShippingAddress(
       {
         fullName: values.name,
-        phone: normalizeMxPhoneForAplazo(values.telefono),
+        phone: normalizeMxPhone(values.telefono),
         street1: `${values.calle} ${values.numero}`.trim(),
         street2: values.colonia,
         interiorNumber: values.numeroInterior,
@@ -1874,177 +1210,40 @@ function ShippingAddressStep({
       return;
     }
 
-    if (!postalValidated) {
-      setAddressError(
-        postalValidationMessage ||
-        "Valida un codigo postal correcto antes de continuar.",
-      );
-      return;
-    }
-
-    if (hasPendingSuggestion || addressValidationStatus === "SUGGESTED") {
-      setAddressError(
-        "FedEx encontro una sugerencia para tu direccion. Elige si quieres usarla o continuar con tu captura.",
-      );
-      return;
-    }
-
-    const addressCanBeUsedForQuote =
-      canUseAddressForFedExQuote(addressValidationStatus);
-
-    if (IS_DEVELOPMENT) {
-      console.log("[FedEx Can Quote]", {
-        postalValidationStatus: postalValidated ? "VALIDATED" : "NOT_VALIDATED",
-        addressValidationStatus,
-        canQuoteShipping: postalValidated && addressCanBeUsedForQuote,
-      });
-    }
-
-    if (!addressCanBeUsedForQuote) {
-      setAddressError(
-        "FedEx debe validar o confirmar tu direccion antes de cotizar.",
-      );
-      return;
-    }
-
-    const currentShippingAddress = buildCurrentShippingAddress(shippingValues);
-    const existingSelectedOption = shippingQuote?.options.find(
-      (option) =>
-        option.optionId === selectedShippingOptionId ||
-        option.serviceType === selectedShippingOptionId,
+    const nextSelection = buildManualFedExShippingSelection();
+    const nextPricing = getExpectedCheckoutPricing(
+      0,
+      "DELIVERY",
+      MANUAL_FEDEX_SHIPPING_COST,
+    );
+    const nextAddressValidationStatus: AddressValidationStatus = "USER_CONFIRMED";
+    const currentShippingAddress = buildCurrentShippingAddress(
+      shippingValues,
+      nextAddressValidationStatus,
     );
 
-    if (
-      shippingQuote &&
-      !isQuoteExpired(shippingQuote) &&
-      !requiresFedExSelection(shippingQuote)
-    ) {
-      const nextPricing = getExpectedCheckoutPricing(0, "DELIVERY", 0);
-      setCheckoutPricing(nextPricing);
-      onContinue({
-        ...shippingValues,
-        fulfillmentMethod: "DELIVERY",
-        formattedAddress,
-        deliveryReferences,
-        shippingAddress: currentShippingAddress,
-        addressValidationStatus,
-        shippingQuote,
-        shippingSelection: null,
-        checkoutPricing: nextPricing,
-      });
-      return;
-    }
+    setAddressValidationStatus(nextAddressValidationStatus);
+    setShippingQuote(nextSelection.quote);
+    setShippingOptions([nextSelection.selectedOption]);
+    setSelectedShippingOptionId(MANUAL_FEDEX_METHOD);
+    setSelectedShipping(nextSelection);
+    setCheckoutPricing(nextPricing);
+    setShippingWarnings([]);
+    setAddressError(null);
+    setShippingError(null);
+    setLastQuotedAddressKey(currentAddressKey);
 
-    if (
-      shippingQuote &&
-      !isQuoteExpired(shippingQuote) &&
-      requiresFedExSelection(shippingQuote) &&
-      !existingSelectedOption
-    ) {
-      setShippingError("Selecciona un servicio FedEx para continuar.");
-      return;
-    }
-
-    if (shippingQuote && existingSelectedOption && !isQuoteExpired(shippingQuote)) {
-      const nextPricing = getExpectedCheckoutPricing(
-        0,
-        "DELIVERY",
-        existingSelectedOption.amount,
-      );
-      const nextSelection = {
-        quote: shippingQuote,
-        selectedOption: existingSelectedOption,
-        shippingSelection: buildCheckoutShippingSelection(
-          existingSelectedOption,
-        ) as ShippingSelection,
-      };
-      setSelectedShipping(nextSelection);
-      setCheckoutPricing(nextPricing);
-      onContinue({
-        ...shippingValues,
-        fulfillmentMethod: "DELIVERY",
-        formattedAddress,
-        deliveryReferences,
-        shippingAddress: currentShippingAddress,
-        addressValidationStatus,
-        shippingQuote,
-        shippingSelection: nextSelection,
-        checkoutPricing: nextPricing,
-      });
-      return;
-    }
-
-    setIsLoadingShippingOptions(true);
-    setIsRecalculatingCheckout(true);
-    try {
-      const quote = await fedexApi.quoteCart(direccionEnvio);
-      if (!requiresFedExSelection(quote)) {
-        const nextPricing = getExpectedCheckoutPricing(0, "DELIVERY", 0);
-        setShippingQuote(quote);
-        setShippingOptions([]);
-        setSelectedShippingOptionId("");
-        setSelectedShipping(null);
-        setCheckoutPricing(nextPricing);
-        setShippingWarnings([]);
-        setLastQuotedAddressKey(currentAddressKey);
-        toast({
-          title: "Entrega lista",
-          description: "Este carrito no requiere envio FedEx.",
-        });
-        onContinue({
-          ...shippingValues,
-          fulfillmentMethod: "DELIVERY",
-          formattedAddress,
-          deliveryReferences,
-          shippingAddress: currentShippingAddress,
-          addressValidationStatus,
-          shippingQuote: quote,
-          shippingSelection: null,
-          checkoutPricing: nextPricing,
-        });
-        return;
-      }
-
-      if (!quote.quoteId || quote.options.length === 0) {
-        setShippingError("FedEx no devolvio opciones de envio para esta direccion.");
-        return;
-      }
-
-      const defaultOption =
-        quote.options.find(
-          (option) =>
-            option.optionId === selectedShippingOptionId ||
-            option.serviceType === selectedShippingOptionId,
-        ) ?? quote.options[0];
-
-      const nextPricing = getExpectedCheckoutPricing(
-        0,
-        "DELIVERY",
-        defaultOption.amount,
-      );
-      setShippingQuote(quote);
-      setShippingOptions(quote.options);
-      setSelectedShippingOptionId(defaultOption.optionId ?? defaultOption.serviceType);
-      setSelectedShipping({
-        quote,
-        selectedOption: defaultOption,
-        shippingSelection: buildCheckoutShippingSelection(defaultOption) as ShippingSelection,
-      });
-      setCheckoutPricing(nextPricing);
-      setShippingWarnings([]);
-      setAddressError(null);
-      setShippingError(null);
-      setLastQuotedAddressKey(currentAddressKey);
-      toast({
-        title: "Opciones FedEx listas",
-        description: "Selecciona un servicio de envio para continuar.",
-      });
-    } catch (error) {
-      setShippingError(getFedExQuoteErrorMessage(error));
-    } finally {
-      setIsLoadingShippingOptions(false);
-      setIsRecalculatingCheckout(false);
-    }
+    onContinue({
+      ...shippingValues,
+      fulfillmentMethod: "DELIVERY",
+      formattedAddress,
+      deliveryReferences,
+      shippingAddress: currentShippingAddress,
+      addressValidationStatus: nextAddressValidationStatus,
+      shippingQuote: nextSelection.quote,
+      shippingSelection: nextSelection,
+      checkoutPricing: nextPricing,
+    });
   };
 
   return (
@@ -2100,9 +1299,9 @@ function ShippingAddressStep({
                     </div>
                     <p className="text-xs leading-5 text-muted-foreground">
                       {isGoogleUnavailable
-                        ? "Google Places no esta disponible. Puedes continuar con captura manual y FedEx seguira validando en backend."
+                        ? "Google Places no esta disponible. Puedes continuar con captura manual."
                         : isGoogleReady
-                          ? "Google completa la direccion y FedEx valida el resultado antes de cotizar."
+                          ? "Google completa la direccion; revisa los campos antes de continuar."
                           : "Cargando autocompletado de Google Places..."}
                     </p>
                     {googleAutocompleteMessage ? (
@@ -2331,63 +1530,24 @@ function ShippingAddressStep({
                       ))}
                     </div>
                   ) : null}
-                  {checkoutPricing && selectedShipping ? (
-                    <div className="rounded-[1.2rem] border border-primary/25 bg-primary/8 px-4 py-3 text-sm text-primary">
-                      Resumen recalculado con backend: envio {formatCurrency(selectedShipping.selectedOption.amount)}.
-                    </div>
-                  ) : null}
-                  {shippingQuote?.requiresShipping === false ? (
-                    <div className="rounded-[1.4rem] border border-primary/25 bg-primary/8 px-4 py-3 text-sm text-primary">
-                      Este carrito no requiere envio FedEx. Puedes continuar a pago.
-                    </div>
-                  ) : shippingQuote ? (
-                    <div className="space-y-3 rounded-[1.4rem] border border-border bg-muted/35 p-4">
-                      <div className="flex items-center gap-2">
-                        <Truck className="h-4 w-4 text-primary" />
-                        <p className="text-sm font-semibold text-foreground">Opciones FedEx</p>
+                  <div className="rounded-[1.4rem] border border-primary/25 bg-primary/8 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <Truck className="mt-0.5 h-4 w-4 text-primary" />
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">
+                            Envio a domicilio FedEx manual
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                            El costo es fijo. La guia y el seguimiento se preparan manualmente despues de confirmar el pago.
+                          </p>
+                        </div>
                       </div>
-                      {isQuoteExpired(shippingQuote) ? (
-                        <p className="text-sm text-destructive">Esta cotizacion expiro. Vuelve a cotizar para continuar.</p>
-                      ) : null}
-                      <RadioGroup
-                        value={selectedShippingOptionId}
-                        onValueChange={(value) => {
-                          setSelectedShippingOptionId(value);
-                          const option = shippingOptions.find(
-                            (item) => item.optionId === value || item.serviceType === value,
-                          );
-                          if (!option || !shippingQuote) {
-                            return;
-                          }
-                          setSelectedShipping({
-                            quote: shippingQuote,
-                            selectedOption: option,
-                            shippingSelection: buildCheckoutShippingSelection(option) as ShippingSelection,
-                          });
-                          setCheckoutPricing(
-                            getExpectedCheckoutPricing(0, "DELIVERY", option.amount),
-                          );
-                        }}
-                        className="gap-3"
-                      >
-                        {shippingOptions.map((option) => {
-                          const value = option.optionId ?? option.serviceType;
-                          return (
-                            <label key={value} htmlFor={`fedex-option-${value}`} className={cn("flex cursor-pointer items-start gap-3 rounded-[1rem] border px-4 py-3 transition-colors", selectedShippingOptionId === value ? "border-primary bg-primary/8" : "border-border bg-card hover:bg-muted/55")}>
-                              <RadioGroupItem id={`fedex-option-${value}`} value={value} className="mt-1" />
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-start justify-between gap-3">
-                                  <p className="text-sm font-semibold text-foreground">{option.serviceName ?? option.serviceType}</p>
-                                  <p className="shrink-0 text-sm font-semibold text-foreground">{formatCurrency(option.amount)}</p>
-                                </div>
-                                <p className="mt-1 text-xs leading-5 text-muted-foreground">{[option.estimatedDeliveryDate ? `Entrega estimada ${option.estimatedDeliveryDate}` : "", option.transitTime].filter(Boolean).join(" | ") || "Tiempo por confirmar"}</p>
-                              </div>
-                            </label>
-                          );
-                        })}
-                      </RadioGroup>
+                      <p className="shrink-0 text-sm font-semibold text-foreground">
+                        {formatCurrency(MANUAL_FEDEX_SHIPPING_COST)}
+                      </p>
                     </div>
-                  ) : null}
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -2564,11 +1724,8 @@ function ShippingAddressStep({
           disabled={isLoadingShippingOptions || isRecalculatingCheckout}
         >
           {isLoadingShippingOptions || isRecalculatingCheckout
-            ? "Cotizando..."
-            : fulfillmentMethod === "DELIVERY" &&
-              (!shippingQuote || isQuoteExpired(shippingQuote))
-              ? "Cotizar envio"
-              : "Continuar a pago"}
+            ? "Preparando..."
+            : "Continuar a pago"}
         </Button>
       </div>
 
@@ -2579,16 +1736,39 @@ function ShippingAddressStep({
           disabled={isLoadingShippingOptions || isRecalculatingCheckout}
         >
           {isLoadingShippingOptions || isRecalculatingCheckout
-            ? "Cotizando..."
-            : fulfillmentMethod === "DELIVERY" &&
-              (!shippingQuote || isQuoteExpired(shippingQuote))
-              ? "Cotizar envio"
-              : "Continuar a pago"}
+            ? "Preparando..."
+            : "Continuar a pago"}
         </Button>
       </MobileCheckoutActions>
     </>
   );
 }
+
+const ACCEPTED_PAYMENT_BRANDS = [
+  { name: "Visa", src: "/images/iconosdepagos/visa.svg" },
+  { name: "Mastercard", src: "/images/iconosdepagos/mastercard.svg" },
+  { name: "American Express", src: "/images/iconosdepagos/AmericanExpress.svg" },
+  { name: "Apple Pay", src: "/images/iconosdepagos/ApplePay.svg" },
+  { name: "Google Pay", src: "/images/iconosdepagos/GooglePay.svg" },
+] as const;
+
+const PAYMENT_REASSURANCES = [
+  {
+    icon: Lock,
+    title: "Cifrado de extremo a extremo",
+    description: "Tus datos viajan protegidos con la seguridad PCI de Stripe.",
+  },
+  {
+    icon: CreditCard,
+    title: "No guardamos tu tarjeta",
+    description: "Stripe procesa el cobro; la tienda nunca ve tus datos bancarios.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Total verificado por backend",
+    description: "Confirmamos el monto final antes de cobrarte, sin sorpresas.",
+  },
+] as const;
 
 function CardPaymentStep({
   values,
@@ -2599,8 +1779,6 @@ function CardPaymentStep({
   codigoPromocion,
   onBack,
   onRecoverableDeliveryError,
-  paymentMethod,
-  onPaymentMethodChange,
   stripePromise,
 }: {
   values: CheckoutValues;
@@ -2611,8 +1789,6 @@ function CardPaymentStep({
   codigoPromocion?: string;
   onBack: () => void;
   onRecoverableDeliveryError: (values: DeliveryCheckoutValues) => void;
-  paymentMethod: PaymentMethod;
-  onPaymentMethodChange: (value: PaymentMethod) => void;
   stripePromise: ReturnType<typeof useStripeConfig>;
 }) {
   const router = useRouter();
@@ -2659,9 +1835,6 @@ function CardPaymentStep({
         }
       }
 
-      clearStoredAplazoCheckoutState();
-      clearStoredAplazoRetryPayload();
-
       const checkoutResult = await checkoutCart(
         buildCheckoutPayload(values, "TARJETA", codigoPromocion),
       );
@@ -2681,7 +1854,7 @@ function CardPaymentStep({
         expectedSubtotal,
       });
 
-      const successUrl = `${window.location.origin}/checkout/confirmation?ordenId=${encodeURIComponent(ordenId)}&status=processing&total=${encodeURIComponent((createdOrder.total ?? total).toFixed(2))}`;
+      const successUrl = `${window.location.origin}/checkout/confirmation?ordenId=${encodeURIComponent(ordenId)}&session_id={CHECKOUT_SESSION_ID}&status=processing&total=${encodeURIComponent((createdOrder.total ?? total).toFixed(2))}`;
       const cancelUrl = `${window.location.origin}/checkout?ordenId=${encodeURIComponent(ordenId)}`;
       const session = await paymentsApi.createEmbeddedCheckoutSession(
         ordenId,
@@ -2693,8 +1866,6 @@ function CardPaymentStep({
         throw new Error("No se recibió clientSecret para montar Stripe Embedded Checkout");
       }
 
-      clearStoredAplazoCheckoutState();
-      clearStoredAplazoRetryPayload();
       setOrderContext({
         ordenId,
         total: createdOrder.total ?? total,
@@ -2720,20 +1891,37 @@ function CardPaymentStep({
 
   return (
     <>
-      <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
-        <CardHeader className="pb-4">
-          <CardTitle>Pago</CardTitle>
+      <Card className="overflow-hidden rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
+        <CardHeader className="gap-4 border-b border-border/70 pb-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-[var(--shadow-glow)]">
+                <Lock className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary/74">
+                  Paso 2 · Pago
+                </p>
+                <CardTitle className="mt-0.5 leading-none">Pago seguro</CardTitle>
+              </div>
+            </div>
+            <span className="hidden items-center gap-1.5 rounded-full border border-success/30 bg-success/12 px-3 py-1.5 text-xs font-medium text-success sm:inline-flex">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Conexión cifrada
+            </span>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-5">
-          <PaymentMethodSelector
-            value={paymentMethod}
-            onValueChange={onPaymentMethodChange}
-          />
 
+        <CardContent className="space-y-5 pt-5">
           {embeddedClientSecret ? (
             <div className="space-y-4">
-              <div className="rounded-[1.4rem] border border-primary/25 bg-primary/8 px-4 py-3 text-sm text-primary">
-                Stripe Embedded Checkout validará el total final directamente desde backend para la orden {orderContext?.ordenId}.
+              <div className="flex items-start gap-3 rounded-[1.4rem] border border-primary/25 bg-primary/8 px-4 py-3 text-sm text-primary">
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+                <p>
+                  Completa tu pago abajo. Stripe valida el total final con el
+                  backend para la orden{" "}
+                  <span className="font-semibold">{orderContext?.ordenId}</span>.
+                </p>
               </div>
               <EmbeddedCheckoutProvider
                 stripe={stripePromise}
@@ -2746,24 +1934,76 @@ function CardPaymentStep({
             </div>
           ) : (
             <>
-              <div className="rounded-[1.5rem] border border-border bg-muted/45 p-5">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary">
-                    <CreditCard className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">
-                      Stripe Embedded Checkout
-                    </p>
-                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                      Primero crearemos tu orden y Stripe montará el checkout embebido con el total validado por backend.
-                    </p>
+              <div className="relative overflow-hidden rounded-[1.6rem] border border-primary/15 bg-[linear-gradient(135deg,rgba(7,58,38,0.06),rgba(246,248,243,0.6))] p-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-card text-primary">
+                      <CreditCard className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-base font-semibold text-foreground">
+                        Paga con tarjeta vía Stripe
+                      </p>
+                      <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                        Tarjeta de crédito o débito, Apple Pay y Google Pay en un
+                        formulario seguro, sin salir de la tienda.
+                      </p>
+                    </div>
                   </div>
                 </div>
+
+                <div className="mt-5 flex flex-wrap items-center gap-2.5">
+                  {ACCEPTED_PAYMENT_BRANDS.map((brand) => (
+                    <div
+                      key={brand.name}
+                      className="flex h-9 items-center justify-center rounded-xl border border-black/6 bg-white/95 px-2.5 shadow-[0_8px_24px_-22px_rgb(8_12_10_/_0.4)]"
+                    >
+                      <Image
+                        src={brand.src}
+                        alt={brand.name}
+                        width={56}
+                        height={22}
+                        className="h-5 w-auto object-contain"
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
-              <p className="text-sm leading-6 text-muted-foreground">
-                El pago se procesa con Stripe. El total estimado a validar es {formatCurrency(total)}.
-              </p>
+
+              <div className="flex items-center justify-between gap-3 rounded-[1.4rem] border border-border bg-muted/45 px-5 py-4">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    Total a pagar
+                  </p>
+                  <p className="mt-1 font-headline text-3xl font-semibold uppercase leading-none tracking-[0.02em]">
+                    {formatCurrency(total)}
+                  </p>
+                </div>
+                <p className="max-w-[11rem] text-right text-xs leading-5 text-muted-foreground">
+                  Confirmamos el monto con el backend antes de cobrarte.
+                </p>
+              </div>
+
+              <ul className="grid gap-2.5">
+                {PAYMENT_REASSURANCES.map((item) => (
+                  <li
+                    key={item.title}
+                    className="flex items-start gap-3 rounded-[1.2rem] border border-border/70 bg-card px-4 py-3"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/15 bg-primary/8 text-primary">
+                      <item.icon className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground">
+                        {item.title}
+                      </p>
+                      <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                        {item.description}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </>
           )}
 
@@ -2782,11 +2022,12 @@ function CardPaymentStep({
             ) : (
               <Button
                 type="button"
-                className="h-12 flex-1 rounded-full"
+                className="h-12 flex-1 gap-2 rounded-full"
                 onClick={() => void handlePrepareEmbeddedCheckout()}
                 disabled={isProcessing || !stripePromise}
               >
-                {isProcessing ? "Preparando..." : "Continuar con Stripe"}
+                <Lock className="h-4 w-4" />
+                {isProcessing ? "Preparando pago seguro..." : `Pagar ${formatCurrency(total)}`}
               </Button>
             )}
           </div>
@@ -2808,508 +2049,20 @@ function CardPaymentStep({
         ) : (
           <Button
             type="button"
-            className="h-12 flex-1 rounded-full"
+            className="h-12 flex-1 gap-2 rounded-full"
             onClick={() => void handlePrepareEmbeddedCheckout()}
             disabled={isProcessing || !stripePromise}
           >
-            {isProcessing ? "Preparando..." : "Continuar con Stripe"}
+            <Lock className="h-4 w-4" />
+            {isProcessing ? "Preparando..." : `Pagar ${formatCurrency(total)}`}
           </Button>
         )}
       </MobileCheckoutActions>
     </>
   );
 }
-function AplazoPaymentStep({
-  values,
-  cartId,
-  cartItems,
-  expectedSubtotal,
-  total,
-  codigoPromocion,
-  onBack,
-  onRecoverableDeliveryError,
-  paymentMethod,
-  onPaymentMethodChange,
-}: {
-  values: CheckoutValues;
-  cartId?: string;
-  cartItems: CartItem[];
-  expectedSubtotal: number;
-  total: number;
-  codigoPromocion?: string;
-  onBack: () => void;
-  onRecoverableDeliveryError: (values: DeliveryCheckoutValues) => void;
-  paymentMethod: PaymentMethod;
-  onPaymentMethodChange: (value: PaymentMethod) => void;
-}) {
-  const router = useRouter();
-  const { toast } = useToast();
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [submissionError, setSubmissionError] = useState<string | null>(null);
-
-  const handleContinueWithAplazo = async () => {
-    if (isProcessing || typeof window === "undefined") {
-      return;
-    }
-
-    const validation = validateAplazoSubmission(
-      values,
-      cartItems,
-      expectedSubtotal,
-    );
-    if (!validation.ok) {
-      setSubmissionError(validation.message);
-      logAplazoDebug("Validación Aplazo fallida antes del submit", {
-        reason: validation.message,
-      });
-      toast({
-        variant: "destructive",
-        title: "Datos inválidos",
-        description: validation.message,
-      });
-      return;
-    }
-
-    setSubmissionError(null);
-    logAplazoDebug("Teléfono Aplazo normalizado", {
-      originalPhone:
-        values.fulfillmentMethod === "PICKUP"
-          ? values.pickupContact.phone
-          : values.telefono,
-      normalizedPhone: validation.customer.phone,
-    });
-
-    setIsProcessing(true);
-
-    try {
-      assertDeliveryShippingReady(values);
-
-      const origin = window.location.origin;
-      const cartFingerprint = [
-        getAplazoCartFingerprint(cartItems),
-        codigoPromocion ?? "",
-        validation.validatedSubtotal.toFixed(2),
-        total.toFixed(2),
-        values.fulfillmentMethod,
-        values.fulfillmentMethod === "PICKUP" ? values.pickupLocation.id : "",
-        values.fulfillmentMethod === "DELIVERY"
-          ? (values.shippingSelection?.quote.quoteId ?? "")
-          : "",
-        values.fulfillmentMethod === "DELIVERY"
-          ? (values.shippingSelection?.selectedOption.optionId ??
-            values.shippingSelection?.selectedOption.serviceType ??
-            "")
-          : "",
-      ].join("|");
-      const cartSessionId = getOrCreateSessionId();
-      const cartSnapshot = cartItems.map((item) => ({
-        productoId: item.id,
-        cantidad: item.quantity,
-        ...(item.tallaId ?? item.size
-          ? { tallaId: item.tallaId ?? item.size }
-          : {}),
-      }));
-      const storedState = readStoredAplazoCheckoutState();
-      const canReuseStoredOrder =
-        storedState?.paymentMethod === "APLAZO" &&
-        storedState.cartFingerprint === cartFingerprint &&
-        Boolean(storedState.orderId);
-
-      if (storedState && !canReuseStoredOrder) {
-        clearStoredAplazoCheckoutState();
-        clearStoredAplazoRetryPayload();
-      }
-
-      if (
-        canReuseStoredOrder &&
-        storedState?.paymentAttemptId &&
-        !isAplazoTerminalStatus(storedState.lastKnownStatus)
-      ) {
-        router.push(
-          buildAplazoReturnHref({
-            paymentAttemptId: storedState.paymentAttemptId,
-            orderId: storedState.orderId,
-            path: "success",
-          }),
-        );
-        return;
-      }
-
-      let orderId = canReuseStoredOrder ? storedState?.orderId ?? "" : "";
-      let idempotencyKey = canReuseStoredOrder
-        ? storedState?.idempotencyKey ?? crypto.randomUUID()
-        : crypto.randomUUID();
-      let createPayload: AplazoOnlineCreatePayload | null = null;
-      let createdOrder: Orden | null = null;
-
-      if (!canReuseStoredOrder) {
-        if (values.fulfillmentMethod === "PICKUP") {
-          const pickupCart = await resolveCartIdForPickup(cartId);
-          const availability = await pickupApi.validateAvailability({
-            locationId: values.pickupLocation.id,
-            cartId: pickupCart.cartId,
-            sessionId: pickupCart.sessionId,
-          });
-
-          if (!availability.canPickup) {
-            throw new Error(
-              "La sucursal seleccionada no tiene disponibilidad para todos los productos.",
-            );
-          }
-        }
-
-        const checkoutValues =
-          values.fulfillmentMethod === "PICKUP"
-            ? {
-              ...values,
-              pickupContact: {
-                ...values.pickupContact,
-                name: validation.fullName,
-                email: validation.customer.email,
-                phone: validation.customer.phone,
-              },
-            }
-            : {
-              ...values,
-              name: validation.fullName,
-              email: validation.customer.email,
-              telefono: validation.customer.phone,
-            };
-
-        const checkoutPayload = buildCheckoutPayload(
-          checkoutValues,
-          "APLAZO",
-          codigoPromocion,
-        );
-
-        logAplazoDebug("CHECKOUT_CART_PAYLOAD_BEFORE_CREATE_ORDER", {
-          codigoPromocionProp: codigoPromocion,
-          validationSubtotal: validation.validatedSubtotal,
-          expectedSubtotal,
-          total,
-          checkoutPayload,
-          cartItems: cartItems.map((item) => ({
-            id: item.id,
-            name: item.name,
-            quantity: item.quantity,
-            price: item.price,
-            tallaId: item.tallaId ?? item.size,
-          })),
-        });
-
-        const checkoutResult = await checkoutCart(checkoutPayload);
-
-        orderId = getOrderIdFromCheckoutResult(checkoutResult);
-        if (!orderId) {
-          throw new Error("No se recibió un ID de orden válido");
-        }
-
-        createdOrder = await ordersApi.getById(orderId);
-        if (!createdOrder) {
-          throw new Error("No se pudo consultar la orden creada para validar montos con Aplazo");
-        }
-        logAplazoDebug("ORDER_CREATED_FOR_APLAZO_DEBUG", {
-          orderId,
-          expectedSubtotal: validation.validatedSubtotal,
-          frontendTotal: total,
-          codigoPromocionProp: codigoPromocion,
-          createdOrder: {
-            subtotal: createdOrder.subtotal,
-            shippingCost: createdOrder.shippingCost,
-            costoEnvio: (createdOrder as any).costoEnvio,
-            total: createdOrder.total,
-            codigoPromocion: (createdOrder as any).codigoPromocion,
-            codigoPromocionId: (createdOrder as any).codigoPromocionId,
-            codigoPromocionTitulo: (createdOrder as any).codigoPromocionTitulo,
-            descuentoCodigoPromocion: (createdOrder as any).descuentoCodigoPromocion,
-            discountTotal: (createdOrder as any).discountTotal,
-            subtotalOriginal: (createdOrder as any).subtotalOriginal,
-            subtotalFinal: (createdOrder as any).subtotalFinal,
-            items: (createdOrder as any).items?.map((item: any) => ({
-              productoId: item.productoId,
-              nombre: item.nombre,
-              cantidad: item.cantidad,
-              precioUnitario: item.precioUnitario,
-              subtotal: item.subtotal,
-              precioOriginal: item.precioOriginal,
-              precioFinal: item.precioFinal,
-              ofertaAplicadaId: item.ofertaAplicadaId,
-              codigoPromocionAplicadoId: item.codigoPromocionAplicadoId,
-            })),
-          },
-        });
-      } else if (storedState && isAplazoRetryableStatus(storedState.lastKnownStatus)) {
-        idempotencyKey = crypto.randomUUID();
-        writeStoredAplazoCheckoutState({
-          ...storedState,
-          paymentAttemptId: undefined,
-          idempotencyKey,
-          cartSessionId: storedState.cartSessionId ?? cartSessionId,
-          cartSnapshot: storedState.cartSnapshot ?? cartSnapshot,
-          expiresAt: null,
-          lastKnownStatus: undefined,
-          lastReturnPath: undefined,
-          updatedAt: new Date().toISOString(),
-        });
-      }
-
-      if (orderId) {
-        createdOrder = createdOrder ?? (await ordersApi.getById(orderId));
-      }
-
-      if (!createdOrder) {
-        throw new Error("No se pudo preparar el pago con Aplazo");
-      }
-
-      logAplazoDebug("VALIDATE_ORDER_PRICING_BEFORE_APLAZO", {
-        orderId,
-        expectedSubtotal: validation.validatedSubtotal,
-        orderSubtotal: createdOrder.subtotal,
-        orderShippingCost: createdOrder.shippingCost,
-        orderTotal: createdOrder.total,
-        expectedTotal: roundCurrency(
-          validation.validatedSubtotal + Number(createdOrder.shippingCost ?? 0),
-        ),
-      });
-
-      validateOrderPricing({
-        order: createdOrder,
-        expectedSubtotal: validation.validatedSubtotal,
-      });
-
-      logAplazoDebug("VALIDATE_ORDER_PRICING_OK", {
-        orderId,
-      });
-
-      createPayload = buildAplazoPayload({
-        orderId,
-        values: {
-          ...(values.fulfillmentMethod === "PICKUP"
-            ? {
-              ...values,
-              pickupContact: {
-                ...values.pickupContact,
-                name: validation.fullName,
-                email: validation.customer.email,
-                phone: validation.customer.phone,
-              },
-            }
-            : {
-              ...values,
-              name: validation.fullName,
-              email: validation.customer.email,
-              telefono: validation.customer.phone,
-            }),
-        } as CheckoutValues,
-        items: cartItems,
-        order: createdOrder,
-        origin,
-        expectedSubtotal: validation.validatedSubtotal,
-      });
-
-      logAplazoDebug("Payload Aplazo sanitizado", {
-        orderId: createPayload.orderId,
-        customer: createPayload.customer
-          ? sanitizeAplazoCustomerForLog(validation.customer)
-          : undefined,
-        metadata: createPayload.metadata,
-      });
-
-      writeStoredAplazoRetryPayload(omitAplazoUrls(createPayload));
-      writeStoredAplazoCheckoutState({
-        paymentMethod: "APLAZO",
-        flowType: "online",
-        orderId,
-        idempotencyKey,
-        cartFingerprint,
-        cartSessionId,
-        cartSnapshot,
-        expiresAt: null,
-        updatedAt: new Date().toISOString(),
-      });
-
-      if (!createPayload || !orderId) {
-        throw new Error("No se pudo preparar el intento de pago con Aplazo");
-      }
-
-      logAplazoDebug("APLAZO_ONLINE_PAYLOAD_BEFORE_PAYMENT_API", {
-        idempotencyKey,
-        orderId,
-        codigoPromocionProp: codigoPromocion,
-        expectedSubtotal: validation.validatedSubtotal,
-        frontendTotal: total,
-        createdOrder: {
-          subtotal: createdOrder.subtotal,
-          shippingCost: createdOrder.shippingCost,
-          total: createdOrder.total,
-          codigoPromocion: (createdOrder as any).codigoPromocion,
-          descuentoCodigoPromocion: (createdOrder as any).descuentoCodigoPromocion,
-        },
-        createPayload,
-      });
-
-      const attempt = await paymentsApi.createAplazoOnlineAttempt(
-        createPayload,
-        idempotencyKey,
-      );
-
-      logAplazoDebug("Respuesta Aplazo create online", {
-        paymentAttemptId: attempt.paymentAttemptId,
-        redirectUrlPresent: Boolean(attempt.redirectUrl),
-        checkoutUrlPresent: Boolean(attempt.checkoutUrl),
-      });
-
-      if (!attempt.paymentAttemptId) {
-        throw new Error("No se recibió paymentAttemptId para continuar con Aplazo");
-      }
-
-      writeStoredAplazoCheckoutState({
-        paymentMethod: "APLAZO",
-        flowType: "online",
-        orderId,
-        paymentAttemptId: attempt.paymentAttemptId,
-        idempotencyKey,
-        cartFingerprint,
-        cartSessionId,
-        cartSnapshot,
-        expiresAt: attempt.expiresAt ?? null,
-        lastKnownStatus: attempt.status,
-        lastReturnPath: "success",
-        updatedAt: new Date().toISOString(),
-      });
-
-      const targetUrl = attempt.checkoutUrl || attempt.redirectUrl;
-      if (targetUrl) {
-        window.location.assign(targetUrl);
-        return;
-      }
-
-      router.push(
-        buildAplazoReturnHref({
-          paymentAttemptId: attempt.paymentAttemptId,
-          orderId,
-          path: "success",
-        }),
-      );
-    } catch (error) {
-      const retryValues = buildRetryDeliveryValuesFromCheckoutError(
-        values,
-        error,
-      );
-      if (retryValues) {
-        onRecoverableDeliveryError(retryValues);
-      }
-      const description = retryValues
-        ? getCheckoutErrorMessage(error)
-        : getAplazoErrorMessage(error);
-      setSubmissionError(description);
-      logAplazoDebug("Error al crear intento Aplazo", {
-        description,
-        code:
-          error && typeof error === "object" && "code" in error
-            ? String((error as { code?: unknown }).code ?? "") || undefined
-            : undefined,
-      });
-      toast({
-        variant: "destructive",
-        title: "No se pudo iniciar Aplazo",
-        description,
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  return (
-    <>
-      <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
-        <CardHeader className="pb-4">
-          <CardTitle>Pago</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <PaymentMethodSelector
-            value={paymentMethod}
-            onValueChange={onPaymentMethodChange}
-          />
-
-          <div className="rounded-[1.5rem] border border-border bg-muted/45 p-5">
-            <div className="flex items-start gap-3">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary">
-                <Clock3 className="h-5 w-5" />
-              </div>
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm font-semibold text-foreground">
-                    Continuarás tu pago fuera del checkout
-                  </p>
-                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                    Crearemos tu orden con método Aplazo y te redirigiremos para completar el pago.
-                    Cuando regreses, esta tienda validará el estado final antes de confirmar tu compra.
-                  </p>
-                </div>
-                <div className="rounded-[1.2rem] border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-                  <p>
-                    Total estimado a validar con Aplazo:{" "}
-                    <span className="font-semibold text-foreground">
-                      {formatCurrency(total)}
-                    </span>
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-[1.4rem] border border-border bg-muted/35 px-4 py-3">
-            <div className="flex items-start gap-3">
-              <ShieldCheck className="mt-0.5 h-5 w-5 text-primary" />
-              <p className="text-xs leading-5 text-muted-foreground">
-                No mostraremos la compra como exitosa hasta que el backend confirme el estado final del intento.
-              </p>
-            </div>
-          </div>
-
-          {submissionError ? (
-            <div className="rounded-[1.2rem] border border-destructive/30 bg-destructive/8 px-4 py-3 text-sm text-destructive">
-              {submissionError}
-            </div>
-          ) : null}
-
-          <div className="hidden gap-3 md:flex">
-            <Button type="button" variant="outline" className="h-12 flex-1 rounded-full" onClick={onBack}>
-              Volver
-            </Button>
-            <Button
-              type="button"
-              className="h-12 flex-1 rounded-full"
-              onClick={() => void handleContinueWithAplazo()}
-              disabled={isProcessing}
-            >
-              {isProcessing ? "Preparando..." : "Continuar con Aplazo"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <MobileCheckoutActions>
-        <Button type="button" variant="outline" className="h-12 flex-1 rounded-full" onClick={onBack}>
-          Volver
-        </Button>
-        <Button
-          type="button"
-          className="h-12 flex-1 rounded-full"
-          onClick={() => void handleContinueWithAplazo()}
-          disabled={isProcessing}
-        >
-          {isProcessing ? "Preparando..." : "Continuar con Aplazo"}
-        </Button>
-      </MobileCheckoutActions>
-    </>
-  );
-}
-
 export default function CheckoutPage() {
   const [currentStep, setCurrentStep] = useState(0);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("TARJETA");
   const [fulfillmentMethod, setFulfillmentMethod] =
     useState<FulfillmentMethod>("DELIVERY");
   const [pickupLocations, setPickupLocations] = useState<PickupLocation[]>([]);
@@ -3542,13 +2295,14 @@ export default function CheckoutPage() {
   const pricing = useMemo(
     () =>
       getExpectedCheckoutPricing(
-        subtotalConCodigo,
+        subtotal,
         fulfillmentMethod,
         checkoutValues?.fulfillmentMethod === "DELIVERY"
-          ? (checkoutValues.shippingSelection?.selectedOption.amount ?? 0)
+          ? (checkoutValues.shippingSelection?.selectedOption.amount ??
+            MANUAL_FEDEX_SHIPPING_COST)
           : 0,
       ),
-    [checkoutValues, fulfillmentMethod, subtotalConCodigo],
+    [checkoutValues, fulfillmentMethod, subtotal],
   );
   const cartSignature = useMemo(
     () =>
@@ -3563,42 +2317,6 @@ export default function CheckoutPage() {
   );
   const total = pricing.total;
 
-  useEffect(() => {
-    logAplazoDebug("CHECKOUT_PRICING_STATE", {
-      codigoPromocion,
-      codigoPromocionAplicado,
-      descuentoCodigo,
-      subtotalConOfertas,
-      subtotalConCodigo,
-      total: pricing.total,
-      resultadoCodigo: resultadoCodigo
-        ? {
-          valido: resultadoCodigo.valido,
-          codigoPromocionId: resultadoCodigo.codigoPromocionId,
-          descuentoTotal: resultadoCodigo.descuentoTotal,
-          subtotalOriginal: resultadoCodigo.subtotalOriginal,
-          subtotalFinal: resultadoCodigo.subtotalFinal,
-          mensaje: resultadoCodigo.mensaje,
-        }
-        : null,
-      items: cartItemsConOfertas.map((item) => ({
-        id: item.id,
-        name: item.name,
-        quantity: item.quantity,
-        price: item.price,
-        tallaId: item.tallaId ?? item.size,
-      })),
-    });
-  }, [
-    codigoPromocion,
-    codigoPromocionAplicado,
-    descuentoCodigo,
-    subtotalConOfertas,
-    subtotalConCodigo,
-    pricing.total,
-    resultadoCodigo,
-    cartItemsConOfertas,
-  ]);
   const activeCheckoutValues =
     checkoutValues ??
     ({
@@ -3607,7 +2325,7 @@ export default function CheckoutPage() {
       shippingAddress: buildCheckoutShippingAddress(
         {
           fullName: shippingForm.getValues("name"),
-          phone: normalizeMxPhoneForAplazo(shippingForm.getValues("telefono")),
+          phone: normalizeMxPhone(shippingForm.getValues("telefono")),
           street1: `${shippingForm.getValues("calle")} ${shippingForm.getValues("numero")}`.trim(),
           street2: shippingForm.getValues("colonia"),
           interiorNumber: shippingForm.getValues("numeroInterior"),
@@ -3616,7 +2334,15 @@ export default function CheckoutPage() {
           postalCode: shippingForm.getValues("zip"),
           countryCode: "MX",
         },
-        "NOT_VALIDATED",
+        "USER_CONFIRMED",
+      ),
+      addressValidationStatus: "USER_CONFIRMED",
+      shippingQuote: buildManualFedExShippingSelection().quote,
+      shippingSelection: buildManualFedExShippingSelection(),
+      checkoutPricing: getExpectedCheckoutPricing(
+        subtotal,
+        "DELIVERY",
+        MANUAL_FEDEX_SHIPPING_COST,
       ),
     } as DeliveryCheckoutValues);
   const handleRecoverableDeliveryError = (
@@ -3723,54 +2449,44 @@ export default function CheckoutPage() {
                 setCurrentStep(1);
               }}
             />
-          ) : paymentMethod === "TARJETA" ? (
-            stripePromise ? (
-              <CardPaymentStep
-                values={activeCheckoutValues}
-                cartId={state.id}
-                cartItems={cartItemsConOfertas}
-                total={total}
-                expectedSubtotal={subtotalConCodigo}
-                codigoPromocion={codigoPromocionAplicado || undefined}
-                onBack={() => setCurrentStep(0)}
-                onRecoverableDeliveryError={handleRecoverableDeliveryError}
-                paymentMethod={paymentMethod}
-                onPaymentMethodChange={setPaymentMethod}
-                stripePromise={stripePromise}
-              />
-            ) : (
-              <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
-                <CardHeader>
-                  <CardTitle>Configuración faltante</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <PaymentMethodSelector
-                    value={paymentMethod}
-                    onValueChange={setPaymentMethod}
-                  />
-                  <p>No se pudo inicializar Stripe.</p>
-                </CardContent>
-              </Card>
-            )
-          ) : (
-            <AplazoPaymentStep
+          ) : stripePromise ? (
+            <CardPaymentStep
               values={activeCheckoutValues}
               cartId={state.id}
-              cartItems={cartItemsConOfertas}
-              expectedSubtotal={subtotalConCodigo}
+              cartItems={state.items}
               total={total}
-              codigoPromocion={codigoPromocionAplicado || undefined}
+              expectedSubtotal={subtotalConCodigo}
+              codigoPromocion={codigoPromocion}
               onBack={() => setCurrentStep(0)}
               onRecoverableDeliveryError={handleRecoverableDeliveryError}
-              paymentMethod={paymentMethod}
-              onPaymentMethodChange={setPaymentMethod}
+              stripePromise={stripePromise}
             />
+          ) : (
+            <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
+              <CardHeader>
+                <CardTitle>Pago no disponible</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm leading-6 text-muted-foreground">
+                  No pudimos inicializar el pago seguro en este momento. Recarga
+                  la página o inténtalo de nuevo en unos segundos.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-12 rounded-full"
+                  onClick={() => setCurrentStep(0)}
+                >
+                  Volver a entrega
+                </Button>
+              </CardContent>
+            </Card>
           )}
 
           <PaymentMethodStrip
             className="mt-6"
             title="Métodos de pago disponibles"
-            description="Aceptamos tarjetas, SPEI, billeteras digitales y Aplazo para que el cierre del checkout se vea completo y claro desde el primer paso."
+            description="Aceptamos tarjetas, SPEI y billeteras digitales para que el cierre del checkout se vea completo y claro desde el primer paso."
           />
         </div>
 
@@ -3801,7 +2517,3 @@ export default function CheckoutPage() {
     </div>
   );
 }
-
-
-
-

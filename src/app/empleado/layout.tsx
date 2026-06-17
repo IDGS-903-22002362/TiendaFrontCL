@@ -5,8 +5,6 @@ import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-    GalleryThumbnails,
-    Newspaper,
     LogOut,
     Menu,
     User,
@@ -23,7 +21,6 @@ import {
 
 const navLinks = [
     { href: "/empleado/puntos", label: "Puntos", icon: Coins },
-    { href: "/empleado/aplazo", label: "Aplazo POS", icon: GalleryThumbnails },
 ];
 
 export default function EmpleadoLayout({

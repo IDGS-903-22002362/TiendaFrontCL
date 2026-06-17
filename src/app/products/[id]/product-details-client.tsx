@@ -187,7 +187,7 @@ export function ProductDetailsClient({
           <PaymentMethodStrip
             compact
             title="Métodos de pago"
-            description="Disponible con tarjeta, SPEI, billeteras digitales y Aplazo para cerrar la compra sin fricción."
+            description="Disponible con tarjeta, SPEI y billeteras digitales para cerrar la compra sin fricción."
           />
           <AccordionSection items={accordionItems} />
           {children ? <div>{children}</div> : null}

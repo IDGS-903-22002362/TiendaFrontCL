@@ -15,7 +15,6 @@ import { useStorefront } from "@/hooks/use-storefront";
 import { useToast } from "@/hooks/use-toast";
 import { getCartVariantKey } from "@/lib/api/cart";
 import {
-  formatCurrency,
   getEditorialProductCopy,
   getProductStockState,
   isPersonalizableProduct,
@@ -234,14 +233,6 @@ export function ProductInfoPanel({
           <p className="mt-4 text-sm leading-6 text-muted-foreground md:text-base">
             {getEditorialProductCopy(product)}
           </p>
-
-          <div className="mt-4 rounded-[1rem] border border-border bg-muted/35 px-4 py-3 text-sm text-muted-foreground">
-            O paga con Aplazo desde{" "}
-            <span className="font-semibold text-foreground">
-              {formatCurrency((product.salePrice || product.price) / 5)}
-            </span>{" "}
-            por quincena.
-          </div>
 
           <div className="mt-7 grid gap-5">
             {sizes.length > 0 ? (
