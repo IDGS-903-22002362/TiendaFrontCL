@@ -33,8 +33,8 @@ export function LookbookSection({ products }: LookbookSectionProps) {
             <div className="relative z-10 flex h-full flex-col justify-between p-6 md:p-8 lg:p-10">
               <SectionHeader
                 eyebrow="Compra el look"
-                title="Una composición más limpia empieza por piezas mejor elegidas."
-                description="Usa la home para entrar desde la narrativa visual y cerrar la compra desde el producto correcto, no desde más ruido."
+                title="Una sola elección basta para lucir como una verdadera Fiera."
+                description="Más que una jersey, un símbolo de entrega, historia y pasión por el equipo."
                 theme="dark"
               />
 

@@ -111,11 +111,11 @@ export default async function Home() {
 
   const collectionIsPersonalizable = isPersonalizableProduct(collectionProduct);
   const collectionTitle = collectionIsPersonalizable
-    ? "Personaliza la prenda oficial sin romper el ritmo de compra."
-    : "Colección oficial con más agua, mejor foco y menos ruido.";
+    ? "Personaliza la prenda oficial"
+    : "Nueva Colección oficial con más estilo y más Fiera que nunca.";
   const collectionDescription = collectionIsPersonalizable
     ? "La personalización sigue conectada al PDP y al carrito actual, pero ahora entra en una composición más limpia, más directa y más centrada en la pieza."
-    : "La navegación comercial se apoya en bloques más sobrios para que el producto destaque antes que la interfaz.";
+    : "Descubre nuestro nuevo lanzamiento dando clic en 'Ver colección', adquierela y luce los colores esmeralda.";
 
   return (
     <div className="pb-16 md:pb-24">
@@ -150,9 +150,9 @@ export default async function Home() {
         <section className="home-section">
           <div className="container">
             <SectionHeader
-              eyebrow="Explora por colección"
-              title="Menos caja. Más dirección comercial."
-              description="Las categorías entran como navegación editorial: jerarquía clara, menos ruido y mejor lectura para abrir el catálogo desde la intención correcta."
+              eyebrow="Explora nuestras colecciones"
+              title="Tendencias y calidad en una sola colección."
+              description="Cada colección reúne nuestra identidad como equipo, siempre pensadas para acompañarte en cada etapa de torneo."
               action={
                 <Link
                   href="/products"
@@ -173,9 +173,9 @@ export default async function Home() {
       {featuredRailProducts.length > 0 ? (
         <div className="home-section">
           <ProductRail
-            eyebrow="Productos destacados"
+            eyebrow="Productos"
             title="Destacados"
-            description="Navegación directa por tipo y una lectura más limpia de cada pieza."
+            description="Descubre los artículos favoritos de la afición y lleva contigo la pasión por nuestros colores."
             products={featuredRailProducts}
             href="/products"
             hrefLabel="Ver más"
@@ -203,7 +203,7 @@ export default async function Home() {
           <ProductRail
             eyebrow="Productos nuevos"
             title="Novedades"
-            description="Una segunda entrada comercial con el mismo lenguaje más recto y más enfocado en producto."
+            description="Los artículos que marcan tendencia dentro y fuera del estadio."
             products={secondaryRailProducts}
             href="/products?tag=new"
             hrefLabel="Ver más"

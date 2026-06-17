@@ -36,8 +36,7 @@ export function StorefrontFooter() {
             <p className="editorial-label text-[#d0ad63]">La Guarida</p>
             <h2 className="mt-4 max-w-2xl font-headline text-4xl font-semibold uppercase leading-[0.9] tracking-[0.04em] md:text-6xl"></h2>
             <p className="mt-5 max-w-xl text-sm leading-6 text-white/68 md:text-base">
-              E-commerce oficial de Club León con foco en producto, navegación
-              clara y compra sin fricción.
+              E-commerce oficial de Club León con colecciones de ropa deportiva, accesorios y artículos para grandes aficionados.
             </p>
           </div>
           <div className="grid gap-8 border-t border-white/8 pt-2 sm:grid-cols-2 sm:border-t-0 sm:pt-0">

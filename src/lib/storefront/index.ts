@@ -168,11 +168,11 @@ function getCategoryDescription(slug: string) {
   const normalized = normalizeStorefrontText(slug);
 
   if (normalized.includes("jersey") || normalized.includes("playera")) {
-    return "Uniformes y siluetas clave para partido, colección y calle.";
+    return "Cada playera representa una forma de vivir el fútbol. Encuentra la tuya.  ";
   }
 
   if (normalized.includes("gorra") || normalized.includes("accesor")) {
-    return "Complementos oficiales con detalle limpio y presencia real.";
+    return "Adquiere los complementos perfectos para tu conjunto esmeralda.";
   }
 
   if (normalized.includes("balon")) {
@@ -183,7 +183,7 @@ function getCategoryDescription(slug: string) {
     return "Capas deportivas para clima variable y travel days.";
   }
 
-  return "Selección oficial curada para una experiencia premium.";
+  return "Comodidad y rendimiento para acompañarte en cada entrenamiento y desafío.";
 }
 
 function getCategoryEyebrow(slug: string) {

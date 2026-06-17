@@ -256,8 +256,8 @@ function getCartOfferLine(
     subtotalFinal < subtotalOriginal &&
     Boolean(
       pricingOferta?.ofertaAplicadaId ||
-        pricingOferta?.ofertaTitulo ||
-        precioFinalUnitario < precioOriginalUnitario,
+      pricingOferta?.ofertaTitulo ||
+      precioFinalUnitario < precioOriginalUnitario,
     );
 
   const totalItem = tieneOferta ? subtotalFinal : item.price * quantity;
@@ -706,14 +706,14 @@ function validateAplazoSubmission(
     };
   }
 
-return {
-  ok: true as const,
-  customer,
-  fullName,
-  validatedSubtotal: roundCurrency(
-    expectedSubtotal ?? calculateAplazoItemsTotal(items),
-  ),
-};
+  return {
+    ok: true as const,
+    customer,
+    fullName,
+    validatedSubtotal: roundCurrency(
+      expectedSubtotal ?? calculateAplazoItemsTotal(items),
+    ),
+  };
 }
 
 function getOrderIdFromCheckoutResult(payload: unknown): string {
@@ -817,13 +817,13 @@ function buildCheckoutPayload(
 ) {
   const promoCodeField = getCheckoutPromoCodeField(codigoPromocion);
   if (values.fulfillmentMethod === "PICKUP") {
-   return {
-  fulfillmentMethod: "PICKUP" as const,
-  pickupLocationId: values.pickupLocation.id,
-  pickupContact: values.pickupContact,
-  metodoPago,
-  ...promoCodeField,
-};
+    return {
+      fulfillmentMethod: "PICKUP" as const,
+      pickupLocationId: values.pickupLocation.id,
+      pickupContact: values.pickupContact,
+      metodoPago,
+      ...promoCodeField,
+    };
   }
 
   const selectedOption = values.shippingSelection?.selectedOption;
@@ -833,12 +833,12 @@ function buildCheckoutPayload(
   );
 
   return {
-  fulfillmentMethod: "DELIVERY" as const,
-  direccionEnvio: shippingPayload.direccionEnvio,
-  shippingAddress: shippingPayload.shippingAddress,
-  fedexAddress: shippingPayload.fedexAddress,
-  metodoPago,
-  ...promoCodeField,
+    fulfillmentMethod: "DELIVERY" as const,
+    direccionEnvio: shippingPayload.direccionEnvio,
+    shippingAddress: shippingPayload.shippingAddress,
+    fedexAddress: shippingPayload.fedexAddress,
+    metodoPago,
+    ...promoCodeField,
     ...(shippingQuoteId ? { shippingQuoteId } : {}),
     ...(selectedOption
       ? selectedOption.optionId
@@ -910,26 +910,26 @@ function buildAplazoPayload(params: {
     throw new Error("No fue posible preparar el pago con Aplazo");
   }
 
- return {
-  orderId: params.orderId,
-  customer: {
-    name: customer.name,
-    email: customer.email,
-    phone: customer.phone,
-  },
-  subtotal: orderSubtotal,
-  shipping: orderShipping,
-  tax: orderTaxes,
-  total: orderTotal,
-  currency: "MXN",
-  successUrl,
-  failureUrl,
-  cancelUrl,
-  cartUrl,
-  metadata: {
-  cartId: params.orderId,
-},
-};
+  return {
+    orderId: params.orderId,
+    customer: {
+      name: customer.name,
+      email: customer.email,
+      phone: customer.phone,
+    },
+    subtotal: orderSubtotal,
+    shipping: orderShipping,
+    tax: orderTaxes,
+    total: orderTotal,
+    currency: "MXN",
+    successUrl,
+    failureUrl,
+    cancelUrl,
+    cartUrl,
+    metadata: {
+      cartId: params.orderId,
+    },
+  };
 }
 
 function getAplazoErrorMessage(error: unknown) {
@@ -1070,29 +1070,29 @@ function OrderSummaryPanel({
 
         <div className="space-y-2 text-sm text-muted-foreground">
           <div className="flex items-center justify-between">
-  <span>Subtotal</span>
-  <span>{formatCurrency(subtotalConOfertas)}</span>
-</div>
+            <span>Subtotal</span>
+            <span>{formatCurrency(subtotalConOfertas)}</span>
+          </div>
 
-{isLoadingCodigo ? (
-  <div className="flex items-center justify-between text-primary">
-    <span>Validando código</span>
-    <span>...</span>
-  </div>
-) : null}
+          {isLoadingCodigo ? (
+            <div className="flex items-center justify-between text-primary">
+              <span>Validando código</span>
+              <span>...</span>
+            </div>
+          ) : null}
 
-{codigoPromocion && descuentoCodigo > 0 ? (
-  <div className="flex items-center justify-between text-primary">
-    <span>Código {codigoPromocion}</span>
-    <span>-{formatCurrency(descuentoCodigo)}</span>
-  </div>
-) : null}
+          {codigoPromocion && descuentoCodigo > 0 ? (
+            <div className="flex items-center justify-between text-primary">
+              <span>Código {codigoPromocion}</span>
+              <span>-{formatCurrency(descuentoCodigo)}</span>
+            </div>
+          ) : null}
 
-{codigoError ? (
-  <div className="rounded-[1rem] border border-destructive/30 bg-destructive/8 px-3 py-2 text-xs text-destructive">
-    {codigoError}
-  </div>
-) : null}
+          {codigoError ? (
+            <div className="rounded-[1rem] border border-destructive/30 bg-destructive/8 px-3 py-2 text-xs text-destructive">
+              {codigoError}
+            </div>
+          ) : null}
 
           <div className="flex items-center justify-between">
             <span>
@@ -1164,21 +1164,21 @@ function PaymentMethodSelector({
     logoWidth?: number;
     logoHeight?: number;
   }> = [
-    {
-      value: "TARJETA",
-      title: "Tarjeta",
-      description: "Pago inmediato con Stripe Embedded Checkout dentro del flujo actual.",
-      icon: CreditCard,
-    },
-    {
-      value: "APLAZO",
-      title: "Aplazo",
-      description: "Te redirigiremos para completar y validar el pago de forma asíncrona.",
-      logoSrc: "/images/iconosdepagos/aplazo.svg",
-      logoWidth: 92,
-      logoHeight: 32,
-    },
-  ];
+      {
+        value: "TARJETA",
+        title: "Tarjeta",
+        description: "Pago inmediato con Stripe Embedded Checkout dentro del flujo actual.",
+        icon: CreditCard,
+      },
+      {
+        value: "APLAZO",
+        title: "Aplazo",
+        description: "Te redirigiremos para completar y validar el pago de forma asíncrona.",
+        logoSrc: "/images/iconosdepagos/aplazo.svg",
+        logoWidth: 92,
+        logoHeight: 32,
+      },
+    ];
 
   return (
     <div className="space-y-3">
@@ -1486,18 +1486,18 @@ function ShippingAddressStep({
     setFormattedAddress(initialDeliveryValues.formattedAddress ?? "");
     setShippingQuote(
       initialDeliveryValues.shippingQuote ??
-        initialDeliveryValues.shippingSelection?.quote ??
-        null,
+      initialDeliveryValues.shippingSelection?.quote ??
+      null,
     );
     setShippingOptions(
       initialDeliveryValues.shippingQuote?.options ??
-        initialDeliveryValues.shippingSelection?.quote.options ??
-        [],
+      initialDeliveryValues.shippingSelection?.quote.options ??
+      [],
     );
     setSelectedShippingOptionId(
       initialDeliveryValues.shippingSelection?.selectedOption.optionId ??
-        initialDeliveryValues.shippingSelection?.selectedOption.serviceType ??
-        "",
+      initialDeliveryValues.shippingSelection?.selectedOption.serviceType ??
+      "",
     );
     setSelectedShipping(initialDeliveryValues.shippingSelection ?? null);
     setAddressValidationStatus(
@@ -1506,7 +1506,7 @@ function ShippingAddressStep({
     setCheckoutPricing(initialDeliveryValues.checkoutPricing ?? null);
     setPostalValidated(
       initialDeliveryValues.addressValidationStatus === "VALIDATED" ||
-        initialDeliveryValues.addressValidationStatus === "USER_CONFIRMED",
+      initialDeliveryValues.addressValidationStatus === "USER_CONFIRMED",
     );
     if (
       initialDeliveryValues.shippingSelection?.quote ||
@@ -1571,7 +1571,7 @@ function ShippingAddressStep({
           result.isValid
             ? result.alerts[0] ?? null
             : result.alerts[0] ??
-                "El codigo postal no es valido para envio FedEx.",
+            "El codigo postal no es valido para envio FedEx.",
         );
 
         if (!result.isValid) {
@@ -1877,7 +1877,7 @@ function ShippingAddressStep({
     if (!postalValidated) {
       setAddressError(
         postalValidationMessage ||
-          "Valida un codigo postal correcto antes de continuar.",
+        "Valida un codigo postal correcto antes de continuar.",
       );
       return;
     }
@@ -2566,7 +2566,7 @@ function ShippingAddressStep({
           {isLoadingShippingOptions || isRecalculatingCheckout
             ? "Cotizando..."
             : fulfillmentMethod === "DELIVERY" &&
-                (!shippingQuote || isQuoteExpired(shippingQuote))
+              (!shippingQuote || isQuoteExpired(shippingQuote))
               ? "Cotizar envio"
               : "Continuar a pago"}
         </Button>
@@ -2581,7 +2581,7 @@ function ShippingAddressStep({
           {isLoadingShippingOptions || isRecalculatingCheckout
             ? "Cotizando..."
             : fulfillmentMethod === "DELIVERY" &&
-                (!shippingQuote || isQuoteExpired(shippingQuote))
+              (!shippingQuote || isQuoteExpired(shippingQuote))
               ? "Cotizar envio"
               : "Continuar a pago"}
         </Button>
@@ -2643,7 +2643,7 @@ function CardPaymentStep({
     try {
       assertDeliveryShippingReady(values);
 
-      
+
       if (values.fulfillmentMethod === "PICKUP") {
         const pickupCart = await resolveCartIdForPickup(cartId);
         const availability = await pickupApi.validateAvailability({
@@ -2659,12 +2659,12 @@ function CardPaymentStep({
         }
       }
 
-    clearStoredAplazoCheckoutState();
-clearStoredAplazoRetryPayload();
+      clearStoredAplazoCheckoutState();
+      clearStoredAplazoRetryPayload();
 
-const checkoutResult = await checkoutCart(
-  buildCheckoutPayload(values, "TARJETA", codigoPromocion),
-);
+      const checkoutResult = await checkoutCart(
+        buildCheckoutPayload(values, "TARJETA", codigoPromocion),
+      );
 
       const ordenId = getOrderIdFromCheckoutResult(checkoutResult);
       if (!ordenId) {
@@ -2853,10 +2853,10 @@ function AplazoPaymentStep({
     }
 
     const validation = validateAplazoSubmission(
-  values,
-  cartItems,
-  expectedSubtotal,
-);
+      values,
+      cartItems,
+      expectedSubtotal,
+    );
     if (!validation.ok) {
       setSubmissionError(validation.message);
       logAplazoDebug("Validación Aplazo fallida antes del submit", {
@@ -2885,22 +2885,22 @@ function AplazoPaymentStep({
       assertDeliveryShippingReady(values);
 
       const origin = window.location.origin;
-     const cartFingerprint = [
-  getAplazoCartFingerprint(cartItems),
-  codigoPromocion ?? "",
-  validation.validatedSubtotal.toFixed(2),
-  total.toFixed(2),
-  values.fulfillmentMethod,
-  values.fulfillmentMethod === "PICKUP" ? values.pickupLocation.id : "",
-  values.fulfillmentMethod === "DELIVERY"
-    ? (values.shippingSelection?.quote.quoteId ?? "")
-    : "",
-  values.fulfillmentMethod === "DELIVERY"
-    ? (values.shippingSelection?.selectedOption.optionId ??
-      values.shippingSelection?.selectedOption.serviceType ??
-      "")
-    : "",
-].join("|");
+      const cartFingerprint = [
+        getAplazoCartFingerprint(cartItems),
+        codigoPromocion ?? "",
+        validation.validatedSubtotal.toFixed(2),
+        total.toFixed(2),
+        values.fulfillmentMethod,
+        values.fulfillmentMethod === "PICKUP" ? values.pickupLocation.id : "",
+        values.fulfillmentMethod === "DELIVERY"
+          ? (values.shippingSelection?.quote.quoteId ?? "")
+          : "",
+        values.fulfillmentMethod === "DELIVERY"
+          ? (values.shippingSelection?.selectedOption.optionId ??
+            values.shippingSelection?.selectedOption.serviceType ??
+            "")
+          : "",
+      ].join("|");
       const cartSessionId = getOrCreateSessionId();
       const cartSnapshot = cartItems.map((item) => ({
         productoId: item.id,
@@ -2976,28 +2976,28 @@ function AplazoPaymentStep({
               telefono: validation.customer.phone,
             };
 
-       const checkoutPayload = buildCheckoutPayload(
-  checkoutValues,
-  "APLAZO",
-  codigoPromocion,
-);
+        const checkoutPayload = buildCheckoutPayload(
+          checkoutValues,
+          "APLAZO",
+          codigoPromocion,
+        );
 
-logAplazoDebug("CHECKOUT_CART_PAYLOAD_BEFORE_CREATE_ORDER", {
-  codigoPromocionProp: codigoPromocion,
-  validationSubtotal: validation.validatedSubtotal,
-  expectedSubtotal,
-  total,
-  checkoutPayload,
-  cartItems: cartItems.map((item) => ({
-    id: item.id,
-    name: item.name,
-    quantity: item.quantity,
-    price: item.price,
-    tallaId: item.tallaId ?? item.size,
-  })),
-});
+        logAplazoDebug("CHECKOUT_CART_PAYLOAD_BEFORE_CREATE_ORDER", {
+          codigoPromocionProp: codigoPromocion,
+          validationSubtotal: validation.validatedSubtotal,
+          expectedSubtotal,
+          total,
+          checkoutPayload,
+          cartItems: cartItems.map((item) => ({
+            id: item.id,
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price,
+            tallaId: item.tallaId ?? item.size,
+          })),
+        });
 
-const checkoutResult = await checkoutCart(checkoutPayload);
+        const checkoutResult = await checkoutCart(checkoutPayload);
 
         orderId = getOrderIdFromCheckoutResult(checkoutResult);
         if (!orderId) {
@@ -3009,35 +3009,35 @@ const checkoutResult = await checkoutCart(checkoutPayload);
           throw new Error("No se pudo consultar la orden creada para validar montos con Aplazo");
         }
         logAplazoDebug("ORDER_CREATED_FOR_APLAZO_DEBUG", {
-  orderId,
-  expectedSubtotal: validation.validatedSubtotal,
-  frontendTotal: total,
-  codigoPromocionProp: codigoPromocion,
-  createdOrder: {
-    subtotal: createdOrder.subtotal,
-    shippingCost: createdOrder.shippingCost,
-    costoEnvio: (createdOrder as any).costoEnvio,
-    total: createdOrder.total,
-    codigoPromocion: (createdOrder as any).codigoPromocion,
-    codigoPromocionId: (createdOrder as any).codigoPromocionId,
-    codigoPromocionTitulo: (createdOrder as any).codigoPromocionTitulo,
-    descuentoCodigoPromocion: (createdOrder as any).descuentoCodigoPromocion,
-    discountTotal: (createdOrder as any).discountTotal,
-    subtotalOriginal: (createdOrder as any).subtotalOriginal,
-    subtotalFinal: (createdOrder as any).subtotalFinal,
-    items: (createdOrder as any).items?.map((item: any) => ({
-      productoId: item.productoId,
-      nombre: item.nombre,
-      cantidad: item.cantidad,
-      precioUnitario: item.precioUnitario,
-      subtotal: item.subtotal,
-      precioOriginal: item.precioOriginal,
-      precioFinal: item.precioFinal,
-      ofertaAplicadaId: item.ofertaAplicadaId,
-      codigoPromocionAplicadoId: item.codigoPromocionAplicadoId,
-    })),
-  },
-});
+          orderId,
+          expectedSubtotal: validation.validatedSubtotal,
+          frontendTotal: total,
+          codigoPromocionProp: codigoPromocion,
+          createdOrder: {
+            subtotal: createdOrder.subtotal,
+            shippingCost: createdOrder.shippingCost,
+            costoEnvio: (createdOrder as any).costoEnvio,
+            total: createdOrder.total,
+            codigoPromocion: (createdOrder as any).codigoPromocion,
+            codigoPromocionId: (createdOrder as any).codigoPromocionId,
+            codigoPromocionTitulo: (createdOrder as any).codigoPromocionTitulo,
+            descuentoCodigoPromocion: (createdOrder as any).descuentoCodigoPromocion,
+            discountTotal: (createdOrder as any).discountTotal,
+            subtotalOriginal: (createdOrder as any).subtotalOriginal,
+            subtotalFinal: (createdOrder as any).subtotalFinal,
+            items: (createdOrder as any).items?.map((item: any) => ({
+              productoId: item.productoId,
+              nombre: item.nombre,
+              cantidad: item.cantidad,
+              precioUnitario: item.precioUnitario,
+              subtotal: item.subtotal,
+              precioOriginal: item.precioOriginal,
+              precioFinal: item.precioFinal,
+              ofertaAplicadaId: item.ofertaAplicadaId,
+              codigoPromocionAplicadoId: item.codigoPromocionAplicadoId,
+            })),
+          },
+        });
       } else if (storedState && isAplazoRetryableStatus(storedState.lastKnownStatus)) {
         idempotencyKey = crypto.randomUUID();
         writeStoredAplazoCheckoutState({
@@ -3062,50 +3062,50 @@ const checkoutResult = await checkoutCart(checkoutPayload);
       }
 
       logAplazoDebug("VALIDATE_ORDER_PRICING_BEFORE_APLAZO", {
-  orderId,
-  expectedSubtotal: validation.validatedSubtotal,
-  orderSubtotal: createdOrder.subtotal,
-  orderShippingCost: createdOrder.shippingCost,
-  orderTotal: createdOrder.total,
-  expectedTotal: roundCurrency(
-    validation.validatedSubtotal + Number(createdOrder.shippingCost ?? 0),
-  ),
-});
+        orderId,
+        expectedSubtotal: validation.validatedSubtotal,
+        orderSubtotal: createdOrder.subtotal,
+        orderShippingCost: createdOrder.shippingCost,
+        orderTotal: createdOrder.total,
+        expectedTotal: roundCurrency(
+          validation.validatedSubtotal + Number(createdOrder.shippingCost ?? 0),
+        ),
+      });
 
-validateOrderPricing({
-  order: createdOrder,
-  expectedSubtotal: validation.validatedSubtotal,
-});
+      validateOrderPricing({
+        order: createdOrder,
+        expectedSubtotal: validation.validatedSubtotal,
+      });
 
-logAplazoDebug("VALIDATE_ORDER_PRICING_OK", {
-  orderId,
-});
+      logAplazoDebug("VALIDATE_ORDER_PRICING_OK", {
+        orderId,
+      });
 
-createPayload = buildAplazoPayload({
-  orderId,
-  values: {
-    ...(values.fulfillmentMethod === "PICKUP"
-      ? {
-        ...values,
-        pickupContact: {
-          ...values.pickupContact,
-          name: validation.fullName,
-          email: validation.customer.email,
-          phone: validation.customer.phone,
-        },
-      }
-      : {
-        ...values,
-        name: validation.fullName,
-        email: validation.customer.email,
-        telefono: validation.customer.phone,
-      }),
-  } as CheckoutValues,
-  items: cartItems,
-  order: createdOrder,
-  origin,
-  expectedSubtotal: validation.validatedSubtotal,
-});
+      createPayload = buildAplazoPayload({
+        orderId,
+        values: {
+          ...(values.fulfillmentMethod === "PICKUP"
+            ? {
+              ...values,
+              pickupContact: {
+                ...values.pickupContact,
+                name: validation.fullName,
+                email: validation.customer.email,
+                phone: validation.customer.phone,
+              },
+            }
+            : {
+              ...values,
+              name: validation.fullName,
+              email: validation.customer.email,
+              telefono: validation.customer.phone,
+            }),
+        } as CheckoutValues,
+        items: cartItems,
+        order: createdOrder,
+        origin,
+        expectedSubtotal: validation.validatedSubtotal,
+      });
 
       logAplazoDebug("Payload Aplazo sanitizado", {
         orderId: createPayload.orderId,
@@ -3133,20 +3133,20 @@ createPayload = buildAplazoPayload({
       }
 
       logAplazoDebug("APLAZO_ONLINE_PAYLOAD_BEFORE_PAYMENT_API", {
-  idempotencyKey,
-  orderId,
-  codigoPromocionProp: codigoPromocion,
-  expectedSubtotal: validation.validatedSubtotal,
-  frontendTotal: total,
-  createdOrder: {
-    subtotal: createdOrder.subtotal,
-    shippingCost: createdOrder.shippingCost,
-    total: createdOrder.total,
-    codigoPromocion: (createdOrder as any).codigoPromocion,
-    descuentoCodigoPromocion: (createdOrder as any).descuentoCodigoPromocion,
-  },
-  createPayload,
-});
+        idempotencyKey,
+        orderId,
+        codigoPromocionProp: codigoPromocion,
+        expectedSubtotal: validation.validatedSubtotal,
+        frontendTotal: total,
+        createdOrder: {
+          subtotal: createdOrder.subtotal,
+          shippingCost: createdOrder.shippingCost,
+          total: createdOrder.total,
+          codigoPromocion: (createdOrder as any).codigoPromocion,
+          descuentoCodigoPromocion: (createdOrder as any).descuentoCodigoPromocion,
+        },
+        createPayload,
+      });
 
       const attempt = await paymentsApi.createAplazoOnlineAttempt(
         createPayload,
@@ -3251,7 +3251,7 @@ createPayload = buildAplazoPayload({
                   <p>
                     Total estimado a validar con Aplazo:{" "}
                     <span className="font-semibold text-foreground">
-                     {formatCurrency(total)}
+                      {formatCurrency(total)}
                     </span>
                   </p>
                 </div>
@@ -3329,168 +3329,168 @@ export default function CheckoutPage() {
   const { isAuthenticated, user, isLoading: isAuthLoading } = useAuth();
   const stripePromise = useStripeConfig();
   const [pricingOfertas, setPricingOfertas] = useState<
-  Record<string, ProductOfferPricing>
->({});
+    Record<string, ProductOfferPricing>
+  >({});
   const [codigoPromocion, setCodigoPromocion] = useState("");
-const [resultadoCodigo, setResultadoCodigo] =
-  useState<ResultadoCodigoPromocionCarrito | null>(null);
-const [codigoError, setCodigoError] = useState<string | null>(null);
-const [isLoadingCodigo, setIsLoadingCodigo] = useState(false);
+  const [resultadoCodigo, setResultadoCodigo] =
+    useState<ResultadoCodigoPromocionCarrito | null>(null);
+  const [codigoError, setCodigoError] = useState<string | null>(null);
+  const [isLoadingCodigo, setIsLoadingCodigo] = useState(false);
 
-useEffect(() => {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  const storedCode = localStorage.getItem(PROMO_CODE_STORAGE_KEY);
-
-  if (storedCode?.trim()) {
-    setCodigoPromocion(storedCode.trim().toUpperCase());
-  }
-}, []);
-
-const offerItemsKey = useMemo(() => {
-  return state.items
-    .map((item) => `${item.id}:${item.quantity}`)
-    .join("|");
-}, [state.items]);
-
-useEffect(() => {
-  let cancelled = false;
-
-  async function cargarOfertasCheckout() {
-    if (state.items.length === 0) {
-      setPricingOfertas({});
+  useEffect(() => {
+    if (typeof window === "undefined") {
       return;
     }
 
-    const items = state.items.map((item) => ({
+    const storedCode = localStorage.getItem(PROMO_CODE_STORAGE_KEY);
+
+    if (storedCode?.trim()) {
+      setCodigoPromocion(storedCode.trim().toUpperCase());
+    }
+  }, []);
+
+  const offerItemsKey = useMemo(() => {
+    return state.items
+      .map((item) => `${item.id}:${item.quantity}`)
+      .join("|");
+  }, [state.items]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function cargarOfertasCheckout() {
+      if (state.items.length === 0) {
+        setPricingOfertas({});
+        return;
+      }
+
+      const items = state.items.map((item) => ({
+        productoId: item.id,
+        cantidad: item.quantity,
+      }));
+
+      const precios = await calcularPreciosOfertasPublicas(items);
+
+      if (!cancelled) {
+        setPricingOfertas(precios);
+      }
+    }
+
+    cargarOfertasCheckout();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [offerItemsKey, state.items]);
+
+  const cartItemsConOfertas = useMemo(() => {
+    return buildCartItemsWithOfferPrices(state.items, pricingOfertas);
+  }, [state.items, pricingOfertas]);
+
+  const subtotalConOfertas = useMemo(() => {
+    return cartItemsConOfertas.reduce((total, item) => {
+      return total + item.price * item.quantity;
+    }, 0);
+  }, [cartItemsConOfertas]);
+
+  const codigoItems = useMemo<ValidarCodigoPromocionCarritoItem[]>(() => {
+    return cartItemsConOfertas.map((item) => ({
       productoId: item.id,
       cantidad: item.quantity,
+      precioUnitario: item.price,
+      tallaId: item.tallaId ?? item.size ?? null,
+      categoriaIds: getStringArrayFromCartItem(item, [
+        "categoriaIds",
+        "categoriasIds",
+        "categoryIds",
+      ]),
+      lineaIds: getStringArrayFromCartItem(item, [
+        "lineaIds",
+        "lineasIds",
+        "lineIds",
+      ]),
     }));
+  }, [cartItemsConOfertas]);
 
-    const precios = await calcularPreciosOfertasPublicas(items);
+  useEffect(() => {
+    let cancelled = false;
 
-    if (!cancelled) {
-      setPricingOfertas(precios);
-    }
-  }
+    async function validarCodigoCheckout() {
+      const codigo = codigoPromocion.trim().toUpperCase();
 
-  cargarOfertasCheckout();
-
-  return () => {
-    cancelled = true;
-  };
-}, [offerItemsKey, state.items]);
-
-const cartItemsConOfertas = useMemo(() => {
-  return buildCartItemsWithOfferPrices(state.items, pricingOfertas);
-}, [state.items, pricingOfertas]);
-
-const subtotalConOfertas = useMemo(() => {
-  return cartItemsConOfertas.reduce((total, item) => {
-    return total + item.price * item.quantity;
-  }, 0);
-}, [cartItemsConOfertas]);
-
-const codigoItems = useMemo<ValidarCodigoPromocionCarritoItem[]>(() => {
-  return cartItemsConOfertas.map((item) => ({
-    productoId: item.id,
-    cantidad: item.quantity,
-    precioUnitario: item.price,
-    tallaId: item.tallaId ?? item.size ?? null,
-    categoriaIds: getStringArrayFromCartItem(item, [
-      "categoriaIds",
-      "categoriasIds",
-      "categoryIds",
-    ]),
-    lineaIds: getStringArrayFromCartItem(item, [
-      "lineaIds",
-      "lineasIds",
-      "lineIds",
-    ]),
-  }));
-}, [cartItemsConOfertas]);
-
-useEffect(() => {
-  let cancelled = false;
-
-  async function validarCodigoCheckout() {
-    const codigo = codigoPromocion.trim().toUpperCase();
-
-    if (!codigo || codigoItems.length === 0) {
-      setResultadoCodigo(null);
-      setCodigoError(null);
-      return;
-    }
-
-    try {
-      setIsLoadingCodigo(true);
-      setCodigoError(null);
-
-      const resultado = await validarCodigoPromocionCarrito({
-        codigo,
-        items: codigoItems,
-      });
-
-      const descuento = Number(resultado.descuentoTotal || 0);
-      const subtotalFinal = Number(resultado.subtotalFinal || 0);
-
-      const codigoValido =
-        resultado.valido !== false &&
-        descuento > 0 &&
-        subtotalFinal > 0 &&
-        subtotalFinal < subtotalConOfertas;
-
-      if (cancelled) {
+      if (!codigo || codigoItems.length === 0) {
+        setResultadoCodigo(null);
+        setCodigoError(null);
         return;
       }
 
-      if (!codigoValido) {
-        setResultadoCodigo(null);
-        setCodigoError(
-          resultado.mensaje || "El código no aplica para este carrito.",
-        );
-        return;
-      }
+      try {
+        setIsLoadingCodigo(true);
+        setCodigoError(null);
 
-      setResultadoCodigo(resultado);
-      setCodigoError(null);
-    } catch (error) {
-      console.error("Failed to validate checkout promo code", error);
+        const resultado = await validarCodigoPromocionCarrito({
+          codigo,
+          items: codigoItems,
+        });
 
-      if (!cancelled) {
-        setResultadoCodigo(null);
-        setCodigoError("No se pudo validar el código promocional.");
-      }
-    } finally {
-      if (!cancelled) {
-        setIsLoadingCodigo(false);
+        const descuento = Number(resultado.descuentoTotal || 0);
+        const subtotalFinal = Number(resultado.subtotalFinal || 0);
+
+        const codigoValido =
+          resultado.valido !== false &&
+          descuento > 0 &&
+          subtotalFinal > 0 &&
+          subtotalFinal < subtotalConOfertas;
+
+        if (cancelled) {
+          return;
+        }
+
+        if (!codigoValido) {
+          setResultadoCodigo(null);
+          setCodigoError(
+            resultado.mensaje || "El código no aplica para este carrito.",
+          );
+          return;
+        }
+
+        setResultadoCodigo(resultado);
+        setCodigoError(null);
+      } catch (error) {
+        console.error("Failed to validate checkout promo code", error);
+
+        if (!cancelled) {
+          setResultadoCodigo(null);
+          setCodigoError("No se pudo validar el código promocional.");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingCodigo(false);
+        }
       }
     }
-  }
 
-  void validarCodigoCheckout();
+    void validarCodigoCheckout();
 
-  return () => {
-    cancelled = true;
-  };
-}, [codigoPromocion, codigoItems, subtotalConOfertas]);
+    return () => {
+      cancelled = true;
+    };
+  }, [codigoPromocion, codigoItems, subtotalConOfertas]);
 
-const descuentoCodigo = Math.max(
-  0,
-  Number(resultadoCodigo?.descuentoTotal || 0),
-);
+  const descuentoCodigo = Math.max(
+    0,
+    Number(resultadoCodigo?.descuentoTotal || 0),
+  );
 
-const subtotalFinalCodigo = Number(resultadoCodigo?.subtotalFinal);
+  const subtotalFinalCodigo = Number(resultadoCodigo?.subtotalFinal);
 
-const subtotalConCodigo =
-  resultadoCodigo && descuentoCodigo > 0 && Number.isFinite(subtotalFinalCodigo)
-    ? roundCurrency(subtotalFinalCodigo)
-    : roundCurrency(subtotalConOfertas);
+  const subtotalConCodigo =
+    resultadoCodigo && descuentoCodigo > 0 && Number.isFinite(subtotalFinalCodigo)
+      ? roundCurrency(subtotalFinalCodigo)
+      : roundCurrency(subtotalConOfertas);
 
-const codigoPromocionAplicado =
-  resultadoCodigo && descuentoCodigo > 0 ? codigoPromocion : "";
+  const codigoPromocionAplicado =
+    resultadoCodigo && descuentoCodigo > 0 ? codigoPromocion : "";
 
 
   // Validación: verificar que el perfil esté completo antes de continuar
@@ -3539,17 +3539,17 @@ const codigoPromocionAplicado =
     void loadPickupLocations();
   }, [fulfillmentMethod, pickupLocations.length]);
 
- const pricing = useMemo(
-  () =>
-    getExpectedCheckoutPricing(
-      subtotalConCodigo,
-      fulfillmentMethod,
-      checkoutValues?.fulfillmentMethod === "DELIVERY"
-        ? (checkoutValues.shippingSelection?.selectedOption.amount ?? 0)
-        : 0,
-    ),
-  [checkoutValues, fulfillmentMethod, subtotalConCodigo],
-);
+  const pricing = useMemo(
+    () =>
+      getExpectedCheckoutPricing(
+        subtotalConCodigo,
+        fulfillmentMethod,
+        checkoutValues?.fulfillmentMethod === "DELIVERY"
+          ? (checkoutValues.shippingSelection?.selectedOption.amount ?? 0)
+          : 0,
+      ),
+    [checkoutValues, fulfillmentMethod, subtotalConCodigo],
+  );
   const cartSignature = useMemo(
     () =>
       state.items
@@ -3564,15 +3564,15 @@ const codigoPromocionAplicado =
   const total = pricing.total;
 
   useEffect(() => {
-  logAplazoDebug("CHECKOUT_PRICING_STATE", {
-    codigoPromocion,
-    codigoPromocionAplicado,
-    descuentoCodigo,
-    subtotalConOfertas,
-    subtotalConCodigo,
-    total: pricing.total,
-    resultadoCodigo: resultadoCodigo
-      ? {
+    logAplazoDebug("CHECKOUT_PRICING_STATE", {
+      codigoPromocion,
+      codigoPromocionAplicado,
+      descuentoCodigo,
+      subtotalConOfertas,
+      subtotalConCodigo,
+      total: pricing.total,
+      resultadoCodigo: resultadoCodigo
+        ? {
           valido: resultadoCodigo.valido,
           codigoPromocionId: resultadoCodigo.codigoPromocionId,
           descuentoTotal: resultadoCodigo.descuentoTotal,
@@ -3580,25 +3580,25 @@ const codigoPromocionAplicado =
           subtotalFinal: resultadoCodigo.subtotalFinal,
           mensaje: resultadoCodigo.mensaje,
         }
-      : null,
-    items: cartItemsConOfertas.map((item) => ({
-      id: item.id,
-      name: item.name,
-      quantity: item.quantity,
-      price: item.price,
-      tallaId: item.tallaId ?? item.size,
-    })),
-  });
-}, [
-  codigoPromocion,
-  codigoPromocionAplicado,
-  descuentoCodigo,
-  subtotalConOfertas,
-  subtotalConCodigo,
-  pricing.total,
-  resultadoCodigo,
-  cartItemsConOfertas,
-]);
+        : null,
+      items: cartItemsConOfertas.map((item) => ({
+        id: item.id,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        tallaId: item.tallaId ?? item.size,
+      })),
+    });
+  }, [
+    codigoPromocion,
+    codigoPromocionAplicado,
+    descuentoCodigo,
+    subtotalConOfertas,
+    subtotalConCodigo,
+    pricing.total,
+    resultadoCodigo,
+    cartItemsConOfertas,
+  ]);
   const activeCheckoutValues =
     checkoutValues ??
     ({
@@ -3726,18 +3726,18 @@ const codigoPromocionAplicado =
           ) : paymentMethod === "TARJETA" ? (
             stripePromise ? (
               <CardPaymentStep
-  values={activeCheckoutValues}
-  cartId={state.id}
-  cartItems={cartItemsConOfertas}
-  total={total}
-  expectedSubtotal={subtotalConCodigo}
-  codigoPromocion={codigoPromocionAplicado || undefined}
-  onBack={() => setCurrentStep(0)}
-  onRecoverableDeliveryError={handleRecoverableDeliveryError}
-  paymentMethod={paymentMethod}
-  onPaymentMethodChange={setPaymentMethod}
-  stripePromise={stripePromise}
-/>
+                values={activeCheckoutValues}
+                cartId={state.id}
+                cartItems={cartItemsConOfertas}
+                total={total}
+                expectedSubtotal={subtotalConCodigo}
+                codigoPromocion={codigoPromocionAplicado || undefined}
+                onBack={() => setCurrentStep(0)}
+                onRecoverableDeliveryError={handleRecoverableDeliveryError}
+                paymentMethod={paymentMethod}
+                onPaymentMethodChange={setPaymentMethod}
+                stripePromise={stripePromise}
+              />
             ) : (
               <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
                 <CardHeader>
@@ -3754,17 +3754,17 @@ const codigoPromocionAplicado =
             )
           ) : (
             <AplazoPaymentStep
-  values={activeCheckoutValues}
-  cartId={state.id}
-  cartItems={cartItemsConOfertas}
-  expectedSubtotal={subtotalConCodigo}
-  total={total}
-  codigoPromocion={codigoPromocionAplicado || undefined}
-  onBack={() => setCurrentStep(0)}
-  onRecoverableDeliveryError={handleRecoverableDeliveryError}
-  paymentMethod={paymentMethod}
-  onPaymentMethodChange={setPaymentMethod}
-/>
+              values={activeCheckoutValues}
+              cartId={state.id}
+              cartItems={cartItemsConOfertas}
+              expectedSubtotal={subtotalConCodigo}
+              total={total}
+              codigoPromocion={codigoPromocionAplicado || undefined}
+              onBack={() => setCurrentStep(0)}
+              onRecoverableDeliveryError={handleRecoverableDeliveryError}
+              paymentMethod={paymentMethod}
+              onPaymentMethodChange={setPaymentMethod}
+            />
           )}
 
           <PaymentMethodStrip
@@ -3776,25 +3776,25 @@ const codigoPromocionAplicado =
 
         <div className="lg:sticky lg:top-[calc(var(--storefront-header-current-height,var(--storefront-header-desktop-height))+1.5rem)]">
           <OrderSummaryPanel
-  fulfillmentMethod={fulfillmentMethod}
-  shippingSelection={
-    checkoutValues?.fulfillmentMethod === "DELIVERY"
-      ? checkoutValues.shippingSelection
-      : null
-  }
-  checkoutPricing={
-    checkoutValues?.fulfillmentMethod === "DELIVERY"
-      ? checkoutValues.checkoutPricing
-      : null
-  }
-  pricingOfertas={pricingOfertas}
-  subtotalConOfertas={subtotalConOfertas}
-  subtotalConCodigo={subtotalConCodigo}
-  codigoPromocion={codigoPromocionAplicado}
-  descuentoCodigo={descuentoCodigo}
-  codigoError={codigoError}
-  isLoadingCodigo={isLoadingCodigo}
-/>
+            fulfillmentMethod={fulfillmentMethod}
+            shippingSelection={
+              checkoutValues?.fulfillmentMethod === "DELIVERY"
+                ? checkoutValues.shippingSelection
+                : null
+            }
+            checkoutPricing={
+              checkoutValues?.fulfillmentMethod === "DELIVERY"
+                ? checkoutValues.checkoutPricing
+                : null
+            }
+            pricingOfertas={pricingOfertas}
+            subtotalConOfertas={subtotalConOfertas}
+            subtotalConCodigo={subtotalConCodigo}
+            codigoPromocion={codigoPromocionAplicado}
+            descuentoCodigo={descuentoCodigo}
+            codigoError={codigoError}
+            isLoadingCodigo={isLoadingCodigo}
+          />
         </div>
       </div>
 

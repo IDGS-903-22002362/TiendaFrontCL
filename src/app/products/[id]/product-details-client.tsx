@@ -173,9 +173,7 @@ export function ProductDetailsClient({
       title: "Cuidados y envíos",
       content: (
         <p>
-          Consulta la etiqueta del producto para materiales exactos. El flujo
-          mantiene checkout actual, pagos protegidos, favoritos y seguimiento de
-          pedido desde la cuenta.
+          Consulta la etiqueta del producto para materiales exactos. Mantente al tanto de nuestras políticas de envío.
         </p>
       ),
     },

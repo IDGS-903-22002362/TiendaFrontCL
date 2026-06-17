@@ -141,7 +141,7 @@ export default function LineaCategorySection() {
 
                             {/* Contenedor de texto con altura fija mínima para que ninguna descripción rompa la alineación horizontal */}
                             <div className="h-10 flex items-start justify-center w-full">
-                                <span className="text-xs font-normal text-neutral-800 leading-snug tracking-normal group-hover:text-black transition-colors line-clamp-2 px-0.5">
+                                <span className="text-xs font-bold text-neutral-800 leading-snug tracking-normal group-hover:text-black transition-colors line-clamp-2 px-0.5">
                                     {name}
                                 </span>
                             </div>
