@@ -10,6 +10,10 @@ type ApiEnvelope<T> = {
   message?: string;
 };
 
+function getReadOptions() {
+  return typeof window !== "undefined" ? { local: true as const } : undefined;
+}
+
 function toStringValue(value: unknown, fallback = ""): string {
   if (typeof value === "string") return value;
   if (typeof value === "number") return String(value);
@@ -49,7 +53,7 @@ export const categoriasApi = {
   async getAll(): Promise<Category[]> {
     const payload = await apiFetch<ApiEnvelope<unknown[]>>("/api/categorias", {
       method: "GET",
-    });
+    }, getReadOptions());
 
     return mapCategoriesList(payload);
   },
@@ -57,7 +61,7 @@ export const categoriasApi = {
   async getById(id: string): Promise<Category | null> {
     const payload = await apiFetch<ApiEnvelope<unknown>>(`/api/categorias/${id}`, {
       method: "GET",
-    });
+    }, getReadOptions());
 
     const data = unwrapData<unknown>(payload);
     if (!data || typeof data !== "object") {
@@ -72,6 +76,7 @@ export const categoriasApi = {
     const payload = await apiFetch<ApiEnvelope<unknown[]>>(
       `/api/categorias/buscar/${encodeURIComponent(term)}`,
       { method: "GET" },
+      getReadOptions(),
     );
 
     return mapCategoriesList(payload);

@@ -10,6 +10,10 @@ type ApiEnvelope<T> = {
   message?: string;
 };
 
+function getReadOptions() {
+  return typeof window !== "undefined" ? { local: true as const } : undefined;
+}
+
 function toStringValue(value: unknown, fallback = ""): string {
   if (typeof value === "string") return value;
   if (typeof value === "number") return String(value);
@@ -55,7 +59,7 @@ export const lineasApi = {
   async getAll(): Promise<Linea[]> {
     const payload = await apiFetch<ApiEnvelope<unknown[]>>("/api/lineas", {
       method: "GET",
-    });
+    }, getReadOptions());
 
     return mapLineasList(payload);
   },
@@ -63,7 +67,7 @@ export const lineasApi = {
   async getById(id: string): Promise<Linea | null> {
     const payload = await apiFetch<ApiEnvelope<unknown>>(`/api/lineas/${id}`, {
       method: "GET",
-    });
+    }, getReadOptions());
 
     const data = unwrapData<unknown>(payload);
     if (!data || typeof data !== "object") {
@@ -78,6 +82,7 @@ export const lineasApi = {
     const payload = await apiFetch<ApiEnvelope<unknown[]>>(
       `/api/lineas/buscar/${encodeURIComponent(term)}`,
       { method: "GET" },
+      getReadOptions(),
     );
 
     return mapLineasList(payload);
