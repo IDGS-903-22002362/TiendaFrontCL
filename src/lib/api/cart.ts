@@ -504,6 +504,18 @@ export async function checkoutCart(payload: {
   shippingSelection?: ShippingSelection;
   notas?: string;
 } | CheckoutPayload) {
+  // El backend resuelve el checkout únicamente con el carrito del usuario
+  // autenticado (ignora x-session-id). Si los productos quedaron en el carrito
+  // anónimo, hay que fusionarlos antes para evitar "El carrito está vacío".
+  const sessionId = getOrCreateSessionId();
+  if (sessionId) {
+    try {
+      await mergeCartSession(sessionId);
+    } catch (error) {
+      console.error("No se pudo fusionar el carrito antes del checkout", error);
+    }
+  }
+
   return apiFetch<unknown>(
     "/api/carrito/checkout",
     {
