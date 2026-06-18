@@ -1,550 +1,778 @@
-# AGENTSFront.MD — Frontend (Next.js + Tailwind) · Mobile-First + Integración API (2026)
+# AGENTS.md - Frontend Ecommerce Club León
 
-> Objetivo: un frontend **mobile-first**, rápido y accesible, conectado de forma segura al backend de tienda.
+## Contexto
 
----
+Frontend del ecommerce Club León.
 
-## 1) Objetivo y alcance
+Stack principal:
 
-Este documento unifica dos frentes:
+* Next.js App Router
+* React
+* TypeScript
+* Tailwind CSS
+* shadcn/ui
+* Firebase client APIs
+* Stripe Embedded Checkout
+* Aplazo
+* Sentry
+* Playwright
+* AccessLint
 
-- reglas de **diseño móvil** para UX consistente,
-- guía de **integración con APIs** (storefront + admin).
-
-El frontend objetivo es Next.js (App Router), con foco en rendimiento, accesibilidad y seguridad.
-
----
-
-## 2) Filosofía de diseño móvil (reglas base)
-
-- **Mobile-first real**: la versión móvil manda; desktop es mejora progresiva.
-- **Menos en pantalla**: priorizar 1 acción primaria por vista.
-- **Feedback inmediato**: cada tap debe responder visualmente.
-- **Accesibilidad desde diseño**, no como parche final.
+El frontend no es fuente de verdad para precios, descuentos, envío, total, estado de pago, inventario, roles ni permisos admin. El backend debe validar todo.
 
 ---
 
-## 3) Estructura de UI recomendada (móvil)
+## MCP disponibles
 
-### 3.1 Layout
+Usa MCP solo cuando aplique a la tarea:
 
-- Header compacto (44–56px), contenido scrolleable y barra inferior cuando haya 3–5 secciones.
-- Evitar sidebars en móvil; usar bottom nav o menú contextual.
-- Mantener ancho de lectura cómodo (`max-w-*` + `px-4` consistente).
-
-### 3.2 Patrones móviles preferidos
-
-- Listas con fila completa cliqueable.
-- Cards con jerarquía clara (título, meta, acción).
-- En móvil, preferir bottom sheets sobre modales centrados cuando aplique.
-
----
-
-## 4) Touch targets, spacing y accesibilidad
-
-- Tamaño mínimo táctil recomendado: **24x24 CSS px** (mínimo normativo).
-- Recomendación UX práctica: **44x44** para acciones principales.
-- Separación suficiente entre targets para evitar taps erróneos.
-- Estados visibles obligatorios: `focus-visible`, `disabled` claro, errores con texto legible.
+* `plugin-firebase-firebase`
+* `user-firebase`
+* `user-shadcn`
+* `user-playwright`
+* `user-accesslint`
+* `user-stripe`
+* `user-snyk`
+* `user-semgrep`
 
 ---
 
-## 5) Tailwind (mobile-first + responsive)
+## Skills disponibles relevantes
 
-- Sin prefijo = móvil; `sm:`, `md:`... para escalar.
-- Preferir container queries en componentes reutilizables.
-- Evitar clase spaghetti: encapsular en componentes base (`Button`, `Input`, `Card`).
-- Usar tokens del sistema (color, radios, sombras, spacing); evitar hardcode repetido.
+Usa estas skills según la tarea:
 
----
+### Frontend/UI
 
-## 6) Tipografía móvil
+* `frontend-design`
+* `shadcn`
 
-- Body base legible (14–16px aprox).
-- Escala de títulos simple (máximo 4 niveles visuales).
-- Limitar ancho de texto (`max-w-prose` o `max-w-*`) para lectura cómoda.
+### Seguridad y revisión
 
----
+* `review-security`
+* `review-bugbot`
+* `review-security`
+* `find-skills`
 
-## 7) Navegación móvil
+### Firebase
 
-- Para navegación primaria: bottom navigation (3–5 destinos).
-- Estado activo con contraste + label (no solo color).
-- Acciones secundarias en menú contextual o sheet.
-- En navegación interna, mostrar back visible.
+* `firebase-basics`
+* `firebase-auth-basics`
+* `firebase-firestore`
+* `firebase-security-rules-auditor`
+* `firebase-hosting-basics`
+* `firebase-app-hosting-basics`
 
----
+### Sentry
 
-## 8) Formularios móviles (UX táctil)
+* `sentry-nextjs-sdk`
+* `sentry-react-sdk`
+* `sentry-fix-issues`
+* `sentry-pr-code-review`
+* `sentry-create-alert`
 
-- Inputs cómodos (`h-12` o `py-3`).
-- Definir `inputmode`, `autocomplete` y tipo correcto (tel, email, number).
-- Validar tras interacción o submit; mensajes simples.
-- CTA sticky con safe-area cuando el flujo lo requiera.
+### Cursor
 
----
-
-## 9) Performance enfocada a móvil
-
-- Reducir JS cliente: evitar marcar páginas completas con `"use client"`.
-- Mantener Server Components por defecto; aislar islas interactivas.
-- Optimizar interacción (INP): handlers livianos, evitar re-renders globales.
-- Usar `loading.tsx` + skeletons ligeros en vez de bloquear toda la vista.
-
----
-
-## 10) Imágenes, iconografía y motion
-
-- Optimizar imágenes para móvil (peso, dimensiones, formato).
-- Icon buttons deben respetar target táctil mínimo.
-- Animaciones sutiles y respetando `prefers-reduced-motion`.
+* `create-rule`
+* `create-hook`
+* `create-skill`
+* `split-to-prs`
+* `loop`
+* `babysit`
+* `canvas`
 
 ---
 
-## 11) Reglas Next.js orientadas a UX móvil
+# Reglas críticas
 
-- Server-first para fetch/render siempre que sea posible.
-- Streaming progresivo para evitar pantallas bloqueadas.
-- `error.tsx` con mensaje claro y acción de recuperación.
+## Seguridad
 
----
+Nunca:
 
-## 12) Checklist mobile antes de PR
+* exponer secretos en frontend
+* usar secrets en `NEXT_PUBLIC_*`
+* confiar en roles del frontend
+* confiar en totales del frontend
+* marcar órdenes como pagadas desde estado frontend
+* debilitar reglas Firebase para corregir UI
+* usar `dangerouslySetInnerHTML` sin sanitizar
+* guardar datos sensibles en localStorage
+* registrar datos sensibles en consola
 
-- [ ] Targets táctiles con tamaño y separación correctos.
-- [ ] Scroll + teclado móvil probados sin romper layout.
-- [ ] Bottom nav/CTA sticky con safe-area.
-- [ ] Estados empty/loading/error consistentes.
-- [ ] Sin `"use client"` innecesario.
+Siempre:
 
----
-
-## 13) Integración API: objetivo
-
-Integrar el frontend Next.js con las APIs del backend con foco en:
-
-- consumo consistente de endpoints,
-- autenticación segura,
-- manejo uniforme de errores,
-- flujo carrito/checkout/pagos,
-- separación storefront vs admin.
+* validar contratos con backend
+* mantener secrets en backend
+* mostrar errores seguros al usuario
+* conservar seguridad en admin
+* revisar flujo completo si se toca checkout, pagos, ofertas o códigos
 
 ---
 
-## 14) URLs base y documentación
+## Checkout y pagos
 
-### 14.1 Base URL API
+No romper:
 
-- Local: `http://localhost:3000/api`
-- Producción: `https://us-central1-e-comerce-leon.cloudfunctions.net/api`
+* carrito
+* precios con oferta
+* códigos promocionales
+* envío fijo de $150 MXN para domicilio
+* pickup con envío $0
+* `expectedSubtotal`
+* Stripe Embedded Checkout
+* Aplazo
+* creación de orden
+* pantalla de estado de pedido
 
-### 14.2 Swagger UI
+Regla principal:
 
-- Local: `http://localhost:3000/api-docs`
-- Producción: `https://us-central1-e-comerce-leon.cloudfunctions.net/api/api-docs`
-
-Regla: si hay duda de payloads, tomar Swagger como referencia operativa.
-
----
-
-## 15) Variables de entorno recomendadas (Next.js)
-
-Crear `.env.local`:
-
-```bash
-# API base
-NEXT_PUBLIC_API_BASE_URL=http://localhost:3000/api
-
-# Firebase Web SDK (cliente)
-NEXT_PUBLIC_FIREBASE_API_KEY=...
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
-NEXT_PUBLIC_FIREBASE_APP_ID=...
-```
-
-Opcional para server actions/route handlers:
-
-```bash
-API_BASE_URL=http://localhost:3000/api
-```
+* El frontend puede mostrar cálculos, pero el backend confirma subtotal, descuento, envío, total y pago.
 
 ---
 
-## 16) Autenticación real del backend (flujo dual)
+## Diseño frontend
 
-Este backend usa 2 etapas:
+El diseño debe sentirse:
 
-1. Obtener Firebase ID token en frontend.
-2. Llamar `POST /api/auth/register-or-login` con `Authorization: Bearer <firebaseIdToken>`.
-3. Recibir `token` (JWT propio) y `usuario`.
-4. Consumir endpoints protegidos con `Authorization: Bearer <apiToken>`.
+* premium
+* limpio
+* ecommerce real
+* mobile-first
+* accesible
+* profesional
+* consistente
 
-Respuesta típica:
+Evitar:
 
-```json
-{
-  "success": true,
-  "token": "jwt_propio_backend",
-  "usuario": {
-    "uid": "...",
-    "email": "...",
-    "rol": "CLIENTE"
-  }
-}
-```
-
-Recomendación de almacenamiento:
-
-- Simple: memoria + re-login silencioso.
-- Robusto: cookie `httpOnly` con patrón BFF (route handlers en Next).
+* gradientes genéricos de IA
+* sombras excesivas
+* colores SaaS aleatorios
+* animaciones innecesarias
+* cards saturadas
+* layouts apretados
+* romper lógica por rediseñar
 
 ---
 
-## 17) Cliente HTTP base recomendado
+# Qué usar según la tarea
 
-Crear `src/lib/api/client.ts`:
+## Diseño premium / UI visual
 
-```ts
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL!;
+Usar:
 
-type ApiErrorPayload = {
-  success?: false;
-  message?: string;
-  error?: string;
-  errors?: Array<{ campo?: string; mensaje?: string; codigo?: string }>;
-};
+* Skill: `frontend-design`
+* Skill: `shadcn`
+* MCP: `user-shadcn`
 
-export class ApiError extends Error {
-  status: number;
-  payload?: ApiErrorPayload;
+Aplica para:
 
-  constructor(status: number, message: string, payload?: ApiErrorPayload) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-    this.payload = payload;
-  }
-}
+* home
+* catálogo
+* product cards
+* carrito
+* checkout UI
+* banners
+* ofertas
+* filtros
+* admin UI
+* modales
+* formularios
+* tablas
 
-export async function apiFetch<T>(
-  path: string,
-  init: RequestInit = {},
-  options?: { token?: string; sessionId?: string; idempotencyKey?: string },
-): Promise<T> {
-  const headers = new Headers(init.headers ?? {});
-  headers.set("Content-Type", "application/json");
+Manual si no hay skill:
 
-  if (options?.token) headers.set("Authorization", `Bearer ${options.token}`);
-  if (options?.sessionId) headers.set("x-session-id", options.sessionId);
-  if (options?.idempotencyKey)
-    headers.set("Idempotency-Key", options.idempotencyKey);
-
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers,
-    cache: "no-store",
-  });
-
-  const payload = (await res.json().catch(() => ({}))) as ApiErrorPayload & T;
-
-  if (!res.ok || (payload as any)?.success === false) {
-    const message = payload?.message || `Error HTTP ${res.status}`;
-    throw new ApiError(res.status, message, payload);
-  }
-
-  return payload as T;
-}
-```
+* mejorar jerarquía visual
+* mejorar spacing
+* hacer CTA más claro
+* agregar loading, empty y error states
+* revisar mobile
+* conservar props y estado existente
 
 ---
 
-## 18) Formato de respuestas y errores
+## Componentes shadcn/ui
 
-Éxito típico:
+Usar:
 
-```json
-{ "success": true, "data": {}, "count": 10, "message": "..." }
-```
+* Skill: `shadcn`
+* MCP: `user-shadcn`
 
-Error de validación:
+Aplica para:
 
-```json
-{
-  "success": false,
-  "message": "Validación fallida",
-  "errors": [
-    {
-      "campo": "email",
-      "mensaje": "El email debe ser válido",
-      "codigo": "invalid_string"
-    }
-  ]
-}
-```
+* Button
+* Card
+* Dialog
+* Sheet
+* Select
+* Input
+* Form
+* Badge
+* Table
+* Tabs
+* Dropdown
+* Skeleton
+* Toast
+* Alert
 
-Mapeo UI recomendado:
+Reglas:
 
-- `400`: mostrar errores de formulario.
-- `401`: redirigir/login.
-- `403`: acceso denegado.
-- `404`: no encontrado.
-- `409`: conflicto de negocio.
-- `500+`: error servidor con retry opcional.
-
----
-
-## 19) Headers especiales que frontend debe manejar
-
-1. `Authorization: Bearer <apiToken>`
-2. `x-session-id` (UUID para carrito anónimo, persistir localmente)
-3. `Idempotency-Key` (recomendado para reintentos de pago seguros)
+* revisar componentes ya existentes
+* no duplicar sistemas UI
+* usar primitives accesibles
+* mantener Tailwind consistente
+* no crear componentes custom si shadcn ya lo resuelve bien
 
 ---
 
-## 20) Mapa de endpoints clave para Next.js
+## Accesibilidad
 
-### 20.1 Públicos (storefront)
+Usar:
 
-- `GET /productos`
-- `GET /productos/:id`
-- `GET /productos/categoria/:categoriaId`
-- `GET /productos/linea/:lineaId`
-- `GET /productos/buscar/:termino`
-- `GET /categorias`
-- `GET /categorias/:id`
-- `GET /categorias/linea/:lineaId`
-- `GET /lineas`
-- `GET /lineas/:id`
-- `GET /tallas`
-- `GET /tallas/:id`
-- `GET /noticias`
-- `GET /noticias/:id`
-- `GET /plantilla/:id`
+* MCP: `user-accesslint`
 
-### 20.2 Auth + usuario
+Aplica para:
 
-- `POST /auth/register-or-login`
-- `GET /usuarios/:id` (protegido)
-- `GET /usuarios` (protegido)
-- `GET /usuarios/exists/email`
+* checkout
+* carrito
+* forms
+* modales
+* sheets
+* filtros
+* botones
+* navegación
+* admin
 
-### 20.3 Carrito (anónimo + autenticado)
+Revisar:
 
-- `GET /carrito`
-- `POST /carrito/items`
-- `PUT /carrito/items/:productoId`
-- `DELETE /carrito/items/:productoId`
-- `DELETE /carrito`
-- `POST /carrito/merge` (protegido)
-- `POST /carrito/checkout` (protegido)
+* labels
+* aria-label
+* focus visible
+* navegación con teclado
+* contraste
+* HTML semántico
+* mensajes de error
+* estados de carga
 
-### 20.4 Órdenes
+Manual si no hay MCP:
 
-- `POST /ordenes`
-- `GET /ordenes` (protegido)
-- `GET /ordenes/:id` (protegido)
-- `PUT /ordenes/:id/cancelar` (protegido)
-- `PUT /ordenes/:id/estado` (protegido + admin/empleado)
-- `GET /ordenes/:id/pago` (protegido)
-
-### 20.5 Pagos (Stripe)
-
-- `POST /pagos/iniciar` (protegido)
-- `GET /pagos/:id` (protegido)
-- `GET /pagos/orden/:ordenId` (protegido)
-- `POST /pagos/:id/reembolso` (protegido + admin/empleado)
-- `POST /pagos/webhook` (server-to-server; no frontend)
-
-### 20.6 Admin inventario
-
-- `POST /inventario/movimientos` (admin/empleado)
-- `POST /inventario/ajustes` (admin/empleado)
-- `GET /inventario/movimientos` (protegido)
-- `GET /inventario/alertas-stock` (admin/empleado)
-
-Nota: endpoints `debug` no deben consumirse en storefront productivo.
+* todo input debe tener label
+* todo botón debe tener texto claro o aria-label
+* no depender solo del color
+* evitar `div` clickeables sin teclado
+* mantener focus visible
 
 ---
 
-## 21) Flujos recomendados en frontend
+## Pruebas visuales y flujo real
 
-### 21.1 Login social/email
+Usar:
 
-1. Sign-in con Firebase Auth.
-2. Obtener `firebaseUser.getIdToken()`.
-3. `POST /auth/register-or-login`.
-4. Guardar `apiToken` y `usuario`.
-5. Si existe carrito anónimo, ejecutar merge.
+* MCP: `user-playwright`
 
-### 21.2 Carrito anónimo a autenticado
+Aplica para:
 
-1. Navegación anónima con `x-session-id`.
-2. Operar carrito con sesión.
-3. Login.
-4. `POST /carrito/merge` con `sessionId`.
+* catálogo
+* filtros
+* carrito
+* checkout
+* pickup
+* domicilio
+* Stripe
+* Aplazo
+* admin
+* responsive
+* regresiones visuales
 
-### 21.3 Checkout y pago
+Probar en checkout:
 
-1. `POST /carrito/checkout` -> orden `PENDIENTE`.
-2. `POST /pagos/iniciar` con `Idempotency-Key`.
-3. Confirmación de pago en frontend con `clientSecret`.
-4. Consultar estado de pago/orden.
+* producto normal
+* producto con oferta
+* código promocional
+* oferta + código
+* pickup
+* domicilio con envío $150
+* carrito vacío
+* error de pago
+* mobile
 
----
+Manual si no hay MCP:
 
-## 22) Ejemplo mínimo de integración
-
-```ts
-// src/lib/api/auth.ts
-import { apiFetch } from "./client";
-
-type RegisterLoginResponse = {
-  success: boolean;
-  token: string;
-  usuario: {
-    uid: string;
-    email: string;
-    rol: "ADMIN" | "EMPLEADO" | "CLIENTE";
-    nombre: string;
-  };
-};
-
-export async function registerOrLoginWithFirebaseToken(
-  firebaseIdToken: string,
-) {
-  return apiFetch<RegisterLoginResponse>(
-    "/auth/register-or-login",
-    { method: "POST", body: JSON.stringify({}) },
-    { token: firebaseIdToken },
-  );
-}
-```
-
-```ts
-// src/lib/api/cart.ts
-import { apiFetch } from "./client";
-
-export function getCart(params: { apiToken?: string; sessionId?: string }) {
-  return apiFetch<{ success: true; data: unknown }>(
-    "/carrito",
-    { method: "GET" },
-    { token: params.apiToken, sessionId: params.sessionId },
-  );
-}
-```
+* dar pasos exactos de prueba
+* incluir URL, acción, resultado esperado y posible fallo
 
 ---
 
-## 23) SSR, Server Actions y Route Handlers
+## Stripe
 
-Para reducir exposición de token en cliente:
+Usar:
 
-- usar route handlers como BFF,
-- guardar JWT backend en cookie `httpOnly`,
-- llamar backend desde server components/actions cuando sea posible.
+* MCP: `user-stripe`
 
----
+Aplica para:
 
-## 24) CORS y despliegue
+* Stripe Embedded Checkout
+* publishable key
+* clientSecret
+* errores Stripe
+* inicialización de pago
+* payload de checkout
 
-- Usar URL exacta por ambiente.
-- Evitar mezclar localhost y cloud en una misma sesión.
-- Centralizar `API_BASE_URL` por entorno.
+Reglas:
 
----
+* no exponer secret key
+* no calcular monto final solo en frontend
+* no marcar orden pagada desde frontend
+* usar datos confirmados por backend
+* no registrar datos sensibles
 
-## 25) Reglas para pantallas admin
+Manual si no hay MCP:
 
-- Basar visibilidad en `usuario.rol`.
-- No confiar solo en ocultar botones; backend valida permisos.
-- Ante `403`, mostrar estado de acceso denegado.
-
----
-
-## 26) Checklist de integración frontend
-
-- [x] Variables de entorno por ambiente.
-- [x] Login Firebase + canje a JWT propio.
-- [ ] Cliente API centralizado con manejo uniforme de errores.
-- [x] `x-session-id` persistente para carrito anónimo.
-- [x] Merge de carrito al autenticar.
-- [ ] Pago con `Idempotency-Key` y retries seguros.
-- [ ] Vistas admin protegidas por rol y manejo 403.
-- [ ] Verificación manual de payloads en `/api-docs`.
+* revisar endpoint backend usado
+* revisar respuesta segura al frontend
+* validar que solo se use publishable key
+* conservar flujo actual que ya funciona
 
 ---
 
-## 27) Notas de consistencia
+## Firebase frontend
 
-- El backend responde principalmente con `success` (no `ok`).
-- Algunas rutas de catálogo pueden tener políticas históricas; tratar acciones admin como protegidas.
-- Si cambian endpoints o contratos, actualizar este documento y Swagger.
+Usar:
+
+* Skill: `firebase-basics`
+* Skill: `firebase-auth-basics`
+* Skill: `firebase-firestore`
+* MCP: `plugin-firebase-firebase`
+* MCP: `user-firebase`
+
+Aplica para:
+
+* inicialización Firebase
+* Auth
+* sesión
+* Firestore client reads
+* Storage images
+* datos públicos
+* datos de usuario
+* lectura de órdenes
+
+Reglas:
+
+* no usar Admin SDK en frontend
+* no exponer service accounts
+* frontend admin checks son solo UX
+* permisos reales van en backend/reglas
+* no debilitar rules por errores del frontend
+
+Manual si no hay MCP:
+
+* seguir patrón actual de Firebase client
+* revisar que solo se usen configs públicas
+* documentar colección/path usado
 
 ---
 
-Fin.
+## Reglas Firebase / seguridad de datos
+
+Usar:
+
+* Skill: `firebase-security-rules-auditor`
+* MCP: `plugin-firebase-firebase`
+* MCP: `user-firebase`
+
+Aplica cuando el frontend accede a:
+
+* Firestore
+* Storage
+* órdenes
+* usuarios
+* admin collections
+* productos privados
+* datos de cliente
+
+Reglas:
+
+* productos públicos pueden ser públicos solo si es intencional
+* órdenes deben limitarse al dueño
+* admin collections deben protegerse
+* no resolver permisos abriendo reglas de más
+
+Manual:
+
+* identificar path
+* identificar quién debe leer/escribir
+* decidir si debe hacerlo frontend o backend
 
 ---
 
-## 28) Estado de implementación (2026-03-02)
+## Seguridad frontend
 
-Se completó la unificación **storefront** de este frontend con backend real para:
+Usar:
 
-- catálogo (`/productos`, `/productos/:id`, `/categorias`),
-- carrito anónimo (`/carrito`, `/carrito/items`, `/carrito/items/:productoId`, `DELETE /carrito`),
-- configuración por ambiente (local y producción).
+* Skill: `review-security`
+* MCP: `user-semgrep`
+* MCP: `user-snyk`
 
-### 28.1 Archivos base agregados
+Aplica para:
 
-- `src/lib/api/client.ts`: cliente HTTP centralizado con `ApiError`.
-- `src/lib/api/storefront.ts`: fetch + mapeo de productos/categorías backend -> tipos UI.
-- `src/lib/api/cart.ts`: fetch de carrito con soporte `x-session-id`.
-- `.env.example`: plantilla única para local y referencia productiva.
+* checkout
+* carrito
+* admin
+* auth
+* órdenes
+* pagos
+* ofertas
+* códigos
+* variables env
+* dependencias
+* inputs de usuario
 
-### 28.2 Migración de vistas a backend real
+Revisar:
 
-- `src/app/page.tsx` (home) ya no usa `mock-data`.
-- `src/app/products/page.tsx` (listado) ya no usa `mock-data`.
-- `src/app/products/[id]/page.tsx` (detalle) ya no usa `mock-data`.
-- `src/hooks/use-cart.tsx` ahora sincroniza contra backend.
-- `src/app/cart/page.tsx` y `src/app/checkout/page.tsx` consumen el carrito remoto.
+* XSS
+* secretos expuestos
+* redirects inseguros
+* roles solo en UI
+* manipulación de precios
+* datos sensibles en logs
+* dependencias vulnerables
 
-### 28.3 Variables por ambiente
+Manual:
 
-**Local (`.env.local`)**
+* buscar `dangerouslySetInnerHTML`
+* buscar `eval`
+* buscar `NEXT_PUBLIC`
+* revisar localStorage
+* revisar console logs
+* revisar que backend valide
 
-```bash
-NEXT_PUBLIC_API_BASE_URL=http://localhost:3000/api
-API_BASE_URL=http://localhost:3000/api
-```
+---
 
-**Producción (hosting)**
+## Dependencias
 
-```bash
-NEXT_PUBLIC_API_BASE_URL=https://us-central1-e-comerce-leon.cloudfunctions.net/api
-API_BASE_URL=https://us-central1-e-comerce-leon.cloudfunctions.net/api
-```
+Usar:
 
-### 28.4 Estado de alcance
+* MCP: `user-snyk`
 
-- ✅ Unificación de datos reales en catálogo y carrito.
-- ✅ Configuración completa local/producción documentada.
-- ✅ Login Firebase -> `/auth/register-or-login` implementado con sesión BFF (`/api/auth/session`).
-- ✅ `POST /carrito/merge` al autenticar implementado en `use-cart`.
-- ⏳ Pendiente fase siguiente: checkout/órdenes/pagos reales.
+Aplica para:
 
-### 28.5 Pruebas requeridas al cierre
+* `package.json`
+* lockfiles
+* upgrades
+* nuevas librerías
+* paquetes de auth, pagos, forms, uploads o parsers
 
-Ejecutar:
+Reglas:
 
-```bash
-npm run lint
-npm run typecheck
-npm run build
-```
+* no hacer upgrades masivos sin motivo
+* no usar `audit fix --force` sin revisar
+* explicar riesgos antes de cambiar
+* preferir cambios mínimos
 
-Smoke manual:
+Manual:
 
-1. Home/listado/detalle muestran datos backend.
-2. Add/update/remove/clear de carrito persiste con `x-session-id`.
-3. Recarga de navegador conserva estado del carrito anónimo.
+* revisar `npm audit`
+* revisar breaking changes
+* correr lint/build
+
+---
+
+## Semgrep
+
+Usar:
+
+* MCP: `user-semgrep`
+
+Aplica para:
+
+* revisión de seguridad estática
+* checkout
+* auth
+* admin
+* env
+* redirects
+* HTML peligroso
+* lógica de pagos
+
+Manual:
+
+* buscar patrones inseguros
+* revisar trust boundaries
+* confirmar validación backend
+
+---
+
+## Sentry
+
+Usar:
+
+* Skill: `sentry-nextjs-sdk`
+* Skill: `sentry-react-sdk`
+* Skill: `sentry-fix-issues`
+* Skill: `sentry-pr-code-review`
+* Skill: `sentry-create-alert`
+
+Aplica para:
+
+* errores producción
+* checkout errors
+* error boundaries
+* tracing
+* performance
+* alertas
+* debugging
+
+Reglas:
+
+* no enviar secrets
+* no enviar payloads sensibles de pago
+* errores usuario deben ser claros
+* errores internos deben ser rastreables
+
+Manual:
+
+* agregar estados de error seguros
+* evitar stack traces al usuario
+* capturar contexto no sensible
+
+---
+
+## Bugs y regresiones
+
+Usar:
+
+* Skill: `review-bugbot`
+
+Aplica cuando:
+
+* algo aparece y desaparece
+* hay hydration mismatch
+* filtros fallan
+* totales se ven mal
+* cards muestran precio incorrecto
+* admin carga y luego falla
+* bug apareció tras merge
+
+Manual:
+
+* reproducir
+* aislar cambio reciente
+* revisar estado/fuente de datos
+* hacer fix mínimo
+* evitar rewrite grande
+
+---
+
+## Refactors grandes
+
+Usar:
+
+* Skill: `canvas`
+* Skill: `split-to-prs`
+* Skill: `loop`
+* Skill: `babysit`
+
+Aplica para:
+
+* rediseño grande
+* checkout
+* catálogo
+* admin
+* separación de componentes
+* migraciones UI
+
+Reglas:
+
+* plan primero
+* cambios pequeños
+* no mezclar UI con pagos
+* verificar entre pasos
+
+Manual:
+
+* separar por módulos
+* mantener comportamiento
+* probar antes y después
+
+---
+
+## Crear reglas/hooks/skills
+
+Usar:
+
+* Skill: `create-rule`
+* Skill: `create-hook`
+* Skill: `create-skill`
+
+Aplica cuando:
+
+* Cursor repite errores
+* se necesita regla del proyecto
+* se necesita validación automática
+* se necesita skill propia
+
+Manual:
+
+* documentar el error recurrente
+* crear checklist corto
+* aplicar en futuras tareas
+
+---
+
+## Buscar skills
+
+Usar:
+
+* Skill: `find-skills`
+
+Aplica cuando:
+
+* no hay skill clara
+* se necesita algo de SEO, analytics, performance, testing o seguridad específica
+
+Manual:
+
+* seguir patrones del proyecto
+* consultar código existente
+* explicar incertidumbre
+
+---
+
+# Reglas de negocio frontend
+
+## Ofertas
+
+* No guardar precio final como precio base.
+* Mostrar precio original y precio oferta si aplica.
+* No duplicar descuentos.
+* Mantener compatibilidad con `tag=sale` y `onlyOffers=true` si existe.
+* No romper “Rebajas Club León”.
+* Checkout debe usar backend como fuente final.
+
+Usar:
+
+* `frontend-design`
+* `shadcn`
+* `user-playwright`
+* `review-bugbot`
+* `review-security` si afecta totales
+
+---
+
+## Códigos promocionales
+
+* Validación real viene del backend.
+* Frontend solo muestra resultado.
+* No aplicar descuento doble.
+* Mantener `expectedSubtotal` alineado.
+
+Usar:
+
+* `user-playwright`
+* `review-security`
+* `user-semgrep`
+
+---
+
+## Envío
+
+Regla temporal:
+
+* pickup = $0
+* domicilio = $150 MXN
+* domicilio requiere dirección
+* FedEx no debe bloquear pago temporalmente
+
+Usar:
+
+* `user-playwright`
+* `frontend-design`
+* `review-security`
+
+---
+
+## Admin
+
+* Checks de frontend son UX, no seguridad real.
+* Acciones destructivas requieren confirmación.
+* Forms deben validar.
+* Tablas deben ser legibles.
+* No eliminar campos sin revisar backend.
+
+Usar:
+
+* `shadcn`
+* `frontend-design`
+* `user-accesslint`
+* `user-playwright`
+* `review-security`
+
+---
+
+# Flujo obligatorio
+
+Para cambios normales:
+
+1. Revisar componente existente.
+2. Usar skill/MCP aplicable.
+3. Preservar props, estado, API calls y lógica.
+4. Revisar mobile.
+5. Agregar loading, empty y error state si falta.
+6. Dar pasos de prueba.
+
+Para checkout, pagos, seguridad o admin:
+
+1. Analizar primero.
+2. Listar archivos involucrados.
+3. Identificar contrato frontend/backend.
+4. Usar `review-security`.
+5. Usar MCP específico si aplica.
+6. No editar hasta tener plan claro.
+
+---
+
+# Quality gate
+
+Antes de terminar:
+
+* no hay secretos expuestos
+* no se rompió pricing
+* no se rompió checkout
+* no se rompió Stripe/Aplazo
+* responsive correcto
+* accesibilidad básica correcta
+* errores seguros
+* loading/empty/error states revisados
+
+Si el cambio es importante, correr:
+
+* `npm run lint`
+* `npm run build`
+
+Usar el package manager actual del proyecto.
+
+---
+
+# No hacer
+
+No:
+
+* reescribir sin aprobación
+* mezclar rediseño con pagos
+* confiar en totales frontend
+* exponer secrets
+* debilitar Firebase rules
+* duplicar lógica backend
+* agregar dependencias innecesarias
+* ignorar mobile
+* ignorar accesibilidad
+* cambiar contratos backend sin revisar backend
+
+---
+
+# Si ninguna skill aplica
+
+1. Seguir patrones existentes.
+2. Hacer cambios mínimos.
+3. Explicar supuestos.
+4. Mantener lógica actual.
+5. Dar pruebas manuales.
+6. Pedir confirmación antes de cambios riesgosos.

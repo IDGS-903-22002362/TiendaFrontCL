@@ -1,13 +1,76 @@
 import type { NextConfig } from "next";
 
+const apiBaseUrl =
+  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/api\/?$/, "") ||
+  "http://localhost:3000";
+
+const baseSecurityHeaders = [
+  {
+    key: "Strict-Transport-Security",
+    value: "max-age=63072000; includeSubDomains; preload",
+  },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  {
+    key: "Permissions-Policy",
+    value: "camera=(), microphone=(), geolocation=()",
+  },
+];
+
+const defaultCsp = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "object-src 'none'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://www.gstatic.com https://www.google.com https://maps.googleapis.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "img-src 'self' data: blob: https: http://localhost:3000",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "connect-src 'self' https://*.googleapis.com https://api.stripe.com https://js.stripe.com https://hooks.stripe.com https://*.cloudfunctions.net https://*.firebaseapp.com https://*.firebaseio.com wss://*.firebaseio.com",
+  "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://www.google.com",
+].join("; ");
+
+const checkoutCsp = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "object-src 'none'",
+  "script-src 'self' 'unsafe-inline' https://js.stripe.com https://www.gstatic.com https://www.google.com https://maps.googleapis.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  `connect-src 'self' ${apiBaseUrl} https://*.googleapis.com https://api.stripe.com https://js.stripe.com https://hooks.stripe.com https://*.cloudfunctions.net https://*.firebaseapp.com`,
+  "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://www.google.com",
+].join("; ");
+
 const nextConfig: NextConfig = {
-  /* config options here */
   outputFileTracingRoot: process.cwd(),
   typescript: {
     ignoreBuildErrors: true,
   },
   eslint: {
     ignoreDuringBuilds: true,
+  },
+  async headers() {
+    return [
+      {
+        source: "/checkout/:path*",
+        headers: [
+          ...baseSecurityHeaders,
+          { key: "Content-Security-Policy", value: checkoutCsp },
+        ],
+      },
+      {
+        source: "/:path*",
+        headers: [
+          ...baseSecurityHeaders,
+          { key: "Content-Security-Policy", value: defaultCsp },
+        ],
+      },
+    ];
   },
   images: {
     remotePatterns: [

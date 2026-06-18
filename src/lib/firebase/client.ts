@@ -1,6 +1,11 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getStorage } from "firebase/storage";
+import {
+  initializeAppCheck,
+  ReCaptchaV3Provider,
+  type AppCheck,
+} from "firebase/app-check";
 
 function pickValue(...values: Array<string | undefined>) {
   for (const value of values) {
@@ -70,6 +75,24 @@ export function isFirebaseConfigured() {
   return getMissingFirebaseEnvVars().length === 0;
 }
 
+let appCheckInstance: AppCheck | null = null;
+
+function initializeAppCheckIfConfigured(app: ReturnType<typeof getFirebaseApp>) {
+  if (typeof window === "undefined" || appCheckInstance) {
+    return;
+  }
+
+  const siteKey = process.env.NEXT_PUBLIC_FIREBASE_APP_CHECK_SITE_KEY?.trim();
+  if (!siteKey) {
+    return;
+  }
+
+  appCheckInstance = initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider(siteKey),
+    isTokenAutoRefreshEnabled: true,
+  });
+}
+
 function getFirebaseApp() {
   if (!isFirebaseConfigured()) {
     const missingVars = getMissingFirebaseEnvVars();
@@ -79,7 +102,9 @@ function getFirebaseApp() {
   }
 
   const config = normalizeFirebaseConfig();
-  return getApps().length > 0 ? getApp() : initializeApp(config);
+  const app = getApps().length > 0 ? getApp() : initializeApp(config);
+  initializeAppCheckIfConfigured(app);
+  return app;
 }
 
 export function getFirebaseAuth() {
