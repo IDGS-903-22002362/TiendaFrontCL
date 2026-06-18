@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ProductCard } from "@/components/product/product-card";
 import { EmptyState } from "@/components/storefront/shared/empty-state";
+import { ProductGridSkeleton } from "@/components/storefront/catalog/product-grid-skeleton";
 import {
   calcularPreciosOfertasPublicas,
   type ProductOfferPricing,
@@ -139,8 +140,9 @@ const selectedDiscount = Number.isFinite(discountParam)
 
   if (mostrarSoloOfertas && isLoadingOffers) {
     return (
-      <div className="border border-black/14 bg-white p-6 text-sm text-muted-foreground">
-        Cargando ofertas disponibles...
+      <div role="status" aria-live="polite">
+        <span className="sr-only">Cargando ofertas disponibles…</span>
+        <ProductGridSkeleton />
       </div>
     );
   }

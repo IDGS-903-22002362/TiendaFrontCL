@@ -80,6 +80,21 @@ export function getProductStockState(product: Product) {
   };
 }
 
+export function getStorefrontBadgeClasses(
+  tone: StorefrontProductBadge["tone"],
+): string {
+  switch (tone) {
+    case "sale":
+      return "border-transparent bg-primary text-primary-foreground";
+    case "warning":
+      return "border-black/10 bg-white/92 text-foreground/65 backdrop-blur-sm";
+    case "success":
+      return "border-transparent bg-secondary text-secondary-foreground";
+    default:
+      return "border-black/10 bg-white/92 text-foreground backdrop-blur-sm";
+  }
+}
+
 export function getPrimaryProductBadge(product: Product): StorefrontProductBadge | null {
   const stockState = getProductStockState(product);
 

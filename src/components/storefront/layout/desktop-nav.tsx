@@ -62,14 +62,14 @@ function DesktopNavContent({
             key={link.href}
             href={link.href}
             className={cn(
-              "group relative py-3 text-[0.78rem] font-semibold uppercase tracking-[0.22em] text-foreground/72 transition-[color,transform] duration-200 hover:text-foreground",
+              "group relative py-3 text-[0.78rem] font-semibold uppercase tracking-[0.22em] text-foreground/72 transition-colors duration-200 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               active && "text-foreground",
             )}
           >
             {link.label}
             <span
               className={cn(
-                "absolute inset-x-0 bottom-[0.35rem] h-px origin-left scale-x-0 bg-black transition-transform duration-200 group-hover:scale-x-100",
+                "absolute inset-x-0 bottom-0 h-[2px] origin-left scale-x-0 bg-primary transition-transform duration-200 group-hover:scale-x-100",
                 active && "scale-x-100",
               )}
             />
@@ -101,14 +101,14 @@ function DesktopNavFallback({
             key={link.href}
             href={link.href}
             className={cn(
-              "group relative py-3 text-[0.78rem] font-semibold uppercase tracking-[0.22em] text-foreground/72 transition-[color,transform] duration-200 hover:text-foreground",
+              "group relative py-3 text-[0.78rem] font-semibold uppercase tracking-[0.22em] text-foreground/72 transition-colors duration-200 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               active && "text-foreground",
             )}
           >
             {link.label}
             <span
               className={cn(
-                "absolute inset-x-0 bottom-[0.35rem] h-px origin-left scale-x-0 bg-black transition-transform duration-200 group-hover:scale-x-100",
+                "absolute inset-x-0 bottom-0 h-[2px] origin-left scale-x-0 bg-primary transition-transform duration-200 group-hover:scale-x-100",
                 active && "scale-x-100",
               )}
             />

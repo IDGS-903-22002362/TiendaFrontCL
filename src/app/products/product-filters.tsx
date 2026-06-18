@@ -18,6 +18,8 @@ import { Slider } from "@/components/ui/slider";
 import { FilterDrawer } from "@/components/storefront/catalog/filter-drawer";
 import { FilterSidebar } from "@/components/storefront/catalog/filter-sidebar";
 import { ProductToolbar } from "@/components/storefront/catalog/product-toolbar";
+import { ProductGridSkeleton } from "@/components/storefront/catalog/product-grid-skeleton";
+import type { ActiveFilterChip } from "@/components/storefront/catalog/active-filter-chips";
 import { useStorefront } from "@/hooks/use-storefront";
 import {
   isCategoryVisible,
@@ -534,23 +536,76 @@ export function ProductFilters({
     sort,
   ]);
 
-  const activeFilters = [
-    category !== "all"
-      ? (visibleCategories.find((item) => item.id === category)?.name ??
-        category)
-      : null,
-    linea !== "all"
-      ? (visibleLineas.find((item) => item.id === linea)?.nombre ?? linea)
-      : null,
-    selectedSize !== "all" ? `Talla ${selectedSize}` : null,
-    priceRange[0] < DEFAULT_MAX_PRICE
-      ? `Hasta $${priceRange[0].toLocaleString("es-MX")}`
-      : null,
-    onlyOffers ? "Ofertas" : null,
-    selectedOfferPercent ? `${selectedOfferPercent}% descuento` : null,
-    !onlyAvailable ? "Incluye agotados" : null,
-    wishlistOnly ? "Favoritos" : null,
-  ].filter(Boolean) as string[];
+  const activeFilters: ActiveFilterChip[] = [];
+
+  if (category !== "all") {
+    activeFilters.push({
+      id: "category",
+      label:
+        visibleCategories.find((item) => item.id === category)?.name ?? category,
+      onRemove: () => setCategory("all"),
+    });
+  }
+
+  if (linea !== "all") {
+    activeFilters.push({
+      id: "linea",
+      label: visibleLineas.find((item) => item.id === linea)?.nombre ?? linea,
+      onRemove: () => setLinea("all"),
+    });
+  }
+
+  if (selectedSize !== "all") {
+    activeFilters.push({
+      id: "talla",
+      label: `Talla ${selectedSize}`,
+      onRemove: () => setSelectedSize("all"),
+    });
+  }
+
+  if (priceRange[0] < DEFAULT_MAX_PRICE) {
+    activeFilters.push({
+      id: "precio",
+      label: `Hasta $${priceRange[0].toLocaleString("es-MX")}`,
+      onRemove: () => setPriceRange([DEFAULT_MAX_PRICE]),
+    });
+  }
+
+  if (onlyOffers) {
+    activeFilters.push({
+      id: "ofertas",
+      label: "Ofertas",
+      onRemove: () => {
+        setOnlyOffers(false);
+        setSelectedOfferPercent(null);
+        setOfferDiscountPage(0);
+      },
+    });
+  }
+
+  if (selectedOfferPercent) {
+    activeFilters.push({
+      id: "offerPercent",
+      label: `${selectedOfferPercent}% descuento`,
+      onRemove: () => setSelectedOfferPercent(null),
+    });
+  }
+
+  if (!onlyAvailable) {
+    activeFilters.push({
+      id: "incluyeAgotados",
+      label: "Incluye agotados",
+      onRemove: () => setOnlyAvailable(true),
+    });
+  }
+
+  if (wishlistOnly) {
+    activeFilters.push({
+      id: "favoritos",
+      label: "Favoritos",
+      onRemove: () => setWishlistOnly(false),
+    });
+  }
 
   const clearFilters = () => {
     setSort("destacados");
@@ -593,9 +648,9 @@ export function ProductFilters({
     : productsBase;
 
   const filterControls = (
-    <div className="space-y-7">
+    <div className="divide-y divide-black/8 [&>div]:py-6 [&>div:first-child]:pt-0 [&>div:last-child]:pb-0">
       <div>
-        <h3 className="mb-4 font-headline text-[var(--font-size-subtitle)] font-semibold uppercase leading-none tracking-[0.03em]">
+        <h3 className="mb-3 text-[12px] font-semibold uppercase leading-none tracking-[0.18em] text-foreground">
           Categoría
         </h3>
         <div className="space-y-2">
@@ -622,7 +677,7 @@ export function ProductFilters({
       </div>
 
       <div>
-        <h3 className="mb-4 font-headline text-[var(--font-size-subtitle)] font-semibold uppercase leading-none tracking-[0.03em]">
+        <h3 className="mb-3 text-[12px] font-semibold uppercase leading-none tracking-[0.18em] text-foreground">
           Precio
         </h3>
         <Slider
@@ -637,7 +692,7 @@ export function ProductFilters({
       </div>
 
       <div>
-        <h3 className="mb-4 font-headline text-[var(--font-size-subtitle)] font-semibold uppercase leading-none tracking-[0.03em]">
+        <h3 className="mb-3 text-[12px] font-semibold uppercase leading-none tracking-[0.18em] text-foreground">
           Líneas
         </h3>
         <div className="space-y-2">
@@ -664,7 +719,7 @@ export function ProductFilters({
       </div>
 
       <div>
-        <h3 className="mb-4 font-headline text-[var(--font-size-subtitle)] font-semibold uppercase leading-none tracking-[0.03em]">
+        <h3 className="mb-3 text-[12px] font-semibold uppercase leading-none tracking-[0.18em] text-foreground">
           Tallas
         </h3>
         <div className="space-y-2">
@@ -694,7 +749,7 @@ export function ProductFilters({
       </div>
 
       <div>
-        <h3 className="mb-4 font-headline text-[var(--font-size-subtitle)] font-semibold uppercase leading-none tracking-[0.03em]">
+        <h3 className="mb-3 text-[12px] font-semibold uppercase leading-none tracking-[0.18em] text-foreground">
           Disponibilidad
         </h3>
         <div className="space-y-2">
@@ -716,7 +771,7 @@ export function ProductFilters({
       </div>
 
       <div>
-        <h3 className="mb-4 font-headline text-[var(--font-size-subtitle)] font-semibold uppercase leading-none tracking-[0.03em]">
+        <h3 className="mb-3 text-[12px] font-semibold uppercase leading-none tracking-[0.18em] text-foreground">
           Favoritos
         </h3>
         <label className="flex min-h-[44px] items-center text-[15px] text-muted-foreground lg:text-[16px]">
@@ -733,9 +788,20 @@ export function ProductFilters({
   return (
     <div className="grid grid-cols-1 gap-4 md:gap-6 xl:grid-cols-[minmax(260px,300px)_minmax(0,1fr)] xl:gap-8">
       <FilterSidebar>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary/72">
-          Filtrar / Buscar
-        </p>
+        <div className="flex items-center justify-between border-b border-black/10 pb-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary/72">
+            Filtros
+          </p>
+          {activeFilters.length > 0 ? (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+            >
+              Limpiar
+            </button>
+          ) : null}
+        </div>
         <div className="mt-5">{filterControls}</div>
       </FilterSidebar>
 
@@ -753,7 +819,11 @@ export function ProductFilters({
           onClear={clearFilters}
           sort={sort}
           onSortChange={(value) => setSort(value as CatalogSort)}
-          mobileFilters={<FilterDrawer>{filterControls}</FilterDrawer>}
+          mobileFilters={
+            <FilterDrawer activeCount={activeFilters.length}>
+              {filterControls}
+            </FilterDrawer>
+          }
         />
 
         {shouldShowOfferShowcase ? (
@@ -845,26 +915,30 @@ export function ProductFilters({
         ) : null}
 
         {loading ? (
-          <div
-            className="mt-6 border border-black/14 bg-white p-5 text-sm text-muted-foreground"
-            role="status"
-            aria-live="polite"
-          >
-            Cargando catálogo...
+          <div className="mt-6" role="status" aria-live="polite">
+            <span className="sr-only">Cargando catálogo…</span>
+            <ProductGridSkeleton />
           </div>
         ) : (
           <div className="mt-6">
             <ProductGrid products={productsToShow} />
 
             {hasMore && !error ? (
-              <div className="mt-8 flex justify-center">
+              <div className="mt-10 flex flex-col items-center gap-3 border-t border-black/8 pt-8">
+                <p
+                  className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground"
+                  aria-live="polite"
+                >
+                  Mostrando {productsToShow.length}
+                  {productsToShow.length === 1 ? " producto" : " productos"}
+                </p>
                 <Button
                   onClick={() => void loadPage(nextCursor)}
                   disabled={loadingMore}
                   variant="outline"
-                  className="min-h-[44px] min-w-[200px]"
+                  className="min-h-[44px] min-w-[220px]"
                 >
-                  {loadingMore ? "Cargando..." : "Cargar más"}
+                  {loadingMore ? "Cargando…" : "Cargar más"}
                 </Button>
               </div>
             ) : null}

@@ -13,15 +13,25 @@ import {
 
 export function FilterDrawer({
   children,
+  activeCount = 0,
 }: {
   children: ReactNode;
+  activeCount?: number;
 }) {
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button variant="outline" className="h-11 min-h-[44px] flex-1 xl:hidden">
-          <Filter className="mr-2 h-4 w-4" />
+        <Button
+          variant="outline"
+          className="h-11 min-h-[44px] w-full justify-center gap-2"
+        >
+          <Filter className="h-4 w-4" />
           Filtros
+          {activeCount > 0 ? (
+            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+              {activeCount}
+            </span>
+          ) : null}
         </Button>
       </SheetTrigger>
       <SheetContent

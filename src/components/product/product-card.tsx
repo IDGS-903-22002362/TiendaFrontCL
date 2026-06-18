@@ -6,8 +6,10 @@ import { WishlistButton } from "@/components/storefront/shared/wishlist-button";
 import {
   formatCurrency,
   getPrimaryProductBadge,
+  getStorefrontBadgeClasses,
   normalizeStorefrontText,
 } from "@/lib/storefront";
+import type { StorefrontProductBadge } from "@/lib/storefront/types";
 import { cn } from "@/lib/utils";
 
 type ProductCardProps = {
@@ -64,10 +66,22 @@ export function ProductCard({ product, pricingOferta }: ProductCardProps) {
       ? product.price
       : null;
 
-  const offerLabel = pricingOferta?.ofertaTitulo || "Oferta";
+  const hasOffer = tieneOfertaBackend || tieneOfertaLocal;
+  const discountPercent =
+    hasOffer && originalPrice && originalPrice > finalPrice
+      ? Math.round(((originalPrice - finalPrice) / originalPrice) * 100)
+      : 0;
 
-  const badge = getCatalogBadge(product);
-  const displayBadge = badge || (tieneOfertaBackend ? { label: "Oferta" } : null);
+  let displayBadge: StorefrontProductBadge | null = getCatalogBadge(product);
+
+  if (estaAgotado) {
+    displayBadge = { label: "Agotado", tone: "warning" };
+  } else if (hasOffer) {
+    displayBadge = {
+      label: discountPercent > 0 ? `-${discountPercent}%` : "Oferta",
+      tone: "sale",
+    };
+  }
 
   const eyebrow = product.lineName || product.category;
 
@@ -77,29 +91,25 @@ export function ProductCard({ product, pricingOferta }: ProductCardProps) {
     ? "object-[center_18%]"
     : "object-center";
 
-  const badgeTone =
-    displayBadge?.label === "Agotado"
-      ? "border-black bg-black text-white"
-      : displayBadge?.label === "Oferta"
-        ? "border-black bg-white text-black"
-        : "border-black bg-black text-white";
-
   return (
     <article className="group flex h-full flex-col">
-      <div className="relative">
+      <div className="relative overflow-hidden border border-black/10">
         <Link href={`/products/${product.id}`} className="block">
           <HoverImagePreview
             images={product.images}
             alt={product.name}
             sizes="(max-width: 640px) 48vw, (max-width: 1024px) 34vw, (max-width: 1440px) 25vw, 20vw"
-            className="aspect-square border border-black/12"
-            imageClassName={cn("p-[12px] md:p-[16px] lg:p-[24px]", imagePosition)}
+            className={cn(
+              "aspect-square transition-opacity duration-300",
+              estaAgotado && "opacity-[0.78]",
+            )}
+            imageClassName={cn("p-5 sm:p-6 lg:p-7", imagePosition)}
             overlay={
               displayBadge ? (
                 <span
                   className={cn(
-                    "absolute left-0 top-0 z-[1] inline-flex min-h-[36px] items-center border px-3 text-[var(--font-size-eyebrow)] font-semibold uppercase tracking-[0.18em]",
-                    badgeTone,
+                    "absolute left-3 top-3 z-[1] inline-flex items-center border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] shadow-sm",
+                    getStorefrontBadgeClasses(displayBadge.tone),
                   )}
                 >
                   {displayBadge.label}
@@ -109,43 +119,37 @@ export function ProductCard({ product, pricingOferta }: ProductCardProps) {
           />
         </Link>
 
-        <div className="absolute right-[10px] top-[10px] md:right-[12px] md:top-[12px] lg:right-[16px] lg:top-[16px]">
+        <div className="absolute right-3 top-3">
           <WishlistButton
             productId={product.id}
-            className="h-11 w-11 min-h-[44px] min-w-[44px] rounded-none border-black/12 bg-white text-foreground shadow-none hover:border-black hover:bg-white"
+            className="h-10 w-10 min-h-[44px] min-w-[44px] rounded-none border-black/10 bg-white/92 text-foreground shadow-sm backdrop-blur-sm transition-colors hover:border-black hover:bg-white"
           />
         </div>
       </div>
 
-      <div className="mt-[10px] flex flex-1 flex-col md:mt-[12px] lg:mt-[16px]">
-  <div className="flex items-baseline gap-2.5">
-    <p className="text-[var(--font-size-price-card-mobile)] font-semibold leading-none tracking-[-0.03em] text-foreground lg:text-[var(--font-size-price-card-desktop)]">
-      {formatCurrency(finalPrice)}
-    </p>
+      <div className="mt-3 flex flex-1 flex-col md:mt-3.5">
+        <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+          <p className="text-[var(--font-size-price-card-mobile)] font-semibold leading-none tracking-[-0.03em] text-foreground lg:text-[var(--font-size-price-card-desktop)]">
+            {formatCurrency(finalPrice)}
+          </p>
 
-    {originalPrice ? (
-      <p className="text-[0.9rem] leading-none text-text-muted line-through md:text-[0.95rem]">
-        {formatCurrency(originalPrice)}
-      </p>
-    ) : null}
-  </div>
+          {originalPrice ? (
+            <p className="text-[0.85rem] leading-none text-text-muted line-through md:text-[0.9rem]">
+              {formatCurrency(originalPrice)}
+            </p>
+          ) : null}
+        </div>
 
-  {tieneOfertaBackend ? (
-    <span className="mt-2 w-fit border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-primary">
-      {offerLabel}
-    </span>
-  ) : null}
+        <Link href={`/products/${product.id}`} className="mt-2 block">
+          <h3 className="line-clamp-2 min-h-[2.5em] text-[var(--font-size-product-name-mobile)] font-medium leading-[var(--line-height-card)] text-foreground transition-colors group-hover:text-primary lg:text-[var(--font-size-product-name-desktop)]">
+            {product.name}
+          </h3>
+        </Link>
 
-  <Link href={`/products/${product.id}`} className="mt-3 block">
-    <h3 className="line-clamp-2 text-[var(--font-size-product-name-mobile)] font-medium leading-[var(--line-height-card)] text-foreground lg:text-[var(--font-size-product-name-desktop)]">
-      {product.name}
-    </h3>
-  </Link>
-
-  <p className="mt-3 text-[var(--font-size-category-meta)] leading-[var(--line-height-body)] text-text-muted">
-    {eyebrow}
-  </p>
-</div>
+        <p className="mt-1.5 text-[var(--font-size-category-meta)] uppercase leading-[var(--line-height-body)] tracking-[0.08em] text-text-muted">
+          {eyebrow}
+        </p>
+      </div>
     </article>
   );
 }

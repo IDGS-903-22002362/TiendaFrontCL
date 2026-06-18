@@ -378,7 +378,11 @@ body[data-storefront="true"] {
 
 @layer base {
   * {
-    @apply border-border outline-ring/40;
+    @apply border-border;
+  }
+
+  *:focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
   }
 
   html {
