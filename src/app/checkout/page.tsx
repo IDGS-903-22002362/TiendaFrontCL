@@ -553,11 +553,11 @@ function OrderSummaryPanel({
     checkoutPricing && checkoutPricing.subtotal > 0
       ? checkoutPricing
       :
-      getExpectedCheckoutPricing(
-        subtotalConCodigo,
-        fulfillmentMethod,
-        shippingSelection?.selectedOption.amount ?? MANUAL_FEDEX_SHIPPING_COST,
-      );
+    getExpectedCheckoutPricing(
+      subtotalConCodigo,
+      fulfillmentMethod,
+      shippingSelection?.selectedOption.amount ?? MANUAL_FEDEX_SHIPPING_COST,
+    );
 
   return (
     <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
@@ -1835,9 +1835,9 @@ function CardPaymentStep({
         }
       }
 
-      const checkoutResult = await checkoutCart(
-        buildCheckoutPayload(values, "TARJETA", codigoPromocion),
-      );
+const checkoutResult = await checkoutCart(
+  buildCheckoutPayload(values, "TARJETA", codigoPromocion),
+);
 
       const ordenId = getOrderIdFromCheckoutResult(checkoutResult);
       if (!ordenId) {
