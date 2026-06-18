@@ -33,13 +33,12 @@ env:
   - variable: NEXT_PUBLIC_AUTH_FIREBASE_STORAGE_BUCKET
     value: app-oficial-leon.firebasestorage.app
 
-  # Vacío = el frontend carga pk_* desde GET /api/stripe/config (STRIPE_PUBLISHABLE_KEY en Functions).
-  # Si se define aquí, debe ser pk_live_* cuando el backend usa sk_live_*.
+  # Clave publishable live (pública por diseño). Debe coincidir con sk_live_* del backend.
   - variable: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-    value: ""
+    value: pk_live_51SxZMKAKmsQ8tJuidM0zdYDGd0xf7JhPVtarD0GAIEc7sa7bQH121I5ibeCkQudWhoHE7CxgRQxS9Ohozz1FlJia00VTMX3q73
 
   - variable: NEXT_PUBLIC_APLAZO_SHOP_ID
-    value: Prueba Tienda
+    value: "Prueba Tienda"
 
   - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
     value: AIzaSyBH74ZroHtQ1VALF5eL7BjEIGU_R3OJWIE
