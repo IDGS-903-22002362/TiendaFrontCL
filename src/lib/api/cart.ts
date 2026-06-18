@@ -509,11 +509,7 @@ export async function checkoutCart(payload: {
   // anónimo, hay que fusionarlos antes para evitar "El carrito está vacío".
   const sessionId = getOrCreateSessionId();
   if (sessionId) {
-    try {
-      await mergeCartSession(sessionId);
-    } catch (error) {
-      console.error("No se pudo fusionar el carrito antes del checkout", error);
-    }
+    await mergeCartSession(sessionId);
   }
 
   return apiFetch<unknown>(
