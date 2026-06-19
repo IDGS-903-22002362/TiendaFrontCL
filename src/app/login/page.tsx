@@ -120,6 +120,21 @@ function LoginPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, isLoading, role, user?.perfilCompleto, router]);
 
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      setIsSubmitting(false);
+      setShowVerification(false);
+      setShowPasswordLogin(false);
+      setShowPasswordRecovery(false);
+      setVerificationCode("");
+      setPendingEmail("");
+      setPassword("");
+      setErrorMessage("");
+      setAttempts(3);
+      setResendTimer(0);
+    }
+  }, [isAuthenticated, isLoading]);
+
   // Timer para reenviar código
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -162,6 +177,12 @@ function LoginPageContent() {
       hasAutoSubmitted.current = false;
     }
   }, [verificationCode]);
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      hasAutoSubmitted.current = false;
+    }
+  }, [isAuthenticated, isLoading]);
 
   const updateOtpDigit = (index: number, nextDigit: string) => {
     const safeDigit = nextDigit.replace(/\D/g, "").slice(-1);
@@ -291,20 +312,6 @@ function LoginPageContent() {
     } finally {
       setIsRequestingCode(false);
     }
-  };
-
-  const resetLoginState = () => {
-    setShowVerification(false);
-    setShowPasswordLogin(false);
-    setShowPasswordRecovery(false);
-
-    setVerificationCode("");
-    setPendingEmail("");
-    setPassword("");
-    setErrorMessage("");
-
-    setAttempts(3);
-    setResendTimer(0);
   };
 
   // Reenviar código

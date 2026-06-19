@@ -171,7 +171,6 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        setWishlistIds([]);
         toast({
           variant: "destructive",
           title: "No se pudieron cargar tus favoritos",

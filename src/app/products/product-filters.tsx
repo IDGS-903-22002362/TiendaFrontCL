@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type {
   CatalogQuery,
@@ -30,6 +31,11 @@ import {
   mapCatalogProductToProductCardViewModel,
 } from "@/lib/api/storefront";
 import { calcularPreciosOfertasPublicas } from "@/lib/ofertas-public";
+import { useAuth } from "@/hooks/use-auth";
+import {
+  getFavorites,
+  mapFavoriteProductToProductCard,
+} from "@/lib/api/favorites";
 
 type ProductFiltersProps = {
   initialPage: CatalogResponse;
@@ -225,6 +231,7 @@ export function ProductFilters({
   const router = useRouter();
   const searchParams = useSearchParams();
   const { wishlistIds } = useStorefront();
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
   const [productsWithOffers, setProductsWithOffers] = useState<Product[]>(() =>
     initialPage.items.map(mapCatalogProductToProductCardViewModel),
@@ -295,7 +302,13 @@ export function ProductFilters({
   const [onlyAvailable, setOnlyAvailable] = useState(
     () => searchParams.get("onlyAvailable") === "true",
   );
-  const [wishlistOnly, setWishlistOnly] = useState(false);
+  const [wishlistOnly, setWishlistOnly] = useState(
+    () => searchParams.get("wishlist") === "1",
+  );
+  const [favoriteProducts, setFavoriteProducts] = useState<Product[]>([]);
+  const [favoritesLoading, setFavoritesLoading] = useState(false);
+  const [favoritesError, setFavoritesError] = useState<string | null>(null);
+  const [favoritesReloadKey, setFavoritesReloadKey] = useState(0);
 
   const initialRender = useRef(true);
 
@@ -474,6 +487,63 @@ export function ProductFilters({
   };
 
   useEffect(() => {
+    if (!wishlistOnly) {
+      setFavoriteProducts([]);
+      setFavoritesError(null);
+      setFavoritesLoading(false);
+      return;
+    }
+
+    if (isAuthLoading) {
+      return;
+    }
+
+    if (!isAuthenticated) {
+      setFavoriteProducts(
+        items.filter((product) => wishlistIds.includes(product.id)),
+      );
+      setFavoritesError(null);
+      setFavoritesLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setFavoritesLoading(true);
+    setFavoritesError(null);
+
+    void getFavorites()
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+
+        setFavoriteProducts(
+          response.data
+            .map((favorite) => favorite.producto)
+            .filter(Boolean)
+            .map(mapFavoriteProductToProductCard),
+        );
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+
+        setFavoriteProducts([]);
+        setFavoritesError("No se pudieron cargar tus favoritos. Intenta de nuevo.");
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setFavoritesLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [wishlistOnly, isAuthenticated, isAuthLoading, items, wishlistIds, favoritesReloadKey]);
+
+  useEffect(() => {
     if (initialRender.current) {
       initialRender.current = false;
 
@@ -511,6 +581,7 @@ export function ProductFilters({
     }
 
     if (!onlyAvailable) params.set("onlyAvailable", "false");
+    if (wishlistOnly) params.set("wishlist", "1");
 
     const nextQuery = params.toString();
     const currentQuery = searchParams.toString();
@@ -520,7 +591,9 @@ export function ProductFilters({
       router.replace(nextUrl, { scroll: false });
     }
 
-    void loadPage(null);
+    if (!wishlistOnly) {
+      void loadPage(null);
+    }
   }, [
     category,
     linea,
@@ -534,6 +607,7 @@ export function ProductFilters({
     selectedOfferPercent,
     selectedSize,
     sort,
+    wishlistOnly,
   ]);
 
   const activeFilters: ActiveFilterChip[] = [];
@@ -623,7 +697,7 @@ export function ProductFilters({
 
   const productsBase = (() => {
     let filteredProducts = wishlistOnly
-      ? items.filter((product) => wishlistIds.includes(product.id))
+      ? favoriteProducts
       : items;
 
     if (onlyOffers) {
@@ -900,6 +974,23 @@ export function ProductFilters({
           </section>
         ) : null}
 
+        {favoritesError ? (
+          <div className="mt-6 border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+            <p>{favoritesError}</p>
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-3 min-h-[44px]"
+              onClick={() => {
+                setFavoritesError(null);
+                setFavoritesReloadKey((current) => current + 1);
+              }}
+            >
+              Reintentar
+            </Button>
+          </div>
+        ) : null}
+
         {error ? (
           <div className="mt-6 border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
             <p>{error}</p>
@@ -914,7 +1005,16 @@ export function ProductFilters({
           </div>
         ) : null}
 
-        {loading ? (
+        {wishlistOnly && !isAuthLoading && !isAuthenticated && wishlistIds.length === 0 ? (
+          <div className="mt-6 border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+            <p>Inicia sesión para guardar y ver tus productos favoritos.</p>
+            <Button asChild className="mt-4 min-h-[44px]">
+              <Link href="/login">Iniciar sesión</Link>
+            </Button>
+          </div>
+        ) : null}
+
+        {(wishlistOnly ? favoritesLoading : loading) ? (
           <div className="mt-6" role="status" aria-live="polite">
             <span className="sr-only">Cargando catálogo…</span>
             <ProductGridSkeleton />
@@ -923,7 +1023,20 @@ export function ProductFilters({
           <div className="mt-6">
             <ProductGrid products={productsToShow} />
 
-            {hasMore && !error ? (
+            {wishlistOnly &&
+            !favoritesLoading &&
+            !favoritesError &&
+            productsToShow.length === 0 ? (
+              <div className="mt-8 border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+                <p>
+                  {isAuthenticated
+                    ? "Aún no tienes productos en favoritos."
+                    : "No encontramos favoritos en el catálogo cargado. Inicia sesión para ver tu lista completa."}
+                </p>
+              </div>
+            ) : null}
+
+            {hasMore && !error && !wishlistOnly ? (
               <div className="mt-10 flex flex-col items-center gap-3 border-t border-black/8 pt-8">
                 <p
                   className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground"

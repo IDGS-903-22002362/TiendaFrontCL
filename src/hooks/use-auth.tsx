@@ -15,6 +15,7 @@ import {
   getLocalSessionStatus,
   type AuthUsuario,
 } from "@/lib/api/auth";
+import { resetAuthRecoveryCache } from "@/lib/api/client";
 import {
   checkInUserStreak,
   completeUserProfile,
@@ -99,12 +100,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const clearSession = useCallback(async () => {
+    resetAuthRecoveryCache();
+    await Promise.allSettled([clearLocalSession(), signOutFirebaseClient()]);
     setToken("");
     setRole("");
     setUser(null);
     setStreak(null);
-
-    await Promise.allSettled([clearLocalSession(), signOutFirebaseClient()]);
+    setIsLoading(false);
   }, []);
 
   const completeProfile = useCallback(
