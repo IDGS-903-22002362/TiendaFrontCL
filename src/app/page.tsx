@@ -17,6 +17,7 @@ import { LookbookSection } from "@/components/storefront/home/lookbook-section";
 import { ProductRail } from "@/components/storefront/home/product-rail";
 import { SectionHeader } from "@/components/storefront/home/section-header";
 import LineaCategorySection from "@/components/storefront/home/lineCategory-section";
+import { HomeRecommendations } from "@/components/storefront/recommendations/home-recommendations";
 
 export const metadata: Metadata = {
   title: "Inicio",
@@ -210,6 +211,10 @@ export default async function Home() {
           />
         </div>
       ) : null}
+
+      <div className="home-section">
+        <HomeRecommendations />
+      </div>
     </div>
   );
 }

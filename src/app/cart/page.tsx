@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { QuantitySelector } from "@/components/product/quantity-selector";
 import { EmptyState } from "@/components/storefront/shared/empty-state";
 import { Breadcrumbs } from "@/components/storefront/shared/breadcrumbs";
+import { CartRecommendations } from "@/components/storefront/recommendations/cart-recommendations";
 
 export default function CartPage() {
   const { state, totalItems, removeItem, setItemQuantity, isLoading } = useCart();
@@ -265,6 +266,10 @@ export default function CartPage() {
             </div>
           </div>
         </aside>
+      </div>
+
+      <div className="mt-12">
+        <CartRecommendations productIds={state.items.map((item) => item.id)} />
       </div>
     </div>
   );
