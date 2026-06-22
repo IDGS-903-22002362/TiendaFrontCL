@@ -38,3 +38,10 @@ export function POST(
 ) {
   return context.params.then((params) => forward(request, params.path));
 }
+
+export function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ path?: string[] }> },
+) {
+  return context.params.then((params) => forward(request, params.path));
+}

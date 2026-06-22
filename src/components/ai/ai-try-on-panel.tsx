@@ -1,11 +1,12 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { Loader2, Sparkles, UploadCloud } from "lucide-react";
+import { Loader2, Sparkles, Trash2, UploadCloud } from "lucide-react";
 import {
   createTryOnJob,
+  deleteAiUserImage,
   getTryOnDownloadLink,
   pollTryOnUntilFinished,
   uploadAiUserImage,
@@ -86,6 +87,10 @@ export function AiTryOnPanel({
   const [selectedFilePreview, setSelectedFilePreview] = useState("");
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const [processingStage, setProcessingStage] = useState("");
+  const [uploadedAssetId, setUploadedAssetId] = useState<string | null>(null);
+  const [resultImageUrl, setResultImageUrl] = useState("");
+  const runLockRef = useRef(false);
   const [threadMessages, setThreadMessages] = useState<AiMessage[]>([]);
 
   useEffect(() => {
@@ -123,7 +128,26 @@ export function AiTryOnPanel({
     defaultProduct ??
     null;
 
+  async function handleClearPhoto() {
+    if (isRunning) {
+      return;
+    }
+
+    if (uploadedAssetId) {
+      await deleteAiUserImage(uploadedAssetId).catch(() => undefined);
+    }
+
+    setSelectedFile(null);
+    setUploadedAssetId(null);
+    setResultImageUrl("");
+    setProcessingStage("");
+  }
+
   async function handleRunTryOn() {
+    if (runLockRef.current || isRunning) {
+      return;
+    }
+
     if (!selectedFile) {
       toast({
         variant: "destructive",
@@ -161,7 +185,10 @@ export function AiTryOnPanel({
       return;
     }
 
+    runLockRef.current = true;
     setIsRunning(true);
+    setProcessingStage("Subiendo tu foto...");
+    setResultImageUrl("");
 
     const userMessageId = `tryon_user_${Date.now()}`;
     setThreadMessages((currentMessages) => [
@@ -177,15 +204,24 @@ export function AiTryOnPanel({
 
     try {
       const asset = await uploadAiUserImage(selectedFile, activeSessionId);
+      setUploadedAssetId(asset.id);
+      setProcessingStage("Creando vista previa...");
+      const idempotencyKey = `tryon_${activeSessionId}_${selectedProduct.id}_${asset.id}`;
       const createdJob = await createTryOnJob({
         sessionId: activeSessionId,
         productId: selectedProduct.id,
         userImageAssetId: asset.id,
         consentAccepted: true,
+        idempotencyKey,
         ...(selectedProduct.clave ? { sku: selectedProduct.clave } : {}),
       });
 
       await onJobCreated?.(createdJob);
+      setProcessingStage(
+        createdJob.status === "processing"
+          ? "Generando con IA..."
+          : "En cola de procesamiento...",
+      );
 
       const completedJob = await pollTryOnUntilFinished(createdJob.id);
       await onJobCompleted?.(completedJob);
@@ -201,6 +237,9 @@ export function AiTryOnPanel({
             "Se generó el try-on, pero no se recibió la imagen final.",
           );
         }
+
+        setResultImageUrl(url);
+        setProcessingStage("");
 
         const assistantMessage = buildLocalMessage({
           id: `tryon_result_${completedJob.id}`,
@@ -234,8 +273,10 @@ export function AiTryOnPanel({
         }),
       ]);
       toast({ variant: "destructive", title: "Fallo", description: message });
+      setProcessingStage("");
     } finally {
       setIsRunning(false);
+      runLockRef.current = false;
     }
   }
 
@@ -306,7 +347,7 @@ export function AiTryOnPanel({
               <AiMessageThread
                 messages={threadMessages}
                 isLoading={false}
-                streamStatus={isRunning ? "Generando tu estilo..." : ""}
+                streamStatus={isRunning ? processingStage || "Generando tu estilo..." : ""}
                 emptyTitle=""
                 emptyDescription=""
                 className="h-[min(45vh,360px)]"
@@ -319,13 +360,46 @@ export function AiTryOnPanel({
               </div>
               <div className="space-y-1">
                 <p className="text-xs font-bold">Sube tu foto</p>
-                <p className="text-[10px] max-w-[200px] leading-tight">
-                  Procesaremos tu imagen para mostrarte cómo te queda el
-                  producto.
+                <p className="text-[10px] max-w-[240px] leading-tight">
+                  Usa una foto tuya de cuerpo completo o de torso, con buena luz,
+                  fondo simple y una sola persona visible.
                 </p>
               </div>
             </div>
           )}
+          {resultImageUrl && selectedFilePreview && (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase text-muted-foreground">
+                  Tu foto
+                </p>
+                <div className="relative aspect-[3/4] overflow-hidden rounded-xl border bg-muted">
+                  <img
+                    src={selectedFilePreview}
+                    alt="Tu foto original para comparar con el resultado del probador virtual"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase text-muted-foreground">
+                  Vista previa IA
+                </p>
+                <div className="relative aspect-[3/4] overflow-hidden rounded-xl border bg-muted">
+                  <img
+                    src={resultImageUrl}
+                    alt="Resultado del probador virtual con el producto seleccionado"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <p className="text-[9px] leading-tight text-muted-foreground">
+            Vista generada con IA: no garantiza talla, ajuste ni fidelidad exacta.
+            Usa la guía de tallas del producto para tu compra.
+          </p>
         </div>
       </ScrollArea>
 
@@ -347,20 +421,38 @@ export function AiTryOnPanel({
             <Input
               id="ai-tryon-file"
               type="file"
-              accept="image/*"
-              onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(e) => {
+                setUploadedAssetId(null);
+                setResultImageUrl("");
+                setSelectedFile(e.target.files?.[0] ?? null);
+              }}
               disabled={isRunning}
               className="sr-only"
             />
             {selectedFile && (
-              <p className="text-[10px] text-center text-primary font-bold truncate px-2">
-                {selectedFile.name}
-              </p>
+              <div className="flex items-center justify-center gap-2">
+                <p className="text-[10px] text-center text-primary font-bold">
+                  Foto lista para procesar
+                </p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-[10px]"
+                  onClick={() => void handleClearPhoto()}
+                  disabled={isRunning}
+                  aria-label="Eliminar foto seleccionada"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             )}
           </div>
 
           <label className="flex items-start gap-2.5 rounded-xl border bg-background/80 p-2.5 shadow-xs">
             <Checkbox
+              id="ai-tryon-consent"
               checked={consentAccepted}
               onCheckedChange={(checked) =>
                 setConsentAccepted(checked === true)
@@ -369,8 +461,9 @@ export function AiTryOnPanel({
               className="mt-0.5"
             />
             <span className="text-[9px] leading-tight text-muted-foreground font-medium">
-              Acepto procesar mi imagen con IA. Se eliminará automáticamente
-              después de generar la vista previa.
+              Acepto procesar mi imagen con IA solo para generar esta vista previa.
+              No se reutiliza para entrenamiento ni publicidad. Se elimina
+              automaticamente despues del procesamiento.
             </span>
           </label>
 
@@ -378,11 +471,12 @@ export function AiTryOnPanel({
             className="h-11 w-full rounded-xl text-xs font-bold shadow-lg transition-transform active:scale-95"
             disabled={isRunning || !selectedFile || !consentAccepted}
             onClick={() => void handleRunTryOn()}
+            aria-busy={isRunning}
           >
             {isRunning ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Procesando...
+                {processingStage || "Procesando..."}
               </>
             ) : (
               "Ver cómo me queda"

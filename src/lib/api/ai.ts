@@ -689,6 +689,14 @@ export async function uploadAiUserImage(file: File, sessionId?: string) {
   return mapTryOnAsset(payload.data);
 }
 
+export async function deleteAiUserImage(assetId: string) {
+  await apiFetch<ApiEnvelope<unknown>>(
+    `/api/ai/files/${encodeURIComponent(assetId)}`,
+    { method: "DELETE" },
+    getLocalOptions(),
+  );
+}
+
 export async function createTryOnJob(input: CreateTryOnJobInput) {
   const payload = await apiFetch<ApiEnvelope<unknown>>(
     "/api/ai/tryon/jobs",
