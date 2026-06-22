@@ -17,6 +17,7 @@ import {
   Bot,
   Coins,
   BadgePercent,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,6 +52,7 @@ const navGroups = [
   links: [
     { href: "/admin/banners", label: "Vallas Publicitarias", icon: Ruler, adminOnly: false, empleadoOnly: false },
     { href: "/admin/ofertas", label: "Ofertas", icon: BadgePercent, adminOnly: false, empleadoOnly: false },
+    { href: "/admin/recomendaciones", label: "Recomendaciones", icon: Sparkles, adminOnly: false, empleadoOnly: false },
     { href: "/admin/puntos", label: "Puntos", icon: Coins, adminOnly: false, empleadoOnly: true },
   ],
 },

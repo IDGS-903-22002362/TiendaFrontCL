@@ -4,6 +4,7 @@ import React, {
   createContext,
   useContext,
   useEffect,
+  useCallback,
   useMemo,
   useState,
 } from "react";
@@ -31,6 +32,7 @@ type CartContextType = {
     quantity: number,
   ) => Promise<void>;
   clearAllItems: () => Promise<void>;
+  reloadCart: () => Promise<void>;
   isLoading: boolean;
   totalItems: number;
   subtotal: number;
@@ -53,6 +55,24 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   const { toast } = useToast();
   const { token, isAuthenticated } = useAuth();
   const authToken = token && token !== "cookie-session" ? token : undefined;
+
+  const reloadCart = useCallback(async () => {
+    const activeSessionId = sessionId || getOrCreateSessionId();
+    if (!sessionId) {
+      setSessionId(activeSessionId);
+    }
+
+    try {
+      const cart = await fetchCart(
+        activeSessionId,
+        isAuthenticated ? authToken : undefined,
+      );
+      setCartId(cart.id);
+      setItems(cart.items);
+    } catch (error) {
+      console.error("Failed to reload cart from API", error);
+    }
+  }, [authToken, isAuthenticated, sessionId]);
 
   useEffect(() => {
     const loadCart = async () => {
@@ -232,6 +252,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         removeItem,
         setItemQuantity,
         clearAllItems,
+        reloadCart,
         isLoading,
         totalItems,
         subtotal,

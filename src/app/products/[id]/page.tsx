@@ -1,13 +1,8 @@
-import { fetchProductById, fetchProducts } from "@/lib/api/storefront";
+import { fetchProductById } from "@/lib/api/storefront";
 import { notFound } from "next/navigation";
 import { ProductDetailsClient } from "./product-details-client";
 import { Breadcrumbs } from "@/components/storefront/shared/breadcrumbs";
-import { RecommendationCarousel } from "@/components/storefront/product/recommendation-carousel";
-import {
-  getProductRecommendationTitle,
-  getRelatedProducts,
-  isProductVisible,
-} from "@/lib/storefront";
+import { ProductRecommendations } from "@/components/storefront/recommendations/product-recommendations";
 
 export default async function ProductPage({
   params,
@@ -20,9 +15,6 @@ export default async function ProductPage({
   if (!product) {
     notFound();
   }
-
-  const allProducts = await fetchProducts();
-  const relatedProducts = getRelatedProducts(allProducts.filter(isProductVisible), product);
 
   return (
     <div className="storefront-frame py-5 md:py-8">
@@ -38,15 +30,7 @@ export default async function ProductPage({
       </div>
 
       <ProductDetailsClient product={product}>
-        {relatedProducts.length > 0 ? (
-          <div className="pt-12 md:pt-16">
-            <RecommendationCarousel
-              title={getProductRecommendationTitle(product)}
-              products={relatedProducts}
-              contained={false}
-            />
-          </div>
-        ) : null}
+        <ProductRecommendations productId={product.id} />
       </ProductDetailsClient>
     </div>
   );

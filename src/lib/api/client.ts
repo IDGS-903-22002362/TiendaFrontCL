@@ -57,6 +57,10 @@ type SessionRefreshResult = {
 
 let pendingSessionRefresh: Promise<SessionRefreshResult> | null = null;
 
+export function resetAuthRecoveryCache(): void {
+  pendingSessionRefresh = null;
+}
+
 function isAuthSessionPath(path: string): boolean {
   return path === "/api/auth/session" || path.startsWith("/api/auth/session?");
 }

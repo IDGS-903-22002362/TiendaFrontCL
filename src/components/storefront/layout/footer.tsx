@@ -10,7 +10,7 @@ const footerColumns = [
       { href: "/products", label: "Todos los productos" },
       { href: "/products?category=jerseys", label: "Jerseys" },
       { href: "/products?tag=new", label: "Novedades" },
-      { href: "/products?tag=sale", label: "Oferton" },
+      { href: "/products?onlyOffers=true", label: "Oferton" },
     ],
   },
   {

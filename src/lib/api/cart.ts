@@ -125,6 +125,18 @@ function mapCartItem(input: unknown): CartItem {
   };
 }
 
+function pickCartItemsArray(record: UnknownRecord): unknown[] | undefined {
+  const keys = ["itemsDetallados", "items", "productos", "articulos", "carrito"];
+
+  for (const key of keys) {
+    if (Array.isArray(record[key])) {
+      return record[key] as unknown[];
+    }
+  }
+
+  return undefined;
+}
+
 function normalizeCartItems(payload: unknown): unknown[] {
   const data = unwrapData<unknown>(payload);
 
@@ -140,19 +152,16 @@ function normalizeCartItems(payload: unknown): unknown[] {
         : record.cart && typeof record.cart === "object"
           ? (record.cart as UnknownRecord)
           : undefined;
-    const keys = ["items", "productos", "articulos", "carrito"];
 
-    for (const key of keys) {
-      if (Array.isArray(record[key])) {
-        return record[key] as unknown[];
-      }
+    const directItems = pickCartItemsArray(record);
+    if (directItems) {
+      return directItems;
     }
 
     if (nestedCart) {
-      for (const key of ["items", "productos", "articulos"]) {
-        if (Array.isArray(nestedCart[key])) {
-          return nestedCart[key] as unknown[];
-        }
+      const nestedItems = pickCartItemsArray(nestedCart);
+      if (nestedItems) {
+        return nestedItems;
       }
     }
   }
@@ -225,7 +234,7 @@ async function fetchProductSnapshot(
       {
         method: "GET",
       },
-      { token },
+      { token, local: true },
     );
     return mapProductSnapshot(unwrapData<unknown>(payload));
   } catch {
@@ -504,6 +513,14 @@ export async function checkoutCart(payload: {
   shippingSelection?: ShippingSelection;
   notas?: string;
 } | CheckoutPayload) {
+  // El backend resuelve el checkout únicamente con el carrito del usuario
+  // autenticado (ignora x-session-id). Si los productos quedaron en el carrito
+  // anónimo, hay que fusionarlos antes para evitar "El carrito está vacío".
+  const sessionId = getOrCreateSessionId();
+  if (sessionId) {
+    await mergeCartSession(sessionId);
+  }
+
   return apiFetch<unknown>(
     "/api/carrito/checkout",
     {

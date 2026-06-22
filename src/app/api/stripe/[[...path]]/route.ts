@@ -39,21 +39,15 @@ export function GET(
 
     if (suffix === "/config") {
       const publishableKey = getStripePublishableKey();
-      if (!publishableKey) {
-        return NextResponse.json(
-          {
-            success: false,
-            message:
-              "Stripe publishable key no disponible o inválida en este entorno",
-          },
-          { status: 503 },
-        );
+      if (publishableKey) {
+        return NextResponse.json({
+          success: true,
+          data: { publishableKey },
+        });
       }
 
-      return NextResponse.json({
-        success: true,
-        data: { publishableKey },
-      });
+      // Sin env local: obtener pk_* del backend (STRIPE_PUBLISHABLE_KEY en Functions).
+      return forward(request, params.path);
     }
 
     return forward(request, params.path);

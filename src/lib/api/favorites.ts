@@ -1,4 +1,4 @@
-import type { FavoriteItem } from "@/lib/types";
+import type { FavoriteItem, Product } from "@/lib/types";
 import { apiFetch } from "./client";
 
 type FavoritesListResponse = {
@@ -29,6 +29,24 @@ type FavoriteMutationResponse = {
     createdAt: string;
   };
 };
+
+export function mapFavoriteProductToProductCard(
+  producto: FavoriteItem["producto"],
+): Product {
+  return {
+    id: producto.id,
+    clave: producto.clave,
+    name: producto.descripcion,
+    description: producto.descripcion,
+    price: producto.precioPublico,
+    images: producto.imagenes?.length ? producto.imagenes : [],
+    category: "",
+    tags: [],
+    stock: 1,
+    stockTotal: 1,
+    activo: true,
+  };
+}
 
 export async function getFavorites(limit = 100, offset = 0) {
   const safeLimit = Math.min(Math.max(limit, 1), 100);

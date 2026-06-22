@@ -15,6 +15,9 @@ import {
   getLocalSessionStatus,
   type AuthUsuario,
 } from "@/lib/api/auth";
+import { mergeRecommendationIdentity } from "@/lib/api/recommendations";
+import { getOrCreateSessionId } from "@/lib/api/cart";
+import { resetAuthRecoveryCache } from "@/lib/api/client";
 import {
   checkInUserStreak,
   completeUserProfile,
@@ -87,6 +90,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRole(response.data?.role ?? "");
     setUser(response.data?.user ?? null);
 
+    const sessionToken = response.data?.token || "cookie-session";
+    const sessionId = getOrCreateSessionId();
+    if (sessionId) {
+      void mergeRecommendationIdentity(sessionToken, sessionId).catch(() => undefined);
+    }
+
     // Notificar a Flutter si estamos dentro de un WebView
     if (typeof window !== "undefined" && (window as any).ClubLeonBridge) {
       (window as any).ClubLeonBridge.postMessage(
@@ -99,12 +108,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const clearSession = useCallback(async () => {
+    resetAuthRecoveryCache();
+    await Promise.allSettled([clearLocalSession(), signOutFirebaseClient()]);
     setToken("");
     setRole("");
     setUser(null);
     setStreak(null);
-
-    await Promise.allSettled([clearLocalSession(), signOutFirebaseClient()]);
+    setIsLoading(false);
   }, []);
 
   const completeProfile = useCallback(

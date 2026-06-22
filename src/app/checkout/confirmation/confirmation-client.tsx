@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ordersApi } from "@/lib/api/orders";
 import { paymentsApi } from "@/lib/api/payments";
+import { useCart } from "@/hooks/use-cart";
 import type { Orden } from "@/lib/types";
 
 const PAID_STATUSES = new Set([
@@ -104,6 +105,7 @@ type VerificationState =
 
 export function ConfirmationClient() {
   const searchParams = useSearchParams();
+  const { reloadCart } = useCart();
   const orderId = searchParams.get("ordenId") || "";
   const paymentId = searchParams.get("pagoId") || "";
   const sessionId =
@@ -208,6 +210,17 @@ export function ConfirmationClient() {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [checkStatus]);
+
+  const cartReloadedRef = useRef(false);
+
+  useEffect(() => {
+    if (verificationState !== "paid" || cartReloadedRef.current) {
+      return;
+    }
+
+    cartReloadedRef.current = true;
+    void reloadCart();
+  }, [verificationState, reloadCart]);
 
   const isPickup = order?.fulfillmentMethod === "PICKUP";
   const isPaid = verificationState === "paid";

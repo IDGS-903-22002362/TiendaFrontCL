@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Product } from "@/lib/types";
 import { normalizeStorefrontText } from "@/lib/storefront";
@@ -14,6 +14,12 @@ import {
 import { cn } from "@/lib/utils";
 import { ProductCardMinimal } from "./product-card-minimal";
 
+export type ProductRailTab = {
+  key: string;
+  label: string;
+  products: Product[];
+};
+
 type ProductRailProps = {
   eyebrow?: string;
   title: string;
@@ -21,6 +27,9 @@ type ProductRailProps = {
   products: Product[];
   href?: string;
   hrefLabel?: string;
+  showCategoryTabs?: boolean;
+  customTabs?: ProductRailTab[];
+  defaultTabKey?: string;
 };
 
 function getTabs(products: Product[]) {
@@ -35,7 +44,10 @@ function getTabs(products: Product[]) {
     }
   });
 
-  return Array.from(tabMap, ([key, label]) => ({ key, label })).slice(0, 5);
+  return [
+    { key: "all", label: "Todos" },
+    ...Array.from(tabMap, ([key, label]) => ({ key, label })).slice(0, 5),
+  ];
 }
 
 export function ProductRail({
@@ -45,19 +57,52 @@ export function ProductRail({
   products,
   href,
   hrefLabel,
+  showCategoryTabs = true,
+  customTabs,
+  defaultTabKey,
 }: ProductRailProps) {
-  const tabs = useMemo(() => getTabs(products), [products]);
-  const defaultTab = tabs[0]?.key ?? "all";
-  const [activeTab, setActiveTab] = useState(defaultTab);
+  const categoryTabs = useMemo(
+    () => (showCategoryTabs && !customTabs?.length ? getTabs(products) : []),
+    [customTabs, products, showCategoryTabs],
+  );
+
+  const tabs = customTabs?.length ? customTabs : categoryTabs;
+
+  const resolveDefaultTab = useCallback(
+    (tabList: ProductRailTab[]) => {
+      if (defaultTabKey && tabList.some((tab) => tab.key === defaultTabKey)) {
+        return defaultTabKey;
+      }
+
+      const firstWithProducts = tabList.find(
+        (tab) => (tab.products?.length ?? 0) > 0,
+      );
+      return firstWithProducts?.key ?? tabList[0]?.key ?? "all";
+    },
+    [defaultTabKey],
+  );
+
+  const [activeTab, setActiveTab] = useState(() =>
+    tabs.length > 0 ? resolveDefaultTab(tabs) : "all",
+  );
 
   useEffect(() => {
-    if (!tabs.some((tab) => tab.key === activeTab)) {
-      setActiveTab(defaultTab);
+    if (tabs.length === 0) {
+      return;
     }
-  }, [activeTab, defaultTab, tabs]);
+
+    if (!tabs.some((tab) => tab.key === activeTab)) {
+      setActiveTab(resolveDefaultTab(tabs));
+    }
+  }, [activeTab, resolveDefaultTab, tabs]);
 
   const filteredProducts = useMemo(() => {
-    if (!activeTab || activeTab === "all") {
+    if (customTabs?.length) {
+      const activeCustomTab = customTabs.find((tab) => tab.key === activeTab);
+      return activeCustomTab?.products ?? [];
+    }
+
+    if (!showCategoryTabs || !activeTab || activeTab === "all") {
       return products;
     }
 
@@ -65,9 +110,14 @@ export function ProductRail({
       const productKey = normalizeStorefrontText(product.category || product.lineName || "Productos");
       return productKey === activeTab;
     });
-  }, [activeTab, products]);
+  }, [activeTab, customTabs, products, showCategoryTabs]);
 
-  if (products.length === 0) {
+  if (
+    (customTabs?.length
+      ? !customTabs.some((tab) => (tab.products?.length ?? 0) > 0)
+      : products.length === 0) ||
+    filteredProducts.length === 0
+  ) {
     return null;
   }
 
@@ -130,7 +180,7 @@ export function ProductRail({
                   key={product.id}
                   className="basis-[76%] sm:basis-[48%] lg:basis-[31%] xl:basis-1/4"
                 >
-                  <ProductCardMinimal product={product} />
+                  <ProductCardMinimal product={product} trackingSurface="home" />
                 </CarouselItem>
               ))}
             </CarouselContent>

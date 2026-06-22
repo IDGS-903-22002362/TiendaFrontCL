@@ -16,7 +16,7 @@ env:
 
   # Frontend IP allowlist. Empty disables the restriction until real IPs are set.
   - variable: ALLOWED_FRONT_IPS
-    value: "127.0.0.1,::1,189.162.86.69,172.18.2.131,189.162.72.157,189.162.106.172,189.162.86.60,189.162.42.0"
+    value: "127.0.0.1,::1,189.162.86.69,172.18.2.131,189.162.72.157,189.162.106.172,189.162.86.60,189.162.42.0,187.189.168.106,189.162.49.177,189.162.55.68,189.162.34.167"
 
   - variable: NEXT_PUBLIC_AUTH_FIREBASE_API_KEY
     value: AIzaSyBq_lNV0ZXJdvaHAhw8eC5diGRafuqs6Do
@@ -33,11 +33,12 @@ env:
   - variable: NEXT_PUBLIC_AUTH_FIREBASE_STORAGE_BUCKET
     value: app-oficial-leon.firebasestorage.app
 
+  # Clave publishable live (pública por diseño). Debe coincidir con sk_live_* del backend.
   - variable: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-    value: pk_test_51SxZMWAcXWVVDBOGSUddGSABMplWjSCqbyq1LC0WTwRlZ20JSRXI1GjXtlDglZhm5Cvhv4dYcMxMpZU57xdaAyzO000OF4wNKD
+    value: pk_live_51SxZMKAKmsQ8tJuidM0zdYDGd0xf7JhPVtarD0GAIEc7sa7bQH121I5ibeCkQudWhoHE7CxgRQxS9Ohozz1FlJia00VTMX3q73
 
   - variable: NEXT_PUBLIC_APLAZO_SHOP_ID
-    value: Prueba Tienda
+    value: "Prueba Tienda"
 
   - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
     value: AIzaSyBH74ZroHtQ1VALF5eL7BjEIGU_R3OJWIE

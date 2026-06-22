@@ -4,25 +4,31 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ProductCard } from "@/components/product/product-card";
 import { EmptyState } from "@/components/storefront/shared/empty-state";
+import { ProductGridSkeleton } from "@/components/storefront/catalog/product-grid-skeleton";
 import {
   calcularPreciosOfertasPublicas,
   type ProductOfferPricing,
 } from "@/lib/ofertas-public";
+import { isOfertasCatalogSort } from "@/lib/api/storefront";
 import type { Product } from "@/lib/types";
 
 type ProductGridProps = {
   products: Product[];
 };
 
-function productHasActiveOffer(
-  product: Product,
-  pricingOferta?: ProductOfferPricing
-) {
-  if (!pricingOferta) {
-    return false;
-  }
+function isProductSoldOut(product: Product): boolean {
+  const stock = product.stockTotal ?? product.stock;
 
-  const precioOriginal = Number(pricingOferta.precioOriginal || product.price || 0);
+  return typeof stock === "number" && stock <= 0;
+}
+
+function productHasActiveOfferFromPricing(
+  product: Product,
+  pricingOferta: ProductOfferPricing,
+) {
+  const precioOriginal = Number(
+    pricingOferta.precioOriginal || product.price || 0,
+  );
   const precioFinal = Number(pricingOferta.precioFinal || 0);
 
   return (
@@ -30,6 +36,29 @@ function productHasActiveOffer(
     precioFinal > 0 &&
     precioFinal < precioOriginal
   );
+}
+
+function productHasActiveOfferFromCatalog(product: Product) {
+  const originalPrice = Number(product.price || 0);
+  const salePrice = Number(product.salePrice || 0);
+
+  return (
+    !isProductSoldOut(product) &&
+    originalPrice > 0 &&
+    salePrice > 0 &&
+    salePrice < originalPrice
+  );
+}
+
+function productHasActiveOffer(
+  product: Product,
+  pricingOferta?: ProductOfferPricing,
+) {
+  if (pricingOferta && productHasActiveOfferFromPricing(product, pricingOferta)) {
+    return true;
+  }
+
+  return productHasActiveOfferFromCatalog(product);
 }
 
 function getOfferDiscountPercent(
@@ -55,10 +84,11 @@ function getOfferDiscountPercent(
 
 export function ProductGrid({ products }: ProductGridProps) {
   const searchParams = useSearchParams();
-  const tag = searchParams.get("tag");
 
-const mostrarSoloOfertas =
-  tag === "sale" || searchParams.get("onlyOffers") === "true";
+  const mostrarSoloOfertas =
+    isOfertasCatalogSort(searchParams.get("sort")) ||
+    searchParams.get("tag") === "sale" ||
+    searchParams.get("onlyOffers") === "true";
 
 const discountParam = Number(searchParams.get("discount") || 0);
 
@@ -122,9 +152,13 @@ const selectedDiscount = Number.isFinite(discountParam)
       return products;
     }
 
-    return products.filter((product) =>
-      productHasActiveOffer(product, pricingOfertas[product.id])
-    );
+    if (products.some((product) => productHasActiveOfferFromCatalog(product))) {
+      return products.filter((product) =>
+        productHasActiveOffer(product, pricingOfertas[product.id]),
+      );
+    }
+
+    return products;
   }, [products, pricingOfertas, mostrarSoloOfertas]);
 
   if (products.length === 0) {
@@ -139,8 +173,9 @@ const selectedDiscount = Number.isFinite(discountParam)
 
   if (mostrarSoloOfertas && isLoadingOffers) {
     return (
-      <div className="border border-black/14 bg-white p-6 text-sm text-muted-foreground">
-        Cargando ofertas disponibles...
+      <div role="status" aria-live="polite">
+        <span className="sr-only">Cargando ofertas disponibles…</span>
+        <ProductGridSkeleton />
       </div>
     );
   }

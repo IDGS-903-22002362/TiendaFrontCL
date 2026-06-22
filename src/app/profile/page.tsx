@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { User, Mail, Shield, ShoppingBag, Clock, ChevronRight, Star, Pencil } from "lucide-react";
+import { User, Mail, Shield, ShoppingBag, Clock, ChevronRight, Star, Pencil, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
 import { getMyPoints, getMyProfile, saveEditableProfile, usuariosApi } from "@/lib/api/users";
 import { useToast } from "@/hooks/use-toast";
+import { ProfileRecommendations } from "@/components/storefront/recommendations/profile-recommendations";
 
 export default function ProfilePage() {
   const { user, role, isAuthenticated, isLoading, refreshSession } = useAuth();
@@ -19,7 +20,7 @@ export default function ProfilePage() {
   const [isLoadingPoints, setIsLoadingPoints] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
-  const [activeSection, setActiveSection] = useState<"personal" | "compras">("personal");
+  const [activeSection, setActiveSection] = useState<"personal" | "compras" | "recomendaciones">("personal");
   const [profileForm, setProfileForm] = useState({
     nombre: "",
     email: "",
@@ -307,9 +308,34 @@ export default function ProfilePage() {
         >
           Mis Compras
         </button>
+        <button
+          type="button"
+          onClick={() => setActiveSection("recomendaciones")}
+          className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${activeSection === "recomendaciones"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:text-foreground"
+            }`}
+        >
+          Recomendaciones
+        </button>
       </div>
 
-      {activeSection === "personal" ? (
+      {activeSection === "recomendaciones" ? (
+        <Card className="w-full">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5" />
+              Recomendaciones
+            </CardTitle>
+            <CardDescription>
+              Productos basados en lo que has visto y comprado en la tienda.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ProfileRecommendations />
+          </CardContent>
+        </Card>
+      ) : activeSection === "personal" ? (
         <Card className="w-full">
           <CardHeader className="pb-2 pt-5">
             <div className="flex items-center justify-between gap-3">

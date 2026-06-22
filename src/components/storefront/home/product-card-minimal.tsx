@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import type { Product } from "@/lib/types";
 import { HoverImagePreview } from "@/components/product/hover-image-preview";
@@ -9,9 +11,11 @@ import {
   normalizeStorefrontText,
 } from "@/lib/storefront";
 import { cn } from "@/lib/utils";
+import { trackProductClick } from "@/lib/analytics/product-events";
 
 type ProductCardMinimalProps = {
   product: Product;
+  trackingSurface?: "home" | "producto" | "carrito" | "cuenta" | "checkout";
 };
 
 function getHomeBadge(product: Product) {
@@ -28,7 +32,10 @@ function getHomeBadge(product: Product) {
   return badge;
 }
 
-export function ProductCardMinimal({ product }: ProductCardMinimalProps) {
+export function ProductCardMinimal({
+  product,
+  trackingSurface = "home",
+}: ProductCardMinimalProps) {
   const badge = getHomeBadge(product);
   const eyebrow = product.lineName || product.category;
   const badgeTone =
@@ -48,10 +55,19 @@ export function ProductCardMinimal({ product }: ProductCardMinimalProps) {
       : "object-center";
   const finalPrice = product.salePrice || product.price;
 
+  const handleProductClick = () => {
+    trackProductClick(product.id, trackingSurface);
+  };
+
   return (
     <article className="group flex h-full flex-col">
       <div className="relative">
-        <Link href={`/products/${product.id}`} className="block" aria-label={ariaLabel}>
+        <Link
+          href={`/products/${product.id}`}
+          className="block"
+          aria-label={ariaLabel}
+          onClick={handleProductClick}
+        >
           <HoverImagePreview
             images={product.images}
             alt={product.name}
@@ -91,7 +107,12 @@ export function ProductCardMinimal({ product }: ProductCardMinimalProps) {
             </p>
           ) : null}
         </div>
-        <Link href={`/products/${product.id}`} className="mt-3 block" aria-label={ariaLabel}>
+        <Link
+          href={`/products/${product.id}`}
+          className="mt-3 block"
+          aria-label={ariaLabel}
+          onClick={handleProductClick}
+        >
           <h3 className="line-clamp-2 text-[1rem] font-medium leading-[1.28] text-foreground md:text-[1.08rem]">
             {product.name}
           </h3>
