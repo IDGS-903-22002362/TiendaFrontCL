@@ -8,6 +8,7 @@ import { tallasApi } from "@/lib/api/tallas";
 import type { Category, Linea, Product, Talla } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { getApiErrorMessage } from "@/lib/api/errors";
+import { apiFetch } from "@/lib/api/client";
 import {
   EntityPicker,
   type EntityOption,
@@ -176,12 +177,6 @@ const EMPTY_CODIGO_PROMOCION_FORM: CodigoPromocionForm = {
   acumulableConOfertas: false,
 };
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ??
-  process.env.NEXT_PUBLIC_API_URL ??
-  process.env.NEXT_PUBLIC_BACKEND_URL ??
-  "";
-
 function normalizeSearchValue(value: string): string {
   return value
     .normalize("NFD")
@@ -190,58 +185,8 @@ function normalizeSearchValue(value: string): string {
     .trim();
 }
 
-function buildApiUrl(path: string) {
-  const cleanPath = path.startsWith("/") ? path : `/${path}`;
-  const cleanBase = API_BASE_URL.replace(/\/+$/, "");
-
-  if (!cleanBase) {
-    return cleanPath;
-  }
-
-  return `${cleanBase}${cleanPath}`;
-}
-
-function getAuthHeaders(): HeadersInit {
-  if (typeof window === "undefined") {
-    return {};
-  }
-
-  const token =
-    localStorage.getItem("token") ??
-    localStorage.getItem("authToken") ??
-    localStorage.getItem("accessToken") ??
-    localStorage.getItem("idToken") ??
-    localStorage.getItem("adminToken");
-
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
 async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(buildApiUrl(path), {
-    ...options,
-    credentials: "omit",
-    headers: {
-      "Content-Type": "application/json",
-      ...getAuthHeaders(),
-      ...(options?.headers ?? {}),
-    },
-  });
-
-  const contentType = response.headers.get("content-type") ?? "";
-  const payload = contentType.includes("application/json")
-    ? await response.json()
-    : await response.text();
-
-  if (!response.ok) {
-    const message =
-      typeof payload === "object" && payload && "message" in payload
-        ? String((payload as { message?: unknown }).message)
-        : `Error HTTP ${response.status}`;
-
-    throw new Error(message);
-  }
-
-  return payload as T;
+  return apiFetch<T>(path, options, { local: true });
 }
 
 function unwrapArray<T>(payload: unknown): T[] {

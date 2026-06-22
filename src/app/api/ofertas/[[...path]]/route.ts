@@ -9,13 +9,22 @@ function getSuffix(path?: string[]) {
   return `/${path.join("/")}`;
 }
 
+function shouldRequireAuth(request: NextRequest, path?: string[]) {
+  if (request.method === "GET") {
+    return false;
+  }
+
+  const suffix = getSuffix(path);
+  return suffix !== "/calcular-precios";
+}
+
 function forward(request: NextRequest, path?: string[]) {
   const suffix = getSuffix(path);
 
   return proxyToBackend({
     request,
     backendPath: `/api/ofertas${suffix}`,
-    requireAuth: request.method !== "GET" && suffix.startsWith("/admin"),
+    requireAuth: shouldRequireAuth(request, path),
   });
 }
 

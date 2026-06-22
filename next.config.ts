@@ -28,7 +28,7 @@ const defaultCsp = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "img-src 'self' data: blob: https: http://localhost:3000",
   "font-src 'self' data: https://fonts.gstatic.com",
-  "connect-src 'self' https://*.googleapis.com https://api.stripe.com https://js.stripe.com https://hooks.stripe.com https://*.cloudfunctions.net https://*.firebaseapp.com https://*.firebaseio.com wss://*.firebaseio.com",
+  `connect-src 'self' ${apiBaseUrl} https://*.googleapis.com https://api.stripe.com https://js.stripe.com https://hooks.stripe.com https://*.cloudfunctions.net https://*.firebaseapp.com https://*.firebaseio.com wss://*.firebaseio.com`,
   "frame-src 'self' https://apis.google.com https://js.stripe.com https://hooks.stripe.com https://www.google.com https://*.firebaseapp.com",
 ].join("; ");
 
