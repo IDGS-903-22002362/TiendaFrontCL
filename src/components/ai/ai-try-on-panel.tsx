@@ -7,7 +7,7 @@ import { Loader2, Sparkles, Trash2, UploadCloud } from "lucide-react";
 import {
   createTryOnJob,
   deleteAiUserImage,
-  getTryOnDownloadLink,
+  getTryOnImageProxyUrl,
   pollTryOnUntilFinished,
   uploadAiUserImage,
 } from "@/lib/api/ai";
@@ -227,17 +227,13 @@ export function AiTryOnPanel({
       await onJobCompleted?.(completedJob);
 
       if (completedJob.status === "completed") {
-        const link = await getTryOnDownloadLink(completedJob.id).catch(
-          () => null,
-        );
-        const url = link?.url || completedJob.outputImageUrl || "";
-
-        if (!url) {
+        if (!completedJob.outputAssetId && !completedJob.outputImageUrl) {
           throw new Error(
             "Se generó el try-on, pero no se recibió la imagen final.",
           );
         }
 
+        const url = getTryOnImageProxyUrl(completedJob.id);
         setResultImageUrl(url);
         setProcessingStage("");
 

@@ -13,7 +13,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import {
-  getTryOnDownloadLink,
+  getTryOnImageProxyUrl,
   listAiSessions,
   listTryOnJobs,
 } from "@/lib/api/ai";
@@ -172,8 +172,7 @@ export function AiWorkspace() {
 
   async function handleDownload(jobId: string) {
     try {
-      const data = await getTryOnDownloadLink(jobId);
-      window.open(data.url, "_blank", "noopener,noreferrer");
+      window.open(getTryOnImageProxyUrl(jobId), "_blank", "noopener,noreferrer");
     } catch (caughtError) {
       toast({
         variant: "destructive",

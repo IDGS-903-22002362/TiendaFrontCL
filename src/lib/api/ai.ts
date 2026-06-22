@@ -749,6 +749,10 @@ export async function pollTryOnUntilFinished(
   throw new Error("Timeout esperando el resultado del try-on");
 }
 
+export function getTryOnImageProxyUrl(jobId: string): string {
+  return `/api/ai/tryon/jobs/${encodeURIComponent(jobId)}/image`;
+}
+
 export async function getTryOnDownloadLink(jobId: string) {
   const payload = await apiFetch<
     ApiEnvelope<{ jobId?: string; url?: string; expiresInSec?: number }>
