@@ -42,6 +42,12 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  DEVOLUCIONES_POLITICA_ADMIN_NOTA,
+  DEVOLUCIONES_POLITICA_TEXTO,
+} from "@/lib/inventory-policy";
+import { Info } from "lucide-react";
 
 const TYPE_OPTIONS: Array<{
   label: string;
@@ -334,6 +340,15 @@ export default function InventoryMovementsPage() {
 
   return (
     <div className="space-y-6">
+      {movTipo === "devolucion" ? (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertTitle>Política de devoluciones</AlertTitle>
+          <AlertDescription>
+            {DEVOLUCIONES_POLITICA_TEXTO} {DEVOLUCIONES_POLITICA_ADMIN_NOTA}
+          </AlertDescription>
+        </Alert>
+      ) : null}
       {!canUseInventory ? (
         <Card>
           <CardContent className="py-6 text-sm text-muted-foreground">

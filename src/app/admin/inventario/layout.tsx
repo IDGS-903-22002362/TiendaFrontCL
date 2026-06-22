@@ -4,6 +4,8 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 
 const tabs = [
+  { name: "Resumen", href: "/admin/inventario" },
+  { name: "Recepciones", href: "/admin/inventario/recepciones" },
   { name: "Movimientos", href: "/admin/inventario/movimientos" },
   { name: "Ajustes", href: "/admin/inventario/ajustes" },
   { name: "Alertas", href: "/admin/inventario/alertas-stock" },
@@ -28,7 +30,10 @@ export default function InventoryLayout({
       <div className="border-b border-border">
         <nav className="-mb-px flex space-x-6" aria-label="Tabs">
           {tabs.map((tab) => {
-            const isActive = pathname === tab.href;
+            const isActive =
+              tab.href === "/admin/inventario"
+                ? pathname === "/admin/inventario"
+                : pathname === tab.href;
             return (
               <Link
                 key={tab.name}

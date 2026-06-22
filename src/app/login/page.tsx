@@ -279,10 +279,14 @@ function LoginPageContent() {
     setErrorMessage("");
 
     try {
-      const response = await apiFetch<RequestVerificationResponse>("/api/auth/request-verification-code", {
-        method: "POST",
-        body: JSON.stringify({ email: email.trim() }),
-      });
+      const response = await apiFetch<RequestVerificationResponse>(
+        "/api/auth/request-verification-code",
+        {
+          method: "POST",
+          body: JSON.stringify({ email: email.trim() }),
+        },
+        { local: true },
+      );
 
       if (response.success) {
         setPendingEmail(email.trim());
@@ -322,10 +326,14 @@ function LoginPageContent() {
     setErrorMessage("");
 
     try {
-      const response = await apiFetch<RequestVerificationResponse>("/api/auth/request-verification-code", {
-        method: "POST",
-        body: JSON.stringify({ email: pendingEmail }),
-      });
+      const response = await apiFetch<RequestVerificationResponse>(
+        "/api/auth/request-verification-code",
+        {
+          method: "POST",
+          body: JSON.stringify({ email: pendingEmail }),
+        },
+        { local: true },
+      );
 
       if (response.success) {
         setResendTimer(60);
@@ -367,13 +375,17 @@ function LoginPageContent() {
     setErrorMessage("");
 
     try {
-      const response = await apiFetch<VerifyAndLoginResponse>("/api/auth/verify-and-login", {
-        method: "POST",
-        body: JSON.stringify({
-          email: pendingEmail,
-          verificationCode: verificationCode.trim(),
-        }),
-      });
+      const response = await apiFetch<VerifyAndLoginResponse>(
+        "/api/auth/verify-and-login",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            email: pendingEmail,
+            verificationCode: verificationCode.trim(),
+          }),
+        },
+        { local: true },
+      );
 
       if (response.success && response.data?.token) {
         await createLocalSessionFromBackendToken(

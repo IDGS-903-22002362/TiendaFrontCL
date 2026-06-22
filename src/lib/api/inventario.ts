@@ -307,4 +307,106 @@ export const inventarioApi = {
       count: payload.count ?? list.length,
     };
   },
+
+  async listDashboard(
+    token: string,
+    params: {
+      q?: string;
+      lineaId?: string;
+      categoriaId?: string;
+      soloBajoStock?: boolean;
+      limit?: number;
+      cursor?: string;
+    } = {},
+  ) {
+    const payload = await apiFetch<ApiEnvelope<unknown[]>>(
+      `/api/inventario/dashboard${buildQuery(params)}`,
+      { method: "GET" },
+      { token, local: true },
+    );
+
+    const data = unwrapData<unknown>(payload);
+    const list = Array.isArray(data) ? data : [];
+
+    return {
+      data: list,
+      count: payload.count ?? list.length,
+      pagination: payload.pagination,
+    };
+  },
+
+  async getDiagnostic(token: string, productoId: string) {
+    const payload = await apiFetch<ApiEnvelope<unknown>>(
+      `/api/inventario/diagnostico/${productoId}`,
+      { method: "GET" },
+      { token, local: true },
+    );
+
+    return unwrapData<unknown>(payload);
+  },
+
+  async listRecepciones(
+    token: string,
+    params: {
+      estado?: string;
+      proveedorId?: string;
+      referencia?: string;
+      limit?: number;
+      cursor?: string;
+    } = {},
+  ) {
+    const payload = await apiFetch<ApiEnvelope<unknown[]>>(
+      `/api/inventario/recepciones${buildQuery(params)}`,
+      { method: "GET" },
+      { token, local: true },
+    );
+
+    const data = unwrapData<unknown>(payload);
+    const list = Array.isArray(data) ? data : [];
+
+    return {
+      data: list,
+      count: payload.count ?? list.length,
+      pagination: payload.pagination,
+    };
+  },
+
+  async getRecepcion(token: string, recepcionId: string) {
+    const payload = await apiFetch<ApiEnvelope<unknown>>(
+      `/api/inventario/recepciones/${recepcionId}`,
+      { method: "GET" },
+      { token, local: true },
+    );
+
+    return unwrapData<unknown>(payload);
+  },
+
+  createRecepcion(token: string, body: Record<string, unknown>) {
+    return apiFetch<ApiEnvelope<unknown>>(
+      "/api/inventario/recepciones",
+      { method: "POST", body: JSON.stringify(body) },
+      { token, local: true },
+    );
+  },
+
+  confirmRecepcion(
+    token: string,
+    recepcionId: string,
+    body: Record<string, unknown>,
+    idempotencyKey?: string,
+  ) {
+    return apiFetch<ApiEnvelope<unknown>>(
+      `/api/inventario/recepciones/${recepcionId}/confirmar`,
+      { method: "POST", body: JSON.stringify(body) },
+      { token, idempotencyKey, local: true },
+    );
+  },
+
+  closeRecepcion(token: string, recepcionId: string) {
+    return apiFetch<ApiEnvelope<unknown>>(
+      `/api/inventario/recepciones/${recepcionId}/cerrar`,
+      { method: "POST", body: JSON.stringify({}) },
+      { token, local: true },
+    );
+  },
 };

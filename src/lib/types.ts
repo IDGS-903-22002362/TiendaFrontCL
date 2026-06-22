@@ -242,6 +242,56 @@ export type InventoryAdjustmentPayload = {
   referencia?: string;
 };
 
+export type RecepcionEstado = "borrador" | "parcial" | "cerrada" | "cancelada";
+
+export type RecepcionLinea = {
+  productoId: string;
+  tallaId?: string | null;
+  cantidadEsperada: number;
+  cantidadAceptada: number;
+  cantidadRechazada: number;
+  cantidadPendiente: number;
+};
+
+export type RecepcionMercancia = {
+  id?: string;
+  proveedorId?: string;
+  proveedorNombre?: string;
+  referencia: string;
+  fechaRecepcion: string;
+  responsableId: string;
+  responsableNombre?: string;
+  estado: RecepcionEstado;
+  lineas: RecepcionLinea[];
+  notas?: string;
+  cerradaEn?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type CreateRecepcionPayload = {
+  proveedorId?: string;
+  proveedorNombre?: string;
+  referencia: string;
+  fechaRecepcion: string;
+  notas?: string;
+  lineas?: Array<{
+    productoId: string;
+    tallaId?: string;
+    cantidadEsperada: number;
+  }>;
+};
+
+export type ConfirmRecepcionPayload = {
+  lineas: Array<{
+    productoId: string;
+    tallaId?: string;
+    cantidadAceptada: number;
+    cantidadRechazada: number;
+  }>;
+  idempotencyKey?: string;
+};
+
 export type UserRole = "ADMIN" | "EMPLEADO" | "CLIENTE" | "EMPLEADO_CLUB" | "SUPER_ADMIN";
 
 export type Provider = "google" | "apple" | "email";
