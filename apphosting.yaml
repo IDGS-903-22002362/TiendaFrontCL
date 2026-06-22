@@ -16,7 +16,7 @@ env:
 
   # Frontend IP allowlist. Empty disables the restriction until real IPs are set.
   - variable: ALLOWED_FRONT_IPS
-    value: "127.0.0.1,::1,189.162.86.69,172.18.2.131,189.162.72.157,189.162.106.172,189.162.86.60,189.162.42.0,187.189.168.106,189.162.49.177"
+    value: "127.0.0.1,::1,189.162.86.69,172.18.2.131,189.162.72.157,189.162.106.172,189.162.86.60,189.162.42.0,187.189.168.106,189.162.49.177,189.162.55.68,189.162.34.167"
 
   - variable: NEXT_PUBLIC_AUTH_FIREBASE_API_KEY
     value: AIzaSyBq_lNV0ZXJdvaHAhw8eC5diGRafuqs6Do
