@@ -3,7 +3,7 @@ import Link from "next/link";
 const links = [
   { href: "/products?category=accesorios", label: "Ayuda" },
   { href: "/order-history", label: "Pedidos" },
-  { href: "/checkout", label: "Devoluciones" },
+  { href: "/TerminosCondiciones", label: "Devoluciones" },
   { href: "/products?category=gorra", label: "Contacto" },
 ];
 
