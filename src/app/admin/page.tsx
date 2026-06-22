@@ -5,9 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
-import { fetchProducts } from "@/lib/api/storefront";
 import { inventarioApi } from "@/lib/api/inventario";
-import { ordersApi } from "@/lib/api/orders";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Package,
@@ -16,14 +14,14 @@ import {
   Activity,
   Plus,
   ArrowRightLeft,
-  Search
+  Search,
 } from "lucide-react";
-import type { Product, InventoryAlert, Orden } from "@/lib/types";
 
 export default function AdminHomePage() {
   const { token } = useAuth();
 
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [metrics, setMetrics] = useState({
     productsCount: 0,
     lowStockCount: 0,
@@ -37,39 +35,22 @@ export default function AdminHomePage() {
 
       try {
         setLoading(true);
-        // Execute API calls in parallel
-        const [products, alertsResult, movementsResult, ordersResult] = await Promise.all([
-          fetchProducts().catch(() => [] as Product[]),
-          inventarioApi.listLowStockAlerts(token, { limit: 50, soloCriticas: true }).catch(() => ({ data: [] as InventoryAlert[] })),
-          inventarioApi.listMovements(token, { limit: 10 }).catch(() => ({ data: [] })),
-          ordersApi.list().catch(() => []),
-        ]);
-
-        const activeProducts = products.length;
-        // Check alerts format
-        const lowStock = Array.isArray(alertsResult) ? alertsResult.length : (alertsResult?.data?.length || 0);
-        const movements = movementsResult?.data?.length || 0;
-
-        // Count orders that are not fulfilled/completed/cancelled
-        const ordersData = Array.isArray(ordersResult) ? ordersResult : [];
-        const pendingOrders = ordersData.filter((o: Orden) =>
-          o.estado !== "CANCELADA" && o.estado !== "COMPLETADA" && o.estado !== "ENTREGADA"
-        ).length;
-
+        setError(null);
+        const summary = await inventarioApi.getOperationalSummary(token);
         setMetrics({
-          productsCount: activeProducts,
-          lowStockCount: lowStock,
-          recentMovementsCount: movements,
-          pendingOrdersCount: pendingOrders,
+          productsCount: summary.activeProductsCount,
+          lowStockCount: summary.lowStockCount,
+          recentMovementsCount: summary.recentMovementsCount,
+          pendingOrdersCount: summary.pendingOrdersCount,
         });
-      } catch (error) {
-        console.error("Error loading dashboard data:", error);
+      } catch {
+        setError("No se pudo cargar el resumen operativo.");
       } finally {
         setLoading(false);
       }
     }
 
-    loadDashboardData();
+    void loadDashboardData();
   }, [token]);
 
   return (
@@ -81,7 +62,12 @@ export default function AdminHomePage() {
         </p>
       </header>
 
-      {/* Resumen Operativo (KPIs) */}
+      {error ? (
+        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+
       <section>
         <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
           <Activity className="h-5 w-5 text-primary" />
@@ -148,14 +134,13 @@ export default function AdminHomePage() {
                 ) : (
                   <span className="text-3xl font-bold">{metrics.recentMovementsCount}</span>
                 )}
-                <span className="text-xs text-text-muted">últimos registros</span>
+                <span className="text-xs text-text-muted">últimos 7 días</span>
               </div>
             </CardContent>
           </Card>
         </div>
       </section>
 
-      {/* Acciones Rápidas */}
       <section>
         <h2 className="text-lg font-semibold mb-4">Acciones Rápidas</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
@@ -167,7 +152,7 @@ export default function AdminHomePage() {
           </Button>
 
           <Button asChild variant="outline" className="h-auto py-4 flex flex-col items-center justify-center gap-3">
-            <Link href="/admin/inventario">
+            <Link href="/admin/inventario/movimientos">
               <ArrowRightLeft className="h-6 w-6 mb-1 text-primary" />
               <span>Registrar Movimiento</span>
             </Link>
@@ -188,7 +173,6 @@ export default function AdminHomePage() {
           </Button>
         </div>
       </section>
-
     </div>
   );
 }

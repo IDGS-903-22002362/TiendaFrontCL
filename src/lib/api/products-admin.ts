@@ -1,4 +1,5 @@
 import type {
+  AdminProductListItem,
   AdminProductsResponse,
   AdminProductStatus,
   ProductFedexShipping,
@@ -147,6 +148,24 @@ export const productsAdminApi = {
       },
       { local: true, token: normalizeToken(token) },
     );
+  },
+
+  async searchAdminProducts(term: string, token?: string) {
+    const trimmed = term.trim();
+    if (!trimmed) {
+      return [];
+    }
+
+    const payload = await apiFetch<{ data?: AdminProductListItem[] }>(
+      `/api/productos/admin/buscar/${encodeURIComponent(trimmed)}`,
+      {
+        method: "GET",
+        cache: "no-store",
+      },
+      { local: true, token: normalizeToken(token) },
+    );
+
+    return Array.isArray(payload.data) ? payload.data : [];
   },
 
   async setProductActiveStatus(id: string, activo: boolean, token?: string) {

@@ -7,19 +7,19 @@ import {
   useMemo,
   useState,
 } from "react";
-import { fetchProducts } from "@/lib/api/storefront";
 import { inventarioApi } from "@/lib/api/inventario";
 import { tallasApi } from "@/lib/api/tallas";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import type {
   InventoryMovement,
   InventoryMovementType,
-  Product,
   ProductStockSnapshot,
   Talla,
 } from "@/lib/types";
 import { useAuth } from "@/hooks/use-auth";
-import { EntityPicker, type EntityOption } from "@/components/admin/entity-picker";
+import { ProductSearchPicker } from "@/components/admin/product-search-picker";
+import type { EntityOption } from "@/components/admin/entity-picker";
+import { mergeProductNameMap } from "@/hooks/use-admin-product-search";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -85,16 +85,17 @@ export default function InventoryMovementsPage() {
   const { token, role } = useAuth();
   const { toast } = useToast();
 
-  const [products, setProducts] = useState<Product[]>([]);
   const [tallas, setTallas] = useState<Talla[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
+  const [productNameById, setProductNameById] = useState<Map<string, string>>(
+    () => new Map(),
+  );
 
   const [rows, setRows] = useState<InventoryMovement[]>([]);
   const [loading, setLoading] = useState(false);
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const [hasNextPage, setHasNextPage] = useState(false);
 
-  const [filterProductQuery, setFilterProductQuery] = useState("");
   const [filterProductId, setFilterProductId] = useState("");
   const [filterProductStock, setFilterProductStock] =
     useState<ProductStockSnapshot | null>(null);
@@ -106,7 +107,6 @@ export default function InventoryMovementsPage() {
   const [movTipo, setMovTipo] = useState<
     "entrada" | "salida" | "venta" | "devolucion"
   >("entrada");
-  const [movProductQuery, setMovProductQuery] = useState("");
   const [movProductId, setMovProductId] = useState("");
   const [movStockSnapshot, setMovStockSnapshot] =
     useState<ProductStockSnapshot | null>(null);
@@ -117,36 +117,20 @@ export default function InventoryMovementsPage() {
   const [movOrdenId, setMovOrdenId] = useState("");
 
   const canUseInventory = useMemo(
-    () => Boolean(token) && role === "ADMIN",
+    () =>
+      Boolean(token) &&
+      (role === "ADMIN" || role === "EMPLEADO" || role === "SUPER_ADMIN"),
     [role, token],
   );
 
-  const productOptions: EntityOption[] = useMemo(
-    () =>
-      products.map((product) => ({
-        id: product.id,
-        label: product.name,
-        subtitle: product.description,
-      })),
-    [products],
-  );
-
-  const productNameById = useMemo(() => {
-    const map = new Map<string, string>();
-    products.forEach((product) => {
-      map.set(product.id, product.name);
-    });
-    return map;
-  }, [products]);
+  const handleProductResults = useCallback((options: EntityOption[]) => {
+    setProductNameById((current) => mergeProductNameMap(current, options));
+  }, []);
 
   const loadCatalog = useCallback(async () => {
     setCatalogLoading(true);
     try {
-      const [productsData, tallasData] = await Promise.all([
-        fetchProducts(),
-        tallasApi.getAll(),
-      ]);
-      setProducts(productsData);
+      const tallasData = await tallasApi.getAll();
       setTallas(tallasData);
     } catch (error) {
       toast({
@@ -313,7 +297,6 @@ export default function InventoryMovementsPage() {
 
       toast({ title: "Movimiento registrado" });
       setMovProductId("");
-      setMovProductQuery("");
       setMovTallaId("");
       setMovStockSnapshot(null);
       setMovCantidad("1");
@@ -370,15 +353,14 @@ export default function InventoryMovementsPage() {
                 <div className="md:col-span-4 space-y-2">
                   <label className="text-sm font-medium">Producto</label>
                   <div className="w-full">
-                    <EntityPicker
+                    <ProductSearchPicker
                       label=""
                       searchLabel="Buscar producto..."
                       selectLabel="Selecciona producto"
-                      query={movProductQuery}
                       value={movProductId}
-                      options={productOptions}
-                      onQueryChange={setMovProductQuery}
                       onValueChange={setMovProductId}
+                      token={token}
+                      onResultsChange={handleProductResults}
                       allowEmpty={false}
                       disabled={catalogLoading}
                     />
@@ -482,15 +464,14 @@ export default function InventoryMovementsPage() {
 
               <div className="flex flex-wrap items-center gap-3 mb-6 bg-muted/30 p-3 rounded-lg border border-border/50">
                 <div className="w-[200px]">
-                  <EntityPicker
+                  <ProductSearchPicker
                     label=""
                     searchLabel="Buscar producto"
                     selectLabel="Producto (Todos)"
-                    query={filterProductQuery}
                     value={filterProductId}
-                    options={productOptions}
-                    onQueryChange={setFilterProductQuery}
                     onValueChange={setFilterProductId}
+                    token={token}
+                    onResultsChange={handleProductResults}
                     allowEmpty
                     disabled={catalogLoading}
                   />
@@ -552,7 +533,6 @@ export default function InventoryMovementsPage() {
                   size="sm"
                   onClick={() => {
                     setFilterProductId("");
-                    setFilterProductQuery("");
                     setFilterTallaId("");
                     setTipo("all");
                     setFechaDesde("");

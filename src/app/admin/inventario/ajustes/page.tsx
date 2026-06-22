@@ -1,16 +1,15 @@
 "use client";
 
 import { type FormEvent, useEffect, useMemo, useState } from "react";
-import { fetchProducts } from "@/lib/api/storefront";
 import { inventarioApi } from "@/lib/api/inventario";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import type {
-  Product,
   ProductStockSnapshot,
   ProductStockUpdatePayload,
 } from "@/lib/types";
 import { useAuth } from "@/hooks/use-auth";
-import { EntityPicker, type EntityOption } from "@/components/admin/entity-picker";
+import { ProductSearchPicker } from "@/components/admin/product-search-picker";
+import type { EntityOption } from "@/components/admin/entity-picker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -40,10 +39,9 @@ export default function InventoryAdjustmentsPage() {
   const { token, role } = useAuth();
   const { toast } = useToast();
 
-  const [products, setProducts] = useState<Product[]>([]);
-  const [productsLoading, setProductsLoading] = useState(false);
-  const [productQuery, setProductQuery] = useState("");
   const [selectedProductId, setSelectedProductId] = useState("");
+  const [selectedProductLabel, setSelectedProductLabel] = useState("");
+  const [searchOptions, setSearchOptions] = useState<EntityOption[]>([]);
 
   const [mode, setMode] = useState<UpdateMode>("puntual");
   const [stockSnapshot, setStockSnapshot] = useState<ProductStockSnapshot | null>(
@@ -64,52 +62,29 @@ export default function InventoryAdjustmentsPage() {
   const [isSaving, setIsSaving] = useState(false);
 
   const canUseInventory = useMemo(
-    () => Boolean(token) && role === "ADMIN",
-    [role, token],
-  );
-
-  const productOptions: EntityOption[] = useMemo(
     () =>
-      products.map((product) => ({
-        id: product.id,
-        label: product.name,
-        subtitle: product.description,
-      })),
-    [products],
-  );
-
-  const selectedProduct = useMemo(
-    () => products.find((product) => product.id === selectedProductId) ?? null,
-    [products, selectedProductId],
+      Boolean(token) &&
+      (role === "ADMIN" || role === "EMPLEADO" || role === "SUPER_ADMIN"),
+    [role, token],
   );
 
   const hasSizeInventory = Boolean(stockSnapshot && stockSnapshot.tallaIds.length > 0);
 
   useEffect(() => {
-    const loadProducts = async () => {
-      setProductsLoading(true);
-      try {
-        const list = await fetchProducts();
-        setProducts(list);
-      } catch (error) {
-        toast({
-          variant: "destructive",
-          title: "No se pudieron cargar productos",
-          description: getApiErrorMessage(error),
-        });
-      } finally {
-        setProductsLoading(false);
-      }
-    };
-
-    void loadProducts();
-  }, [toast]);
-
-  useEffect(() => {
     setStockSnapshot(null);
     setTallaId("");
     setBulkValues({});
+    if (!selectedProductId) {
+      setSelectedProductLabel("");
+    }
   }, [selectedProductId]);
+
+  useEffect(() => {
+    const match = searchOptions.find((option) => option.id === selectedProductId);
+    if (match) {
+      setSelectedProductLabel(match.label);
+    }
+  }, [searchOptions, selectedProductId]);
 
   const hydrateBulkFromSnapshot = (snapshot: ProductStockSnapshot) => {
     const bySize = new Map(
@@ -301,17 +276,15 @@ export default function InventoryAdjustmentsPage() {
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-4">
               <div className="md:col-span-3">
-                <EntityPicker
+                <ProductSearchPicker
                   label="Producto"
                   searchLabel="Buscar por nombre, clave o descripción"
                   selectLabel="Selecciona producto"
-                  query={productQuery}
                   value={selectedProductId}
-                  options={productOptions}
-                  onQueryChange={setProductQuery}
                   onValueChange={setSelectedProductId}
+                  token={token}
+                  onResultsChange={setSearchOptions}
                   allowEmpty={false}
-                  disabled={productsLoading}
                 />
               </div>
               <div className="md:col-span-1 flex items-end">
@@ -328,7 +301,7 @@ export default function InventoryAdjustmentsPage() {
               <div className="md:col-span-4 text-sm text-muted-foreground rounded-md border p-3">
                 {stockSnapshot ? (
                   <>
-                    <p>Producto: {selectedProduct?.name ?? stockSnapshot.productoId}</p>
+                    <p>Producto: {selectedProductLabel || stockSnapshot.productoId}</p>
                     <p>ID: {stockSnapshot.productoId}</p>
                     <p>Existencias totales: {stockSnapshot.existencias}</p>
                     <p>
