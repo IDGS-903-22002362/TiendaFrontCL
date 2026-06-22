@@ -730,23 +730,42 @@ export async function getTryOnJob(jobId: string) {
   return mapTryOnJob(unwrapData(payload));
 }
 
+const activeTryOnPolls = new Map<string, Promise<TryOnJob>>();
+
 export async function pollTryOnUntilFinished(
   jobId: string,
-  intervalMs = 4000,
-  timeoutMs = 120000,
+  intervalMs = Number(process.env.NEXT_PUBLIC_AI_TRYON_POLL_INTERVAL_MS) || 5000,
+  timeoutMs = Number(process.env.NEXT_PUBLIC_AI_TRYON_POLL_TIMEOUT_MS) || 120000,
 ) {
-  const startedAt = Date.now();
-
-  while (Date.now() - startedAt < timeoutMs) {
-    const job = await getTryOnJob(jobId);
-    if (job.status === "completed" || job.status === "failed") {
-      return job;
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  const existingPoll = activeTryOnPolls.get(jobId);
+  if (existingPoll) {
+    return existingPoll;
   }
 
-  throw new Error("Timeout esperando el resultado del try-on");
+  const pollPromise = (async () => {
+    const startedAt = Date.now();
+    let pollIntervalMs = intervalMs;
+
+    while (Date.now() - startedAt < timeoutMs) {
+      const job = await getTryOnJob(jobId);
+      if (job.status === "completed" || job.status === "failed") {
+        return job;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+      pollIntervalMs = Math.min(Math.round(pollIntervalMs * 1.25), 10000);
+    }
+
+    throw new Error("Timeout esperando el resultado del try-on");
+  })();
+
+  activeTryOnPolls.set(jobId, pollPromise);
+
+  try {
+    return await pollPromise;
+  } finally {
+    activeTryOnPolls.delete(jobId);
+  }
 }
 
 export function getTryOnImageProxyUrl(jobId: string): string {

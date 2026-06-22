@@ -12,6 +12,10 @@ import {
   uploadAiUserImage,
 } from "@/lib/api/ai";
 import type { AiMessage, TryOnJob } from "@/lib/ai/types";
+import {
+  getTryOnIneligibilityMessage,
+  isTryOnEligibleProduct,
+} from "@/lib/ai/try-on-eligibility";
 import type { Product } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { getApiErrorMessage } from "@/lib/api/errors";
@@ -127,6 +131,15 @@ export function AiTryOnPanel({
     products.find((product) => product.id === selectedProductId) ??
     defaultProduct ??
     null;
+  const isSelectedProductEligible = selectedProduct
+    ? isTryOnEligibleProduct({
+        categoryId: selectedProduct.categoryId,
+        categoryName: selectedProduct.category,
+        lineId: selectedProduct.lineId,
+        lineName: selectedProduct.lineName,
+        description: selectedProduct.description,
+      })
+    : false;
 
   async function handleClearPhoto() {
     if (isRunning) {
@@ -162,6 +175,21 @@ export function AiTryOnPanel({
         variant: "destructive",
         title: "Producto requerido",
         description: "Selecciona un producto.",
+      });
+      return;
+    }
+
+    if (!isSelectedProductEligible) {
+      toast({
+        variant: "destructive",
+        title: "Producto no compatible",
+        description: getTryOnIneligibilityMessage({
+          categoryId: selectedProduct.categoryId,
+          categoryName: selectedProduct.category,
+          lineId: selectedProduct.lineId,
+          lineName: selectedProduct.lineName,
+          description: selectedProduct.description,
+        }),
       });
       return;
     }
@@ -465,7 +493,12 @@ export function AiTryOnPanel({
 
           <Button
             className="h-11 w-full rounded-xl text-xs font-bold shadow-lg transition-transform active:scale-95"
-            disabled={isRunning || !selectedFile || !consentAccepted}
+            disabled={
+              isRunning ||
+              !selectedFile ||
+              !consentAccepted ||
+              !isSelectedProductEligible
+            }
             onClick={() => void handleRunTryOn()}
             aria-busy={isRunning}
           >

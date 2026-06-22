@@ -7,6 +7,7 @@ export type Product = {
   salePrice?: number;
   images: string[];
   category: string;
+  categoryId?: string;
   lineId?: string;
   lineName?: string;
   tags: ("new" | "sale")[];

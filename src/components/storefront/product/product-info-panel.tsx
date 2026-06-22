@@ -19,6 +19,7 @@ import {
   getProductStockState,
   isPersonalizableProduct,
 } from "@/lib/storefront";
+import { isTryOnEligibleProduct } from "@/lib/ai/try-on-eligibility";
 import { cn } from "@/lib/utils";
 import { PersonalizationPanel } from "./personalization-panel";
 import { WishlistButton } from "@/components/storefront/shared/wishlist-button";
@@ -107,6 +108,13 @@ export function ProductInfoPanel({
     (!sizeRequired || Boolean(selectedSize)) && selectedStock > 0;
   const canPersonalize =
     isPersonalizableProduct(product) && Boolean(selectedSize);
+  const canTryOn = isTryOnEligibleProduct({
+    categoryId: product.categoryId,
+    categoryName: product.category,
+    lineId: product.lineId,
+    lineName: product.lineName,
+    description: product.description,
+  });
   const addLabel =
     selectedStock <= 0
       ? "Agotado"
@@ -304,15 +312,17 @@ export function ProductInfoPanel({
                 >
                   {addLabel}
                 </Button>
-                <Button
-                  variant="outline"
-                  className="hidden h-[52px] lg:h-[56px] min-w-[44px] min-h-[44px] rounded-[1rem] border-primary/30 text-primary hover:bg-primary/10 lg:inline-flex"
-                  type="button"
-                  onClick={handleOpenTryOn}
-                >
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Pruebatelo
-                </Button>
+                {canTryOn ? (
+                  <Button
+                    variant="outline"
+                    className="hidden h-[52px] lg:h-[56px] min-w-[44px] min-h-[44px] rounded-[1rem] border-primary/30 text-primary hover:bg-primary/10 lg:inline-flex"
+                    type="button"
+                    onClick={handleOpenTryOn}
+                  >
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Pruebatelo
+                  </Button>
+                ) : null}
               </div>
             </div>
 

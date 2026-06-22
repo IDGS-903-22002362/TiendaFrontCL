@@ -47,7 +47,7 @@ function getCatalogSort(value: string | null, params: URLSearchParams): CatalogS
     return value as CatalogSort;
   }
 
-  return "destacados";
+  return "recientes";
 }
 
 function resolveInitialOnlyOffers(params: URLSearchParams): boolean {
