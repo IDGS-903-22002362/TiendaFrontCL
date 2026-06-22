@@ -1,18 +1,29 @@
 import { Suspense } from "react";
 import { ProductFilters } from "./product-filters";
-import { fetchCategories, fetchCatalogPage } from "@/lib/api/storefront";
-import type { CatalogSort } from "@/lib/types";
+import type { CatalogQuery, CatalogSort } from "@/lib/types";
+import {
+  DESTACADOS_CATALOG_FETCH_LIMIT,
+  fetchCategories,
+  fetchCatalogPage,
+  getCatalogQueryForSort,
+  isOfertasCatalogSort,
+  mapCatalogSortForOffersView,
+  resolveCatalogOnlyAvailable,
+} from "@/lib/api/storefront";
 import { lineasApi } from "@/lib/api/lineas";
 import { tallasApi } from "@/lib/api/tallas";
-import { OffersHero } from "@/components/storefront/catalog/offers-hero";
-
 export const dynamic = "force-dynamic";
 
 const CATALOG_SORTS: CatalogSort[] = [
   "destacados",
+  "populares",
+  "mas_comprados",
+  "recientes",
+  "ofertas_populares",
+  "ofertas_mas_compradas",
+  "ofertas_recientes",
   "precio_asc",
   "precio_desc",
-  "recientes",
   "nombre_asc",
 ];
 
@@ -20,10 +31,43 @@ function getSingleParam(params: URLSearchParams, key: string) {
   return params.get(key)?.trim() || undefined;
 }
 
-function getCatalogSort(value: string | null): CatalogSort {
-  return CATALOG_SORTS.includes(value as CatalogSort)
-    ? (value as CatalogSort)
-    : "destacados";
+function isLegacySaleRoute(params: URLSearchParams): boolean {
+  const tag = params.get("tag");
+  const tags = params.get("tags")?.split(",") ?? [];
+
+  return (
+    params.get("onlyOffers") === "true" ||
+    tag === "sale" ||
+    tags.includes("sale")
+  );
+}
+
+function getCatalogSort(value: string | null, params: URLSearchParams): CatalogSort {
+  if (value && CATALOG_SORTS.includes(value as CatalogSort)) {
+    return value as CatalogSort;
+  }
+
+  return "destacados";
+}
+
+function resolveInitialOnlyOffers(params: URLSearchParams): boolean {
+  if (isLegacySaleRoute(params)) {
+    return true;
+  }
+
+  if (isOfertasCatalogSort(getCatalogSort(params.get("sort"), params))) {
+    return true;
+  }
+
+  const discountParam =
+    params.get("offerPercent")?.trim() || params.get("discount")?.trim();
+
+  if (discountParam) {
+    const parsed = Number(discountParam);
+    return Number.isFinite(parsed) && parsed > 0;
+  }
+
+  return false;
 }
 
 function getNumberParam(params: URLSearchParams, key: string) {
@@ -59,23 +103,25 @@ export default async function ProductsPage({
 
   const queryKey = queryParams.toString() || "all";
 
-  const initialParams = {
-    limit: 24,
+  const sort = getCatalogSort(queryParams.get("sort"), queryParams);
+  const onlyOffers = resolveInitialOnlyOffers(queryParams);
+  const effectiveSort = onlyOffers ? mapCatalogSortForOffersView(sort) : sort;
+
+  const initialParams: CatalogQuery = {
+    ...getCatalogQueryForSort(effectiveSort, DESTACADOS_CATALOG_FETCH_LIMIT, {
+      onlyOffers,
+    }),
     category: getSingleParam(queryParams, "category"),
     line: getSingleParam(queryParams, "line"),
     talla: getSingleParam(queryParams, "talla"),
     minPrice: getNumberParam(queryParams, "minPrice"),
-    maxPrice: getNumberParam(queryParams, "maxPrice"),
-    sort: getCatalogSort(queryParams.get("sort")),
+    maxPrice: onlyOffers
+      ? undefined
+      : getNumberParam(queryParams, "maxPrice"),
     q: getSingleParam(queryParams, "q"),
-    onlyOffers: queryParams.get("onlyOffers") === "true",
-    onlyAvailable: queryParams.get("onlyAvailable") === "true",
+    onlyAvailable: resolveCatalogOnlyAvailable(queryParams.get("onlyAvailable")),
+    onlyOffers,
   };
-
-  const isOffersPage =
-  initialParams.onlyOffers || queryParams.get("tag") === "sale";
-
-const currentDiscount = getNumberParam(queryParams, "discount");
 
   const [initialPage, categories, lineas, tallas] = await Promise.all([
     fetchCatalogPage(initialParams).catch(() => ({ items: [], nextCursor: null, hasMore: false })),
@@ -84,25 +130,17 @@ const currentDiscount = getNumberParam(queryParams, "discount");
     tallasApi.getAll(),
   ]);
 
- return (
-  <div className="container py-6 md:py-8 lg:py-10">
-    {isOffersPage && (
-      <OffersHero
-  products={initialPage.items}
-  categories={categories}
-  currentDiscount={currentDiscount}
-/>
-    )}
-
-    <Suspense fallback={<div>Cargando catálogo...</div>}>
-      <ProductFilters
-        key={queryKey}
-        initialPage={initialPage}
-        categories={categories}
-        lineas={lineas}
-        tallas={tallas}
-      />
-    </Suspense>
-  </div>
-);
+  return (
+    <div className="container py-6 md:py-8 lg:py-10">
+      <Suspense fallback={<div>Cargando catálogo...</div>}>
+        <ProductFilters
+          key={queryKey}
+          initialPage={initialPage}
+          categories={categories}
+          lineas={lineas}
+          tallas={tallas}
+        />
+      </Suspense>
+    </div>
+  );
 }

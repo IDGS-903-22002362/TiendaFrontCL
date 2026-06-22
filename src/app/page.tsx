@@ -1,23 +1,29 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { fetchCategories, fetchProducts } from "@/lib/api/storefront";
+import {
+  buildHomeDestacadosRailProducts,
+  HOME_DESTACADOS_RAIL_LIMIT,
+} from "@/lib/api/home-sections";
+import {
+  DESTACADOS_CATALOG_FETCH_LIMIT,
+  fetchCategories,
+  fetchDestacadosProducts,
+  fetchProducts,
+} from "@/lib/api/storefront";
 import type { Product } from "@/lib/types";
 import {
   getCategoryCards,
-  getFeaturedProducts,
   getHeroProduct,
-  getNewArrivalProducts,
   isPersonalizableProduct,
 } from "@/lib/storefront";
 import { CategoryGrid } from "@/components/storefront/home/category-grid";
 import { EditorialSplit } from "@/components/storefront/home/editorial-split";
 import { HeroEditorial } from "@/components/storefront/home/hero-editorial";
-import { LookbookSection } from "@/components/storefront/home/lookbook-section";
+import { HomeDynamicRails } from "@/components/storefront/home/home-dynamic-rails";
 import { ProductRail } from "@/components/storefront/home/product-rail";
 import { SectionHeader } from "@/components/storefront/home/section-header";
 import LineaCategorySection from "@/components/storefront/home/lineCategory-section";
-import { HomeRecommendations } from "@/components/storefront/recommendations/home-recommendations";
 
 export const metadata: Metadata = {
   title: "Inicio",
@@ -39,9 +45,10 @@ function dedupeProducts(products: Array<Product | null | undefined>) {
 }
 
 export default async function Home() {
-  const [products, categories] = await Promise.all([
+  const [products, categories, featuredFromAnalytics] = await Promise.all([
     fetchProducts(),
     fetchCategories(),
+    fetchDestacadosProducts(DESTACADOS_CATALOG_FETCH_LIMIT),
   ]);
 
   const heroProduct = getHeroProduct(products);
@@ -59,18 +66,17 @@ export default async function Home() {
     );
   }
 
-  const featuredProducts = dedupeProducts(getFeaturedProducts(products));
-  const newArrivals = dedupeProducts(getNewArrivalProducts(products));
+  const destacadosProducts = dedupeProducts(featuredFromAnalytics);
   const categoryCards = getCategoryCards(categories, products);
   const homeCategories = [...categoryCards]
     .sort((left, right) => right.count - left.count)
     .slice(0, 4);
+
   const customizableProduct =
-    featuredProducts.find(isPersonalizableProduct) ||
+    destacadosProducts.find(isPersonalizableProduct) ||
     products.find(isPersonalizableProduct);
   const editorialProduct =
-    featuredProducts.find((product) => product.id !== heroProduct.id) ||
-    newArrivals.find((product) => product.id !== heroProduct.id) ||
+    destacadosProducts.find((product) => product.id !== heroProduct.id) ||
     heroProduct;
 
   const collectionProduct =
@@ -82,33 +88,12 @@ export default async function Home() {
       heroProduct,
     ])[0] ?? heroProduct;
 
-  const featuredRailProducts = dedupeProducts(
-    featuredProducts.filter(
-      (product) =>
-        product.id !== heroProduct.id && product.id !== collectionProduct.id,
-    ),
-  ).slice(0, 6);
-
-  const lookbookProducts = dedupeProducts([
-    editorialProduct,
-    ...featuredProducts,
-    ...newArrivals,
-  ])
-    .filter((product) => product.id !== collectionProduct.id)
-    .slice(0, 3);
-
-  const excludedIds = new Set([
-    heroProduct.id,
-    collectionProduct.id,
-    ...lookbookProducts.map((product) => product.id),
-  ]);
-
-  const secondaryRailProducts = dedupeProducts([
-    ...newArrivals,
-    ...featuredProducts,
-  ])
-    .filter((product) => !excludedIds.has(product.id))
-    .slice(0, 6);
+  // Same destacados ranking as /products?sort=destacados; hero/collection are editorial slots.
+  const featuredRailProducts = buildHomeDestacadosRailProducts(
+    destacadosProducts,
+    [heroProduct.id, collectionProduct.id],
+    HOME_DESTACADOS_RAIL_LIMIT,
+  );
 
   const collectionIsPersonalizable = isPersonalizableProduct(collectionProduct);
   const collectionTitle = collectionIsPersonalizable
@@ -174,47 +159,22 @@ export default async function Home() {
       {featuredRailProducts.length > 0 ? (
         <div className="home-section">
           <ProductRail
-            eyebrow="Productos"
+            eyebrow="Analytics"
             title="Destacados"
-            description="Descubre los artículos favoritos de la afición y lleva contigo la pasión por nuestros colores."
+            description="Los artículos con mayor interacción real en la tienda."
             products={featuredRailProducts}
-            href="/products"
+            href="/products?sort=destacados"
             hrefLabel="Ver más"
+            showCategoryTabs={false}
           />
         </div>
       ) : null}
 
-      {lookbookProducts.length >= 3 ? (
-        <div className="home-section">
-          <LookbookSection products={lookbookProducts} />
-        </div>
-      ) : null}
+      <HomeDynamicRails />
 
-      {/* Sección de Líneas */}
       <section className="home-section">
-        <div className="container">
-        </div>
-        <div className="mt-8">
-          <LineaCategorySection />
-        </div>
+        <LineaCategorySection />
       </section>
-
-      {secondaryRailProducts.length > 0 ? (
-        <div className="home-section">
-          <ProductRail
-            eyebrow="Productos nuevos"
-            title="Novedades"
-            description="Los artículos que marcan tendencia dentro y fuera del estadio."
-            products={secondaryRailProducts}
-            href="/products?tag=new"
-            hrefLabel="Ver más"
-          />
-        </div>
-      ) : null}
-
-      <div className="home-section">
-        <HomeRecommendations />
-      </div>
     </div>
   );
 }

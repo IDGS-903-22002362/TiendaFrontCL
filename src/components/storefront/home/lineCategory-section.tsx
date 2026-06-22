@@ -153,7 +153,7 @@ export default function LineaCategorySection() {
     };
 
     return (
-        <div className=" mx-auto px-6 py-1 space-y-20 min-h-screen antialiased">
+        <div className="mx-auto space-y-20 px-6 py-1 antialiased">
 
             {/* Sección de Líneas */}
             <section className="space-y-8">

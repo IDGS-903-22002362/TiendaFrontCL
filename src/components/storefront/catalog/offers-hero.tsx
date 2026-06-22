@@ -276,11 +276,9 @@ export function OffersHero({
   categories,
   currentDiscount,
 }: OffersHeroProps) {
-  const offerProducts = products.filter((product) => {
-    const discount = getProductDiscountPercent(product);
-
-    return discount > 0 || products.length > 0;
-  });
+  const offerProducts = products.filter(
+    (product) => getProductDiscountPercent(product) > 0,
+  );
 
   const discountOptions = Array.from(
     new Set(
@@ -325,8 +323,8 @@ export function OffersHero({
       id: groupId,
       name: groupName,
       href: category
-        ? `/products?onlyOffers=true&category=${encodeURIComponent(groupSlug)}`
-        : `/products?onlyOffers=true&q=${encodeURIComponent(productName)}`,
+        ? `/products?sort=ofertas_populares&category=${encodeURIComponent(groupSlug)}`
+        : `/products?sort=ofertas_populares&q=${encodeURIComponent(productName)}`,
       image,
       productCount: 1,
     });
@@ -390,7 +388,7 @@ export function OffersHero({
               return (
                 <Link
                   key={discount}
-                  href={`/products?onlyOffers=true&discount=${discount}`}
+                  href={`/products?sort=ofertas_populares&discount=${discount}`}
                   className={cn(
                     "border px-4 py-2 text-center text-sm font-bold tracking-[0.14em] transition",
                     isActive

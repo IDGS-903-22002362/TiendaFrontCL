@@ -2,6 +2,7 @@ import type {
   CatalogQuery,
   CatalogResponse,
   CatalogProductCard,
+  CatalogSort,
   Category,
   Product,
   ProductExtraDetail,
@@ -13,6 +14,7 @@ import type {
   ProductUserRating,
 } from "@/lib/types";
 import { apiFetch, unwrapData } from "./client";
+import { enrichProductWithOfferPricing } from "@/lib/ofertas-public";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -514,7 +516,7 @@ export async function fetchProductById(id: string): Promise<Product | null> {
 
     const stockData = stockPayload?.data;
     if (!stockData) {
-      return product;
+      return enrichProductWithOfferPricing(product);
     }
 
     const normalizedInventory = mapSizeInventory(stockData.inventarioPorTalla);
@@ -525,7 +527,7 @@ export async function fetchProductById(id: string): Promise<Product | null> {
       product.stockTotal ?? product.stock,
     );
 
-    return {
+    return enrichProductWithOfferPricing({
       ...product,
       stock: stockTotal,
       stockTotal,
@@ -533,7 +535,7 @@ export async function fetchProductById(id: string): Promise<Product | null> {
       sizes: hasSizeInventory ? tallaIds : product.sizes,
       inventarioPorTalla: normalizedInventory,
       hasSizeInventory,
-    };
+    });
   } catch (error) {
     console.error("fetchProductById failed", error);
     return null;
@@ -561,7 +563,11 @@ export async function fetchProductDetail(
     }
 
     const product = mapProduct(data);
-    return product.id ? product : null;
+    if (!product.id) {
+      return null;
+    }
+
+    return enrichProductWithOfferPricing(product);
   } catch (error) {
     console.error("fetchProductDetail failed", error);
     return null;
@@ -702,7 +708,7 @@ export function mapCatalogProductToProductCardViewModel(
     tags,
     stock,
     stockTotal: stock,
-    activo: catalogProduct.disponible,
+    activo: true,
   };
 }
 
@@ -918,6 +924,8 @@ async function fetchCatalogFallbackPage(
         return a.name.localeCompare(b.name, "es-MX");
       case "recientes":
       case "destacados":
+      case "populares":
+      case "mas_comprados":
       default:
         return a.name.localeCompare(b.name, "es-MX");
     }
@@ -940,6 +948,233 @@ function normalizeStorefrontLikeText(value: string) {
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase()
     .trim();
+}
+
+/**
+ * Shared page size for home Destacados rail and /products?sort=destacados first page.
+ * Backend may return fewer items when the ranked list is shorter than this limit.
+ */
+export const DESTACADOS_CATALOG_FETCH_LIMIT = 24;
+
+export function resolveCatalogOnlyAvailable(
+  value: string | null | undefined,
+): boolean {
+  return value !== "false";
+}
+
+/** Canonical catalog query for analytics-ranked Destacados (home + catalog parity). */
+export function getDestacadosCatalogQuery(
+  limit = DESTACADOS_CATALOG_FETCH_LIMIT,
+  overrides: Partial<CatalogQuery> = {},
+): CatalogQuery {
+  return {
+    sort: "destacados",
+    limit,
+    onlyAvailable: true,
+    onlyOffers: false,
+    ...overrides,
+  };
+}
+
+/** Canonical catalog query for Populares (home rail + /products?sort=populares). */
+export function getPopularesCatalogQuery(
+  limit = DESTACADOS_CATALOG_FETCH_LIMIT,
+  overrides: Partial<CatalogQuery> = {},
+): CatalogQuery {
+  return {
+    sort: "populares",
+    limit,
+    onlyAvailable: true,
+    onlyOffers: false,
+    ...overrides,
+  };
+}
+
+/** Canonical catalog query for Más comprados (home rail + /products?sort=mas_comprados). */
+export function getMasCompradosCatalogQuery(
+  limit = DESTACADOS_CATALOG_FETCH_LIMIT,
+  overrides: Partial<CatalogQuery> = {},
+): CatalogQuery {
+  return {
+    sort: "mas_comprados",
+    limit,
+    onlyAvailable: true,
+    onlyOffers: false,
+    ...overrides,
+  };
+}
+
+/** Canonical catalog query for Novedades (home rail + /products?sort=recientes). */
+export function getRecientesCatalogQuery(
+  limit = DESTACADOS_CATALOG_FETCH_LIMIT,
+  overrides: Partial<CatalogQuery> = {},
+): CatalogQuery {
+  return {
+    sort: "recientes",
+    limit,
+    onlyAvailable: true,
+    onlyOffers: false,
+    ...overrides,
+  };
+}
+
+export const OFERTAS_CATALOG_SORTS = [
+  "ofertas_populares",
+  "ofertas_mas_compradas",
+  "ofertas_recientes",
+] as const satisfies readonly CatalogSort[];
+
+export type OfertasCatalogSort = (typeof OFERTAS_CATALOG_SORTS)[number];
+
+export function isOfertasCatalogSort(
+  sort: string | null | undefined,
+): sort is OfertasCatalogSort {
+  return OFERTAS_CATALOG_SORTS.includes(sort as OfertasCatalogSort);
+}
+
+export function getOfertasSortLabel(sort: OfertasCatalogSort): string {
+  switch (sort) {
+    case "ofertas_populares":
+      return "Ofertas más vistas";
+    case "ofertas_mas_compradas":
+      return "Ofertas más compradas";
+    case "ofertas_recientes":
+      return "Ofertas recién agregadas";
+    default:
+      return "Ofertas";
+  }
+}
+
+/** Map catalog toolbar sorts to backend ofertas rankings when onlyOffers is active. */
+export function mapCatalogSortForOffersView(sort: CatalogSort): CatalogSort {
+  if (isOfertasCatalogSort(sort)) {
+    return sort;
+  }
+
+  switch (sort) {
+    case "populares":
+    case "destacados":
+      return "ofertas_populares";
+    case "mas_comprados":
+      return "ofertas_mas_compradas";
+    case "recientes":
+      return "ofertas_recientes";
+    default:
+      return sort;
+  }
+}
+
+export function getProductEffectiveCatalogPrice(product: Product): number {
+  return product.salePrice ?? product.price;
+}
+
+/** Canonical catalog query for Ofertas más vistas. */
+export function getOfertasPopularesCatalogQuery(
+  limit = DESTACADOS_CATALOG_FETCH_LIMIT,
+  overrides: Partial<CatalogQuery> = {},
+): CatalogQuery {
+  return {
+    sort: "ofertas_populares",
+    limit,
+    onlyAvailable: true,
+    onlyOffers: false,
+    ...overrides,
+  };
+}
+
+/** Canonical catalog query for Ofertas más compradas. */
+export function getOfertasMasCompradasCatalogQuery(
+  limit = DESTACADOS_CATALOG_FETCH_LIMIT,
+  overrides: Partial<CatalogQuery> = {},
+): CatalogQuery {
+  return {
+    sort: "ofertas_mas_compradas",
+    limit,
+    onlyAvailable: true,
+    onlyOffers: false,
+    ...overrides,
+  };
+}
+
+/** Canonical catalog query for Ofertas recién agregadas. */
+export function getOfertasRecientesCatalogQuery(
+  limit = DESTACADOS_CATALOG_FETCH_LIMIT,
+  overrides: Partial<CatalogQuery> = {},
+): CatalogQuery {
+  return {
+    sort: "ofertas_recientes",
+    limit,
+    onlyAvailable: true,
+    onlyOffers: false,
+    ...overrides,
+  };
+}
+
+const AGGREGATE_CATALOG_SORTS = new Set<CatalogSort>([
+  "destacados",
+  "populares",
+  "mas_comprados",
+  "recientes",
+  "ofertas_populares",
+  "ofertas_mas_compradas",
+  "ofertas_recientes",
+]);
+
+export function getCatalogQueryForSort(
+  sort: CatalogSort,
+  limit = DESTACADOS_CATALOG_FETCH_LIMIT,
+  overrides: Partial<CatalogQuery> = {},
+): CatalogQuery {
+  switch (sort) {
+    case "destacados":
+      return getDestacadosCatalogQuery(limit, overrides);
+    case "populares":
+      return getPopularesCatalogQuery(limit, overrides);
+    case "mas_comprados":
+      return getMasCompradosCatalogQuery(limit, overrides);
+    case "recientes":
+      return getRecientesCatalogQuery(limit, overrides);
+    case "ofertas_populares":
+      return getOfertasPopularesCatalogQuery(limit, overrides);
+    case "ofertas_mas_compradas":
+      return getOfertasMasCompradasCatalogQuery(limit, overrides);
+    case "ofertas_recientes":
+      return getOfertasRecientesCatalogQuery(limit, overrides);
+    default:
+      return {
+        sort,
+        limit,
+        onlyAvailable: true,
+        onlyOffers: false,
+        ...overrides,
+      };
+  }
+}
+
+export function isAggregateCatalogSort(sort: CatalogSort): boolean {
+  return AGGREGATE_CATALOG_SORTS.has(sort);
+}
+
+/** Single source for Destacados product IDs/order — used by home and catalog. */
+export async function fetchDestacadosProducts(
+  limit = DESTACADOS_CATALOG_FETCH_LIMIT,
+  overrides: Partial<CatalogQuery> = {},
+): Promise<Product[]> {
+  try {
+    const page = await fetchCatalogPage(getDestacadosCatalogQuery(limit, overrides));
+
+    return page.items.map(mapCatalogProductToProductCardViewModel);
+  } catch (error) {
+    console.warn("fetchDestacadosProducts failed", error);
+    return [];
+  }
+}
+
+/** @deprecated Use fetchDestacadosProducts — kept for call-site compatibility. */
+export async function fetchFeaturedProducts(
+  limit = DESTACADOS_CATALOG_FETCH_LIMIT,
+): Promise<Product[]> {
+  return fetchDestacadosProducts(limit);
 }
 
 export async function fetchCatalogPage(params: CatalogQuery = {}): Promise<CatalogResponse> {

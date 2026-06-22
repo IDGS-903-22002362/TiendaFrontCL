@@ -742,10 +742,15 @@ export type PaymentTimelineEvent = {
 
 export type CatalogSort =
   | "destacados"
+  | "populares"
+  | "mas_comprados"
   | "precio_asc"
   | "precio_desc"
   | "recientes"
-  | "nombre_asc";
+  | "nombre_asc"
+  | "ofertas_populares"
+  | "ofertas_mas_compradas"
+  | "ofertas_recientes";
 
 export type CatalogQuery = {
   limit?: number; // default 24, max 48

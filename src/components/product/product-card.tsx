@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import type { Product } from "@/lib/types";
 import type { ProductOfferPricing } from "@/lib/ofertas-public";
@@ -11,10 +13,12 @@ import {
 } from "@/lib/storefront";
 import type { StorefrontProductBadge } from "@/lib/storefront/types";
 import { cn } from "@/lib/utils";
+import { trackProductClick } from "@/lib/analytics/product-events";
 
 type ProductCardProps = {
   product: Product;
   pricingOferta?: ProductOfferPricing | null;
+  trackingSurface?: "home" | "producto" | "carrito" | "cuenta" | "checkout";
 };
 
 function getCatalogBadge(product: Product) {
@@ -37,7 +41,11 @@ function isProductSoldOut(product: Product): boolean {
   return typeof stock === "number" && stock <= 0;
 }
 
-export function ProductCard({ product, pricingOferta }: ProductCardProps) {
+export function ProductCard({
+  product,
+  pricingOferta,
+  trackingSurface = "producto",
+}: ProductCardProps) {
   const estaAgotado = isProductSoldOut(product);
 
   const precioOriginalOferta = Number(pricingOferta?.precioOriginal || product.price || 0);
@@ -91,10 +99,14 @@ export function ProductCard({ product, pricingOferta }: ProductCardProps) {
     ? "object-[center_18%]"
     : "object-center";
 
+  const handleProductClick = () => {
+    trackProductClick(product.id, trackingSurface);
+  };
+
   return (
     <article className="group flex h-full flex-col">
       <div className="relative overflow-hidden border border-black/10">
-        <Link href={`/products/${product.id}`} className="block">
+        <Link href={`/products/${product.id}`} className="block" onClick={handleProductClick}>
           <HoverImagePreview
             images={product.images}
             alt={product.name}
@@ -140,7 +152,7 @@ export function ProductCard({ product, pricingOferta }: ProductCardProps) {
           ) : null}
         </div>
 
-        <Link href={`/products/${product.id}`} className="mt-2 block">
+        <Link href={`/products/${product.id}`} className="mt-2 block" onClick={handleProductClick}>
           <h3 className="line-clamp-2 min-h-[2.5em] text-[var(--font-size-product-name-mobile)] font-medium leading-[var(--line-height-card)] text-foreground transition-colors group-hover:text-primary lg:text-[var(--font-size-product-name-desktop)]">
             {product.name}
           </h3>

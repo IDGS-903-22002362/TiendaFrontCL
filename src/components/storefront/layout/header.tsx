@@ -28,7 +28,7 @@ const navLinks = [
   { href: "/products", label: "Todos los productos" },
   { href: "/products?category=jerseys", label: "Jerseys" },
   { href: "/products?tag=new", label: "Novedades" },
-  { href: "/products?tag=sale", label: "Ofertas" },
+  { href: "/products?onlyOffers=true", label: "Ofertas" },
   { href: "/products?category=accesorios", label: "Accesorios" },
 ];
 
@@ -41,7 +41,7 @@ export function StorefrontHeader() {
 }, [pathname, searchParams]);
   const { role, isAuthenticated, clearSession, user } = useAuth();
   const { totalItems } = useCart();
-  const { wishlistIds } = useStorefront();
+  const { showFavoritesNav, wishlistIds } = useStorefront();
   const [isDesktop, setIsDesktop] = useState(false);
   const [isCompact, setIsCompact] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
@@ -239,22 +239,22 @@ export function StorefrontHeader() {
           <div className="ml-auto flex shrink-0 items-center gap-1.5 md:gap-2 lg:min-w-[20rem] lg:justify-end">
             <SearchDrawer isDesktop={isDesktop} />
 
-            <Button
-              asChild
-              variant="ghost"
-              size="icon"
-              className="relative hidden h-11 w-11 rounded-full border border-black/14 bg-white lg:inline-flex"
-            >
-              <Link href="/products?wishlist=1">
-                <Heart className="h-4.5 w-4.5" />
-                {wishlistIds.length > 0 ? (
+            {showFavoritesNav ? (
+              <Button
+                asChild
+                variant="ghost"
+                size="icon"
+                className="relative hidden h-11 w-11 rounded-full border border-black/14 bg-white lg:inline-flex"
+              >
+                <Link href="/products?wishlist=1">
+                  <Heart className="h-4.5 w-4.5" />
                   <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground shadow-[var(--shadow-card)]">
                     {Math.min(wishlistIds.length, 99)}
                   </span>
-                ) : null}
-                <span className="sr-only">Favoritos</span>
-              </Link>
-            </Button>
+                  <span className="sr-only">Favoritos</span>
+                </Link>
+              </Button>
+            ) : null}
 
             {isAuthenticated ? (
               <DropdownMenu>

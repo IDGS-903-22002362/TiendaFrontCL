@@ -24,7 +24,9 @@ export function SortSelect({
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="destacados">Destacados</SelectItem>
-        <SelectItem value="recientes">Más nuevos</SelectItem>
+        <SelectItem value="populares">Populares</SelectItem>
+        <SelectItem value="mas_comprados">Más comprados</SelectItem>
+        <SelectItem value="recientes">Novedades</SelectItem>
         <SelectItem value="precio_asc">Precio menor a mayor</SelectItem>
         <SelectItem value="precio_desc">Precio mayor a menor</SelectItem>
         <SelectItem value="nombre_asc">Nombre A-Z</SelectItem>

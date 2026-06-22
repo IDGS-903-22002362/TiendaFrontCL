@@ -98,7 +98,9 @@ import { PaymentMethodStrip } from "@/components/storefront/shared/payment-metho
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/storefront";
 import {
+  buildCartOfferPricingItems,
   calcularPreciosOfertasPublicas,
+  getCartItemOfferLine,
   type ProductOfferPricing,
 } from "@/lib/ofertas-public";
 
@@ -169,56 +171,12 @@ function getExpectedCheckoutPricing(
   };
 }
 
-function getCartOfferLine(
-  item: CartItem,
-  pricingOfertas: Record<string, ProductOfferPricing>,
-) {
-  const pricingOferta = pricingOfertas[item.id];
-  const quantity = Math.max(Number(item.quantity || 1), 1);
-
-  const precioOriginalUnitario = Number(
-    pricingOferta?.precioOriginal ?? item.price ?? 0,
-  );
-
-  const precioFinalUnitario = Number(pricingOferta?.precioFinal ?? 0);
-
-  const subtotalOriginal = Number(
-    pricingOferta?.subtotalOriginal ?? precioOriginalUnitario * quantity,
-  );
-
-  const subtotalFinal = Number(
-    pricingOferta?.subtotalFinal ?? precioFinalUnitario * quantity,
-  );
-
-  const tieneOferta =
-    subtotalFinal > 0 &&
-    subtotalFinal < subtotalOriginal &&
-    Boolean(
-      pricingOferta?.ofertaAplicadaId ||
-      pricingOferta?.ofertaTitulo ||
-      precioFinalUnitario < precioOriginalUnitario,
-    );
-
-  const totalItem = tieneOferta ? subtotalFinal : item.price * quantity;
-  const precioUnitario = totalItem / quantity;
-
-  return {
-    pricingOferta,
-    tieneOferta,
-    precioOriginalUnitario,
-    precioUnitario,
-    subtotalOriginal,
-    totalItem,
-    offerLabel: pricingOferta?.ofertaTitulo || "Oferta aplicada",
-  };
-}
-
 function buildCartItemsWithOfferPrices(
   items: CartItem[],
   pricingOfertas: Record<string, ProductOfferPricing>,
 ): CartItem[] {
   return items.map((item) => {
-    const offerLine = getCartOfferLine(item, pricingOfertas);
+    const offerLine = getCartItemOfferLine(item, pricingOfertas);
 
     return {
       ...item,
@@ -570,7 +528,7 @@ function OrderSummaryPanel({
           {state.items.map((item) => {
             const variantKey = getCartVariantKey(item);
             const personalization = getPersonalization(variantKey);
-            const offerLine = getCartOfferLine(item, pricingOfertas);
+            const offerLine = getCartItemOfferLine(item, pricingOfertas);
 
             return (
               <div
@@ -2104,7 +2062,7 @@ export default function CheckoutPage() {
 
   const offerItemsKey = useMemo(() => {
     return state.items
-      .map((item) => `${item.id}:${item.quantity}`)
+      .map((item) => `${item.id}:${item.tallaId ?? item.size ?? ""}:${item.quantity}`)
       .join("|");
   }, [state.items]);
 
@@ -2117,12 +2075,9 @@ export default function CheckoutPage() {
         return;
       }
 
-      const items = state.items.map((item) => ({
-        productoId: item.id,
-        cantidad: item.quantity,
-      }));
-
-      const precios = await calcularPreciosOfertasPublicas(items);
+      const precios = await calcularPreciosOfertasPublicas(
+        buildCartOfferPricingItems(state.items),
+      );
 
       if (!cancelled) {
         setPricingOfertas(precios);

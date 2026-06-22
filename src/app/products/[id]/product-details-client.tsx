@@ -13,6 +13,11 @@ import {
   fetchProductDetail,
   fetchProductExtraDetails,
 } from "@/lib/api/storefront";
+import {
+  enrichProductWithOfferPricing,
+  hasValidSalePrice,
+  mergeProductPricing,
+} from "@/lib/ofertas-public";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import { getProductStockState } from "@/lib/storefront";
 import { useAuth } from "@/hooks/use-auth";
@@ -22,6 +27,7 @@ import { ProductInfoPanel } from "@/components/storefront/product/product-info-p
 import { AccordionSection } from "@/components/storefront/product/accordion-section";
 import { StickySidebar } from "@/components/storefront/product/sticky-sidebar";
 import { PaymentMethodStrip } from "@/components/storefront/shared/payment-method-strip";
+import { trackProductView } from "@/lib/analytics/product-events";
 
 const ProductQnA = dynamic(
   () => import("./product-qna").then((module) => module.ProductQnA),
@@ -47,13 +53,39 @@ export function ProductDetailsClient({
     );
 
     if (nextProduct) {
-      setCurrentProduct(nextProduct);
+      setCurrentProduct((previous) => mergeProductPricing(previous, nextProduct));
     }
   }, [product.id, token]);
 
   useEffect(() => {
-    setCurrentProduct(product);
+    setCurrentProduct((previous) => mergeProductPricing(previous, product));
   }, [product]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (hasValidSalePrice(product)) {
+      return;
+    }
+
+    void enrichProductWithOfferPricing(product).then((enriched) => {
+      if (cancelled) {
+        return;
+      }
+
+      if (hasValidSalePrice(enriched)) {
+        setCurrentProduct((previous) => mergeProductPricing(previous, enriched));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [product]);
+
+  useEffect(() => {
+    trackProductView(product.id, token && token !== "cookie-session" ? token : undefined);
+  }, [product.id, token]);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,7 +119,6 @@ export function ProductDetailsClient({
     }
 
     if (!isAuthenticated) {
-      setCurrentProduct(product);
       return;
     }
 

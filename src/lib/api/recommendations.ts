@@ -39,10 +39,18 @@ export type RecommendationEventType =
   | "compra"
   | "favorito";
 
+function resolveAuthToken(token?: string) {
+  if (!token || token === "cookie-session") {
+    return undefined;
+  }
+
+  return token;
+}
+
 function getClientOptions(token?: string) {
   return {
     local: true as const,
-    token,
+    token: resolveAuthToken(token),
     sessionId: typeof window !== "undefined" ? getOrCreateSessionId() : undefined,
   };
 }

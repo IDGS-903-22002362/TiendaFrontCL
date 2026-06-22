@@ -27,6 +27,7 @@ function areSameIds(left: string[], right: string[]) {
 
 type StorefrontContextValue = {
   wishlistIds: string[];
+  showFavoritesNav: boolean;
   isWishlisted: (productId: string) => boolean;
   toggleWishlist: (productId: string) => Promise<boolean>;
   isWishlistLoading: boolean;
@@ -268,9 +269,16 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
     [personalizationByVariant],
   );
 
+  const showFavoritesNav =
+    !isAuthLoading &&
+    isAuthenticated &&
+    !isWishlistLoading &&
+    wishlistIds.length > 0;
+
   const value = useMemo<StorefrontContextValue>(
     () => ({
       wishlistIds,
+      showFavoritesNav,
       isWishlisted,
       toggleWishlist,
       isWishlistLoading,
@@ -286,6 +294,7 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
       isWishlistLoading,
       personalizationByVariant,
       setPersonalization,
+      showFavoritesNav,
       toggleWishlist,
       wishlistIds,
     ],

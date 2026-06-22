@@ -59,11 +59,11 @@ export function MobileBottomNav() {
   const searchParams = useSearchParams();
   const { isAuthenticated } = useAuth();
   const { totalItems } = useCart();
-  const { wishlistIds } = useStorefront();
+  const { showFavoritesNav, wishlistIds } = useStorefront();
   const accountHref = isAuthenticated ? "/profile" : "/login";
 
   const items: NavItem[] = [
-    ...navItems,
+    ...navItems.filter((item) => item.label !== "Wish" || showFavoritesNav),
     {
       href: accountHref,
       label: "Cuenta",
@@ -77,7 +77,12 @@ export function MobileBottomNav() {
       className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-[rgb(248_242_233_/_0.96)] px-3 pt-2 shadow-[0_-16px_34px_-28px_rgb(10_14_11_/_0.34)] backdrop-blur-xl md:hidden"
       aria-label="Navegación principal móvil"
     >
-      <div className="mx-auto grid max-w-xl grid-cols-5 gap-1 rounded-[1.4rem] border border-border/70 bg-card/72 p-1.5 pb-[calc(env(safe-area-inset-bottom)+0.4rem)]">
+      <div
+        className={cn(
+          "mx-auto grid max-w-xl gap-1 rounded-[1.4rem] border border-border/70 bg-card/72 p-1.5 pb-[calc(env(safe-area-inset-bottom)+0.4rem)]",
+          showFavoritesNav ? "grid-cols-5" : "grid-cols-4",
+        )}
+      >
         {items.map((item) => {
           const Icon = item.icon;
           const isActive = item.matches(pathname, searchParams);

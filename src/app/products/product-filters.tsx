@@ -27,8 +27,16 @@ import {
   normalizeStorefrontText,
 } from "@/lib/storefront";
 import {
+  DESTACADOS_CATALOG_FETCH_LIMIT,
   fetchCatalogPage,
+  getCatalogQueryForSort,
+  getOfertasSortLabel,
+  getProductEffectiveCatalogPrice,
+  isAggregateCatalogSort,
+  isOfertasCatalogSort,
   mapCatalogProductToProductCardViewModel,
+  mapCatalogSortForOffersView,
+  resolveCatalogOnlyAvailable,
 } from "@/lib/api/storefront";
 import { calcularPreciosOfertasPublicas } from "@/lib/ofertas-public";
 import { useAuth } from "@/hooks/use-auth";
@@ -142,16 +150,109 @@ async function applyOfferPricesToProducts(
 const DEFAULT_MAX_PRICE = 5000;
 const CATALOG_SORTS: CatalogSort[] = [
   "destacados",
+  "populares",
+  "mas_comprados",
+  "recientes",
+  "ofertas_populares",
+  "ofertas_mas_compradas",
+  "ofertas_recientes",
   "precio_asc",
   "precio_desc",
-  "recientes",
   "nombre_asc",
 ];
 
-function getCatalogSort(value: string | null): CatalogSort {
-  return CATALOG_SORTS.includes(value as CatalogSort)
-    ? (value as CatalogSort)
-    : "destacados";
+function isLegacySaleRoute(searchParams: URLSearchParams): boolean {
+  const tag = searchParams.get("tag");
+  const tags = searchParams.get("tags")?.split(",") ?? [];
+
+  return (
+    searchParams.get("onlyOffers") === "true" ||
+    tag === "sale" ||
+    tags.includes("sale")
+  );
+}
+
+function resolveInitialOnlyOffers(searchParams: URLSearchParams): boolean {
+  if (isLegacySaleRoute(searchParams)) {
+    return true;
+  }
+
+  if (isOfertasCatalogSort(resolveInitialCatalogSort(searchParams))) {
+    return true;
+  }
+
+  const discountParam =
+    searchParams.get("offerPercent")?.trim() ||
+    searchParams.get("discount")?.trim();
+
+  if (discountParam) {
+    const parsed = Number(discountParam);
+    return Number.isFinite(parsed) && parsed > 0;
+  }
+
+  return false;
+}
+
+function buildCatalogSearchParams(input: {
+  category: string;
+  linea: string;
+  selectedSize: string;
+  priceRange: [number];
+  sort: CatalogSort;
+  searchQuery: string;
+  selectedOfferPercent: number | null;
+  onlyAvailable: boolean;
+  onlyOffers: boolean;
+  wishlistOnly: boolean;
+}) {
+  const params = new URLSearchParams();
+
+  if (input.category !== "all") params.set("category", input.category);
+  if (input.linea !== "all") params.set("line", input.linea);
+  if (input.selectedSize !== "all") params.set("talla", input.selectedSize);
+
+  if (input.priceRange[0] < DEFAULT_MAX_PRICE) {
+    params.set("maxPrice", String(input.priceRange[0]));
+  }
+
+  if (input.sort !== "destacados") params.set("sort", input.sort);
+  if (input.searchQuery) params.set("q", input.searchQuery);
+
+  if (input.selectedOfferPercent) {
+    params.set("offerPercent", String(input.selectedOfferPercent));
+  }
+
+  if (!input.onlyAvailable) params.set("onlyAvailable", "false");
+  if (input.onlyOffers) params.set("onlyOffers", "true");
+  if (input.wishlistOnly) params.set("wishlist", "1");
+
+  return params;
+}
+
+function normalizeCatalogQueryString(query: string) {
+  const params = new URLSearchParams(query);
+  const offerPercent =
+    params.get("offerPercent")?.trim() || params.get("discount")?.trim();
+
+  params.delete("discount");
+
+  if (offerPercent) {
+    params.set("offerPercent", offerPercent);
+  } else {
+    params.delete("offerPercent");
+  }
+
+  return params.toString();
+}
+
+function resolveInitialCatalogSort(searchParams: URLSearchParams): CatalogSort {
+  const sortParam = searchParams.get("sort");
+
+  if (sortParam && CATALOG_SORTS.includes(sortParam as CatalogSort)) {
+    return sortParam as CatalogSort;
+  }
+
+  return "destacados";
 }
 
 function getUrlParam(searchParams: URLSearchParams, key: string, fallback = "") {
@@ -261,7 +362,7 @@ export function ProductFilters({
   const [error, setError] = useState<string | null>(null);
 
   const [sort, setSort] = useState<CatalogSort>(() =>
-    getCatalogSort(searchParams.get("sort")),
+    resolveInitialCatalogSort(searchParams),
   );
   const [category, setCategory] = useState(() =>
     resolveCategoryFilterValue(
@@ -289,18 +390,11 @@ export function ProductFilters({
   const [searchQuery, setSearchQuery] = useState(() =>
     getUrlParam(searchParams, "q"),
   );
-  const [onlyOffers, setOnlyOffers] = useState(() => {
-    const tag = searchParams.get("tag");
-    const tags = searchParams.get("tags")?.split(",") ?? [];
-
-    return (
-      searchParams.get("onlyOffers") === "true" ||
-      tag === "sale" ||
-      tags.includes("sale")
-    );
-  });
-  const [onlyAvailable, setOnlyAvailable] = useState(
-    () => searchParams.get("onlyAvailable") === "true",
+  const [onlyAvailable, setOnlyAvailable] = useState(() =>
+    resolveCatalogOnlyAvailable(searchParams.get("onlyAvailable")),
+  );
+  const [onlyOffers, setOnlyOffers] = useState(() =>
+    resolveInitialOnlyOffers(searchParams),
   );
   const [wishlistOnly, setWishlistOnly] = useState(
     () => searchParams.get("wishlist") === "1",
@@ -312,16 +406,7 @@ export function ProductFilters({
 
   const initialRender = useRef(true);
 
-  const shouldNormalizeSaleRoute = useRef(() => {
-    const tag = searchParams.get("tag");
-    const tags = searchParams.get("tags")?.split(",") ?? [];
-
-    return (
-      searchParams.get("onlyOffers") === "true" ||
-      tag === "sale" ||
-      tags.includes("sale")
-    );
-  });
+  const isOfferView = onlyOffers || isOfertasCatalogSort(sort);
 
   const visibleCategories = useMemo(
     () => categories.filter(isCategoryVisible),
@@ -332,26 +417,47 @@ export function ProductFilters({
 
   const catalogQuery = useCallback(
     (cursor?: string | null): CatalogQuery => {
+      const offerViewSort = isOfferView
+        ? mapCatalogSortForOffersView(sort)
+        : sort;
       const shouldSendPriceSort =
+        !isOfferView &&
         priceRange[0] < DEFAULT_MAX_PRICE &&
         sort !== "precio_asc" &&
         sort !== "precio_desc";
+      const pageLimit = selectedOfferPercent
+        ? 80
+        : DESTACADOS_CATALOG_FETCH_LIMIT;
+      const aggregateBase =
+        isAggregateCatalogSort(offerViewSort) && !shouldSendPriceSort
+          ? getCatalogQueryForSort(offerViewSort, pageLimit, { onlyOffers })
+          : {
+              limit: pageLimit,
+              onlyAvailable,
+              onlyOffers,
+              sort: offerViewSort,
+            };
+      const apiMaxPrice =
+        !isOfferView && priceRange[0] < DEFAULT_MAX_PRICE
+          ? priceRange[0]
+          : undefined;
 
       return {
-        limit: onlyOffers || selectedOfferPercent ? 80 : 24,
+        ...aggregateBase,
         cursor: cursor || undefined,
         category: category !== "all" ? category : undefined,
         line: linea !== "all" ? linea : undefined,
         talla: selectedSize !== "all" ? selectedSize : undefined,
-        maxPrice:
-          priceRange[0] < DEFAULT_MAX_PRICE ? priceRange[0] : undefined,
-        sort: shouldSendPriceSort ? "precio_asc" : sort,
+        maxPrice: apiMaxPrice,
+        sort: shouldSendPriceSort ? "precio_asc" : offerViewSort,
         q: searchQuery || undefined,
         onlyAvailable,
+        onlyOffers,
       };
     },
     [
       category,
+      isOfferView,
       linea,
       onlyAvailable,
       onlyOffers,
@@ -392,9 +498,7 @@ export function ProductFilters({
               : current;
           }
 
-          return newProductsWithActiveOffers.length > 0
-            ? newProductsWithActiveOffers
-            : current;
+          return newProductsWithActiveOffers;
         });
 
         setNextCursor(response.nextCursor);
@@ -440,11 +544,6 @@ export function ProductFilters({
 
   const hasOfferShowcase = offerDiscounts.length > 0;
 
-  const isOfferView =
-    onlyOffers ||
-    searchParams.get("tag") === "sale" ||
-    searchParams.get("tags")?.split(",").includes("sale");
-
   const shouldShowOfferShowcase = Boolean(isOfferView && hasOfferShowcase);
   const totalOfferDiscountPages = Math.max(
     1,
@@ -479,11 +578,19 @@ export function ProductFilters({
 
 
   const handleOfferDiscountClick = (percent: number) => {
-    setSelectedOfferPercent((currentPercent: number | null) =>
-      currentPercent === percent ? null : percent,
-    );
+    const nextPercent = selectedOfferPercent === percent ? null : percent;
 
-    setOnlyOffers(true);
+    setSelectedOfferPercent(nextPercent);
+
+    if (nextPercent !== null) {
+      if (!onlyOffers) {
+        setOnlyOffers(true);
+      }
+
+      if (!isOfertasCatalogSort(sort)) {
+        setSort("ofertas_populares");
+      }
+    }
   };
 
   useEffect(() => {
@@ -544,51 +651,45 @@ export function ProductFilters({
   }, [wishlistOnly, isAuthenticated, isAuthLoading, items, wishlistIds, favoritesReloadKey]);
 
   useEffect(() => {
-    if (initialRender.current) {
-      initialRender.current = false;
-
-      if (!shouldNormalizeSaleRoute.current()) {
-        return;
-      }
-    }
-
-    const params = new URLSearchParams();
-
-    const isSaleRoute =
-      onlyOffers ||
-      searchParams.get("tag") === "sale" ||
-      searchParams.get("onlyOffers") === "true" ||
-      searchParams.get("tags")?.split(",").includes("sale");
-
-    if (category !== "all") params.set("category", category);
-    if (linea !== "all") params.set("line", linea);
-    if (selectedSize !== "all") params.set("talla", selectedSize);
-
-    if (priceRange[0] < DEFAULT_MAX_PRICE) {
-      params.set("maxPrice", String(priceRange[0]));
-    }
-
-    if (sort !== "destacados") params.set("sort", sort);
-    if (searchQuery) params.set("q", searchQuery);
-
-    if (isSaleRoute) {
-      params.set("tag", "sale");
-      params.set("onlyOffers", "true");
-    }
-
-    if (selectedOfferPercent) {
-      params.set("offerPercent", String(selectedOfferPercent));
-    }
-
-    if (!onlyAvailable) params.set("onlyAvailable", "false");
-    if (wishlistOnly) params.set("wishlist", "1");
+    const params = buildCatalogSearchParams({
+      category,
+      linea,
+      selectedSize,
+      priceRange,
+      sort,
+      searchQuery,
+      selectedOfferPercent,
+      onlyAvailable,
+      onlyOffers,
+      wishlistOnly,
+    });
 
     const nextQuery = params.toString();
-    const currentQuery = searchParams.toString();
-    const nextUrl = nextQuery ? `/products?${nextQuery}` : "/products";
+    const currentQuery = normalizeCatalogQueryString(searchParams.toString());
 
     if (nextQuery !== currentQuery) {
+      const nextUrl = nextQuery ? `/products?${nextQuery}` : "/products";
       router.replace(nextUrl, { scroll: false });
+    }
+  }, [
+    category,
+    linea,
+    onlyAvailable,
+    onlyOffers,
+    priceRange,
+    router,
+    searchParams,
+    searchQuery,
+    selectedOfferPercent,
+    selectedSize,
+    sort,
+    wishlistOnly,
+  ]);
+
+  useEffect(() => {
+    if (initialRender.current) {
+      initialRender.current = false;
+      return;
     }
 
     if (!wishlistOnly) {
@@ -601,8 +702,6 @@ export function ProductFilters({
     onlyAvailable,
     onlyOffers,
     priceRange,
-    router,
-    searchParams,
     searchQuery,
     selectedOfferPercent,
     selectedSize,
@@ -645,18 +744,6 @@ export function ProductFilters({
     });
   }
 
-  if (onlyOffers) {
-    activeFilters.push({
-      id: "ofertas",
-      label: "Ofertas",
-      onRemove: () => {
-        setOnlyOffers(false);
-        setSelectedOfferPercent(null);
-        setOfferDiscountPage(0);
-      },
-    });
-  }
-
   if (selectedOfferPercent) {
     activeFilters.push({
       id: "offerPercent",
@@ -670,6 +757,14 @@ export function ProductFilters({
       id: "incluyeAgotados",
       label: "Incluye agotados",
       onRemove: () => setOnlyAvailable(true),
+    });
+  }
+
+  if (onlyOffers) {
+    activeFilters.push({
+      id: "soloOfertas",
+      label: "Solo ofertas",
+      onRemove: () => setOnlyOffers(false),
     });
   }
 
@@ -688,38 +783,70 @@ export function ProductFilters({
     setSelectedSize("all");
     setPriceRange([DEFAULT_MAX_PRICE]);
     setSearchQuery("");
-    setOnlyOffers(false);
     setSelectedOfferPercent(null);
     setOfferDiscountPage(0);
     setOnlyAvailable(true);
+    setOnlyOffers(false);
     setWishlistOnly(false);
   };
 
-  const productsBase = (() => {
-    let filteredProducts = wishlistOnly
-      ? favoriteProducts
-      : items;
+  const productsBase = wishlistOnly ? favoriteProducts : items;
 
-    if (onlyOffers) {
-      filteredProducts = filteredProducts.filter(hasActiveProductOffer);
+  const productsToShow = useMemo(() => {
+    const filteredByDiscount = selectedOfferPercent
+      ? productsBase.filter((product) => {
+          const productWithOffer = productsWithOffers.find(
+            (offerProduct) => offerProduct.id === product.id,
+          );
+
+          return (
+            getProductDiscountPercent(product) === selectedOfferPercent ||
+            getProductDiscountPercent(productWithOffer ?? product) ===
+              selectedOfferPercent
+          );
+        })
+      : productsBase;
+
+    const trustBackendOfferFilter =
+      onlyOffers || isOfertasCatalogSort(sort);
+
+    let result =
+      !isOfferView ||
+      wishlistOnly ||
+      selectedOfferPercent ||
+      trustBackendOfferFilter
+        ? filteredByDiscount
+        : filteredByDiscount.filter(hasActiveProductOffer);
+
+    if (isOfferView && priceRange[0] < DEFAULT_MAX_PRICE) {
+      result = result.filter(
+        (product) =>
+          getProductEffectiveCatalogPrice(product) <= priceRange[0],
+      );
     }
 
-    return filteredProducts;
-  })();
+    if (isOfferView && (sort === "precio_asc" || sort === "precio_desc")) {
+      result = [...result].sort((left, right) => {
+        const leftPrice = getProductEffectiveCatalogPrice(left);
+        const rightPrice = getProductEffectiveCatalogPrice(right);
 
-  const productsToShow = selectedOfferPercent
-    ? productsBase.filter((product) => {
-      const productWithOffer = productsWithOffers.find(
-        (offerProduct) => offerProduct.id === product.id,
-      );
+        return sort === "precio_asc"
+          ? leftPrice - rightPrice
+          : rightPrice - leftPrice;
+      });
+    }
 
-      return (
-        getProductDiscountPercent(product) === selectedOfferPercent ||
-        getProductDiscountPercent(productWithOffer ?? product) ===
-        selectedOfferPercent
-      );
-    })
-    : productsBase;
+    return result;
+  }, [
+    isOfferView,
+    onlyOffers,
+    priceRange,
+    productsBase,
+    productsWithOffers,
+    selectedOfferPercent,
+    sort,
+    wishlistOnly,
+  ]);
 
   const filterControls = (
     <div className="divide-y divide-black/8 [&>div]:py-6 [&>div:first-child]:pt-0 [&>div:last-child]:pb-0">
@@ -887,7 +1014,9 @@ export function ProductFilters({
               ? `Resultados para "${searchQuery}"`
               : onlyOffers
                 ? "Ofertas"
-                : undefined
+                : isOfertasCatalogSort(sort)
+                  ? getOfertasSortLabel(sort)
+                  : undefined
           }
           activeFilters={activeFilters}
           onClear={clearFilters}
