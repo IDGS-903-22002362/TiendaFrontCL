@@ -1,10 +1,10 @@
 import Link from "next/link";
 
 const links = [
-  { href: "/products?category=accesorios", label: "Ayuda" },
+  { href: "/TerminosCondiciones", label: "Ayuda" },
   { href: "/order-history", label: "Pedidos" },
   { href: "/TerminosCondiciones", label: "Devoluciones" },
-  { href: "/products?category=gorra", label: "Contacto" },
+  { href: "/TerminosCondiciones#transferencias", label: "Contacto" },
 ];
 
 export function UtilityBar() {
