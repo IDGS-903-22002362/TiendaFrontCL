@@ -25,4 +25,6 @@ export type StorefrontCategoryCard = {
   href: string;
   count: number;
   imagenPrincipal?: string | null;
+  /** Home CategoryGrid only: spans N columns in the right sm:grid-cols-2 grid */
+  gridColSpan?: number;
 };

@@ -76,8 +76,7 @@ export default function CategorySection() {
         }
 
         return (
-            /* Solución al vacío: flex-wrap + justify-center asegura que si faltan elementos en la fila, queden centrados idéntico a Nike */
-            <div className="flex flex-wrap justify-center gap-x-6 gap-y-10 max-w-6xl mx-auto">
+            <div className="grid w-full grid-cols-3 gap-x-4 gap-y-8 sm:grid-cols-4 sm:gap-x-5 sm:gap-y-10 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-9">
                 {items.map((item) => {
                     const img = item.imagenPrincipal;
                     const name = type === "linea" ? item.nombre : item.name;
@@ -90,27 +89,25 @@ export default function CategorySection() {
                                     ? `/products?line=${item.id}`
                                     : `/products?category=${item.id}`
                             }
-                            className="group flex flex-col items-center cursor-pointer select-none w-[110px] sm:w-[130px]"
+                            className="group flex w-full flex-col items-center cursor-pointer select-none"
                         >
-                            {/* Forzamos un tamaño máximo simétrico para los contenedores de imagen */}
-                            <div className="w-full aspect-square flex items-center justify-center p-2 mb-2 overflow-hidden rounded-2xl">
+                            <div className="mb-3 flex aspect-square w-full items-center justify-center overflow-hidden rounded-[1.35rem] bg-neutral-50/60 p-1.5 sm:rounded-[1.5rem] sm:p-2">
                                 {img ? (
                                     <img
                                         src={img}
                                         alt={name}
-                                        className="w-full h-full object-cover rounded-full transition-transform duration-300 ease-out group-hover:scale-105"
+                                        className="h-full w-full rounded-full object-cover transition-transform duration-300 ease-out group-hover:scale-105"
                                         loading="lazy"
                                     />
                                 ) : (
-                                    <div className="w-12 h-12 rounded-full bg-neutral-50 border border-neutral-100 flex items-center justify-center text-[9px] text-neutral-400 tracking-wider">
-                                        s N/A
+                                    <div className="flex h-16 w-16 items-center justify-center rounded-full border border-neutral-100 bg-neutral-50 text-[10px] tracking-wider text-neutral-400 sm:h-20 sm:w-20">
+                                        N/A
                                     </div>
                                 )}
                             </div>
 
-                            {/* Contenedor de texto con altura fija mínima para que ninguna descripción rompa la alineación horizontal */}
-                            <div className="h-10 flex items-start justify-center w-full">
-                                <span className="text-xs font-bold text-neutral-800 leading-snug tracking-normal group-hover:text-black transition-colors line-clamp-2 px-0.5">
+                            <div className="flex min-h-[2.75rem] w-full items-start justify-center px-1 sm:min-h-[3rem]">
+                                <span className="line-clamp-2 text-center text-sm font-bold leading-snug tracking-normal text-neutral-800 transition-colors group-hover:text-black sm:text-base">
                                     {name}
                                 </span>
                             </div>
@@ -122,12 +119,10 @@ export default function CategorySection() {
     };
 
     return (
-        <div className="mx-auto space-y-20 px-6 py-1 antialiased">
-
-            {/* Sección de Categorías */}
-            <section className="space-y-8">
+        <div className="container py-1 antialiased">
+            <section className="space-y-8 md:space-y-10">
                 <div className="text-center">
-                    <h2 className="text-lg sm:text-xl font-bold tracking-wider text-neutral-950 uppercase">
+                    <h2 className="font-headline text-[1.65rem] font-semibold uppercase tracking-[0.03em] text-neutral-950 sm:text-[2rem] md:text-[2.15rem]">
                         Compra por Categorías
                     </h2>
                 </div>
