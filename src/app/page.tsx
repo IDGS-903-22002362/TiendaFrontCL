@@ -139,7 +139,7 @@ export default async function Home() {
       {featuredRailProducts.length > 0 ? (
         <div className="home-container-compact">
           <ProductRail
-            eyebrow="Analytics"
+            eyebrow="Continúa explorando"
             title="Destacados"
             description="Los artículos con mayor interacción real en la tienda."
             products={featuredRailProducts}
