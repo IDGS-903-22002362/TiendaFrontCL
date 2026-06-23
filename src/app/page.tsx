@@ -101,7 +101,7 @@ export default async function Home() {
     : "Descubre nuestro nuevo lanzamiento dando clic en 'Ver colección', adquierela y luce los colores esmeralda.";
 
   return (
-    <div className="pb-16 md:pb-24">
+    <div className="pb-10 md:pb-16">
       <HeroEditorial />
 
       <div className="home-container-compact">
@@ -154,7 +154,7 @@ export default async function Home() {
 
       <HomeDynamicRails />
 
-      <section className="home-section">
+      <section className="home-section pb-0">
         <CategorySection />
       </section>
     </div>

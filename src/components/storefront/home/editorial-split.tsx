@@ -28,6 +28,7 @@ export function EditorialSplit({
 }: EditorialSplitProps) {
   return (
     <section className="container">
+      <div className="border-t border-black/12 pt-8 md:pt-10">
       <div className="overflow-hidden rounded-[2rem]">
         <div className="grid gap-8 lg:grid-cols-[0.98fr_1.02fr] lg:items-stretch">
           <div className="relative min-h-[20rem] lg:min-h-[32rem]">
@@ -81,6 +82,7 @@ export function EditorialSplit({
             </div>
           </div>
         </div>
+      </div>
       </div>
     </section>
   );

@@ -571,8 +571,8 @@ function LoginPageContent() {
   }
 
   return (
-    <div className="relative flex min-h-[100svh] flex-col overflow-hidden bg-white">
-      <div className="absolute inset-0 z-0" aria-hidden="true">
+    <div className="fixed inset-0 z-0 flex w-full flex-col overflow-hidden bg-white">
+      <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
         <div className="h-full w-full">
           <Antigravity
             count={250}
@@ -596,29 +596,31 @@ function LoginPageContent() {
 
       {/* Back button */}
       {!isFromMobileApp ? (
-        <div className="absolute left-3 top-3 z-20 sm:left-5 sm:top-5">
+        <div className="absolute left-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 sm:left-5">
           <button
+            type="button"
             onClick={handleGoBack}
+            aria-label="Volver"
             className="flex items-center gap-2 rounded-full bg-black/30 px-3 py-2 text-white backdrop-blur-md transition-all hover:bg-black/45 sm:px-4"
           >
-            <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+            <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true" />
             <span className="text-sm font-medium">Volver</span>
           </button>
         </div>
       ) : (null)}
 
       {/* Main content */}
-      <div className="pointer-events-none relative z-10 flex flex-1 items-start justify-center overflow-y-auto px-2 pb-6 pt-16 sm:items-center sm:px-4 sm:py-10 lg:py-14">
-        <section className="pointer-events-auto relative w-full max-w-[22rem] rounded-[1.6rem] border border-white/55 bg-white/95 px-3 pb-4 pt-12 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-md sm:max-w-md sm:rounded-[2rem] sm:px-8 sm:pb-8 sm:pt-20 md:max-w-md md:px-9 lg:max-w-md lg:pb-12 lg:pt-24">
+      <div className="pointer-events-none relative z-10 flex w-full flex-1 items-start justify-center overflow-y-auto px-4 pt-[max(5.5rem,calc(env(safe-area-inset-top)+4.5rem))] pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-6 sm:pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] sm:pb-8 lg:pt-[max(7rem,calc(env(safe-area-inset-top)+5.5rem))] lg:pb-12">
+        <section className="pointer-events-auto relative mx-auto w-full min-w-0 max-w-md rounded-[1.6rem] border border-white/55 bg-white/95 px-4 pb-6 pt-14 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-md sm:rounded-[2rem] sm:px-8 sm:pb-8 sm:pt-20 lg:pb-12 lg:pt-24">
           <img
             src="/images/leon.png"
             alt="Club León Logo"
-            className="absolute left-1/2 top-0 h-20 w-auto -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-lg sm:h-28 md:h-32"
+            className="absolute left-1/2 top-0 h-16 w-auto max-w-[85%] -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-lg sm:h-28 md:h-32"
           />
 
-          <h1 className="text-center text-[1.85rem] font-black tracking-tight text-[#06543b] sm:text-5xl lg:text-6xl">CLUB LEÓN</h1>
+          <h1 className="text-center text-2xl font-black tracking-tight text-[#06543b] sm:text-4xl lg:text-5xl">CLUB LEÓN</h1>
 
-          <p className="mx-auto mt-2 max-w-sm text-center text-xs leading-relaxed text-gray-600 sm:text-base lg:text-lg">
+          <p className="mx-auto mt-2 max-w-sm text-pretty text-center text-xs leading-relaxed text-gray-600 sm:text-sm lg:text-base">
             Consulta contenido exclusivo del Club León, regístrate, guarda tu progreso y desbloquea grandes beneficios.
           </p>
 
@@ -683,6 +685,7 @@ function LoginPageContent() {
                       inputMode="email"
                       autoComplete="email"
                       placeholder="Correo electrónico"
+                      aria-label="Correo electrónico"
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
                       disabled={isRequestingCode}
@@ -714,7 +717,7 @@ function LoginPageContent() {
                     <p className="text-sm text-gray-600">
                       Hemos enviado un código de verificación a
                     </p>
-                    <p className="mt-1 font-semibold text-[#007A53]">
+                    <p className="mt-1 break-all px-1 font-semibold text-[#007A53]">
                       {pendingEmail}
                     </p>
                   </div>
@@ -724,7 +727,7 @@ function LoginPageContent() {
                     <p className="text-center text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
                       Código de 6 dígitos
                     </p>
-                    <div className="flex items-center justify-center gap-2 sm:gap-3">
+                    <div className="grid grid-cols-6 gap-1.5 sm:gap-2 md:gap-3">
                       {Array.from({ length: 6 }).map((_, index) => {
                         const digit = verificationCode[index] ?? "";
 
@@ -743,7 +746,7 @@ function LoginPageContent() {
                             disabled={isSubmitting}
                             onChange={(event) => handleOtpChange(index, event.target.value)}
                             onKeyDown={(event) => handleOtpKeyDown(index, event)}
-                            className="h-12 w-11 rounded-xl border border-gray-200 bg-white text-center text-xl font-bold text-gray-900 shadow-sm transition-all focus:border-[#007A53] focus:ring-2 focus:ring-[#007A53]/20 sm:h-14 sm:w-12 sm:text-2xl"
+                            className="aspect-square h-auto w-full min-w-0 max-h-14 rounded-xl border border-gray-200 bg-white text-center text-lg font-bold text-gray-900 shadow-sm transition-all focus:border-[#007A53] focus:ring-2 focus:ring-[#007A53]/20 sm:text-xl md:text-2xl"
                             aria-label={`Dígito ${index + 1} del código`}
                           />
                         );
@@ -831,6 +834,7 @@ function LoginPageContent() {
                       inputMode="email"
                       autoComplete="email"
                       placeholder="Correo electrónico"
+                      aria-label="Correo electrónico"
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
                       disabled={isSubmitting}
@@ -849,6 +853,7 @@ function LoginPageContent() {
                       type={showPassword ? "text" : "password"}
                       autoComplete="current-password"
                       placeholder="Contraseña"
+                      aria-label="Contraseña"
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
                       disabled={isSubmitting}
@@ -857,6 +862,7 @@ function LoginPageContent() {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                       className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-gray-600"
                       disabled={isSubmitting}
                     >
@@ -920,6 +926,7 @@ function LoginPageContent() {
                           inputMode="email"
                           autoComplete="email"
                           placeholder="Correo electrónico"
+                          aria-label="Correo electrónico para recuperación"
                           value={recoveryEmail}
                           onChange={(event) => setRecoveryEmail(event.target.value)}
                           disabled={isSubmitting}
@@ -979,17 +986,17 @@ function LoginPageContent() {
                 </div>
               ) : null}
 
-              <div className="my-6 flex items-center gap-4">
-                <div className="h-px flex-1 bg-gray-300" />
-                <span className="text-sm font-medium text-gray-500">O inicia con</span>
-                <div className="h-px flex-1 bg-gray-300" />
+              <div className="my-6 flex min-w-0 items-center gap-2 sm:gap-4">
+                <div className="h-px min-w-0 flex-1 bg-gray-300" />
+                <span className="shrink-0 text-xs font-medium text-gray-500 sm:text-sm">O inicia con</span>
+                <div className="h-px min-w-0 flex-1 bg-gray-300" />
               </div>
 
               {/* Social Buttons */}
               <div className="space-y-3">
                 {/* Google Button */}
                 <Button
-                  className="h-12 w-full justify-center gap-3 rounded-full border border-gray-200 bg-white text-base font-semibold text-gray-900 transition-all hover:bg-gray-50 disabled:opacity-70 sm:h-14 sm:text-lg"
+                  className="h-12 w-full min-w-0 justify-center gap-2 rounded-full border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-900 transition-all hover:bg-gray-50 disabled:opacity-70 sm:h-14 sm:gap-3 sm:px-4 sm:text-base"
                   onClick={onGoogleLogin}
                   disabled={isSubmitting || isRequestingCode}
                 >
@@ -1016,7 +1023,7 @@ function LoginPageContent() {
 
                 {/* Apple Button */}
                 <Button
-                  className="h-12 w-full justify-center gap-3 rounded-full bg-black text-base font-semibold text-white transition-all hover:bg-gray-900 disabled:opacity-70 sm:h-14 sm:text-lg"
+                  className="h-12 w-full min-w-0 justify-center gap-2 rounded-full bg-black px-3 text-sm font-semibold text-white transition-all hover:bg-gray-900 disabled:opacity-70 sm:h-14 sm:gap-3 sm:px-4 sm:text-base"
                   onClick={onAppleLogin}
                   disabled={isSubmitting || isRequestingCode}
                 >
@@ -1038,7 +1045,7 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-[#007A53] text-center text-white">
+        <div className="flex min-h-[100svh] items-center justify-center bg-[#007A53] px-4 text-center text-white">
           Cargando...
         </div>
       }

@@ -120,14 +120,16 @@ export default function CategorySection() {
 
     return (
         <div className="container py-1 antialiased">
-            <section className="space-y-8 md:space-y-10">
-                <div className="text-center">
-                    <h2 className="font-headline text-[1.65rem] font-semibold uppercase tracking-[0.03em] text-neutral-950 sm:text-[2rem] md:text-[2.15rem]">
-                        Compra por Categorías
-                    </h2>
-                </div>
-                {renderItemsGrid(filteredCategorias, "categoria")}
-            </section>
+            <div className="border-t border-black/12 pt-8 md:pt-10">
+                <section className="space-y-8 md:space-y-10">
+                    <div className="text-center">
+                        <h2 className="font-headline text-[1.65rem] font-semibold uppercase tracking-[0.03em] text-neutral-950 sm:text-[2rem] md:text-[2.15rem]">
+                            Compra por Categorías
+                        </h2>
+                    </div>
+                    {renderItemsGrid(filteredCategorias, "categoria")}
+                </section>
+            </div>
         </div>
     );
 }
