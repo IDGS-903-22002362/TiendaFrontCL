@@ -18,33 +18,12 @@ function normalizeSearch(value: string): string {
         .trim();
 }
 
-export default function LineaCategorySection() {
-    const [lineas, setLineas] = useState<Linea[]>([]);
+export default function CategorySection() {
     const [categorias, setCategorias] = useState<Category[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
-    const [selectedLineaId, setSelectedLineaId] = useState<string | null>(null);
     const [selectedCategoriaId, setSelectedCategoriaId] = useState<string | null>(null);
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
-
-    const loadLineas = useCallback(async () => {
-        setIsLoading(true);
-        try {
-            const data = await lineasApi.getAll();
-            setLineas(data);
-            setSelectedLineaId((current) =>
-                current && !data.some((linea) => linea.id === current) ? "" : current,
-            );
-        } catch (error) {
-            toast({
-                variant: "destructive",
-                title: "No se pudieron cargar las líneas",
-                description: getApiErrorMessage(error),
-            });
-        } finally {
-            setIsLoading(false);
-        }
-    }, [toast]);
 
     const loadCategorias = useCallback(async () => {
         setIsLoading(true);
@@ -66,18 +45,8 @@ export default function LineaCategorySection() {
     }, [toast]);
 
     useEffect(() => {
-        loadLineas();
         loadCategorias();
-    }, [loadLineas, loadCategorias]);
-
-    const filteredLineas = useMemo(() => {
-        return lineas.filter((linea) => {
-            if (selectedLineaId && linea.id !== selectedLineaId) return false;
-            const query = normalizeSearch(searchQuery);
-            if (!query) return true;
-            return normalizeSearch(`${linea.nombre} ${linea.codigo}`).includes(query);
-        });
-    }, [lineas, searchQuery, selectedLineaId]);
+    }, [loadCategorias]);
 
     const filteredCategorias = useMemo(() => {
         return categorias.filter((categoria) => {
@@ -154,11 +123,6 @@ export default function LineaCategorySection() {
 
     return (
         <div className="mx-auto space-y-20 px-6 py-1 antialiased">
-
-            {/* Sección de Líneas */}
-            <section className="space-y-8">
-                {renderItemsGrid(filteredLineas, "linea")}
-            </section>
 
             {/* Sección de Categorías */}
             <section className="space-y-8">

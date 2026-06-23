@@ -345,7 +345,7 @@ export default function TerminosCondicionesPage() {
           </ul>
         </section>
 
-        <section>
+        <section id="transferencias">
           <h3>16.3 Transferencias y control</h3>
           <p>
             Los datos solo se comparten con proveedores esenciales (pasarelas de pago, boleteras y servicios tecnológicos críticos), bajo obligaciones de confidencialidad y seguridad.
@@ -359,7 +359,7 @@ export default function TerminosCondicionesPage() {
           </p>
         </section>
 
-        <section>
+        <section id="contacto">
           <h2>Contacto</h2>
           <p>
             Para dudas o consultas sobre estos términos, puedes contactarnos en:
