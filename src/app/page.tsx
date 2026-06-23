@@ -23,7 +23,8 @@ import { HeroEditorial } from "@/components/storefront/home/hero-editorial";
 import { HomeDynamicRails } from "@/components/storefront/home/home-dynamic-rails";
 import { ProductRail } from "@/components/storefront/home/product-rail";
 import { SectionHeader } from "@/components/storefront/home/section-header";
-import LineaCategorySection from "@/components/storefront/home/lineCategory-section";
+import LineaSection from "@/components/storefront/home/line-section";
+import CategorySection from "@/components/storefront/home/category-section";
 
 export const metadata: Metadata = {
   title: "Inicio",
@@ -98,7 +99,7 @@ export default async function Home() {
   const collectionIsPersonalizable = isPersonalizableProduct(collectionProduct);
   const collectionTitle = collectionIsPersonalizable
     ? "Personaliza la prenda oficial"
-    : "Nueva Colección oficial con más estilo y más Fiera que nunca.";
+    : "Colección oficial";
   const collectionDescription = collectionIsPersonalizable
     ? "La personalización sigue conectada al PDP y al carrito actual, pero ahora entra en una composición más limpia, más directa y más centrada en la pieza."
     : "Descubre nuestro nuevo lanzamiento dando clic en 'Ver colección', adquierela y luce los colores esmeralda.";
@@ -107,7 +108,11 @@ export default async function Home() {
     <div className="pb-16 md:pb-24">
       <HeroEditorial />
 
-      <div className="home-section">
+      <section className="home-section">
+        <LineaSection />
+      </section>
+
+      <div className="home-container-compact">
         <EditorialSplit
           product={collectionProduct}
           eyebrow={
@@ -131,6 +136,7 @@ export default async function Home() {
           }
         />
       </div>
+
 
       {homeCategories.length > 0 ? (
         <section className="home-section">
@@ -157,7 +163,7 @@ export default async function Home() {
       ) : null}
 
       {featuredRailProducts.length > 0 ? (
-        <div className="home-section">
+        <div className="home-container-compact">
           <ProductRail
             eyebrow="Analytics"
             title="Destacados"
@@ -173,7 +179,7 @@ export default async function Home() {
       <HomeDynamicRails />
 
       <section className="home-section">
-        <LineaCategorySection />
+        <CategorySection />
       </section>
     </div>
   );

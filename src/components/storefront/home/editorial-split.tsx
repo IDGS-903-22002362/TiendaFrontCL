@@ -28,7 +28,7 @@ export function EditorialSplit({
 }: EditorialSplitProps) {
   return (
     <section className="container">
-      <div className="home-surface overflow-hidden rounded-[2rem]">
+      <div className="overflow-hidden rounded-[2rem]">
         <div className="grid gap-8 lg:grid-cols-[0.98fr_1.02fr] lg:items-stretch">
           <div className="relative min-h-[20rem] lg:min-h-[32rem]">
             <Image
@@ -38,7 +38,7 @@ export function EditorialSplit({
               sizes="(max-width: 1024px) 100vw, 48vw"
               className="object-cover object-center"
             />
-            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(17,23,21,0)_44%,rgba(17,23,21,0.12)_100%)]" />
+
           </div>
 
           <div className="flex flex-col justify-between px-6 py-8 md:px-8 md:py-10 lg:px-10 lg:py-12">
@@ -47,7 +47,7 @@ export function EditorialSplit({
                 <p className="home-kicker text-primary/68">{eyebrow}</p>
                 <span className="home-rule" />
               </div>
-              <h2 className="mt-4 max-w-[14ch] font-headline text-4xl font-semibold uppercase leading-[0.88] tracking-[0.035em] text-foreground md:text-[4.5rem]">
+              <h2 className="mt-4 max-w-[14ch] font-headline text-4xl font-semibold uppercase leading-[0.88] tracking-[0.035em] text-[#0A4D34] md:text-[3.5rem]">
                 {title}
               </h2>
               <p className="mt-5 max-w-xl text-sm leading-7 text-muted-foreground md:text-base">

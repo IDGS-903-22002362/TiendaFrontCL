@@ -47,15 +47,15 @@ const navGroups = [
       { href: "/admin/proveedores", label: "Proveedores", icon: Truck, adminOnly: false, empleadoOnly: false },
     ],
   },
- {
-  title: "Marketing",
-  links: [
-    { href: "/admin/banners", label: "Vallas Publicitarias", icon: Ruler, adminOnly: false, empleadoOnly: false },
-    { href: "/admin/ofertas", label: "Ofertas", icon: BadgePercent, adminOnly: false, empleadoOnly: false },
-    { href: "/admin/recomendaciones", label: "Recomendaciones", icon: Sparkles, adminOnly: false, empleadoOnly: false },
-    { href: "/admin/puntos", label: "Puntos", icon: Coins, adminOnly: false, empleadoOnly: true },
-  ],
-},
+  {
+    title: "Marketing",
+    links: [
+      { href: "/admin/banners", label: "Vallas Publicitarias", icon: Ruler, adminOnly: false, empleadoOnly: false },
+      { href: "/admin/ofertas", label: "Ofertas", icon: BadgePercent, adminOnly: false, empleadoOnly: false },
+      { href: "/admin/recomendaciones", label: "Recomendaciones", icon: Sparkles, adminOnly: false, empleadoOnly: false },
+      { href: "/admin/puntos", label: "Puntos", icon: Coins, adminOnly: false, empleadoOnly: true },
+    ],
+  },
   {
     title: "Integraciones",
     links: [
@@ -118,13 +118,13 @@ export default function AdminLayout({
     <div className="flex flex-col gap-6">
       {navGroups.map((group) => {
         const visibleLinks = group.links.filter((link) => {
-  const isAdminRole = role === "ADMIN" || role === "SUPER_ADMIN";
+          const isAdminRole = role === "ADMIN" || role === "SUPER_ADMIN";
 
-  return (
-    (!link.adminOnly || isAdminRole) &&
-    (!link.empleadoOnly || role === "EMPLEADO")
-  );
-});
+          return (
+            (!link.adminOnly || isAdminRole) &&
+            (!link.empleadoOnly || role === "EMPLEADO")
+          );
+        });
 
         if (visibleLinks.length === 0) return null;
 
