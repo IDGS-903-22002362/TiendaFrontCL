@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ProductCard } from "@/components/product/product-card";
 import { EmptyState } from "@/components/storefront/shared/empty-state";
@@ -14,6 +14,7 @@ import type { Product } from "@/lib/types";
 
 type ProductGridProps = {
   products: Product[];
+  offerPricing?: Record<string, ProductOfferPricing>;
 };
 
 function isProductSoldOut(product: Product): boolean {
@@ -61,28 +62,14 @@ function productHasActiveOffer(
   return productHasActiveOfferFromCatalog(product);
 }
 
-function getOfferDiscountPercent(
-  product: Product,
-  pricingOferta?: ProductOfferPricing,
+function getMissingOfferPricingProducts(
+  products: Product[],
+  pricing: Record<string, ProductOfferPricing>,
 ) {
-  if (!pricingOferta) {
-    return 0;
-  }
-
-  const precioOriginal = Number(
-    pricingOferta.precioOriginal || product.price || 0,
-  );
-
-  const precioFinal = Number(pricingOferta.precioFinal || 0);
-
-  if (!precioOriginal || !precioFinal || precioFinal >= precioOriginal) {
-    return 0;
-  }
-
-  return Math.round(((precioOriginal - precioFinal) / precioOriginal) * 100);
+  return products.filter((product) => !pricing[product.id]);
 }
 
-export function ProductGrid({ products }: ProductGridProps) {
+export function ProductGrid({ products, offerPricing = {} }: ProductGridProps) {
   const searchParams = useSearchParams();
 
   const mostrarSoloOfertas =
@@ -98,7 +85,14 @@ export function ProductGrid({ products }: ProductGridProps) {
   const [pricingOfertas, setPricingOfertas] = useState<
     Record<string, ProductOfferPricing>
   >({});
-  const [isLoadingOffers, setIsLoadingOffers] = useState(true);
+  const localPricingRef = useRef(localPricing);
+  localPricingRef.current = localPricing;
+
+  const [isLoadingOffers, setIsLoadingOffers] = useState(
+    () =>
+      mostrarSoloOfertas &&
+      getMissingOfferPricingProducts(products, offerPricing).length > 0,
+  );
 
   const productIdsKey = useMemo(() => {
     return products.map((product) => product.id).join("|");
@@ -108,8 +102,26 @@ export function ProductGrid({ products }: ProductGridProps) {
     let cancelled = false;
 
     async function cargarOfertas() {
+      if (!mostrarSoloOfertas) {
+        setIsLoadingOffers(false);
+        return;
+      }
+
       if (products.length === 0) {
-        setPricingOfertas({});
+        setIsLoadingOffers(false);
+        return;
+      }
+
+      const knownPricing = {
+        ...localPricingRef.current,
+        ...offerPricing,
+      };
+      const missingProducts = getMissingOfferPricingProducts(
+        products,
+        knownPricing,
+      );
+
+      if (missingProducts.length === 0) {
         setIsLoadingOffers(false);
         return;
       }
@@ -117,7 +129,7 @@ export function ProductGrid({ products }: ProductGridProps) {
       try {
         setIsLoadingOffers(true);
 
-        const items = products.map((product) => ({
+        const items = missingProducts.map((product) => ({
           productoId: product.id,
           cantidad: 1,
         }));
@@ -125,14 +137,14 @@ export function ProductGrid({ products }: ProductGridProps) {
         const precios = await calcularPreciosOfertasPublicas(items);
 
         if (!cancelled) {
-          setPricingOfertas(precios);
+          setLocalPricing((current) => {
+            const next = { ...current, ...precios };
+            localPricingRef.current = next;
+            return next;
+          });
         }
       } catch (error) {
         console.error("Error cargando precios de ofertas:", error);
-
-        if (!cancelled) {
-          setPricingOfertas({});
-        }
       } finally {
         if (!cancelled) {
           setIsLoadingOffers(false);
@@ -145,7 +157,12 @@ export function ProductGrid({ products }: ProductGridProps) {
     return () => {
       cancelled = true;
     };
-  }, [products, productIdsKey]);
+  }, [mostrarSoloOfertas, offerPricing, productIdsKey, products]);
+
+  const mergedPricingOfertas = useMemo(
+    () => ({ ...localPricing, ...offerPricing }),
+    [localPricing, offerPricing],
+  );
 
   const productsToRender = useMemo(() => {
     if (!mostrarSoloOfertas) {
@@ -154,12 +171,12 @@ export function ProductGrid({ products }: ProductGridProps) {
 
     if (products.some((product) => productHasActiveOfferFromCatalog(product))) {
       return products.filter((product) =>
-        productHasActiveOffer(product, pricingOfertas[product.id]),
+        productHasActiveOffer(product, mergedPricingOfertas[product.id]),
       );
     }
 
     return products;
-  }, [products, pricingOfertas, mostrarSoloOfertas]);
+  }, [products, mergedPricingOfertas, mostrarSoloOfertas]);
 
   if (products.length === 0) {
     return (
@@ -196,7 +213,7 @@ export function ProductGrid({ products }: ProductGridProps) {
         <ProductCard
           key={product.id}
           product={product}
-          pricingOferta={pricingOfertas[product.id]}
+          pricingOferta={mergedPricingOfertas[product.id]}
         />
       ))}
     </div>

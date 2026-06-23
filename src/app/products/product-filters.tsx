@@ -38,7 +38,13 @@ import {
   mapCatalogSortForOffersView,
   resolveCatalogOnlyAvailable,
 } from "@/lib/api/storefront";
-import { calcularPreciosOfertasPublicas } from "@/lib/ofertas-public";
+import {
+  applyCatalogOfferPricingToProducts,
+  fetchCatalogOfferPricingForProducts,
+  getOfferDiscountPercent,
+  hasActiveOfferFromPricing,
+  type ProductOfferPricing,
+} from "@/lib/ofertas-public";
 import { useAuth } from "@/hooks/use-auth";
 import {
   getFavorites,
@@ -47,6 +53,7 @@ import {
 
 type ProductFiltersProps = {
   initialPage: CatalogResponse;
+  initialOfferPricing?: Record<string, ProductOfferPricing>;
   categories: Category[];
   lineas: Linea[];
   tallas: Talla[];
@@ -85,66 +92,20 @@ function hasActiveProductOffer(product: Product): boolean {
   );
 }
 
-function getProductDiscountPercent(product: Product): number | null {
-  if (!hasActiveProductOffer(product)) {
-    return null;
-  }
-
-  const originalPrice = Number(product.price || 0);
-  const salePrice = Number(product.salePrice || 0);
-
-  if (originalPrice <= 0 || salePrice <= 0 || salePrice >= originalPrice) {
-    return null;
-  }
-
-  return Math.round(((originalPrice - salePrice) / originalPrice) * 100);
+function productHasActiveOffer(
+  product: Product,
+  pricing?: ProductOfferPricing,
+): boolean {
+  return (
+    hasActiveOfferFromPricing(product, pricing) || hasActiveProductOffer(product)
+  );
 }
 
-async function applyOfferPricesToProducts(
-  products: Product[],
-): Promise<Product[]> {
-  if (products.length === 0) {
-    return products;
-  }
-
-  try {
-    const offerPrices = await calcularPreciosOfertasPublicas(
-      products.map((product) => ({
-        productoId: product.id,
-        cantidad: 1,
-      })),
-    );
-
-    return products.map((product) => {
-      const offerPrice = offerPrices[product.id];
-
-      if (!offerPrice) {
-        return product;
-      }
-
-      const originalPrice = Number(offerPrice.precioOriginal || product.price || 0);
-      const finalPrice = Number(offerPrice.precioFinal || 0);
-
-      const hasOffer =
-        Boolean(offerPrice.ofertaAplicadaId || offerPrice.ofertaTitulo) &&
-        originalPrice > 0 &&
-        finalPrice > 0 &&
-        finalPrice < originalPrice;
-
-      if (!hasOffer) {
-        return product;
-      }
-
-      return {
-        ...product,
-        price: originalPrice,
-        salePrice: finalPrice,
-      };
-    });
-  } catch (error) {
-    console.error("Error calculando precios de ofertas del catálogo:", error);
-    return products;
-  }
+function resolveProductDiscountPercent(
+  product: Product,
+  pricing?: ProductOfferPricing,
+): number | null {
+  return getOfferDiscountPercent(product, pricing);
 }
 
 const DEFAULT_MAX_PRICE = 5000;
@@ -329,6 +290,7 @@ function resolveTallaFilterValue(value: string, tallas: Talla[]) {
 
 export function ProductFilters({
   initialPage,
+  initialOfferPricing = {},
   categories,
   lineas,
   tallas,
@@ -338,8 +300,23 @@ export function ProductFilters({
   const { wishlistIds } = useStorefront();
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
+  const initialProducts = useMemo(() => {
+    const mapped = initialPage.items.map(mapCatalogProductToProductCardViewModel);
+
+    if (Object.keys(initialOfferPricing).length === 0) {
+      return mapped;
+    }
+
+    return applyCatalogOfferPricingToProducts(mapped, initialOfferPricing);
+  }, [initialOfferPricing, initialPage.items]);
+
+  const [offerPricing, setOfferPricing] =
+    useState<Record<string, ProductOfferPricing>>(initialOfferPricing);
+
   const [productsWithOffers, setProductsWithOffers] = useState<Product[]>(() =>
-    initialPage.items.map(mapCatalogProductToProductCardViewModel),
+    initialProducts.filter((product) =>
+      productHasActiveOffer(product, initialOfferPricing[product.id]),
+    ),
   );
 
   const [offerDiscountPage, setOfferDiscountPage] = useState(0);
@@ -354,9 +331,7 @@ export function ProductFilters({
     },
   );
 
-  const [items, setItems] = useState<Product[]>(() =>
-    initialPage.items.map(mapCatalogProductToProductCardViewModel),
-  );
+  const [items, setItems] = useState<Product[]>(() => initialProducts);
   const [nextCursor, setNextCursor] = useState<string | null>(
     initialPage.nextCursor,
   );
@@ -429,9 +404,7 @@ export function ProductFilters({
         priceRange[0] < DEFAULT_MAX_PRICE &&
         sort !== "precio_asc" &&
         sort !== "precio_desc";
-      const pageLimit = selectedOfferPercent
-        ? 80
-        : DESTACADOS_CATALOG_FETCH_LIMIT;
+      const pageLimit = DESTACADOS_CATALOG_FETCH_LIMIT;
       const aggregateBase =
         isAggregateCatalogSort(offerViewSort) && !shouldSendPriceSort
           ? getCatalogQueryForSort(offerViewSort, pageLimit, { onlyOffers })
@@ -467,7 +440,6 @@ export function ProductFilters({
       onlyOffers,
       priceRange,
       searchQuery,
-      selectedOfferPercent,
       selectedSize,
       sort,
     ],
@@ -487,13 +459,20 @@ export function ProductFilters({
         const mappedProducts = response.items.map(
           mapCatalogProductToProductCardViewModel,
         );
-        const newProducts = await applyOfferPricesToProducts(mappedProducts);
+        const { products: newProducts, pricing } =
+          await fetchCatalogOfferPricingForProducts(mappedProducts);
+
+        setOfferPricing((current) =>
+          cursor ? { ...current, ...pricing } : pricing,
+        );
 
         setItems((current) =>
           cursor ? [...current, ...newProducts] : newProducts,
         );
 
-        const newProductsWithActiveOffers = newProducts.filter(hasActiveProductOffer);
+        const newProductsWithActiveOffers = newProducts.filter((product) =>
+          productHasActiveOffer(product, pricing[product.id]),
+        );
 
         setProductsWithOffers((current) => {
           if (cursor) {
@@ -510,7 +489,6 @@ export function ProductFilters({
       } catch (loadError) {
         console.error("Failed to load catalog page", loadError);
         if (!cursor) {
-          setItems([]);
           setNextCursor(null);
           setHasMore(false);
         }
@@ -524,15 +502,21 @@ export function ProductFilters({
   );
 
   const productsOnSale = useMemo(
-    () => productsWithOffers.filter((product) => hasActiveProductOffer(product)),
-    [productsWithOffers],
+    () =>
+      productsWithOffers.filter((product) =>
+        productHasActiveOffer(product, offerPricing[product.id]),
+      ),
+    [offerPricing, productsWithOffers],
   );
 
   const offerDiscounts = useMemo<OfferDiscountHighlight[]>(() => {
     const discountMap = new Map<number, number>();
 
     productsOnSale.forEach((product) => {
-      const percent = getProductDiscountPercent(product);
+      const percent = resolveProductDiscountPercent(
+        product,
+        offerPricing[product.id],
+      );
 
       if (!percent) {
         return;
@@ -544,7 +528,7 @@ export function ProductFilters({
     return Array.from(discountMap.entries())
       .map(([percent, count]) => ({ percent, count }))
       .sort((a, b) => b.percent - a.percent);
-  }, [productsOnSale]);
+  }, [offerPricing, productsOnSale]);
 
   const hasOfferShowcase = offerDiscounts.length > 0;
 
@@ -586,7 +570,8 @@ export function ProductFilters({
 
     setSelectedOfferPercent(nextPercent);
 
-    if (nextPercent !== null) {
+    // Percent filter is client-side only; avoid refetch when already in offers view.
+    if (nextPercent !== null && !isOfferView) {
       if (!onlyOffers) {
         setOnlyOffers(true);
       }
@@ -707,7 +692,6 @@ export function ProductFilters({
     onlyOffers,
     priceRange,
     searchQuery,
-    selectedOfferPercent,
     selectedSize,
     sort,
     wishlistOnly,
@@ -799,14 +783,11 @@ export function ProductFilters({
   const productsToShow = useMemo(() => {
     const filteredByDiscount = selectedOfferPercent
       ? productsBase.filter((product) => {
-          const productWithOffer = productsWithOffers.find(
-            (offerProduct) => offerProduct.id === product.id,
-          );
-
           return (
-            getProductDiscountPercent(product) === selectedOfferPercent ||
-            getProductDiscountPercent(productWithOffer ?? product) ===
-              selectedOfferPercent
+            resolveProductDiscountPercent(
+              product,
+              offerPricing[product.id],
+            ) === selectedOfferPercent
           );
         })
       : productsBase;
@@ -843,10 +824,10 @@ export function ProductFilters({
     return result;
   }, [
     isOfferView,
+    offerPricing,
     onlyOffers,
     priceRange,
     productsBase,
-    productsWithOffers,
     selectedOfferPercent,
     sort,
     wishlistOnly,
@@ -1052,7 +1033,7 @@ export function ProductFilters({
                         type="button"
                         onClick={handlePrevOfferDiscounts}
                         disabled={offerDiscountPage === 0}
-                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-primary text-2xl font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground disabled:pointer-events-none disabled:opacity-30"
+                        className="offer-discount-circle flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-primary text-2xl font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground disabled:pointer-events-none disabled:opacity-30"
                         aria-label="Ver descuentos anteriores"
                       >
                         ‹
@@ -1067,11 +1048,10 @@ export function ProductFilters({
                           onClick={() => handleOfferDiscountClick(discount.percent)}
                           className="group flex flex-col items-center justify-center text-center !border-0 !bg-transparent p-0 !shadow-none outline-none appearance-none"  >
                           <span
-                            className={`flex h-28 w-28 min-h-[7rem] min-w-[7rem] max-h-[7rem] max-w-[7rem] shrink-0 items-center justify-center overflow-hidden !rounded-full border text-center font-headline text-2xl font-semibold uppercase tracking-[0.08em] transition-all md:h-36 md:w-36 md:min-h-[9rem] md:min-w-[9rem] md:max-h-[9rem] md:max-w-[9rem] md:text-3xl ${selectedOfferPercent === discount.percent
+                            className={`offer-discount-circle flex h-28 w-28 min-h-[7rem] min-w-[7rem] max-h-[7rem] max-w-[7rem] shrink-0 items-center justify-center overflow-hidden rounded-full border text-center font-headline text-2xl font-semibold uppercase tracking-[0.08em] transition-all md:h-36 md:w-36 md:min-h-[9rem] md:min-w-[9rem] md:max-h-[9rem] md:max-w-[9rem] md:text-3xl ${selectedOfferPercent === discount.percent
                                 ? "border-primary bg-primary text-primary-foreground"
                                 : "border-primary/20 bg-neutral-50 text-primary hover:border-primary hover:bg-primary hover:text-primary-foreground"
                               }`}
-                            style={{ borderRadius: "9999px" }}
                           >
                             {discount.percent}%
                           </span>
@@ -1088,7 +1068,7 @@ export function ProductFilters({
                         type="button"
                         onClick={handleNextOfferDiscounts}
                         disabled={offerDiscountPage >= totalOfferDiscountPages - 1}
-                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-primary text-2xl font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground disabled:pointer-events-none disabled:opacity-30"
+                        className="offer-discount-circle flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-primary text-2xl font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground disabled:pointer-events-none disabled:opacity-30"
                         aria-label="Ver más descuentos"
                       >
                         ›
@@ -1154,7 +1134,7 @@ export function ProductFilters({
           </div>
         ) : (
           <div className="mt-6">
-            <ProductGrid products={productsToShow} />
+            <ProductGrid products={productsToShow} offerPricing={offerPricing} />
 
             {wishlistOnly &&
             !favoritesLoading &&

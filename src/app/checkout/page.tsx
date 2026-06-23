@@ -2101,24 +2101,58 @@ export default function CheckoutPage() {
     }, 0);
   }, [cartItemsConOfertas]);
 
+  const carritoTieneOfertas = useMemo(() => {
+    return state.items.some((item) => {
+      const offerLine = getCartItemOfferLine(item, pricingOfertas);
+      return offerLine.tieneOferta;
+    });
+  }, [state.items, pricingOfertas]);
+
   const codigoItems = useMemo<ValidarCodigoPromocionCarritoItem[]>(() => {
-    return cartItemsConOfertas.map((item) => ({
-      productoId: item.id,
-      cantidad: item.quantity,
-      precioUnitario: item.price,
-      tallaId: item.tallaId ?? item.size ?? null,
-      categoriaIds: getStringArrayFromCartItem(item, [
-        "categoriaIds",
-        "categoriasIds",
-        "categoryIds",
-      ]),
-      lineaIds: getStringArrayFromCartItem(item, [
-        "lineaIds",
-        "lineasIds",
-        "lineIds",
-      ]),
-    }));
-  }, [cartItemsConOfertas]);
+    return state.items.reduce<ValidarCodigoPromocionCarritoItem[]>(
+      (itemsElegibles, item) => {
+        const offerLine = getCartItemOfferLine(item, pricingOfertas);
+
+        if (offerLine.tieneOferta) {
+          return itemsElegibles;
+        }
+
+        itemsElegibles.push({
+          productoId: item.id,
+          cantidad: item.quantity,
+          precioUnitario: offerLine.precioUnitario,
+          tallaId: item.tallaId ?? item.size ?? null,
+          categoriaIds: getStringArrayFromCartItem(item, [
+            "categoriaIds",
+            "categoriasIds",
+            "categoryIds",
+          ]),
+          lineaIds: getStringArrayFromCartItem(item, [
+            "lineaIds",
+            "lineasIds",
+            "lineIds",
+          ]),
+        });
+
+        return itemsElegibles;
+      },
+      [],
+    );
+  }, [state.items, pricingOfertas]);
+
+  useEffect(() => {
+    if (!carritoTieneOfertas) {
+      return;
+    }
+
+    setCodigoPromocion("");
+    setResultadoCodigo(null);
+    setCodigoError(null);
+
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(PROMO_CODE_STORAGE_KEY);
+    }
+  }, [carritoTieneOfertas]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2126,7 +2160,7 @@ export default function CheckoutPage() {
     async function validarCodigoCheckout() {
       const codigo = codigoPromocion.trim().toUpperCase();
 
-      if (!codigo || codigoItems.length === 0) {
+      if (carritoTieneOfertas || !codigo || codigoItems.length === 0) {
         setResultadoCodigo(null);
         setCodigoError(null);
         return;
@@ -2183,7 +2217,7 @@ export default function CheckoutPage() {
     return () => {
       cancelled = true;
     };
-  }, [codigoPromocion, codigoItems, subtotalConOfertas]);
+  }, [codigoPromocion, codigoItems, subtotalConOfertas, carritoTieneOfertas]);
 
   const descuentoCodigo = Math.max(
     0,
