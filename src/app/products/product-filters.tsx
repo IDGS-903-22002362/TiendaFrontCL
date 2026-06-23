@@ -206,6 +206,10 @@ function normalizeCatalogQueryString(query: string) {
   return params.toString();
 }
 
+function getDefaultCatalogSort(): CatalogSort {
+  return "recientes";
+}
+
 function resolveInitialCatalogSort(searchParams: URLSearchParams): CatalogSort {
   const sortParam = searchParams.get("sort");
 
@@ -213,7 +217,7 @@ function resolveInitialCatalogSort(searchParams: URLSearchParams): CatalogSort {
     return sortParam as CatalogSort;
   }
 
-  return "destacados";
+  return getDefaultCatalogSort();
 }
 
 function getUrlParam(searchParams: URLSearchParams, key: string, fallback = "") {
@@ -761,7 +765,7 @@ export function ProductFilters({
   }
 
   const clearFilters = () => {
-    setSort("destacados");
+    setSort("recientes");
     setCategory("all");
     setLinea("all");
     setSelectedSize("all");

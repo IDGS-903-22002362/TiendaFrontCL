@@ -40,6 +40,7 @@ type StorefrontContextValue = {
   getPersonalization: (
     variantKey: string,
   ) => ProductPersonalization | undefined;
+  clearFavorites: () => void; // Añadimos esta función
 };
 
 const WISHLIST_STORAGE_KEY = "tiendafront_wishlist_ids";
@@ -88,41 +89,99 @@ function readLocalStorage<T>(key: string, fallback: T): T {
   }
 }
 
+function writeLocalStorage(key: string, value: unknown) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignorar errores de localStorage
+  }
+}
+
 export function StorefrontProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const { toast } = useToast();
   const [wishlistIds, setWishlistIds] = useState<string[]>([]);
   const [isWishlistLoading, setIsWishlistLoading] = useState(false);
   const [personalizationByVariant, setPersonalizationByVariant] =
-    useState<PersonalizationMap>({});
-
-  useEffect(() => {
-    setWishlistIds(readLocalStorage<string[]>(WISHLIST_STORAGE_KEY, []));
-    setPersonalizationByVariant(
-      readLocalStorage<PersonalizationMap>(PERSONALIZATION_STORAGE_KEY, {}),
+    useState<PersonalizationMap>(() =>
+      readLocalStorage<PersonalizationMap>(PERSONALIZATION_STORAGE_KEY, {})
     );
+
+  // Función para limpiar favoritos (al cerrar sesión)
+  const clearFavorites = useCallback(() => {
+    setWishlistIds([]);
+    // Limpiar localStorage también
+    writeLocalStorage(WISHLIST_STORAGE_KEY, []);
   }, []);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || isAuthenticated) {
+
+  // Cargar favoritos cuando el usuario se autentica
+  const loadFavorites = useCallback(async () => {
+    if (!isAuthenticated) {
+      clearFavorites();
       return;
     }
 
-    window.localStorage.setItem(
-      WISHLIST_STORAGE_KEY,
-      JSON.stringify(wishlistIds),
-    );
-  }, [isAuthenticated, wishlistIds]);
+    setIsWishlistLoading(true);
 
+    try {
+      const response = await getFavorites();
+
+      if (response.success) {
+        const backendWishlistIds = response.data
+          .map((favorite) => favorite.producto?.id)
+          .filter((productId): productId is string => Boolean(productId));
+
+        setWishlistIds(backendWishlistIds);
+        // No guardamos en localStorage cuando está autenticado
+        // Los datos viven en el backend
+      } else {
+        setWishlistIds([]);
+        toast({
+          variant: "destructive",
+          title: "Error al cargar favoritos",
+          description: "No se pudieron cargar tus favoritos",
+        });
+      }
+    } catch (error) {
+      console.error("Error loading favorites:", error);
+      setWishlistIds([]);
+      toast({
+        variant: "destructive",
+        title: "Error al cargar favoritos",
+        description: getApiErrorMessage(error),
+      });
+    } finally {
+      setIsWishlistLoading(false);
+    }
+  }, [isAuthenticated, toast, clearFavorites]);
+
+  // Efecto para manejar cambios en autenticación
+  useEffect(() => {
+    if (isAuthLoading) {
+      return;
+    }
+
+    if (isAuthenticated) {
+      // Usuario autenticado: cargar favoritos del backend
+      void loadFavorites();
+    } else {
+      // Usuario no autenticado: limpiar favoritos
+      clearFavorites();
+    }
+  }, [isAuthenticated, isAuthLoading, loadFavorites, clearFavorites]);
+
+  // Efecto para personalización (esto sí se guarda en localStorage)
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
 
-    window.localStorage.setItem(
-      PERSONALIZATION_STORAGE_KEY,
-      JSON.stringify(personalizationByVariant),
-    );
+    writeLocalStorage(PERSONALIZATION_STORAGE_KEY, personalizationByVariant);
   }, [personalizationByVariant]);
 
   const isWishlisted = useCallback(
@@ -130,92 +189,49 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
     [wishlistIds],
   );
 
-  useEffect(() => {
-    if (isAuthLoading) {
-      return;
-    }
-
-    if (!isAuthenticated) {
-      const localWishlistIds = readLocalStorage<string[]>(
-        WISHLIST_STORAGE_KEY,
-        [],
-      );
-      setWishlistIds((currentWishlistIds) =>
-        areSameIds(currentWishlistIds, localWishlistIds)
-          ? currentWishlistIds
-          : localWishlistIds,
-      );
-      return;
-    }
-
-    let cancelled = false;
-    setIsWishlistLoading(true);
-
-    void getFavorites()
-      .then((response) => {
-        if (cancelled) {
-          return;
-        }
-
-        const backendWishlistIds = response.data
-          .map((favorite) => favorite.producto?.id)
-          .filter((productId): productId is string => Boolean(productId));
-
-        setWishlistIds((currentWishlistIds) =>
-          areSameIds(currentWishlistIds, backendWishlistIds)
-            ? currentWishlistIds
-            : backendWishlistIds,
-        );
-      })
-      .catch((error) => {
-        if (cancelled) {
-          return;
-        }
-
-        toast({
-          variant: "destructive",
-          title: "No se pudieron cargar tus favoritos",
-          description: getApiErrorMessage(error),
-        });
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setIsWishlistLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isAuthenticated, isAuthLoading, toast]);
-
   const toggleWishlist = useCallback(
     async (productId: string) => {
       if (!productId) {
         return false;
       }
 
+      // Si no está autenticado, mostrar mensaje y no permitir
+      if (!isAuthenticated) {
+        toast({
+          variant: "destructive",
+          title: "Inicia sesión",
+          description: "Necesitas iniciar sesión para guardar favoritos",
+        });
+        return false;
+      }
+
       const currentlyWishlisted = wishlistIds.includes(productId);
 
+      // Optimistic update
       setWishlistIds((currentIds) =>
         currentlyWishlisted
           ? currentIds.filter((id) => id !== productId)
           : [...currentIds, productId],
       );
 
-      if (!isAuthenticated) {
-        return !currentlyWishlisted;
-      }
-
       try {
         if (currentlyWishlisted) {
           await removeFavorite(productId);
+          toast({
+            title: "Eliminado de favoritos",
+            description: "El producto ha sido eliminado de tus favoritos",
+          });
           return false;
         }
 
         await addFavorite(productId);
+        toast({
+          title: "Agregado a favoritos",
+          description: "El producto ha sido agregado a tus favoritos",
+        });
         return true;
       } catch (error) {
+        // Revertir optimistic update en caso de error
         setWishlistIds((currentIds) =>
           currentlyWishlisted
             ? [...currentIds, productId]
@@ -286,8 +302,10 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
       setPersonalization,
       clearPersonalization,
       getPersonalization,
+      clearFavorites,
     }),
     [
+      clearFavorites,
       clearPersonalization,
       getPersonalization,
       isWishlisted,

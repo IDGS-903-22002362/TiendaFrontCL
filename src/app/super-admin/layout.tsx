@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
     Users,
-    LogOut,
+    ,
     Menu,
     User,
 } from "lucide-react";
@@ -71,8 +71,8 @@ export default function SuperAdminLayout({
                         href={link.href}
                         onClick={() => setIsMobileMenuOpen(false)}
                         className={`flex items-center gap-3 rounded-2xl px-3 py-2.5 transition-all ${isActive
-                                ? "bg-primary text-primary-foreground shadow-[var(--shadow-glow)]"
-                                : "text-text-secondary hover:bg-muted hover:text-foreground"
+                            ? "bg-primary text-primary-foreground shadow-[var(--shadow-glow)]"
+                            : "text-text-secondary hover:bg-muted hover:text-foreground"
                             }`}
                     >
                         <Icon className="h-5 w-5" />

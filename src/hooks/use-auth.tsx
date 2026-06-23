@@ -42,6 +42,8 @@ type AuthContextType = {
   updateProfilePhone: (telefono: string) => Promise<void>;
   refreshStreak: () => Promise<void>;
   checkInStreak: () => Promise<void>;
+  // Añadimos esta función para registrar callbacks de limpieza
+  onSessionClear: (callback: () => void) => () => void;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -52,6 +54,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<Partial<AuthUsuario> | null>(null);
   const [streak, setStreak] = useState<UserStreak | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Array de callbacks para ejecutar al limpiar sesión
+  const [clearSessionCallbacks, setClearSessionCallbacks] = useState<(() => void)[]>([]);
 
   const refreshSession = useCallback(async () => {
     try {
@@ -108,6 +113,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const clearSession = useCallback(async () => {
+    // Ejecutar todos los callbacks registrados (ej: limpiar favoritos)
+    clearSessionCallbacks.forEach(callback => {
+      try {
+        callback();
+      } catch (error) {
+        console.error("Error en callback de limpieza de sesión:", error);
+      }
+    });
+
     resetAuthRecoveryCache();
     await Promise.allSettled([clearLocalSession(), signOutFirebaseClient()]);
     setToken("");
@@ -115,19 +129,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setStreak(null);
     setIsLoading(false);
+  }, [clearSessionCallbacks]);
+
+  // Función para registrar callbacks de limpieza
+  const onSessionClear = useCallback((callback: () => void) => {
+    setClearSessionCallbacks(prev => [...prev, callback]);
+    // Retornar función para eliminar el callback
+    return () => {
+      setClearSessionCallbacks(prev => prev.filter(cb => cb !== callback));
+    };
   }, []);
 
   const completeProfile = useCallback(
     async (payload: CompleteProfilePayload) => {
       const response = await completeUserProfile(payload);
-      // Actualizar el usuario con todos los datos retornados del backend
       setUser((currentUser) => ({
         ...(currentUser ?? {}),
         ...response.data,
         perfilCompleto: response.data.perfilCompleto,
       }));
 
-      // Revalidar sesión para sincronizar cookies (perfilCompleto) y estado local.
       await refreshSession();
     },
     [refreshSession],
@@ -171,6 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       updateProfilePhone,
       refreshStreak,
       checkInStreak,
+      onSessionClear,
     }),
     [
       token,
@@ -185,10 +207,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       updateProfilePhone,
       refreshStreak,
       checkInStreak,
+      onSessionClear,
     ],
   );
 
-  // use-auth.tsx - dentro de AuthProvider, después de las definiciones
   useEffect(() => {
     if (typeof window !== 'undefined') {
       (window as any).__tiendaAuth = {

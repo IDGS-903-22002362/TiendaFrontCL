@@ -43,6 +43,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -290,10 +291,10 @@ export default function AdminProductsPage() {
 
   const { toast } = useToast();
 
-  const loadProducts = useCallback(async (status: AdminProductStatus = productStatus) => {
+  const loadProducts = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await productsAdminApi.fetchAdminProducts("cookie-session", status);
+      const response = await productsAdminApi.fetchAdminProducts("cookie-session", "todos");
       setProducts(response.data || []);
       setSelectedProductId((current) =>
         current && !(response.data || []).some((product: AdminProductListItem) => product.id === current)
@@ -309,11 +310,11 @@ export default function AdminProductsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [productStatus, toast]);
+  }, [toast]);
 
   useEffect(() => {
-    void loadProducts(productStatus);
-  }, [loadProducts, productStatus]);
+    void loadProducts();
+  }, [loadProducts]);
 
   const loadMeta = useCallback(async () => {
     setIsLoadingMeta(true);
@@ -407,10 +408,29 @@ export default function AdminProductsPage() {
     );
   }, [tallaQuery, tallas]);
 
+  const productMetrics = useMemo(() => {
+    const visible = products.filter((product) => product.activo).length;
+    const hidden = products.length - visible;
+
+    return {
+      total: products.length,
+      visible,
+      hidden,
+    };
+  }, [products]);
+
   const filteredProducts = useMemo(() => {
     const query = normalizeSearchValue(productSearchQuery);
 
     return products.filter((product) => {
+      if (productStatus === "activo" && !product.activo) {
+        return false;
+      }
+
+      if (productStatus === "inactivo" && product.activo) {
+        return false;
+      }
+
       if (selectedProductId && product.id !== selectedProductId) {
         return false;
       }
@@ -423,7 +443,7 @@ export default function AdminProductsPage() {
         `${product.descripcion} ${product.clave ?? ""} ${product.categoriaId ?? ""} ${product.lineaId ?? ""}`,
       ).includes(query);
     });
-  }, [productSearchQuery, products, selectedProductId]);
+  }, [productSearchQuery, productStatus, products, selectedProductId]);
 
   const totalPages = Math.max(
     1,
@@ -1004,6 +1024,45 @@ export default function AdminProductsPage() {
         </div>
       </div>
 
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Total en catálogo
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold tabular-nums">
+              {isLoading ? "—" : productMetrics.total}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Visibles en tienda
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold tabular-nums text-green-700">
+              {isLoading ? "—" : productMetrics.visible}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Ocultos
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold tabular-nums text-muted-foreground">
+              {isLoading ? "—" : productMetrics.hidden}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="rounded-md border bg-card p-4">
         <div className="grid gap-3 md:grid-cols-[1fr_auto]">
           <EntityPicker
@@ -1158,7 +1217,7 @@ export default function AdminProductsPage() {
                               if (window.confirm(msg)) {
                                 try {
                                   await productsAdminApi.setProductActiveStatus(product.id, nextStatus, "cookie-session");
-                                  void loadProducts(productStatus);
+                                  void loadProducts();
                                 } catch (error) {
                                   toast({
                                     title: "Error",

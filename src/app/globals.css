@@ -122,31 +122,50 @@ body[data-storefront="true"] {
   --breakpoint-2xl: 1536px;
 
   /* Typography rules */
-  --font-size-hero-desktop: clamp(4.5rem, 6vw, 6rem); /* 72px a 96px */
-  --font-size-hero-mobile: clamp(2.375rem, 10vw, 3rem); /* 38px a 48px */
-  --font-size-catalog-title-desktop: clamp(3rem, 4vw, 4rem); /* 48px a 64px */
-  --font-size-catalog-title-mobile: clamp(2rem, 8vw, 2.5rem); /* 32px a 40px */
-  --font-size-section-title-desktop: clamp(2.5rem, 3.5vw, 3.5rem); /* 40px a 56px */
-  --font-size-section-title-mobile: clamp(1.75rem, 7vw, 2.125rem); /* 28px a 34px */
-  --font-size-body: 1rem; /* 16px */
-  --font-size-subtitle: clamp(1rem, 2vw, 1.25rem); /* 16px a 20px */
-  --font-size-product-name-desktop: clamp(1.0625rem, 1.5vw, 1.1875rem); /* 17px a 19px */
-  --font-size-product-name-mobile: clamp(0.9375rem, 4vw, 1rem); /* 15px a 16px */
-  --font-size-price-card-desktop: clamp(1.5rem, 2vw, 1.75rem); /* 24px a 28px */
-  --font-size-price-card-mobile: clamp(1.25rem, 5vw, 1.5rem); /* 20px a 24px */
-  --font-size-category-meta: clamp(0.8125rem, 1.5vw, 0.9375rem); /* 13px a 15px */
-  --font-size-eyebrow: clamp(0.6875rem, 1vw, 0.75rem); /* 11px a 12px */
-  --font-size-navbar: clamp(0.8125rem, 1vw, 0.875rem); /* 13px a 14px */
+  --font-size-hero-desktop: clamp(4.5rem, 6vw, 6rem);
+  /* 72px a 96px */
+  --font-size-hero-mobile: clamp(2.375rem, 10vw, 3rem);
+  /* 38px a 48px */
+  --font-size-catalog-title-desktop: clamp(3rem, 4vw, 4rem);
+  /* 48px a 64px */
+  --font-size-catalog-title-mobile: clamp(2rem, 8vw, 2.5rem);
+  /* 32px a 40px */
+  --font-size-section-title-desktop: clamp(2.5rem, 3.5vw, 3.5rem);
+  /* 40px a 56px */
+  --font-size-section-title-mobile: clamp(1.75rem, 7vw, 2.125rem);
+  /* 28px a 34px */
+  --font-size-body: 1rem;
+  /* 16px */
+  --font-size-subtitle: clamp(1rem, 2vw, 1.25rem);
+  /* 16px a 20px */
+  --font-size-product-name-desktop: clamp(1.0625rem, 1.5vw, 1.1875rem);
+  /* 17px a 19px */
+  --font-size-product-name-mobile: clamp(0.9375rem, 4vw, 1rem);
+  /* 15px a 16px */
+  --font-size-price-card-desktop: clamp(1.5rem, 2vw, 1.75rem);
+  /* 24px a 28px */
+  --font-size-price-card-mobile: clamp(1.25rem, 5vw, 1.5rem);
+  /* 20px a 24px */
+  --font-size-category-meta: clamp(0.8125rem, 1.5vw, 0.9375rem);
+  /* 13px a 15px */
+  --font-size-eyebrow: clamp(0.6875rem, 1vw, 0.75rem);
+  /* 11px a 12px */
+  --font-size-navbar: clamp(0.8125rem, 1vw, 0.875rem);
+  /* 13px a 14px */
 
   /* Custom Line heights */
-  --line-height-heading-large: 1; /* 0.95 to 1.05 */
-  --line-height-heading-normal: 1.15; /* 1.1 to 1.2 */
+  --line-height-heading-large: 1;
+  /* 0.95 to 1.05 */
+  --line-height-heading-normal: 1.15;
+  /* 1.1 to 1.2 */
   --line-height-body: 1.5;
   --line-height-card: 1.25;
 
   /* Standard variables for spacing */
-  --spacing-section-gap-desktop: clamp(4.5rem, 6vw, 6rem); /* 72px a 96px */
-  --spacing-section-gap-mobile: clamp(3rem, 8vw, 4rem); /* 48px a 64px */
+  --spacing-section-gap-desktop: clamp(4.5rem, 6vw, 6rem);
+  /* 72px a 96px */
+  --spacing-section-gap-mobile: clamp(3rem, 8vw, 4rem);
+  /* 48px a 64px */
 
   --color-background: var(--background);
   --color-background-deep: var(--background-deep);
@@ -210,6 +229,7 @@ body[data-storefront="true"] {
     from {
       height: 0;
     }
+
     to {
       height: var(--radix-accordion-content-height);
     }
@@ -219,6 +239,7 @@ body[data-storefront="true"] {
     from {
       height: var(--radix-accordion-content-height);
     }
+
     to {
       height: 0;
     }
@@ -228,15 +249,19 @@ body[data-storefront="true"] {
 @utility container {
   margin-inline: auto;
   width: 100%;
-  padding-inline: clamp(1rem, 5vw, 1.25rem); /* 16px a 20px mobile */
+  padding-inline: clamp(1rem, 5vw, 1.25rem);
+  /* 16px a 20px mobile */
 
-  @media (width >= 768px) {
-    padding-inline: 2rem; /* 32px tablet */
+  @media (width >=768px) {
+    padding-inline: 2rem;
+    /* 32px tablet */
   }
 
-  @media (width >= 1024px) {
-    max-width: 1480px; /* 1440px a 1480px desktop */
-    padding-inline: clamp(3rem, 4vw, 4rem); /* 48px a 64px desktop */
+  @media (width >=1024px) {
+    max-width: 1480px;
+    /* 1440px a 1480px desktop */
+    padding-inline: clamp(3rem, 4vw, 4rem);
+    /* 48px a 64px desktop */
   }
 }
 
@@ -246,11 +271,11 @@ body[data-storefront="true"] {
   max-width: 1920px;
   padding-inline: clamp(1rem, 5vw, 1.25rem);
 
-  @media (width >= 768px) {
+  @media (width >=768px) {
     padding-inline: 2rem;
   }
 
-  @media (width >= 1024px) {
+  @media (width >=1024px) {
     padding-inline: clamp(3rem, 4vw, 4rem);
   }
 }
@@ -271,7 +296,7 @@ body[data-storefront="true"] {
 @utility section-shell {
   padding-block: clamp(3rem, 8vw, 4rem);
 
-  @media (width >= 1024px) {
+  @media (width >=1024px) {
     padding-block: clamp(4.5rem, 6vw, 6rem);
   }
 }
@@ -315,10 +340,10 @@ body[data-storefront="true"] {
 }
 
 @utility home-section {
-  padding-block: clamp(3rem, 8vw, 4rem);
+  padding-block: clamp(1rem, 1vw, 1rem);
 
-  @media (width >= 1024px) {
-    padding-block: clamp(4.5rem, 6vw, 6rem);
+  @media (width >=1024px) {
+    padding-block: clamp(1rem, 1vw, 1rem);
   }
 }
 
@@ -471,13 +496,11 @@ body[data-storefront="true"] {
 
   body[data-storefront="true"] :where(.apple-card-accent-line) {
     height: 2px;
-    background: linear-gradient(
-      90deg,
-      rgb(13 75 56 / 0.08) 0%,
-      var(--secondary) 42%,
-      var(--primary) 58%,
-      rgb(13 75 56 / 0.08) 100%
-    );
+    background: linear-gradient(90deg,
+        rgb(13 75 56 / 0.08) 0%,
+        var(--secondary) 42%,
+        var(--primary) 58%,
+        rgb(13 75 56 / 0.08) 100%);
   }
 
   body[data-storefront="true"] :where(.apple-card-clip--sale) :where(.apple-card-hover-scrim) {
@@ -502,7 +525,7 @@ body[data-storefront="true"] {
     content: none;
   }
 
-  :where(.flex, .grid) > :where(*) {
+  :where(.flex, .grid)> :where(*) {
     min-width: 0;
   }
 
@@ -604,20 +627,16 @@ body[data-storefront="true"] {
 }
 
 .category-marquee-mask {
-  -webkit-mask-image: linear-gradient(
-    90deg,
-    transparent,
-    black 10%,
-    black 90%,
-    transparent
-  );
-  mask-image: linear-gradient(
-    90deg,
-    transparent,
-    black 10%,
-    black 90%,
-    transparent
-  );
+  -webkit-mask-image: linear-gradient(90deg,
+      transparent,
+      black 10%,
+      black 90%,
+      transparent);
+  mask-image: linear-gradient(90deg,
+      transparent,
+      black 10%,
+      black 90%,
+      transparent);
 }
 
 .category-marquee-row {
@@ -673,5 +692,34 @@ body[data-storefront="true"] {
 
   .category-marquee-group[aria-hidden="true"] {
     display: none;
+  }
+}
+
+@utility home-section-compact {
+  padding-block: clamp(2rem, 5vw, 3rem);
+  /* Reducido de clamp(3rem, 8vw, 4rem) a clamp(2rem, 5vw, 3rem) */
+
+  @media (width >=1024px) {
+    padding-block: clamp(1rem, 1vw, 1rem);
+    /* Reducido de clamp(4.5rem, 6vw, 6rem) a clamp(3rem, 4vw, 4rem) */
+  }
+}
+
+@utility home-section-tight {
+  padding-block: clamp(1.5rem, 3vw, 2.5rem);
+  /* Aún más compacto para secciones que quieras muy juntas */
+
+  @media (width >=1024px) {
+    padding-block: clamp(2rem, 3vw, 3rem);
+  }
+}
+
+/* También podemos ajustar el espaciado del contenedor principal */
+@utility home-container-compact {
+  padding-bottom: clamp(2rem, 4vw, 3rem) !important;
+  /* Para el padding inferior del container principal */
+
+  @media (width >=1024px) {
+    padding-bottom: clamp(3rem, 4vw, 4rem) !important;
   }
 }

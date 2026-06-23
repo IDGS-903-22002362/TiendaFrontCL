@@ -44,7 +44,7 @@ export function SectionHeader({
         <h2
           className={cn(
             "mt-3 font-headline text-[2.35rem] font-semibold uppercase leading-[0.88] tracking-[0.035em] md:text-[3.9rem]",
-            isDark ? "text-white" : "text-foreground",
+            isDark ? "text-[#0A4D34]" : "text-[#0A4D34]",
           )}
         >
           {title}

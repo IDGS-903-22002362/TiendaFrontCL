@@ -33,6 +33,9 @@ import {
   buildProductContextMessage,
   messageContainsProductContext,
 } from "@/lib/ai/message-content";
+import {
+  isTryOnEligibleProduct,
+} from "@/lib/ai/try-on-eligibility";
 import { cn } from "@/lib/utils";
 import type { AiMessage } from "@/lib/ai/types";
 
@@ -60,6 +63,19 @@ export function ProductQnA({ product }: { product: Product }) {
   const sessionHasActiveProductContext = conversation.messages.some((message) =>
     messageContainsProductContext(message.content, product.id),
   );
+  const isTryOnEligible = isTryOnEligibleProduct({
+    categoryId: product.categoryId,
+    categoryName: product.category,
+    lineId: product.lineId,
+    lineName: product.lineName,
+    description: product.description,
+  });
+  const assistantTabs = isTryOnEligible
+    ? [
+        { value: "chat", label: "Consulta" },
+        { value: "tryon", label: "Try-On" },
+      ]
+    : [{ value: "chat", label: "Consulta" }];
 
   async function handleSendMessage(message: string) {
     try {
@@ -103,7 +119,9 @@ export function ProductQnA({ product }: { product: Product }) {
       }
 
       setIsOpen(true);
-      setActiveTab("tryon");
+      if (isTryOnEligible) {
+        setActiveTab("tryon");
+      }
     };
 
     window.addEventListener("product-assistant:open-tryon", handleOpenTryOn);
@@ -114,7 +132,7 @@ export function ProductQnA({ product }: { product: Product }) {
         handleOpenTryOn,
       );
     };
-  }, [product.id]);
+  }, [isTryOnEligible, product.id]);
 
   useEffect(() => {
     let lastY = window.scrollY;
@@ -236,10 +254,7 @@ export function ProductQnA({ product }: { product: Product }) {
                   <AssistantTabs
                     variant="default"
                     className="h-10 w-full max-w-none"
-                    tabs={[
-                      { value: "chat", label: "Consulta" },
-                      { value: "tryon", label: "Try-On" },
-                    ]}
+                    tabs={assistantTabs}
                   />
                 </div>
 
@@ -279,30 +294,32 @@ export function ProductQnA({ product }: { product: Product }) {
                   />
                 </TabsContent>
 
-                <TabsContent
-                  value="tryon"
-                  className="m-0 overflow-hidden bg-background data-[state=active]:flex data-[state=active]:min-h-0 data-[state=active]:flex-1 data-[state=active]:flex-col data-[state=inactive]:hidden"
-                >
-                  <AiTryOnPanel
-                    sessionId={conversation.currentSessionId || undefined}
-                    ensureSession={conversation.ensureSession}
-                    defaultProduct={product}
-                    onResultReady={({ message }) => {
-                      setTryOnMessages((currentMessages) => {
-                        const exists = currentMessages.some(
-                          (entry) => entry.id === message.id,
-                        );
-                        if (exists) {
-                          return currentMessages;
-                        }
+                {isTryOnEligible ? (
+                  <TabsContent
+                    value="tryon"
+                    className="m-0 overflow-hidden bg-background data-[state=active]:flex data-[state=active]:min-h-0 data-[state=active]:flex-1 data-[state=active]:flex-col data-[state=inactive]:hidden"
+                  >
+                    <AiTryOnPanel
+                      sessionId={conversation.currentSessionId || undefined}
+                      ensureSession={conversation.ensureSession}
+                      defaultProduct={product}
+                      onResultReady={({ message }) => {
+                        setTryOnMessages((currentMessages) => {
+                          const exists = currentMessages.some(
+                            (entry) => entry.id === message.id,
+                          );
+                          if (exists) {
+                            return currentMessages;
+                          }
 
-                        return [...currentMessages, message];
-                      });
-                      setActiveTab("chat");
-                    }}
-                    variant="product-premium"
-                  />
-                </TabsContent>
+                          return [...currentMessages, message];
+                        });
+                        setActiveTab("chat");
+                      }}
+                      variant="product-premium"
+                    />
+                  </TabsContent>
+                ) : null}
               </Tabs>
             )}
           </ProductAssistantPanel>

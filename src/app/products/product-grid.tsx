@@ -77,7 +77,12 @@ export function ProductGrid({ products, offerPricing = {} }: ProductGridProps) {
     searchParams.get("tag") === "sale" ||
     searchParams.get("onlyOffers") === "true";
 
-  const [localPricing, setLocalPricing] = useState<
+  const discountParam = Number(searchParams.get("discount") || 0);
+
+  const selectedDiscount = Number.isFinite(discountParam)
+    ? discountParam
+    : 0;
+  const [pricingOfertas, setPricingOfertas] = useState<
     Record<string, ProductOfferPricing>
   >({});
   const localPricingRef = useRef(localPricing);

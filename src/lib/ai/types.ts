@@ -155,6 +155,7 @@ export type CreateTryOnJobInput = {
   userImageAssetId: string;
   consentAccepted: true;
   sku?: string;
+  idempotencyKey?: string;
 };
 
 export type AiSseStatusEvent = {
