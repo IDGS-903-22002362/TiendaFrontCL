@@ -66,10 +66,51 @@ function getOfferPricingList(payload: unknown): ProductOfferPricing[] {
   return [];
 }
 
-export async function calcularPreciosOfertasPublicas(
+const resolvedProductPricing = new Map<string, ProductOfferPricing>();
+const inflightProductPricingBatches = new Map<
+  string,
+  Promise<Record<string, ProductOfferPricing>>
+>();
+
+function buildCatalogOfferPricingItems(
+  products: Pick<Product, "id">[],
+): CalcularOfertaItem[] {
+  return products.map((product) => ({
+    productoId: product.id,
+    cantidad: 1,
+  }));
+}
+
+function buildPricingBatchKey(items: CalcularOfertaItem[]): string {
+  return [...items]
+    .map(
+      (item) =>
+        `${item.productoId}:${item.cantidad}:${item.tallaId ?? ""}`,
+    )
+    .sort()
+    .join("|");
+}
+
+function pickPricingFromCache(
+  items: CalcularOfertaItem[],
+): Record<string, ProductOfferPricing> {
+  return items.reduce<Record<string, ProductOfferPricing>>((acc, item) => {
+    const cached = resolvedProductPricing.get(item.productoId);
+
+    if (cached) {
+      acc[item.productoId] = cached;
+    }
+
+    return acc;
+  }, {});
+}
+
+async function requestOfferPricingBatch(
   items: CalcularOfertaItem[],
 ): Promise<Record<string, ProductOfferPricing>> {
-  if (!items.length) return {};
+  if (!items.length) {
+    return {};
+  }
 
   try {
     const payload = await apiFetch<unknown>(
@@ -85,6 +126,7 @@ export async function calcularPreciosOfertasPublicas(
 
     return lista.reduce<Record<string, ProductOfferPricing>>((acc, item) => {
       if (item.productoId) {
+        resolvedProductPricing.set(item.productoId, item);
         acc[item.productoId] = item;
       }
 
@@ -94,6 +136,95 @@ export async function calcularPreciosOfertasPublicas(
     console.warn("Error calculando ofertas públicas", error);
     return {};
   }
+}
+
+export async function calcularPreciosOfertasPublicas(
+  items: CalcularOfertaItem[],
+): Promise<Record<string, ProductOfferPricing>> {
+  if (!items.length) return {};
+
+  const cached = pickPricingFromCache(items);
+  const missingItems = items.filter(
+    (item) => !resolvedProductPricing.has(item.productoId),
+  );
+
+  if (missingItems.length === 0) {
+    return cached;
+  }
+
+  const batchKey = buildPricingBatchKey(missingItems);
+  let inflight = inflightProductPricingBatches.get(batchKey);
+
+  if (!inflight) {
+    inflight = requestOfferPricingBatch(missingItems).finally(() => {
+      inflightProductPricingBatches.delete(batchKey);
+    });
+    inflightProductPricingBatches.set(batchKey, inflight);
+  }
+
+  const fetched = await inflight;
+
+  return {
+    ...cached,
+    ...fetched,
+  };
+}
+
+export function applyCatalogOfferPricingToProduct(
+  product: Product,
+  offerPrice?: ProductOfferPricing,
+): Product {
+  if (!offerPrice) {
+    return product;
+  }
+
+  const originalPrice = Number(offerPrice.precioOriginal || product.price || 0);
+  const finalPrice = Number(offerPrice.precioFinal || 0);
+
+  const hasOffer =
+    Boolean(offerPrice.ofertaAplicadaId || offerPrice.ofertaTitulo) &&
+    originalPrice > 0 &&
+    finalPrice > 0 &&
+    finalPrice < originalPrice;
+
+  if (!hasOffer) {
+    return product;
+  }
+
+  return {
+    ...product,
+    price: originalPrice,
+    salePrice: finalPrice,
+  };
+}
+
+export function applyCatalogOfferPricingToProducts(
+  products: Product[],
+  offerPrices: Record<string, ProductOfferPricing>,
+): Product[] {
+  return products.map((product) =>
+    applyCatalogOfferPricingToProduct(product, offerPrices[product.id]),
+  );
+}
+
+export async function fetchCatalogOfferPricingForProducts(
+  products: Product[],
+): Promise<{
+  products: Product[];
+  pricing: Record<string, ProductOfferPricing>;
+}> {
+  if (products.length === 0) {
+    return { products, pricing: {} };
+  }
+
+  const pricing = await calcularPreciosOfertasPublicas(
+    buildCatalogOfferPricingItems(products),
+  );
+
+  return {
+    products: applyCatalogOfferPricingToProducts(products, pricing),
+    pricing,
+  };
 }
 
 export function buildCartOfferPricingItems(
@@ -198,6 +329,29 @@ export function hasActiveOfferFromPricing(
     precioFinal > 0 &&
     precioFinal < precioOriginal
   );
+}
+
+export function getOfferDiscountPercent(
+  product: Pick<Product, "price" | "salePrice">,
+  pricing?: ProductOfferPricing | null,
+): number | null {
+  if (hasActiveOfferFromPricing(product, pricing)) {
+    const precioOriginal = Number(pricing!.precioOriginal || product.price || 0);
+    const precioFinal = Number(pricing!.precioFinal || 0);
+
+    if (precioOriginal > 0 && precioFinal > 0 && precioFinal < precioOriginal) {
+      return Math.round(((precioOriginal - precioFinal) / precioOriginal) * 100);
+    }
+  }
+
+  const originalPrice = Number(product.price || 0);
+  const salePrice = Number(product.salePrice || 0);
+
+  if (originalPrice > 0 && salePrice > 0 && salePrice < originalPrice) {
+    return Math.round(((originalPrice - salePrice) / originalPrice) * 100);
+  }
+
+  return null;
 }
 
 export function applyOfferPricingToProduct(

@@ -10,6 +10,10 @@ import {
   mapCatalogSortForOffersView,
   resolveCatalogOnlyAvailable,
 } from "@/lib/api/storefront";
+import {
+  calcularPreciosOfertasPublicas,
+  type ProductOfferPricing,
+} from "@/lib/ofertas-public";
 import { lineasApi } from "@/lib/api/lineas";
 import { tallasApi } from "@/lib/api/tallas";
 export const dynamic = "force-dynamic";
@@ -130,12 +134,24 @@ export default async function ProductsPage({
     tallasApi.getAll(),
   ]);
 
+  let initialOfferPricing: Record<string, ProductOfferPricing> = {};
+
+  if (onlyOffers && initialPage.items.length > 0) {
+    initialOfferPricing = await calcularPreciosOfertasPublicas(
+      initialPage.items.map((item) => ({
+        productoId: item.id,
+        cantidad: 1,
+      })),
+    );
+  }
+
   return (
     <div className="container py-6 md:py-8 lg:py-10">
       <Suspense fallback={<div>Cargando catálogo...</div>}>
         <ProductFilters
           key={queryKey}
           initialPage={initialPage}
+          initialOfferPricing={initialOfferPricing}
           categories={categories}
           lineas={lineas}
           tallas={tallas}

@@ -7,6 +7,7 @@ import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { useCart } from "@/hooks/use-cart";
 import { useStorefront } from "@/hooks/use-storefront";
 import {
+  consultarDisponibilidadCodigosPromocionCarrito,
   getCartVariantKey,
   validarCodigoPromocionCarrito,
   type ResultadoCodigoPromocionCarrito,
@@ -185,6 +186,14 @@ export function CartDrawer() {
     Record<string, ProductOfferPricing>
   >({});
 
+    const [ofertasCarritoCargadas, setOfertasCarritoCargadas] =
+    useState(false);
+
+  const [
+    puedeMostrarCodigoPromocional,
+    setPuedeMostrarCodigoPromocional,
+  ] = useState(false);
+
   const [codigoInput, setCodigoInput] = useState("");
   const [codigoAplicado, setCodigoAplicado] = useState("");
   const [resultadoCodigo, setResultadoCodigo] =
@@ -210,29 +219,49 @@ export function CartDrawer() {
   }, [state.items]);
 
   useEffect(() => {
-    let cancelled = false;
+  let cancelled = false;
 
-    async function cargarOfertasCarrito() {
-      if (state.items.length === 0) {
+  async function cargarOfertasCarrito() {
+    if (state.items.length === 0) {
+      if (!cancelled) {
         setPricingOfertas({});
-        return;
+        setOfertasCarritoCargadas(true);
       }
 
+      return;
+    }
+
+    if (!cancelled) {
+      setOfertasCarritoCargadas(false);
+      setPuedeMostrarCodigoPromocional(false);
+    }
+
+    try {
       const precios = await calcularPreciosOfertasPublicas(
         buildCartOfferPricingItems(state.items),
       );
 
       if (!cancelled) {
         setPricingOfertas(precios);
+        setOfertasCarritoCargadas(true);
+      }
+    } catch (error) {
+      console.error("Failed to load cart offer pricing", error);
+
+      if (!cancelled) {
+        setPricingOfertas({});
+        setOfertasCarritoCargadas(false);
+        setPuedeMostrarCodigoPromocional(false);
       }
     }
+  }
 
-    cargarOfertasCarrito();
+  void cargarOfertasCarrito();
 
-    return () => {
-      cancelled = true;
-    };
-  }, [offerItemsKey, state.items]);
+  return () => {
+    cancelled = true;
+  };
+}, [offerItemsKey, state.items]);
 
   useEffect(() => {
     let cancelled = false;
@@ -374,40 +403,148 @@ export function CartDrawer() {
     }, 0);
   }, [state.items, pricingOfertas]);
 
-  const codigoItems = useMemo<ValidarCodigoPromocionCarritoItem[]>(() => {
-    return state.items.map((item) => {
-      const offerLine = getCartItemOfferLine(item, pricingOfertas);
+  const carritoTieneOfertas = useMemo(() => {
+  return state.items.some((item) => {
+    const offerLine = getCartItemOfferLine(item, pricingOfertas);
 
-      return {
-        productoId: item.id,
-        cantidad: item.quantity,
-        precioUnitario: offerLine.precioUnitario,
-        tallaId: item.tallaId ?? item.size ?? null,
-        categoriaIds: getStringArrayFromCartItem(item, [
-          "categoriaIds",
-          "categoriasIds",
-          "categoryIds",
-        ]),
-        lineaIds: getStringArrayFromCartItem(item, [
-          "lineaIds",
-          "lineasIds",
-          "lineIds",
-        ]),
-      };
-    });
+    return offerLine.tieneOferta;
+  });
+}, [state.items, pricingOfertas]);
+
+
+    const codigoItems = useMemo<ValidarCodigoPromocionCarritoItem[]>(() => {
+    return state.items.reduce<ValidarCodigoPromocionCarritoItem[]>(
+      (itemsElegibles, item) => {
+        const offerLine = getCartItemOfferLine(item, pricingOfertas);
+
+        // La oferta normal tiene prioridad.
+        // Los productos con oferta activa no participan en códigos.
+        if (offerLine.tieneOferta) {
+          return itemsElegibles;
+        }
+
+        itemsElegibles.push({
+          productoId: item.id,
+          cantidad: item.quantity,
+          precioUnitario: offerLine.precioUnitario,
+          tallaId: item.tallaId ?? item.size ?? null,
+          categoriaIds: getStringArrayFromCartItem(item, [
+            "categoriaIds",
+            "categoriasIds",
+            "categoryIds",
+          ]),
+          lineaIds: getStringArrayFromCartItem(item, [
+            "lineaIds",
+            "lineasIds",
+            "lineIds",
+          ]),
+        });
+
+        return itemsElegibles;
+      },
+      [],
+    );
   }, [state.items, pricingOfertas]);
+
+  const subtotalElegibleParaCodigo = useMemo(() => {
+    return codigoItems.reduce((total, item) => {
+      return total + item.precioUnitario * item.cantidad;
+    }, 0);
+  }, [codigoItems]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function verificarDisponibilidadCodigos() {
+      if (
+  !ofertasCarritoCargadas ||
+  state.items.length === 0 ||
+  codigoItems.length === 0 ||
+  carritoTieneOfertas
+) {
+        if (!cancelled) {
+          setPuedeMostrarCodigoPromocional(false);
+          setCodigoInput("");
+          setCodigoAplicado("");
+          setResultadoCodigo(null);
+          setCodigoError("");
+          setShowCodigoForm(false);
+
+          if (typeof window !== "undefined") {
+            localStorage.removeItem(PROMO_CODE_STORAGE_KEY);
+          }
+        }
+
+        return;
+      }
+
+      try {
+        const resultado =
+          await consultarDisponibilidadCodigosPromocionCarrito({
+            items: codigoItems,
+          });
+
+        if (cancelled) {
+          return;
+        }
+
+        const disponible = resultado.disponible === true;
+
+        setPuedeMostrarCodigoPromocional(disponible);
+
+        if (!disponible) {
+          setCodigoInput("");
+          setCodigoAplicado("");
+          setResultadoCodigo(null);
+          setCodigoError("");
+          setShowCodigoForm(false);
+
+          if (typeof window !== "undefined") {
+            localStorage.removeItem(PROMO_CODE_STORAGE_KEY);
+          }
+        }
+      } catch (error) {
+        console.error(
+          "Failed to check promo code availability",
+          error,
+        );
+
+        if (!cancelled) {
+          setPuedeMostrarCodigoPromocional(false);
+          setCodigoInput("");
+          setCodigoAplicado("");
+          setResultadoCodigo(null);
+          setCodigoError("");
+          setShowCodigoForm(false);
+
+          if (typeof window !== "undefined") {
+            localStorage.removeItem(PROMO_CODE_STORAGE_KEY);
+          }
+        }
+      }
+    }
+
+    void verificarDisponibilidadCodigos();
+
+    return () => {
+      cancelled = true;
+    };
+ }, [
+  codigoItems,
+  ofertasCarritoCargadas,
+  carritoTieneOfertas,
+  state.items.length,
+]);
 
   const descuentoCodigo = Math.max(
     0,
     Number(resultadoCodigo?.descuentoTotal || 0),
   );
 
-  const subtotalFinalCodigo = Number(resultadoCodigo?.subtotalFinal);
-
-  const totalConCodigo =
-    resultadoCodigo && descuentoCodigo > 0 && Number.isFinite(subtotalFinalCodigo)
-      ? subtotalFinalCodigo
-      : Math.max(subtotalConOfertas - descuentoCodigo, 0);
+   const totalConCodigo = Math.max(
+    subtotalConOfertas - descuentoCodigo,
+    0,
+  );
 
   const codigoResultadoItems = useMemo(() => {
     return getCodigoResultadoItems(resultadoCodigo);
@@ -484,6 +621,7 @@ export function CartDrawer() {
     }
   };
 
+
   const handleApplyCodigo = async () => {
     const codigo = codigoInput.trim().toUpperCase();
 
@@ -497,6 +635,16 @@ export function CartDrawer() {
       return;
     }
 
+     if (
+  carritoTieneOfertas ||
+  !puedeMostrarCodigoPromocional ||
+  codigoItems.length === 0
+) {
+  setCodigoError("");
+  setShowCodigoForm(false);
+  return;
+}
+
     try {
       setIsApplyingCodigo(true);
       setCodigoError("");
@@ -506,28 +654,26 @@ export function CartDrawer() {
         items: codigoItems,
       });
 
-      const descuento = Number(resultado.descuentoTotal || 0);
-      const subtotalFinal = Number(resultado.subtotalFinal || 0);
+           const descuento = Number(resultado.descuentoTotal || 0);
 
       const codigoValido =
         resultado.valido !== false &&
+        Number.isFinite(descuento) &&
         descuento > 0 &&
-        subtotalFinal > 0 &&
-        subtotalFinal < subtotalConOfertas;
+        descuento <= subtotalElegibleParaCodigo;
 
       if (!codigoValido) {
-        setCodigoAplicado("");
-        setResultadoCodigo(null);
-        setCodigoError(
-          resultado.mensaje || "El código no aplica para este carrito.",
-        );
+  const mensaje =
+    resultado.mensaje || "El código no aplica para este carrito.";
 
-        if (typeof window !== "undefined") {
-          localStorage.removeItem(PROMO_CODE_STORAGE_KEY);
-        }
+  setCodigoError(
+    codigoAplicado
+      ? `${mensaje} El código ${codigoAplicado} continúa aplicado.`
+      : mensaje,
+  );
 
-        return;
-      }
+  return;
+}
 
       setCodigoAplicado(codigo);
       setCodigoInput(codigo);
@@ -538,15 +684,14 @@ export function CartDrawer() {
         localStorage.setItem(PROMO_CODE_STORAGE_KEY, codigo);
       }
     } catch (error) {
-      console.error("Failed to validate promo code", error);
-      setCodigoAplicado("");
-      setResultadoCodigo(null);
-      setCodigoError("No se pudo validar el código. Intenta nuevamente.");
+  console.error("Failed to validate promo code", error);
 
-      if (typeof window !== "undefined") {
-        localStorage.removeItem(PROMO_CODE_STORAGE_KEY);
-      }
-    } finally {
+  setCodigoError(
+    codigoAplicado
+      ? `No se pudo validar el nuevo código. El código ${codigoAplicado} continúa aplicado.`
+      : "No se pudo validar el código. Intenta nuevamente.",
+  );
+} finally {
       setIsApplyingCodigo(false);
     }
   };
@@ -562,9 +707,21 @@ export function CartDrawer() {
       return;
     }
 
-    if (codigoAplicado && typeof window !== "undefined") {
-      localStorage.setItem(PROMO_CODE_STORAGE_KEY, codigoAplicado);
-    }
+ if (typeof window !== "undefined") {
+  if (
+    !carritoTieneOfertas &&
+    puedeMostrarCodigoPromocional &&
+    codigoAplicado &&
+    resultadoCodigo
+  ) {
+    localStorage.setItem(
+      PROMO_CODE_STORAGE_KEY,
+      codigoAplicado,
+    );
+  } else {
+    localStorage.removeItem(PROMO_CODE_STORAGE_KEY);
+  }
+}
 
     setIsDrawerOpen(false);
     router.push("/checkout");
@@ -908,8 +1065,10 @@ export function CartDrawer() {
 
             <SheetFooter className="shrink-0 border-t border-black/12 px-6 py-3 sm:flex-col sm:space-x-0">
               <div className="w-full space-y-2.5">
-                {state.items.length > 0 ? (
-                  showCodigoForm || codigoAplicado ? (
+                               {state.items.length > 0 &&
+puedeMostrarCodigoPromocional &&
+!carritoTieneOfertas ? (
+  showCodigoForm || codigoAplicado ? (
                     <form
                       className="border border-black/18 bg-white p-3"
                       onSubmit={(event) => {
@@ -960,11 +1119,11 @@ export function CartDrawer() {
                         </p>
                       ) : null}
 
-                      {codigoAplicado && resultadoCodigo ? (
-                        <p className="mt-2 text-xs font-medium text-primary">
-                          Código {codigoAplicado} aplicado correctamente.
-                        </p>
-                      ) : null}
+                      {codigoAplicado && resultadoCodigo && !codigoError ? (
+  <p className="mt-2 text-xs font-medium text-primary">
+    Código {codigoAplicado} aplicado correctamente.
+  </p>
+) : null}
                     </form>
                   ) : (
                     <Button

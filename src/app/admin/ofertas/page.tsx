@@ -427,6 +427,16 @@ async function createCodigoPromocion(payload: CodigoPromocionPayload) {
   });
 }
 
+async function updateCodigoPromocion(
+  id: string,
+  payload: CodigoPromocionPayload,
+) {
+  return apiRequest<unknown>(`/api/codigos-promocion/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("es-MX", {
     style: "currency",
@@ -665,10 +675,13 @@ export default function AdminOfertasPage() {
   const [isSaving, setIsSaving] = useState(false);
 
   const [isCodigoDialogOpen, setIsCodigoDialogOpen] = useState(false);
-const [codigoFormData, setCodigoFormData] = useState<CodigoPromocionForm>(
-  EMPTY_CODIGO_PROMOCION_FORM,
-);
-const [isSavingCodigo, setIsSavingCodigo] = useState(false);
+  const [editingCodigoPromocionId, setEditingCodigoPromocionId] = useState<
+    string | null
+  >(null);
+  const [codigoFormData, setCodigoFormData] = useState<CodigoPromocionForm>(
+    EMPTY_CODIGO_PROMOCION_FORM,
+  );
+  const [isSavingCodigo, setIsSavingCodigo] = useState(false);
 
 const [codigoProductoQuery, setCodigoProductoQuery] = useState("");
 const [codigoCategoriaQuery, setCodigoCategoriaQuery] = useState("");
@@ -840,22 +853,64 @@ const [codigoTallaQuery, setCodigoTallaQuery] = useState("");
   };
 
   const resetCodigoPromocionDialogState = () => {
-  setIsCodigoDialogOpen(false);
-  setCodigoFormData(EMPTY_CODIGO_PROMOCION_FORM);
-  setCodigoProductoQuery("");
-  setCodigoCategoriaQuery("");
-  setCodigoLineaQuery("");
-  setCodigoTallaQuery("");
-};
+    setIsCodigoDialogOpen(false);
+    setEditingCodigoPromocionId(null);
+    setCodigoFormData(EMPTY_CODIGO_PROMOCION_FORM);
+    setCodigoProductoQuery("");
+    setCodigoCategoriaQuery("");
+    setCodigoLineaQuery("");
+    setCodigoTallaQuery("");
+  };
 
-const openCodigoPromocionDialog = () => {
-  setCodigoFormData(EMPTY_CODIGO_PROMOCION_FORM);
-  setCodigoProductoQuery("");
-  setCodigoCategoriaQuery("");
-  setCodigoLineaQuery("");
-  setCodigoTallaQuery("");
-  setIsCodigoDialogOpen(true);
-};
+  const openCodigoPromocionForm = (codigoPromo?: CodigoPromocion) => {
+    if (codigoPromo) {
+      setEditingCodigoPromocionId(codigoPromo.id);
+      setCodigoFormData({
+        codigo: codigoPromo.codigo,
+        titulo: codigoPromo.titulo,
+        descripcion: codigoPromo.descripcion ?? "",
+        estado: codigoPromo.estado,
+        valorDescuento: String(codigoPromo.valorDescuento),
+        aplicaA: codigoPromo.aplicaA,
+        productoIds: codigoPromo.productoIds.slice(0, 1),
+        categoriaIds: codigoPromo.categoriaIds.slice(0, 1),
+        lineaIds: codigoPromo.lineaIds.slice(0, 1),
+        tallaIds: codigoPromo.tallaIds,
+        fechaInicio: toDateTimeLocalValue(codigoPromo.fechaInicio),
+        fechaFin: toDateTimeLocalValue(codigoPromo.fechaFin),
+        hastaAgotarExistencias:
+          codigoPromo.aplicaA === "productos" &&
+          codigoPromo.stockLimiteCodigo !== null &&
+          codigoPromo.stockLimiteCodigo !== undefined &&
+          codigoPromo.stockLimiteCodigo > 0
+            ? false
+            : true,
+        stockLimiteCodigo:
+          codigoPromo.aplicaA === "productos" &&
+          codigoPromo.stockLimiteCodigo !== null &&
+          codigoPromo.stockLimiteCodigo !== undefined &&
+          codigoPromo.stockLimiteCodigo > 0
+            ? String(codigoPromo.stockLimiteCodigo)
+            : "",
+        montoMinimoCompra: String(codigoPromo.montoMinimoCompra),
+        acumulableConOfertas: codigoPromo.acumulableConOfertas,
+      });
+      setCodigoProductoQuery("");
+      setCodigoCategoriaQuery("");
+      setCodigoLineaQuery("");
+      setCodigoTallaQuery("");
+      setIsCodigoDialogOpen(true);
+      return;
+    }
+
+    setEditingCodigoPromocionId(null);
+    setCodigoFormData(EMPTY_CODIGO_PROMOCION_FORM);
+    setCodigoProductoQuery("");
+    setCodigoCategoriaQuery("");
+    setCodigoLineaQuery("");
+    setCodigoTallaQuery("");
+    setIsCodigoDialogOpen(true);
+  };
 
   const openForm = (oferta?: Oferta) => {
     if (oferta) {
@@ -1346,24 +1401,41 @@ const handleSaveCodigoPromocion = async () => {
 
   if (!payload) return;
 
-  console.log("payload crear código promocional:", payload);
-
   setIsSavingCodigo(true);
 
   try {
-    await createCodigoPromocion(payload);
+    if (editingCodigoPromocionId) {
+      const existing = codigosPromocion.find(
+        (item) => item.id === editingCodigoPromocionId,
+      );
 
-    toast({
-      title: "Código promocional creado",
-      description: `El código ${payload.codigo} se creó correctamente.`,
-    });
+      await updateCodigoPromocion(editingCodigoPromocionId, {
+        ...payload,
+        usoMaximoTotal: existing?.usoMaximoTotal ?? null,
+        usoMaximoPorUsuario: existing?.usoMaximoPorUsuario ?? 1,
+      });
 
-   resetCodigoPromocionDialogState();
-void loadCodigosPromocion();
+      toast({
+        title: "Código promocional actualizado",
+        description: `El código ${payload.codigo} se actualizó correctamente.`,
+      });
+    } else {
+      await createCodigoPromocion(payload);
+
+      toast({
+        title: "Código promocional creado",
+        description: `El código ${payload.codigo} se creó correctamente.`,
+      });
+    }
+
+    resetCodigoPromocionDialogState();
+    void loadCodigosPromocion();
   } catch (error) {
     toast({
       variant: "destructive",
-      title: "Error al crear código promocional",
+      title: editingCodigoPromocionId
+        ? "Error al actualizar código promocional"
+        : "Error al crear código promocional",
       description: getApiErrorMessage(error),
     });
   } finally {
@@ -1473,7 +1545,7 @@ const activeCodigoTargetOptions =
   <RefreshCw className="h-4 w-4" />
 </Button>
 
-          <Button variant="outline" onClick={openCodigoPromocionDialog}>
+          <Button variant="outline" onClick={() => openCodigoPromocionForm()}>
   <Plus className="mr-2 h-4 w-4" />
   Código promocional
 </Button>
@@ -1655,8 +1727,8 @@ const activeCodigoTargetOptions =
                 <TableHead>Descuento</TableHead>
                 <TableHead>Aplica a</TableHead>
                 <TableHead>Vigencia</TableHead>
-                <TableHead>Reglas</TableHead>
                 <TableHead>Estado</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
 
@@ -1736,29 +1808,25 @@ const activeCodigoTargetOptions =
                       </TableCell>
 
                       <TableCell>
-                        <div className="flex flex-col text-xs text-muted-foreground">
-                          <span>
-                            Compra mínima:{" "}
-                            {formatCurrency(codigoPromo.montoMinimoCompra)}
-                          </span>
-                          <span>
-                            Uso por usuario:{" "}
-                            {codigoPromo.usoMaximoPorUsuario}
-                          </span>
-                          <span>
-                            {codigoPromo.acumulableConOfertas
-                              ? "Acumulable con ofertas"
-                              : "No acumulable con ofertas"}
-                          </span>
-                        </div>
-                      </TableCell>
-
-                      <TableCell>
                         <span
                           className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${status.className}`}
                         >
                           {status.label}
                         </span>
+                      </TableCell>
+
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-2"
+                            onClick={() => openCodigoPromocionForm(codigoPromo)}
+                          >
+                            <Edit className="h-4 w-4 mr-1" />
+                            Editar
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -2034,7 +2102,11 @@ const activeCodigoTargetOptions =
       >
         <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Nuevo código promocional</DialogTitle>
+            <DialogTitle>
+              {editingCodigoPromocionId
+                ? "Editar código promocional"
+                : "Nuevo código promocional"}
+            </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-5 py-4">
@@ -2344,7 +2416,11 @@ const activeCodigoTargetOptions =
                 onClick={() => void handleSaveCodigoPromocion()}
                 disabled={isSavingCodigo}
               >
-                {isSavingCodigo ? "Guardando..." : "Crear código"}
+                {isSavingCodigo
+                  ? "Guardando..."
+                  : editingCodigoPromocionId
+                    ? "Guardar cambios"
+                    : "Crear código"}
               </Button>
             </div>
           </div>

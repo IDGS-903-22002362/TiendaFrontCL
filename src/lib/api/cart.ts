@@ -33,6 +33,10 @@ export type ResultadoCodigoPromocionCarrito = {
   items?: unknown[];
 };
 
+export type DisponibilidadCodigosPromocionCarrito = {
+  disponible: boolean;
+};
+
 const SESSION_STORAGE_KEY = "tiendafront_session_id";
 
 function toStringValue(value: unknown, fallback = ""): string {
@@ -441,6 +445,29 @@ function mapResultadoCodigoPromocion(
   };
 }
 
+function mapDisponibilidadCodigosPromocion(
+  payload: unknown,
+): DisponibilidadCodigosPromocionCarrito {
+  const data = unwrapData<unknown>(payload);
+
+  if (typeof data === "boolean") {
+    return {
+      disponible: data,
+    };
+  }
+
+  const record =
+    data && typeof data === "object"
+      ? (data as UnknownRecord)
+      : {};
+
+  return {
+    disponible:
+      record.disponible === true ||
+      record.hayCodigosDisponibles === true,
+  };
+}
+
 export async function validarCodigoPromocionCarrito(payload: {
   codigo: string;
   items: ValidarCodigoPromocionCarritoItem[];
@@ -457,17 +484,49 @@ export async function validarCodigoPromocionCarrito(payload: {
   }));
 
   const response = await apiFetch<unknown>(
-  "/api/codigos-promocion/validar",
-  {
-    method: "POST",
-    body: JSON.stringify({
-      codigo,
-      items,
-    }),
-  },
-);
+    "/api/codigos-promocion/validar",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        codigo,
+        items,
+      }),
+    },
+  );
 
-return mapResultadoCodigoPromocion(response);
+  return mapResultadoCodigoPromocion(response);
+}
+
+
+export async function consultarDisponibilidadCodigosPromocionCarrito(payload: {
+  items: ValidarCodigoPromocionCarritoItem[];
+}): Promise<DisponibilidadCodigosPromocionCarrito> {
+  if (!Array.isArray(payload.items) || payload.items.length === 0) {
+    return {
+      disponible: false,
+    };
+  }
+
+  const items = payload.items.map((item) => ({
+    productoId: item.productoId,
+    cantidad: Math.max(1, Number(item.cantidad || 1)),
+    precioUnitario: Math.max(0, Number(item.precioUnitario || 0)),
+    categoriaIds: item.categoriaIds ?? [],
+    lineaIds: item.lineaIds ?? [],
+    ...(item.tallaId ? { tallaId: item.tallaId } : {}),
+  }));
+
+  const response = await apiFetch<unknown>(
+    "/api/codigos-promocion/disponibilidad-carrito",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        items,
+      }),
+    },
+  );
+
+  return mapDisponibilidadCodigosPromocion(response);
 }
 
 export async function checkoutCart(payload: {

@@ -412,6 +412,10 @@ body[data-storefront="true"] {
     border-radius: 0 !important;
   }
 
+  body[data-storefront="true"] :where(.offer-discount-circle) {
+    border-radius: 9999px !important;
+  }
+
   body[data-storefront="true"] :where(.apple-card-clip) {
     border-radius: 1.5rem !important;
     overflow: hidden;
