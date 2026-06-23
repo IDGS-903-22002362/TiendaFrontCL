@@ -16,12 +16,14 @@ function forward(request: NextRequest, path?: string[]) {
     suffix === "/chat/messages" &&
     (request.nextUrl.searchParams.get("stream") === "true" ||
       request.headers.get("accept")?.includes("text/event-stream"));
+  const isTryOnImageStream =
+    request.method === "GET" && /\/tryon\/jobs\/[^/]+\/image$/.test(suffix);
 
   return proxyToBackend({
     request,
     backendPath: `/api/ai${suffix}`,
     requireAuth: true,
-    rawResponse: isMessageStream,
+    rawResponse: isMessageStream || isTryOnImageStream,
   });
 }
 
@@ -33,6 +35,13 @@ export function GET(
 }
 
 export function POST(
+  request: NextRequest,
+  context: { params: Promise<{ path?: string[] }> },
+) {
+  return context.params.then((params) => forward(request, params.path));
+}
+
+export function DELETE(
   request: NextRequest,
   context: { params: Promise<{ path?: string[] }> },
 ) {

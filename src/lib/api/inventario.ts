@@ -409,4 +409,94 @@ export const inventarioApi = {
       { token, local: true },
     );
   },
+
+  async getOperationalSummary(token?: string) {
+    const payload = await apiFetch<ApiEnvelope<{
+      pendingOrdersCount: number;
+      lowStockCount: number;
+      activeProductsCount: number;
+      recentMovementsCount: number;
+      generatedAt: string;
+    }>>(
+      "/api/inventario/resumen-operativo",
+      { method: "GET", cache: "no-store" },
+      { local: true, token: token === "cookie-session" ? undefined : token },
+    );
+
+    const data = unwrapData(payload);
+    if (!data) {
+      throw new Error("No se pudo cargar el resumen operativo");
+    }
+
+    return data;
+  },
+
+  async listAdminNotifications(token?: string) {
+    const payload = await apiFetch<ApiEnvelope<{
+      items: Array<{
+        id: string;
+        type: string;
+        title: string;
+        message: string;
+        href: string;
+        createdAt: string;
+        read: boolean;
+      }>;
+      unreadCount: number;
+    }>>(
+      "/api/inventario/notificaciones-admin",
+      { method: "GET", cache: "no-store" },
+      { local: true, token: token === "cookie-session" ? undefined : token },
+    );
+
+    const data = unwrapData(payload);
+    return data ?? { items: [], unreadCount: 0 };
+  },
+
+  async markAdminNotificationsRead(ids: string[], token?: string) {
+    const payload = await apiFetch<ApiEnvelope<{
+      items: Array<{
+        id: string;
+        type: string;
+        title: string;
+        message: string;
+        href: string;
+        createdAt: string;
+        read: boolean;
+      }>;
+      unreadCount: number;
+    }>>(
+      "/api/inventario/notificaciones-admin/read",
+      {
+        method: "POST",
+        body: JSON.stringify({ ids }),
+      },
+      { local: true, token: token === "cookie-session" ? undefined : token },
+    );
+
+    const data = unwrapData(payload);
+    return data ?? { items: [], unreadCount: 0 };
+  },
+
+  async markAllAdminNotificationsRead(token?: string) {
+    const payload = await apiFetch<ApiEnvelope<{
+      items: Array<{
+        id: string;
+        type: string;
+        title: string;
+        message: string;
+        href: string;
+        createdAt: string;
+        read: boolean;
+      }>;
+      unreadCount: number;
+    }>>(
+      "/api/inventario/notificaciones-admin/read-all",
+      { method: "POST" },
+      { local: true, token: token === "cookie-session" ? undefined : token },
+    );
+
+    const data = unwrapData(payload);
+    return data ?? { items: [], unreadCount: 0 };
+  },
 };

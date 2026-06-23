@@ -185,6 +185,18 @@ async function recoverAuthSession(): Promise<SessionRefreshResult> {
   return pendingSessionRefresh;
 }
 
+function shouldUseLocalProxy(path: string, options?: ApiFetchOptions): boolean {
+  if (options?.local !== undefined) {
+    return options.local;
+  }
+
+  return (
+    typeof window !== "undefined" &&
+    process.env.NODE_ENV === "development" &&
+    path.startsWith("/api/")
+  );
+}
+
 export async function apiFetch<T>(
   path: string,
   init: RequestInit = {},
@@ -215,13 +227,14 @@ export async function apiFetch<T>(
   }
 
   let response: Response;
-  const endpoint = options?.local ? path : joinApiUrl(API_BASE, path);
+  const useLocalProxy = shouldUseLocalProxy(path, options);
+  const endpoint = useLocalProxy ? path : joinApiUrl(API_BASE, path);
 
   try {
     response = await fetch(endpoint, {
       ...init,
       headers,
-      credentials: options?.local ? "include" : init.credentials,
+      credentials: useLocalProxy ? "include" : init.credentials,
       cache:
         init.cache ??
         (typeof window !== "undefined" ? "no-store" : "force-cache"),

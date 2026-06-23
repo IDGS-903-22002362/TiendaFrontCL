@@ -303,11 +303,15 @@ function mapProduct(input: unknown): Product {
     0,
   );
   const salePrice = salePriceRaw > 0 ? salePriceRaw : undefined;
+  const categoryId = toStringValue(
+    product.categoriaId ??
+      (product.categoria as UnknownRecord | undefined)?.id ??
+      (product.categoria as UnknownRecord | undefined)?.slug,
+  );
   const categoryName = toStringValue(
     (product.categoria as UnknownRecord | undefined)?.nombre ??
       product.categoriaNombre ??
-      product.categoriaId ??
-      product.category,
+      (categoryId || product.category),
     "General",
   );
   const lineId = toStringValue(
@@ -380,6 +384,7 @@ function mapProduct(input: unknown): Product {
         ? images
         : [`https://picsum.photos/seed/${id || "product"}/600/600`],
     category: categoryName,
+    categoryId: categoryId || undefined,
     lineId: lineId || undefined,
     lineName: lineName || undefined,
     tags: mapProductTagList(product, price, salePrice),

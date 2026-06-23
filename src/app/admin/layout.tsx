@@ -27,6 +27,7 @@ import {
   SheetTitle,
   SheetHeader,
 } from "@/components/ui/sheet";
+import { AdminNotificationsPanel } from "@/components/admin/admin-notifications-panel";
 
 const navGroups = [
   {
@@ -70,7 +71,7 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { isAuthenticated, isLoading, role, user, clearSession } = useAuth();
+  const { isAuthenticated, isLoading, role, user, clearSession, token } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -193,21 +194,25 @@ export default function AdminLayout({
             </div>
           </SheetContent>
         </Sheet>
-        <div className="flex flex-1 items-center justify-between">
+        <div className="flex flex-1 items-center justify-between gap-3">
           <span className="font-headline text-lg font-bold">
             Panel de Administración
           </span>
-          <span className="text-xs uppercase text-text-muted">{role}</span>
+          <div className="flex items-center gap-2">
+            <AdminNotificationsPanel token={token} />
+            <span className="text-xs uppercase text-text-muted">{role}</span>
+          </div>
         </div>
       </header>
 
       <aside className="hidden border-r border-border bg-sidebar md:sticky md:top-0 md:block md:h-screen md:self-start md:w-64 lg:w-72">
         <div className="flex h-full max-h-screen flex-col gap-2">
-          <div className="flex h-14 items-center border-b border-border px-4 lg:h-[60px] lg:px-6">
+          <div className="flex h-14 items-center justify-between border-b border-border px-4 lg:h-[60px] lg:px-6">
             <Link href="/" className="flex items-center gap-2 font-semibold">
               <Package className="h-6 w-6 text-secondary" />
               <span className="font-headline text-xl">Admin Tienda</span>
             </Link>
+            <AdminNotificationsPanel token={token} className="hidden md:inline-flex" />
           </div>
           <div className="flex-1 overflow-auto py-2">
             <nav className="grid items-start gap-1 px-2 text-sm font-medium lg:px-4">
