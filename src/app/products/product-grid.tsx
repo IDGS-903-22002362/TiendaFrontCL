@@ -82,7 +82,7 @@ export function ProductGrid({ products, offerPricing = {} }: ProductGridProps) {
   const selectedDiscount = Number.isFinite(discountParam)
     ? discountParam
     : 0;
-  const [pricingOfertas, setPricingOfertas] = useState<
+  const [localPricing, setLocalPricing] = useState<
     Record<string, ProductOfferPricing>
   >({});
   const localPricingRef = useRef(localPricing);
@@ -91,6 +91,8 @@ export function ProductGrid({ products, offerPricing = {} }: ProductGridProps) {
   const [isLoadingOffers, setIsLoadingOffers] = useState(
     () =>
       mostrarSoloOfertas &&
+      products.length > 0 &&
+      !products.some((product) => productHasActiveOfferFromCatalog(product)) &&
       getMissingOfferPricingProducts(products, offerPricing).length > 0,
   );
 
@@ -108,6 +110,11 @@ export function ProductGrid({ products, offerPricing = {} }: ProductGridProps) {
       }
 
       if (products.length === 0) {
+        setIsLoadingOffers(false);
+        return;
+      }
+
+      if (products.some((product) => productHasActiveOfferFromCatalog(product))) {
         setIsLoadingOffers(false);
         return;
       }

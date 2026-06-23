@@ -11,7 +11,7 @@ import {
   resolveCatalogOnlyAvailable,
 } from "@/lib/api/storefront";
 import {
-  calcularPreciosOfertasPublicas,
+  buildOfferPricingFromCatalogItems,
   type ProductOfferPricing,
 } from "@/lib/ofertas-public";
 import { lineasApi } from "@/lib/api/lineas";
@@ -134,16 +134,8 @@ export default async function ProductsPage({
     tallasApi.getAll(),
   ]);
 
-  let initialOfferPricing: Record<string, ProductOfferPricing> = {};
-
-  if (onlyOffers && initialPage.items.length > 0) {
-    initialOfferPricing = await calcularPreciosOfertasPublicas(
-      initialPage.items.map((item) => ({
-        productoId: item.id,
-        cantidad: 1,
-      })),
-    );
-  }
+  const initialOfferPricing: Record<string, ProductOfferPricing> =
+    buildOfferPricingFromCatalogItems(initialPage.items);
 
   return (
     <div className="container py-6 md:py-8 lg:py-10">

@@ -1,4 +1,4 @@
-import type { CartItem, Product } from "@/lib/types";
+import type { CartItem, Product, CatalogProductCard } from "@/lib/types";
 import { apiFetch, unwrapData } from "@/lib/api/client";
 
 export type ProductOfferPricing = {
@@ -136,6 +136,72 @@ async function requestOfferPricingBatch(
     console.warn("Error calculando ofertas públicas", error);
     return {};
   }
+}
+
+export function buildOfferPricingFromCatalogItems(
+  items: CatalogProductCard[],
+): Record<string, ProductOfferPricing> {
+  return items.reduce<Record<string, ProductOfferPricing>>((acc, item) => {
+    if (
+      item.tieneOferta &&
+      item.precioFinal > 0 &&
+      item.precioFinal < item.precioOriginal
+    ) {
+      acc[item.id] = {
+        productoId: item.id,
+        precioOriginal: item.precioOriginal,
+        precioFinal: item.precioFinal,
+        ofertaAplicadaId: item.ofertaAplicadaId,
+        ofertaTitulo: item.ofertaTitulo,
+      };
+    }
+
+    return acc;
+  }, {});
+}
+
+export function catalogItemsIncludeOfferPricing(
+  items: CatalogProductCard[],
+): boolean {
+  return items.some(
+    (item) =>
+      item.tieneOferta &&
+      item.precioFinal > 0 &&
+      item.precioFinal < item.precioOriginal,
+  );
+}
+
+export async function enrichCatalogProductsWithOfferPricing(
+  products: Product[],
+  catalogItems: CatalogProductCard[],
+): Promise<{
+  products: Product[];
+  pricing: Record<string, ProductOfferPricing>;
+}> {
+  const pricing = buildOfferPricingFromCatalogItems(catalogItems);
+  const enriched = applyCatalogOfferPricingToProducts(products, pricing);
+  const missingProducts = enriched.filter(
+    (product) => !pricing[product.id] && !hasValidSalePrice(product),
+  );
+
+  if (missingProducts.length === 0) {
+    return { products: enriched, pricing };
+  }
+
+  const fetched = await calcularPreciosOfertasPublicas(
+    buildCatalogOfferPricingItems(missingProducts),
+  );
+
+  return {
+    products: applyCatalogOfferPricingToProducts(enriched, {
+      ...pricing,
+      ...fetched,
+    }),
+    pricing: {
+      ...pricing,
+      ...fetched,
+    },
+  };
 }
 
 export async function calcularPreciosOfertasPublicas(

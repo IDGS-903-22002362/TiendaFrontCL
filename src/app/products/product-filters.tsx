@@ -40,7 +40,7 @@ import {
 } from "@/lib/api/storefront";
 import {
   applyCatalogOfferPricingToProducts,
-  fetchCatalogOfferPricingForProducts,
+  enrichCatalogProductsWithOfferPricing,
   getOfferDiscountPercent,
   hasActiveOfferFromPricing,
   type ProductOfferPricing,
@@ -460,7 +460,10 @@ export function ProductFilters({
           mapCatalogProductToProductCardViewModel,
         );
         const { products: newProducts, pricing } =
-          await fetchCatalogOfferPricingForProducts(mappedProducts);
+          await enrichCatalogProductsWithOfferPricing(
+            mappedProducts,
+            response.items,
+          );
 
         setOfferPricing((current) =>
           cursor ? { ...current, ...pricing } : pricing,
