@@ -40,6 +40,7 @@ import {
 } from "@/lib/api/storefront";
 import {
   applyCatalogOfferPricingToProducts,
+  catalogItemsNeedOfferPricingFallback,
   enrichCatalogProductsWithOfferPricing,
   getOfferDiscountPercent,
   hasActiveOfferFromPricing,
@@ -53,6 +54,7 @@ import {
 
 type ProductFiltersProps = {
   initialPage: CatalogResponse;
+  initialProducts?: Product[];
   initialOfferPricing?: Record<string, ProductOfferPricing>;
   categories: Category[];
   lineas: Linea[];
@@ -290,6 +292,7 @@ function resolveTallaFilterValue(value: string, tallas: Talla[]) {
 
 export function ProductFilters({
   initialPage,
+  initialProducts: initialProductsProp,
   initialOfferPricing = {},
   categories,
   lineas,
@@ -301,6 +304,10 @@ export function ProductFilters({
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
   const initialProducts = useMemo(() => {
+    if (initialProductsProp?.length) {
+      return initialProductsProp;
+    }
+
     const mapped = initialPage.items.map(mapCatalogProductToProductCardViewModel);
 
     if (Object.keys(initialOfferPricing).length === 0) {
@@ -308,7 +315,7 @@ export function ProductFilters({
     }
 
     return applyCatalogOfferPricingToProducts(mapped, initialOfferPricing);
-  }, [initialOfferPricing, initialPage.items]);
+  }, [initialOfferPricing, initialPage.items, initialProductsProp]);
 
   const [offerPricing, setOfferPricing] =
     useState<Record<string, ProductOfferPricing>>(initialOfferPricing);
@@ -677,6 +684,50 @@ export function ProductFilters({
     sort,
     wishlistOnly,
   ]);
+
+  useEffect(() => {
+    if (wishlistOnly) {
+      return;
+    }
+
+    if (
+      !catalogItemsNeedOfferPricingFallback(
+        initialProducts,
+        initialPage.items,
+        initialOfferPricing,
+      )
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void enrichCatalogProductsWithOfferPricing(
+      initialProducts,
+      initialPage.items,
+    )
+      .then(({ products, pricing }) => {
+        if (cancelled) {
+          return;
+        }
+
+        setOfferPricing((current) => ({ ...current, ...pricing }));
+        setItems(products);
+
+        const withOffers = products.filter((product) =>
+          productHasActiveOffer(product, pricing[product.id]),
+        );
+
+        setProductsWithOffers(withOffers);
+      })
+      .catch((error) => {
+        console.error("Error enriqueciendo ofertas del catálogo", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialOfferPricing, initialPage.items, initialProducts, wishlistOnly]);
 
   useEffect(() => {
     if (initialRender.current) {

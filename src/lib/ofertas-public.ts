@@ -179,6 +179,42 @@ export function catalogItemsIncludeOfferPricing(
   );
 }
 
+export function hasOfferPriceDelta(
+  product: Pick<Product, "price">,
+  pricing: Pick<ProductOfferPricing, "precioOriginal" | "precioFinal">,
+): boolean {
+  const precioOriginal = Number(pricing.precioOriginal || product.price || 0);
+  const precioFinal = Number(pricing.precioFinal || 0);
+
+  return (
+    precioOriginal > 0 && precioFinal > 0 && precioFinal < precioOriginal
+  );
+}
+
+export function catalogItemsNeedOfferPricingFallback(
+  products: Product[],
+  catalogItems: CatalogProductCard[],
+  existingPricing: Record<string, ProductOfferPricing> = {},
+): boolean {
+  if (catalogItems.length === 0 || products.length === 0) {
+    return false;
+  }
+
+  if (catalogItemsIncludeOfferPricing(catalogItems)) {
+    return false;
+  }
+
+  const snapshotPricing = buildOfferPricingFromCatalogItems(catalogItems);
+
+  return products.some((product) => {
+    if (snapshotPricing[product.id] || existingPricing[product.id]) {
+      return false;
+    }
+
+    return !hasValidSalePrice(product);
+  });
+}
+
 export async function enrichCatalogProductsWithOfferPricing(
   products: Product[],
   catalogItems: CatalogProductCard[],
@@ -255,13 +291,7 @@ export function applyCatalogOfferPricingToProduct(
   const originalPrice = Number(offerPrice.precioOriginal || product.price || 0);
   const finalPrice = Number(offerPrice.precioFinal || 0);
 
-  const hasOffer =
-    Boolean(offerPrice.ofertaAplicadaId || offerPrice.ofertaTitulo) &&
-    originalPrice > 0 &&
-    finalPrice > 0 &&
-    finalPrice < originalPrice;
-
-  if (!hasOffer) {
+  if (!hasOfferPriceDelta(product, offerPrice)) {
     return product;
   }
 
@@ -390,25 +420,18 @@ export function hasActiveOfferFromPricing(
     return false;
   }
 
-  const precioOriginal = Number(pricing.precioOriginal || product.price || 0);
-  const precioFinal = Number(pricing.precioFinal || 0);
-
-  return (
-    Boolean(pricing.ofertaAplicadaId || pricing.ofertaTitulo) &&
-    precioFinal > 0 &&
-    precioFinal < precioOriginal
-  );
+  return hasOfferPriceDelta(product, pricing);
 }
 
 export function getOfferDiscountPercent(
   product: Pick<Product, "price" | "salePrice">,
   pricing?: ProductOfferPricing | null,
 ): number | null {
-  if (hasActiveOfferFromPricing(product, pricing)) {
-    const precioOriginal = Number(pricing!.precioOriginal || product.price || 0);
-    const precioFinal = Number(pricing!.precioFinal || 0);
+  if (hasActiveOfferFromPricing(product, pricing) && pricing) {
+    const precioOriginal = Number(pricing.precioOriginal || product.price || 0);
+    const precioFinal = Number(pricing.precioFinal || 0);
 
-    if (precioOriginal > 0 && precioFinal > 0 && precioFinal < precioOriginal) {
+    if (hasOfferPriceDelta(product, pricing)) {
       return Math.round(((precioOriginal - precioFinal) / precioOriginal) * 100);
     }
   }

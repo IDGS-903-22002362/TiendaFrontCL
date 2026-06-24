@@ -607,7 +607,7 @@ function LoginPageContent() {
         </div>
       </div>
 
-      {/* Back button */}
+      {/* Botón volver */}
       {!isFromMobileApp ? (
         <div className="absolute left-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 sm:left-5">
           <button
@@ -620,7 +620,7 @@ function LoginPageContent() {
             <span className="text-sm font-medium">Volver</span>
           </button>
         </div>
-      ) : (null)}
+      ) : null}
 
       {/* Main content */}
       <div className="pointer-events-none relative z-10 flex w-full flex-1 items-start justify-center overflow-y-auto px-[clamp(0.75rem,4vw,1.5rem)] pt-[max(5rem,calc(env(safe-area-inset-top)+4rem))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center sm:px-6 sm:pt-[max(5.5rem,calc(env(safe-area-inset-top)+4.5rem))] sm:pb-8 lg:pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] lg:pb-12">
@@ -639,14 +639,14 @@ function LoginPageContent() {
 
           {/* Error message */}
           {errorMessage && (
-            <div className="mt-6 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="mb-[clamp(0.6rem,1.8vh,1rem)] rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 break-words">
               {errorMessage}
             </div>
           )}
 
           {/* Loading state */}
           {isSubmitting && (
-            <div className="mt-6 rounded-3xl border border-emerald-100 bg-emerald-50 p-6 text-center">
+            <div className="rounded-3xl border border-emerald-100 bg-emerald-50/95 p-6 text-center backdrop-blur-sm">
               <svg
                 className="mx-auto mb-3 h-12 w-12 animate-spin text-[#007A53]"
                 xmlns="http://www.w3.org/2000/svg"
@@ -674,7 +674,7 @@ function LoginPageContent() {
           )}
 
           {!isSubmitting && !firebaseReady && (
-            <div className="mt-6 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-center text-amber-900">
+            <div className="rounded-2xl border border-amber-300 bg-amber-50/95 p-5 text-center text-amber-900 backdrop-blur-sm">
               <p className="font-semibold">Servicio en mantenimiento</p>
               <p className="mt-2 text-sm">Intenta más tarde o contacta con soporte.</p>
             </div>
@@ -686,7 +686,7 @@ function LoginPageContent() {
                 // Pantalla inicial: Email + Google/Apple
                 <div className="mt-6 space-y-4 rounded-3xl border border-[#e7ece9] bg-[#f8fbf9] p-[clamp(0.75rem,3vw,1.25rem)] shadow-sm sm:mt-7">
                   {/* Email Input */}
-                  <div className="relative">
+                  <div className="relative w-full min-w-0">
                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
                       <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
@@ -717,7 +717,7 @@ function LoginPageContent() {
                   <div className="text-center">
                     <Link
                       href="/register"
-                      className="text-sm font-bold text-[#007A53] underline-offset-4 hover:underline"
+                      className="inline-block max-w-full text-pretty text-sm font-bold text-[#007A53] underline-offset-4 hover:underline"
                     >
                       ¿No tienes cuenta? Regístrate aquí
                     </Link>
@@ -793,12 +793,12 @@ function LoginPageContent() {
                     </button>
                   </div>
 
-                  <div className="space-y-3 border-t border-gray-200 pt-4">
+                  <div className="space-y-3 border-t border-gray-200 pt-[clamp(0.6rem,1.8vh,1rem)]">
                     <p className="text-center text-sm font-semibold text-gray-600">
                       ¿Prefieres iniciar sesión con correo y contraseña?
                     </p>
                     <Button
-                      className="h-12 w-full rounded-2xl border-2 border-[#007A53] bg-white text-base font-bold text-[#007A53] transition-all hover:bg-[#f0f7f5] sm:h-14 sm:text-lg"
+                      className="h-[clamp(2.75rem,6vh,3.5rem)] min-h-[44px] w-full rounded-2xl border-2 border-[#007A53] bg-white text-base font-bold text-[#007A53] transition-all hover:bg-[#f0f7f5]"
                       onClick={() => {
                         setShowVerification(false);
                         setShowPasswordLogin(true);
@@ -835,7 +835,7 @@ function LoginPageContent() {
                 // Formulario de correo y contraseña
                 <div className="mt-6 space-y-4 rounded-3xl border border-[#e7ece9] bg-[#f8fbf9] p-[clamp(0.75rem,3vw,1.25rem)] shadow-sm sm:mt-7">
                   {/* Email Input */}
-                  <div className="relative">
+                  <div className="relative w-full min-w-0">
                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
                       <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
@@ -856,7 +856,7 @@ function LoginPageContent() {
                   </div>
 
                   {/* Password Input */}
-                  <div className="relative">
+                  <div className="relative w-full min-w-0">
                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
                       <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
@@ -870,7 +870,7 @@ function LoginPageContent() {
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
                       disabled={isSubmitting}
-                      className="h-12 rounded-2xl border border-gray-200 bg-white pl-12 pr-12 text-gray-900 placeholder-gray-500 transition-all focus:border-[#007A53] focus:ring-2 focus:ring-[#007A53]/15 sm:h-14"
+                      className="h-[clamp(2.75rem,6vh,3.5rem)] min-h-[44px] w-full min-w-0 rounded-2xl border border-gray-200 bg-white pl-12 pr-14 text-base text-gray-900 placeholder-gray-500 transition-all focus:border-[#007A53] focus:ring-2 focus:ring-[#007A53]/15"
                     />
                     <button
                       type="button"
@@ -878,6 +878,7 @@ function LoginPageContent() {
                       aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                       className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-gray-600"
                       disabled={isSubmitting}
+                      aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                     >
                       {showPassword ? (
                         <EyeOff className="h-5 w-5" />
@@ -927,7 +928,7 @@ function LoginPageContent() {
                       )}
 
                       {/* Recovery Email Input */}
-                      <div className="relative">
+                      <div className="relative w-full min-w-0">
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
                           <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
@@ -976,14 +977,14 @@ function LoginPageContent() {
                         </svg>
                       </div>
                       <h3 className="text-lg font-bold text-[#007A53]">¡Email enviado!</h3>
-                      <p className="text-sm text-gray-600">
-                        Hemos enviado un enlace de recuperación a <strong>{recoveryEmail}</strong>
+                      <p className="text-sm text-gray-600 break-words">
+                        Hemos enviado un enlace de recuperación a <strong className="break-all">{recoveryEmail}</strong>
                       </p>
                       <p className="text-sm text-gray-500">
                         Por favor revisa tu bandeja de entrada o en spam y sigue las instrucciones para restablecer tu contraseña.
                       </p>
                       <Button
-                        className="h-12 w-full rounded-2xl bg-[#007A53] text-base font-bold text-white shadow-lg shadow-[#007A53]/30 transition-all hover:bg-[#006248] sm:h-14 sm:text-lg"
+                        className="h-[clamp(2.75rem,6vh,3.5rem)] min-h-[44px] w-full rounded-2xl bg-[#007A53] text-base font-bold text-white shadow-lg shadow-[#007A53]/30 transition-all hover:bg-[#006248]"
                         onClick={() => {
                           setShowPasswordRecovery(false);
                           setShowPasswordLogin(true);
@@ -998,6 +999,9 @@ function LoginPageContent() {
                   )}
                 </div>
               ) : null}
+            </>
+          )}
+          </div>
 
               <div className="my-6 flex min-w-0 items-center gap-2 sm:gap-4">
                 <div className="h-px min-w-0 flex-1 bg-gray-300" />
@@ -1005,9 +1009,7 @@ function LoginPageContent() {
                 <div className="h-px min-w-0 flex-1 bg-gray-300" />
               </div>
 
-              {/* Social Buttons */}
-              <div className="space-y-3">
-                {/* Google Button */}
+              <div className="space-y-[clamp(0.5rem,1.5vh,0.75rem)]">
                 <Button
                   className="h-11 w-full min-w-0 justify-center gap-2 rounded-full border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-900 transition-all hover:bg-gray-50 disabled:opacity-70 sm:h-12 sm:gap-3 sm:px-4 sm:text-sm md:h-14 md:text-base"
                   onClick={onGoogleLogin}
@@ -1034,13 +1036,12 @@ function LoginPageContent() {
                   Continuar con Google
                 </Button>
 
-                {/* Apple Button */}
                 <Button
                   className="h-11 w-full min-w-0 justify-center gap-2 rounded-full bg-black px-3 text-xs font-semibold text-white transition-all hover:bg-gray-900 disabled:opacity-70 sm:h-12 sm:gap-3 sm:px-4 sm:text-sm md:h-14 md:text-base"
                   onClick={onAppleLogin}
                   disabled={isSubmitting || isRequestingCode}
                 >
-                  <svg className="-ml-2 h-6 w-6 shrink-0" fill="currentColor" viewBox="0 0 384 512" aria-hidden="true">
+                  <svg className="h-5 w-5 shrink-0" fill="currentColor" viewBox="0 0 384 512" aria-hidden="true">
                     <path d="M318.7 268.6c-.2-36.7 16.3-64.3 49.8-84.9-18.7-26.8-47-41.6-84.6-44.5-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141 16 187.3 16 267.5c0 24.1 4.4 49 13.3 74.8 11.9 34.2 54.9 118.2 99.7 116.8 23.4-.6 39.9-16.6 70.4-16.6 29.6 0 44.9 16.6 71 16.6 45.2-.6 84.1-77 95.4-111.3-65.8-31-47.1-126.8-47.1-129.2zM262.2 107.5c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-51.9 16.4-67.8 34.9-17.5 20.1-27.8 44.9-25.6 72.5 26 .2 50.2-13 69.4-34.9z" />
                   </svg>
                   Continuar con Apple
@@ -1048,8 +1049,9 @@ function LoginPageContent() {
               </div>
             </>
           )}
-        </section>
-      </div>
+          </section>
+        </div>
+      </main>
     </div>
   );
 }
