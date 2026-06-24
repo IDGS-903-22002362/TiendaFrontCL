@@ -28,8 +28,8 @@ const defaultCsp = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "img-src 'self' data: blob: https: http://localhost:3000",
   "font-src 'self' data: https://fonts.gstatic.com",
-  `connect-src 'self' ${apiBaseUrl} https://*.googleapis.com https://api.stripe.com https://js.stripe.com https://hooks.stripe.com https://*.cloudfunctions.net https://*.firebaseapp.com https://*.firebaseio.com wss://*.firebaseio.com`,
-  "frame-src 'self' https://apis.google.com https://js.stripe.com https://hooks.stripe.com https://www.google.com https://*.firebaseapp.com",
+  `connect-src 'self' ${apiBaseUrl} https://*.googleapis.com https://api.stripe.com https://js.stripe.com https://hooks.stripe.com https://r.stripe.com https://m.stripe.com https://pay.google.com https://*.cloudfunctions.net https://*.firebaseapp.com https://*.firebaseio.com wss://*.firebaseio.com https://www.google.com https://www.gstatic.com`,
+  "frame-src 'self' https://apis.google.com https://js.stripe.com https://hooks.stripe.com https://pay.google.com https://www.google.com https://*.firebaseapp.com",
 ].join("; ");
 
 const checkoutCsp = [
@@ -42,8 +42,8 @@ const checkoutCsp = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data: https://fonts.gstatic.com",
-  `connect-src 'self' ${apiBaseUrl} https://*.googleapis.com https://api.stripe.com https://js.stripe.com https://hooks.stripe.com https://*.cloudfunctions.net https://*.firebaseapp.com`,
-  "frame-src 'self' https://apis.google.com https://js.stripe.com https://hooks.stripe.com https://www.google.com https://*.firebaseapp.com",
+  `connect-src 'self' ${apiBaseUrl} https://*.googleapis.com https://api.stripe.com https://js.stripe.com https://hooks.stripe.com https://r.stripe.com https://m.stripe.com https://pay.google.com https://*.cloudfunctions.net https://*.firebaseapp.com https://www.google.com https://www.gstatic.com`,
+  "frame-src 'self' https://apis.google.com https://js.stripe.com https://hooks.stripe.com https://pay.google.com https://www.google.com https://*.firebaseapp.com",
 ].join("; ");
 
 const nextConfig: NextConfig = {

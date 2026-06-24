@@ -245,6 +245,18 @@ export async function apiFetch<T>(
     headers.set("Idempotency-Key", options.idempotencyKey);
   }
 
+  if (typeof window !== "undefined") {
+    try {
+      const { getAppCheckToken } = await import("@/lib/firebase/client");
+      const appCheckToken = await getAppCheckToken();
+      if (appCheckToken) {
+        headers.set("X-Firebase-AppCheck", appCheckToken);
+      }
+    } catch {
+      // App Check es opcional hasta activar APP_CHECK_ENFORCED en backend.
+    }
+  }
+
   let response: Response;
   const useLocalProxy = shouldUseLocalProxy(path, options);
   const endpoint = useLocalProxy ? path : joinApiUrl(API_BASE, path);

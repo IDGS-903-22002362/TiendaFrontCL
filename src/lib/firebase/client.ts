@@ -4,6 +4,7 @@ import { getStorage } from "firebase/storage";
 import {
   initializeAppCheck,
   ReCaptchaV3Provider,
+  getToken,
   type AppCheck,
 } from "firebase/app-check";
 
@@ -76,6 +77,23 @@ export function isFirebaseConfigured() {
 }
 
 let appCheckInstance: AppCheck | null = null;
+let debugTokenConfigured = false;
+
+function configureAppCheckDebugTokenIfNeeded() {
+  if (debugTokenConfigured || typeof window === "undefined") {
+    return;
+  }
+
+  debugTokenConfigured = true;
+
+  const isProduction = process.env.NODE_ENV === "production";
+  const debugToken = process.env.NEXT_PUBLIC_FIREBASE_APP_CHECK_DEBUG_TOKEN?.trim();
+
+  if (!isProduction && debugToken) {
+    (self as typeof self & { FIREBASE_APPCHECK_DEBUG_TOKEN?: string }).FIREBASE_APPCHECK_DEBUG_TOKEN =
+      debugToken;
+  }
+}
 
 function initializeAppCheckIfConfigured(app: ReturnType<typeof getFirebaseApp>) {
   if (typeof window === "undefined" || appCheckInstance) {
@@ -91,6 +109,45 @@ function initializeAppCheckIfConfigured(app: ReturnType<typeof getFirebaseApp>) 
     provider: new ReCaptchaV3Provider(siteKey),
     isTokenAutoRefreshEnabled: true,
   });
+}
+
+export function getAppCheckInstance(): AppCheck | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  if (!appCheckInstance && isFirebaseConfigured()) {
+    getFirebaseApp();
+  }
+
+  return appCheckInstance;
+}
+
+export async function getAppCheckToken(
+  forceRefresh = false,
+): Promise<string | null> {
+  if (typeof window === "undefined" || !isFirebaseConfigured()) {
+    return null;
+  }
+
+  const siteKey = process.env.NEXT_PUBLIC_FIREBASE_APP_CHECK_SITE_KEY?.trim();
+  if (!siteKey) {
+    return null;
+  }
+
+  configureAppCheckDebugTokenIfNeeded();
+
+  try {
+    getFirebaseApp();
+    if (!appCheckInstance) {
+      return null;
+    }
+
+    const result = await getToken(appCheckInstance, forceRefresh);
+    return result.token;
+  } catch {
+    return null;
+  }
 }
 
 function getFirebaseApp() {

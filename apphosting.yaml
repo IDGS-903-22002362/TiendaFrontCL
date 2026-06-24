@@ -35,10 +35,10 @@ env:
 
   # Clave publishable live (pública por diseño). Debe coincidir con sk_live_* del backend.
   - variable: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-    value: pk_live_51SxZMKAKmsQ8tJuidM0zdYDGd0xf7JhPVtarD0GAIEc7sa7bQH121I5ibeCkQudWhoHE7CxgRQxS9Ohozz1FlJia00VTMX3q73
+    value: pk_live_51TlczJQVAPvus3zFEkVFfo8a86rhExW4luLjHJ4OsX902ri7PLYEYbpRK7bRtYw2yttV5codkBOUQlidz7qSTXCW0066d2l0hi
 
   - variable: NEXT_PUBLIC_APLAZO_SHOP_ID
-    value: "Prueba Tienda"
+    value: "Laguarida"
 
   - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
     value: AIzaSyBH74ZroHtQ1VALF5eL7BjEIGU_R3OJWIE

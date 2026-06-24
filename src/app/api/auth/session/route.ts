@@ -77,12 +77,10 @@ export async function GET(request: NextRequest) {
     const payload = await backendRes.json() as BackendAuthResponse;
 
     // Renovar cookie con token fresco si el backend lo rotó
-    const freshToken = payload.token ?? token;
     const response = NextResponse.json({
       success: true,
       data: {
         isAuthenticated: true,
-        token: freshToken,
         role: payload.usuario?.rol ?? role,
         user: {
           id: payload.usuario?.id ?? payload.usuario?.uid,
@@ -97,7 +95,7 @@ export async function GET(request: NextRequest) {
 
     // Sincronizar cookies con datos frescos de usuario (incluye perfilCompleto)
     setSessionCookies(response, {
-      token: freshToken,
+      token: payload.token ?? token,
       role: payload.usuario?.rol ?? role,
       user: payload.usuario ?? null,
     });
@@ -122,37 +120,59 @@ export async function POST(request: NextRequest) {
   };
 
   if (body.backendToken) {
-    if (!body.user) {
+    try {
+      const backendRes = await fetch(joinBackendUrl("/api/auth/refresh"), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${body.backendToken}` },
+      });
+
+      if (!backendRes.ok) {
+        return NextResponse.json(
+          { success: false, message: "Token de sesión inválido" },
+          { status: 401 },
+        );
+      }
+
+      const payload = (await backendRes.json()) as BackendAuthResponse;
+      const validatedToken = payload.token ?? body.backendToken;
+      const usuario = payload.usuario ?? body.user;
+
+      if (!usuario?.uid) {
+        return NextResponse.json(
+          { success: false, message: "No se pudo validar la sesión" },
+          { status: 401 },
+        );
+      }
+
+      const response = NextResponse.json({
+        success: true,
+        data: {
+          role: usuario.rol ?? "",
+          user: {
+            id: usuario.uid,
+            uid: usuario.uid,
+            email: usuario.email,
+            nombre: usuario.nombre,
+            perfilCompleto: usuario.perfilCompleto,
+            rol: usuario.rol,
+          },
+        },
+      });
+
+      setSessionCookies(response, {
+        token: validatedToken,
+        role: usuario.rol ?? "",
+        user: usuario,
+      });
+      setCsrfCookie(response);
+
+      return response;
+    } catch {
       return NextResponse.json(
-        { success: false, message: "user es requerido con backendToken" },
-        { status: 400 },
+        { success: false, message: "No se pudo validar la sesión" },
+        { status: 502 },
       );
     }
-
-    const response = NextResponse.json({
-      success: true,
-      data: {
-        token: body.backendToken,
-        role: body.user.rol ?? "",
-        user: {
-          id: body.user.uid,
-          uid: body.user.uid,
-          email: body.user.email,
-          nombre: body.user.nombre,
-          perfilCompleto: body.user.perfilCompleto,
-          rol: body.user.rol,
-        },
-      },
-    });
-
-    setSessionCookies(response, {
-      token: body.backendToken,
-      role: body.user.rol ?? "",
-      user: body.user,
-    });
-    setCsrfCookie(response);
-
-    return response;
   }
 
   if (!body.firebaseIdToken) {
@@ -192,7 +212,6 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json({
       success: true,
       data: {
-        token: payload.token,
         role: payload.usuario?.rol ?? "",
         user: {
           id: payload.usuario?.id ?? payload.usuario?.uid,

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { type UseFormReturn, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -1720,6 +1720,12 @@ const ACCEPTED_PAYMENT_BRANDS = [
   { name: "Google Pay", src: "/images/iconosdepagos/GooglePay.svg" },
 ] as const;
 
+const PAYMENT_METHODS_NOTICE =
+  "Stripe muestra tarjeta, Link, Apple Pay y Google Pay según tu dispositivo, navegador y banco. Si no ves una opción, prueba otro método o navegador compatible.";
+
+const MSI_NOTICE =
+  "Meses sin intereses dependen de la tarjeta y el banco participante. Stripe mostrará los planes disponibles; no calculamos cuotas en la tienda.";
+
 const PAYMENT_REASSURANCES = [
   {
     icon: Lock,
@@ -1762,6 +1768,7 @@ function CardPaymentStep({
   const router = useRouter();
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
+  const checkoutSessionStartedRef = useRef(false);
   const [embeddedClientSecret, setEmbeddedClientSecret] = useState<string | null>(null);
   const [orderContext, setOrderContext] = useState<{
     attemptId: string;
@@ -1770,7 +1777,12 @@ function CardPaymentStep({
   } | null>(null);
 
   const handlePrepareEmbeddedCheckout = async () => {
-    if (isProcessing || typeof window === "undefined") {
+    if (
+      isProcessing ||
+      checkoutSessionStartedRef.current ||
+      embeddedClientSecret ||
+      typeof window === "undefined"
+    ) {
       return;
     }
 
@@ -1819,6 +1831,7 @@ function CardPaymentStep({
         total: attempt.total ?? total,
         pagoId: attempt.pagoId,
       });
+      checkoutSessionStartedRef.current = true;
       setEmbeddedClientSecret(attempt.clientSecret);
     } catch (error) {
       const retryValues = buildRetryDeliveryValuesFromCheckoutError(
@@ -1871,6 +1884,9 @@ function CardPaymentStep({
                   backend. Tu pedido se creará cuando el pago quede confirmado.
                 </p>
               </div>
+              <p className="text-xs leading-5 text-muted-foreground">
+                {PAYMENT_METHODS_NOTICE} {MSI_NOTICE}
+              </p>
               <EmbeddedCheckoutProvider
                 stripe={stripePromise}
                 options={{ clientSecret: embeddedClientSecret }}
@@ -1893,8 +1909,9 @@ function CardPaymentStep({
                         Paga con tarjeta vía Stripe
                       </p>
                       <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                        Tarjeta de crédito o débito, Apple Pay y Google Pay en un
-                        formulario seguro, sin salir de la tienda.
+                        Tarjeta, Apple Pay, Google Pay y Link en un formulario
+                        seguro. Stripe muestra los métodos compatibles con tu
+                        dispositivo y navegador.
                       </p>
                     </div>
                   </div>
@@ -1952,6 +1969,12 @@ function CardPaymentStep({
                   </li>
                 ))}
               </ul>
+              <p className="text-xs leading-5 text-muted-foreground">
+                {PAYMENT_METHODS_NOTICE}
+              </p>
+              <p className="text-xs leading-5 text-muted-foreground">
+                {MSI_NOTICE}
+              </p>
             </>
           )}
 
