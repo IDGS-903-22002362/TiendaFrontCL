@@ -137,3 +137,68 @@ export function buildCheckoutShippingSelection(
     deliveryTimestamp: option.estimatedDeliveryDate,
   };
 }
+
+export const MANUAL_SHIPPING_COST_LEON = 99;
+export const MANUAL_SHIPPING_COST_OUTSIDE_LEON = 299;
+export const LEON_POSTAL_CODE_MIN = 37000;
+export const LEON_POSTAL_CODE_MAX = 37700;
+
+export const MANUAL_FEDEX_CURRENCY = "MXN";
+export const MANUAL_FEDEX_METHOD = "manual_fedex";
+export const MANUAL_FEDEX_SERVICE_NAME = "FedEx manual";
+
+export type ManualShippingZone = "LEON" | "OUTSIDE_LEON";
+
+export const PICKUP_OFFICIAL_ID_MESSAGE =
+  "Para recoger tu pedido debes presentar una identificaci\u00f3n oficial vigente (INE, pasaporte o licencia de conducir).";
+
+export function parseMxPostalCode(value?: string): number | null {
+  const normalized = value?.trim().replace(/\D/g, "");
+  if (!normalized || normalized.length !== 5) {
+    return null;
+  }
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function isLeonPostalCode(value?: string): boolean {
+  const parsed = parseMxPostalCode(value);
+  if (parsed === null) {
+    return false;
+  }
+
+  return parsed >= LEON_POSTAL_CODE_MIN && parsed <= LEON_POSTAL_CODE_MAX;
+}
+
+export function resolveManualShippingZone(
+  postalCode?: string,
+): ManualShippingZone {
+  return isLeonPostalCode(postalCode) ? "LEON" : "OUTSIDE_LEON";
+}
+
+export function calculateManualShippingCost(postalCode?: string): number {
+  return isLeonPostalCode(postalCode)
+    ? MANUAL_SHIPPING_COST_LEON
+    : MANUAL_SHIPPING_COST_OUTSIDE_LEON;
+}
+
+export function getDeliveryShippingAmount(
+  postalCode?: string,
+): number | null {
+  if (parseMxPostalCode(postalCode) === null) {
+    return null;
+  }
+
+  return calculateManualShippingCost(postalCode);
+}
+
+export function getManualShippingZoneLabel(postalCode?: string): string {
+  if (parseMxPostalCode(postalCode) === null) {
+    return "";
+  }
+
+  return isLeonPostalCode(postalCode)
+    ? "Dentro de Le\u00f3n, Gto."
+    : "Fuera de Le\u00f3n, Gto.";
+}

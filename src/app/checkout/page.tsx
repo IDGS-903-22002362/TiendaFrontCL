@@ -47,7 +47,22 @@ import {
 import { type FedExDireccionEnvio } from "@/lib/api/fedex";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import {
+  buildCartOfferPricingItems,
+  calcularPreciosOfertasPublicas,
+  getCartItemOfferLine,
+  type ProductOfferPricing,
+} from "@/lib/ofertas-public";
+import {
   buildCheckoutShippingAddress,
+  calculateManualShippingCost,
+  getDeliveryShippingAmount,
+  getManualShippingZoneLabel,
+  MANUAL_FEDEX_CURRENCY,
+  MANUAL_FEDEX_METHOD,
+  MANUAL_FEDEX_SERVICE_NAME,
+  MANUAL_SHIPPING_COST_LEON,
+  MANUAL_SHIPPING_COST_OUTSIDE_LEON,
+  PICKUP_OFFICIAL_ID_MESSAGE,
   toLegacyDireccionEnvio,
 } from "@/lib/checkout/shipping";
 import {
@@ -100,23 +115,10 @@ import { Breadcrumbs } from "@/components/storefront/shared/breadcrumbs";
 import { PaymentMethodStrip } from "@/components/storefront/shared/payment-method-strip";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/storefront";
-import {
-  buildCartOfferPricingItems,
-  calcularPreciosOfertasPublicas,
-  getCartItemOfferLine,
-  type ProductOfferPricing,
-} from "@/lib/ofertas-public";
 
 function roundCurrency(value: number) {
   return Math.round(value * 100) / 100;
 }
-
-const MANUAL_FEDEX_SHIPPING_COST = 150;
-const MANUAL_FEDEX_CURRENCY = "MXN";
-const MANUAL_FEDEX_METHOD = "manual_fedex";
-const MANUAL_FEDEX_SERVICE_NAME = "FedEx manual";
-
-const IS_DEVELOPMENT = process.env.NODE_ENV !== "production";
 
 const PROMO_CODE_STORAGE_KEY = "tiendafront_codigo_promocion";
 
@@ -160,15 +162,17 @@ if (IS_DEVELOPMENT && typeof window !== "undefined") {
 function getExpectedCheckoutPricing(
   subtotal: number,
   fulfillmentMethod: FulfillmentMethod = "DELIVERY",
-  shippingAmount = MANUAL_FEDEX_SHIPPING_COST,
+  shippingAmount: number | null = null,
 ) {
-  const shipping = fulfillmentMethod === "PICKUP" ? 0 : shippingAmount;
+  const shipping =
+    fulfillmentMethod === "PICKUP" ? 0 : (shippingAmount ?? 0);
   const tax = 0;
   const total = subtotal + shipping + tax;
 
   return {
     subtotal: roundCurrency(subtotal),
     shipping: roundCurrency(shipping),
+    shippingPending: fulfillmentMethod === "DELIVERY" && shippingAmount === null,
     tax: roundCurrency(tax),
     total: roundCurrency(total),
   };
@@ -347,13 +351,16 @@ function assertDeliveryShippingReady(values: CheckoutValues) {
   }
 }
 
-function buildManualFedExShippingSelection(): DeliveryShippingSelection {
+function buildManualFedExShippingSelection(
+  postalCode: string,
+): DeliveryShippingSelection {
+  const shippingAmount = calculateManualShippingCost(postalCode);
   const selectedOption: FedExShippingOption = {
     provider: "FEDEX",
     optionId: MANUAL_FEDEX_METHOD,
     serviceType: MANUAL_FEDEX_METHOD,
     serviceName: MANUAL_FEDEX_SERVICE_NAME,
-    amount: MANUAL_FEDEX_SHIPPING_COST,
+    amount: shippingAmount,
     currency: MANUAL_FEDEX_CURRENCY,
   };
 
@@ -372,7 +379,7 @@ function buildManualFedExShippingSelection(): DeliveryShippingSelection {
       serviceType: MANUAL_FEDEX_METHOD,
       serviceName: MANUAL_FEDEX_SERVICE_NAME,
       carrierCode: "FEDEX",
-      quotedAmount: MANUAL_FEDEX_SHIPPING_COST,
+      quotedAmount: shippingAmount,
       quotedCurrency: MANUAL_FEDEX_CURRENCY,
     },
   };
@@ -489,6 +496,7 @@ function OrderSummaryPanel({
   fulfillmentMethod,
   shippingSelection,
   checkoutPricing,
+  deliveryPostalCode,
   pricingOfertas,
   subtotalConOfertas,
   subtotalConCodigo,
@@ -500,6 +508,7 @@ function OrderSummaryPanel({
   fulfillmentMethod: FulfillmentMethod;
   shippingSelection?: DeliveryShippingSelection | null;
   checkoutPricing?: CheckoutPricing | null;
+  deliveryPostalCode?: string;
   pricingOfertas: Record<string, ProductOfferPricing>;
   subtotalConOfertas: number;
   subtotalConCodigo: number;
@@ -510,15 +519,17 @@ function OrderSummaryPanel({
 }) {
   const { state, totalItems } = useCart();
   const { getPersonalization } = useStorefront();
+  const resolvedShippingAmount =
+    shippingSelection?.selectedOption.amount ??
+    getDeliveryShippingAmount(deliveryPostalCode);
   const pricing =
     checkoutPricing && checkoutPricing.subtotal > 0
       ? checkoutPricing
-      :
-      getExpectedCheckoutPricing(
-        subtotalConCodigo,
-        fulfillmentMethod,
-        shippingSelection?.selectedOption.amount ?? MANUAL_FEDEX_SHIPPING_COST,
-      );
+      : getExpectedCheckoutPricing(
+          subtotalConCodigo,
+          fulfillmentMethod,
+          fulfillmentMethod === "DELIVERY" ? resolvedShippingAmount : 0,
+        );
 
   return (
     <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
@@ -629,7 +640,9 @@ function OrderSummaryPanel({
             <span>
               {fulfillmentMethod === "PICKUP"
                 ? "Sin costo"
-                : formatCurrency(pricing.shipping)}
+                : resolvedShippingAmount === null
+                  ? "Por confirmar"
+                  : formatCurrency(pricing.shipping)}
             </span>
           </div>
           {fulfillmentMethod === "DELIVERY" ? (
@@ -664,10 +677,14 @@ function OrderSummaryPanel({
 function FulfillmentSelector({
   value,
   onValueChange,
+  deliveryPostalCode,
 }: {
   value: FulfillmentMethod;
   onValueChange: (value: FulfillmentMethod) => void;
+  deliveryPostalCode?: string;
 }) {
+  const deliveryShippingAmount = getDeliveryShippingAmount(deliveryPostalCode);
+  const deliveryZoneLabel = getManualShippingZoneLabel(deliveryPostalCode);
   const options: Array<{
     value: FulfillmentMethod;
     title: string;
@@ -749,11 +766,14 @@ function FulfillmentSelector({
       {value === "DELIVERY" ? (
         <div className="rounded-[1.2rem] border border-border bg-muted/40 px-4 py-3 text-xs leading-5 text-muted-foreground">
           <p className="font-semibold text-foreground">
-            Costo de envío: {formatCurrency(MANUAL_FEDEX_SHIPPING_COST)} MXN
+            {deliveryShippingAmount === null
+              ? `Envío a domicilio: ${formatCurrency(MANUAL_SHIPPING_COST_LEON)} dentro de León (CP 37000–37700) · ${formatCurrency(MANUAL_SHIPPING_COST_OUTSIDE_LEON)} fuera de León`
+              : `Costo de envío: ${formatCurrency(deliveryShippingAmount)} MXN${deliveryZoneLabel ? ` · ${deliveryZoneLabel}` : ""}`}
           </p>
           <p className="mt-1">
-            El envío se procesa manualmente por paquetería. La guía de rastreo
-            estará disponible cuando el pedido sea entregado a FedEx.
+            El costo se calcula automáticamente con tu código postal. El envío se
+            procesa manualmente por paquetería y la guía de rastreo estará
+            disponible cuando el pedido sea entregado a FedEx.
           </p>
         </div>
       ) : (
@@ -764,6 +784,9 @@ function FulfillmentSelector({
           <p className="mt-1">
             Recibirás un aviso cuando tu pedido esté listo para recoger en la
             sucursal.
+          </p>
+          <p className="mt-2 font-medium text-foreground">
+            {PICKUP_OFFICIAL_ID_MESSAGE}
           </p>
         </div>
       )}
@@ -860,6 +883,8 @@ function ShippingAddressStep({
   const watchedCity = form.watch("city");
   const watchedEstado = form.watch("estado");
   const watchedZip = form.watch("zip");
+  const deliveryShippingAmount = getDeliveryShippingAmount(watchedZip);
+  const deliveryZoneLabel = getManualShippingZoneLabel(watchedZip);
   const currentAddressKey = buildAddressValidationKey(
     buildFedExDireccionEnvio(
       {
@@ -981,9 +1006,18 @@ function ShippingAddressStep({
     }
 
     const postalCode = normalizeWhitespace(watchedZip);
+    const isValidPostalCode = /^\d{5}$/.test(postalCode);
     setIsValidatingPostal(false);
-    setPostalValidated(/^\d{5}$/.test(postalCode));
-    setPostalValidationMessage(null);
+    setPostalValidated(isValidPostalCode);
+
+    if (!isValidPostalCode) {
+      setPostalValidationMessage(null);
+      return;
+    }
+
+    setPostalValidationMessage(
+      `${getManualShippingZoneLabel(postalCode)} · Envío ${formatCurrency(calculateManualShippingCost(postalCode))} MXN`,
+    );
   }, [fulfillmentMethod, watchedZip]);
 
   useEffect(() => {
@@ -1168,11 +1202,12 @@ function ShippingAddressStep({
       return;
     }
 
-    const nextSelection = buildManualFedExShippingSelection();
+    const nextSelection = buildManualFedExShippingSelection(shippingValues.zip);
+    const nextShippingAmount = calculateManualShippingCost(shippingValues.zip);
     const nextPricing = getExpectedCheckoutPricing(
       0,
       "DELIVERY",
-      MANUAL_FEDEX_SHIPPING_COST,
+      nextShippingAmount,
     );
     const nextAddressValidationStatus: AddressValidationStatus = "USER_CONFIRMED";
     const currentShippingAddress = buildCurrentShippingAddress(
@@ -1215,6 +1250,7 @@ function ShippingAddressStep({
             <form className="space-y-5">
               <FulfillmentSelector
                 value={fulfillmentMethod}
+                deliveryPostalCode={watchedZip}
                 onValueChange={(value) => {
                   setAddressError(null);
                   setAddressValidationStatus("NOT_VALIDATED");
@@ -1497,18 +1533,28 @@ function ShippingAddressStep({
                             Envio a domicilio FedEx manual
                           </p>
                           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                            El costo es fijo. La guía y el seguimiento se preparan manualmente después de confirmar el pago.
+                            {deliveryShippingAmount === null
+                              ? `Ingresa tu código postal para calcular el envío: ${formatCurrency(MANUAL_SHIPPING_COST_LEON)} dentro de León (CP 37000–37700) o ${formatCurrency(MANUAL_SHIPPING_COST_OUTSIDE_LEON)} fuera de León.`
+                              : `Costo calculado automáticamente${deliveryZoneLabel ? ` para ${deliveryZoneLabel}` : ""}. La guía y el seguimiento se preparan manualmente después de confirmar el pago.`}
                           </p>
                         </div>
                       </div>
                       <p className="shrink-0 text-sm font-semibold text-foreground">
-                        {formatCurrency(MANUAL_FEDEX_SHIPPING_COST)}
+                        {deliveryShippingAmount === null
+                          ? "Por confirmar"
+                          : formatCurrency(deliveryShippingAmount)}
                       </p>
                     </div>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-4">
+                  <div className="rounded-[1.2rem] border border-primary/25 bg-primary/8 px-4 py-3 text-xs leading-5 text-muted-foreground">
+                    <p className="font-semibold text-foreground">
+                      Identificación requerida
+                    </p>
+                    <p className="mt-1">{PICKUP_OFFICIAL_ID_MESSAGE}</p>
+                  </div>
                   <div className="space-y-3">
                     <FormLabel>Sucursal de recolección</FormLabel>
                     {isLoadingPickupLocations ? (
@@ -2342,17 +2388,26 @@ export default function CheckoutPage() {
     void loadPickupLocations();
   }, [fulfillmentMethod, pickupLocations.length]);
 
+  const watchedDeliveryPostalCode = shippingForm.watch("zip");
+
   const pricing = useMemo(
     () =>
       getExpectedCheckoutPricing(
         subtotal,
         fulfillmentMethod,
-        checkoutValues?.fulfillmentMethod === "DELIVERY"
-          ? (checkoutValues.shippingSelection?.selectedOption.amount ??
-            MANUAL_FEDEX_SHIPPING_COST)
-          : 0,
+        fulfillmentMethod === "PICKUP"
+          ? 0
+          : checkoutValues?.fulfillmentMethod === "DELIVERY"
+            ? (checkoutValues.shippingSelection?.selectedOption.amount ??
+              getDeliveryShippingAmount(watchedDeliveryPostalCode))
+            : getDeliveryShippingAmount(watchedDeliveryPostalCode),
       ),
-    [checkoutValues, fulfillmentMethod, subtotal],
+    [
+      checkoutValues,
+      fulfillmentMethod,
+      subtotal,
+      watchedDeliveryPostalCode,
+    ],
   );
   const cartSignature = useMemo(
     () =>
@@ -2387,12 +2442,16 @@ export default function CheckoutPage() {
         "USER_CONFIRMED",
       ),
       addressValidationStatus: "USER_CONFIRMED",
-      shippingQuote: buildManualFedExShippingSelection().quote,
-      shippingSelection: buildManualFedExShippingSelection(),
+      shippingQuote: buildManualFedExShippingSelection(
+        shippingForm.getValues("zip"),
+      ).quote,
+      shippingSelection: buildManualFedExShippingSelection(
+        shippingForm.getValues("zip"),
+      ),
       checkoutPricing: getExpectedCheckoutPricing(
         subtotal,
         "DELIVERY",
-        MANUAL_FEDEX_SHIPPING_COST,
+        getDeliveryShippingAmount(shippingForm.getValues("zip")),
       ),
     } as DeliveryCheckoutValues);
   const handleRecoverableDeliveryError = (
@@ -2543,6 +2602,7 @@ export default function CheckoutPage() {
         <div className="lg:sticky lg:top-[calc(var(--storefront-header-current-height,var(--storefront-header-desktop-height))+1.5rem)]">
           <OrderSummaryPanel
             fulfillmentMethod={fulfillmentMethod}
+            deliveryPostalCode={watchedDeliveryPostalCode}
             shippingSelection={
               checkoutValues?.fulfillmentMethod === "DELIVERY"
                 ? checkoutValues.shippingSelection
