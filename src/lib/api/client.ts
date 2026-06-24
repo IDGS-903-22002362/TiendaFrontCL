@@ -1,3 +1,6 @@
+import { CSRF_HEADER_NAME } from "@/lib/cookies/constants";
+import { readCsrfTokenFromDocument } from "@/lib/cookies/csrf-client";
+
 const FALLBACK_API_BASE = "http://localhost:3000/api";
 
 const API_BASE =
@@ -185,6 +188,22 @@ async function recoverAuthSession(): Promise<SessionRefreshResult> {
   return pendingSessionRefresh;
 }
 
+function attachCsrfHeader(headers: Headers, useLocalProxy: boolean, method: string) {
+  if (!useLocalProxy || typeof window === "undefined") {
+    return;
+  }
+
+  const normalized = method.toUpperCase();
+  if (normalized === "GET" || normalized === "HEAD" || normalized === "OPTIONS") {
+    return;
+  }
+
+  const csrfToken = readCsrfTokenFromDocument();
+  if (csrfToken) {
+    headers.set(CSRF_HEADER_NAME, csrfToken);
+  }
+}
+
 function shouldUseLocalProxy(path: string, options?: ApiFetchOptions): boolean {
   if (options?.local !== undefined) {
     return options.local;
@@ -229,6 +248,8 @@ export async function apiFetch<T>(
   let response: Response;
   const useLocalProxy = shouldUseLocalProxy(path, options);
   const endpoint = useLocalProxy ? path : joinApiUrl(API_BASE, path);
+  const method = (init.method ?? "GET").toUpperCase();
+  attachCsrfHeader(headers, useLocalProxy, method);
 
   try {
     response = await fetch(endpoint, {

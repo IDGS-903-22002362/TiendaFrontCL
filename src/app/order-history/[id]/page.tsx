@@ -188,17 +188,18 @@ export default function OrderDetailPage({
                     item.producto?.clave ||
                     item.productoId;
                   return (
-                    <div
+                    <Link
                       key={`${item.productoId}-${item.tallaId ?? ""}-${index}`}
-                      className="flex gap-3 rounded-[1.1rem] border border-border bg-muted/40 p-3"
+                      href={`/products/${item.productoId}`}
+                      className="group flex gap-3 rounded-[1.1rem] border border-border bg-muted/40 p-3 transition-colors hover:border-primary/30 hover:bg-muted/60"
                     >
-                      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-[0.9rem] border border-border bg-card">
+                      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-[0.9rem] border border-border bg-card transition group-hover:border-primary/35">
                         {image ? (
                           <Image
                             src={image}
-                            alt={name}
+                            alt=""
                             fill
-                            className="object-cover"
+                            className="object-cover transition duration-300 group-hover:scale-105"
                           />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center text-muted-foreground">
@@ -207,7 +208,7 @@ export default function OrderDetailPage({
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="line-clamp-2 text-sm font-medium text-foreground">
+                        <p className="line-clamp-2 text-sm font-medium text-foreground transition group-hover:text-primary">
                           {name}
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
@@ -218,7 +219,7 @@ export default function OrderDetailPage({
                       <p className="text-sm font-medium text-foreground">
                         {formatCurrency(item.subtotal)}
                       </p>
-                    </div>
+                    </Link>
                   );
                 })
               )}

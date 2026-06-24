@@ -38,6 +38,11 @@ type CartContextType = {
   subtotal: number;
   isDrawerOpen: boolean;
   setIsDrawerOpen: (open: boolean) => void;
+  addedToCartNotification: {
+    title: string;
+    description?: string;
+  } | null;
+  dismissAddedToCartNotification: () => void;
 };
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -51,6 +56,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   const [mergedToken, setMergedToken] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [addedToCartNotification, setAddedToCartNotification] = useState<{
+    title: string;
+    description?: string;
+  } | null>(null);
   
   const { toast } = useToast();
   const { token, isAuthenticated } = useAuth();
@@ -147,11 +156,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
 
       setCartId((current) => cart.id ?? current);
       setItems(cart.items);
-      setIsDrawerOpen(true); // Abrir el carrito dinámicamente al añadir
-      
-      toast({
+      setIsDrawerOpen(true);
+      setAddedToCartNotification({
         title: "¡Agregado al carrito!",
-        description: `${item.name} ${item.quantity && item.quantity > 1 ? `(${item.quantity})` : ""} ha sido añadido a tu carrito.`.trim(),
+        description: `${item.name}${item.quantity && item.quantity > 1 ? ` (${item.quantity})` : ""} ha sido añadido a tu carrito.`.trim(),
       });
     } catch (error) {
       console.error("Failed to add item to cart", error);
@@ -258,6 +266,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         subtotal,
         isDrawerOpen,
         setIsDrawerOpen,
+        addedToCartNotification,
+        dismissAddedToCartNotification: () => setAddedToCartNotification(null),
       }}
     >
       {children}

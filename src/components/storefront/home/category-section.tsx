@@ -91,7 +91,7 @@ export default function CategorySection() {
                             }
                             className="group flex w-full flex-col items-center cursor-pointer select-none"
                         >
-                            <div className="mb-3 flex aspect-square w-full items-center justify-center overflow-hidden rounded-[1.35rem] bg-neutral-50/60 p-1.5 sm:rounded-[1.5rem] sm:p-2">
+                            <div className="mb-3 flex aspect-square w-full items-center justify-center overflow-hidden rounded-[1.35rem] p-1.5 sm:rounded-[1.5rem] sm:p-2">
                                 {img ? (
                                     <img
                                         src={img}

@@ -123,19 +123,28 @@ export default function CartPage() {
             return (
               <article
                 key={variantKey}
-                className="rounded-[1.9rem] border border-border bg-card p-4 shadow-[var(--shadow-card)] md:p-5"
+                className="rounded-[1.9rem] border border-border bg-card p-4 shadow-[var(--shadow-card)] transition-colors hover:border-primary/20 md:p-5"
               >
                 <div className="flex flex-col gap-4 md:flex-row">
-                  <div className="relative aspect-square w-full overflow-hidden rounded-[1.3rem] border border-border bg-muted/45 md:h-36 md:w-36">
-                    <Image src={item.image} alt={item.name} fill className="object-cover" />
-                  </div>
+                  <Link
+                    href={`/products/${item.id}`}
+                    className="group relative aspect-square w-full overflow-hidden rounded-[1.3rem] border border-border bg-muted/45 transition hover:border-primary/35 md:h-36 md:w-36"
+                    aria-label={`Ver ${item.name}`}
+                  >
+                    <Image
+                      src={item.image}
+                      alt=""
+                      fill
+                      className="object-cover transition duration-300 group-hover:scale-105"
+                    />
+                  </Link>
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <Link
                           href={`/products/${item.id}`}
-                          className="font-headline text-3xl font-semibold uppercase leading-none tracking-[0.03em] text-foreground"
+                          className="font-headline text-3xl font-semibold uppercase leading-none tracking-[0.03em] text-foreground transition hover:text-primary"
                         >
                           {item.name}
                         </Link>

@@ -10,6 +10,7 @@ import { getApiErrorMessage } from "@/lib/api/errors";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import Antigravity from "@/components/Antigravity";
 
 export default function RegisterPage() {
@@ -19,6 +20,7 @@ export default function RegisterPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [acceptedTerms, setAcceptedTerms] = useState(false);
 
     const [form, setForm] = useState({
         nombre: "",
@@ -50,6 +52,15 @@ export default function RegisterPage() {
                 variant: "destructive",
                 title: "Contrasenas no coinciden",
                 description: "Por favor, asegurate de que las contrasenas coincidan.",
+            });
+            return;
+        }
+
+        if (!acceptedTerms) {
+            toast({
+                variant: "destructive",
+                title: "Terminos y condiciones",
+                description: "Debes aceptar los terminos y condiciones para crear tu cuenta.",
             });
             return;
         }
@@ -93,7 +104,7 @@ export default function RegisterPage() {
     };
 
     return (
-        <div className="relative flex min-h-[100svh] flex-col overflow-hidden bg-white">
+        <div className="relative flex min-h-[100dvh] w-full flex-col overflow-x-hidden bg-white">
             <div className="absolute inset-0 z-0" aria-hidden="true">
                 <div className="h-full w-full">
                     <Antigravity
@@ -126,21 +137,21 @@ export default function RegisterPage() {
                 </button>
             </div>
 
-            <div className="pointer-events-none relative z-10 flex flex-1 items-start justify-center overflow-y-auto px-2 pb-6 pt-16 sm:items-center sm:px-4 sm:py-10 lg:py-14">
-                <section className="pointer-events-auto relative w-full max-w-[22rem] rounded-[1.6rem] border border-white/55 bg-white/95 px-3 pb-4 pt-12 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-md sm:max-w-md sm:rounded-[2rem] sm:px-8 sm:pb-8 sm:pt-20 md:max-w-md md:px-9 lg:max-w-md lg:pb-12 lg:pt-24">
+            <div className="pointer-events-none relative z-10 flex flex-1 items-start justify-center overflow-y-auto px-[clamp(0.75rem,4vw,1.5rem)] pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(4.5rem,calc(env(safe-area-inset-top)+3.5rem))] sm:items-center sm:px-6 sm:py-10 lg:py-14">
+                <section className="pointer-events-auto relative mx-auto w-[min(100%,calc(100vw-1.5rem))] min-w-0 max-w-md rounded-[1.25rem] border border-white/55 bg-white/95 px-[clamp(1rem,4vw,2rem)] pb-[clamp(1rem,4vw,2rem)] pt-[clamp(3rem,10vw,5rem)] shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-md sm:max-w-lg sm:rounded-[2rem] md:max-w-xl lg:pb-12 lg:pt-24">
                     <img
                         src="/images/leon.png"
                         alt="Club Leon Logo"
-                        className="absolute left-1/2 top-0 h-20 w-auto -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-lg sm:h-28 md:h-32"
+                        className="absolute left-1/2 top-0 h-[clamp(3.5rem,12vw,5rem)] w-auto max-w-[min(85%,12rem)] -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-lg sm:h-24 md:h-28 lg:h-32"
                     />
 
-                    <h1 className="text-center text-2xl font-black tracking-tight text-[#06543b] sm:text-4xl">Registro manual</h1>
+                    <h1 className="text-center text-[clamp(1.375rem,5vw,2.25rem)] font-black tracking-tight text-[#06543b] sm:text-4xl">Registro manual</h1>
 
-                    <p className="mx-auto mt-1.5 max-w-sm text-center text-xs leading-relaxed text-gray-600 sm:mt-2 sm:text-sm">
+                    <p className="mx-auto mt-1.5 max-w-sm text-center text-[clamp(0.6875rem,2.8vw,0.875rem)] leading-relaxed text-gray-600 sm:mt-2 sm:text-sm">
                         Completa tus datos para ser parte del Club León.
                     </p>
 
-                    <form onSubmit={handleSubmit} className="mt-4 space-y-3 rounded-3xl border border-[#e7ece9] bg-[#f8fbf9] p-3 shadow-sm sm:mt-5 sm:p-4">
+                    <form onSubmit={handleSubmit} className="mt-4 space-y-3 rounded-3xl border border-[#e7ece9] bg-[#f8fbf9] p-[clamp(0.75rem,3vw,1rem)] shadow-sm sm:mt-5">
                         <Input
                             name="nombre"
                             placeholder="Nombre completo"
@@ -238,10 +249,36 @@ export default function RegisterPage() {
                             <option value="O">Otro</option>
                         </select>
 
+                        <label
+                            htmlFor="register-terms"
+                            className="flex items-start gap-2.5 rounded-2xl border border-[#e7ece9] bg-white p-3"
+                        >
+                            <Checkbox
+                                id="register-terms"
+                                checked={acceptedTerms}
+                                onCheckedChange={(checked) => setAcceptedTerms(checked === true)}
+                                disabled={isSubmitting}
+                                className="mt-0.5"
+                                aria-required="true"
+                            />
+                            <span className="text-xs leading-relaxed text-gray-600 sm:text-sm">
+                                Acepto los{" "}
+                                <Link
+                                    href="/TerminosCondiciones"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="font-semibold text-[#007A53] underline-offset-4 hover:underline"
+                                >
+                                    terminos y condiciones
+                                </Link>{" "}
+                                y el aviso de privacidad del Club Leon.
+                            </span>
+                        </label>
+
                         <Button
                             type="submit"
-                                className="h-10 w-full rounded-2xl bg-[#007A53] text-sm font-bold text-white shadow-lg shadow-[#007A53]/30 transition-all hover:bg-[#006248] disabled:opacity-70 sm:h-11 sm:text-base"
-                            disabled={isSubmitting}
+                            className="h-10 w-full rounded-2xl bg-[#007A53] text-sm font-bold text-white shadow-lg shadow-[#007A53]/30 transition-all hover:bg-[#006248] disabled:opacity-70 sm:h-11 sm:text-base"
+                            disabled={isSubmitting || !acceptedTerms}
                         >
                             {isSubmitting ? "Creando cuenta..." : "Crear cuenta"}
                         </Button>

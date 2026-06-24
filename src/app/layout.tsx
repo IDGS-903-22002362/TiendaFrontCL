@@ -6,6 +6,11 @@ import { AuthProvider } from "@/hooks/use-auth";
 import { CartProvider } from "@/hooks/use-cart";
 import { StorefrontProvider } from "@/hooks/use-storefront";
 import { StorefrontShell } from "@/components/layout/storefront-shell";
+import { CartAddedNotificationHost } from "@/components/cart/cart-added-notification-host";
+import { CookieConsentProvider } from "@/hooks/use-cookie-consent";
+import { CookieConsentHost } from "@/components/cookies/cookie-consent-host";
+import { Suspense } from "react";
+import { CookieSettingsOpener } from "@/components/cookies/cookie-settings-opener";
 
 const bodyFont = Ubuntu({
   subsets: ["latin"],
@@ -35,14 +40,21 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className={`${bodyFont.variable} ${headlineFont.variable} font-body antialiased`}>
-        <AuthProvider>
-          <StorefrontProvider>
-            <CartProvider>
-              <StorefrontShell>{children}</StorefrontShell>
-              <Toaster />
-            </CartProvider>
-          </StorefrontProvider>
-        </AuthProvider>
+        <CookieConsentProvider>
+          <AuthProvider>
+            <StorefrontProvider>
+              <CartProvider>
+                <StorefrontShell>{children}</StorefrontShell>
+                <CartAddedNotificationHost />
+                <CookieConsentHost />
+                <Suspense fallback={null}>
+                  <CookieSettingsOpener />
+                </Suspense>
+                <Toaster />
+              </CartProvider>
+            </StorefrontProvider>
+          </AuthProvider>
+        </CookieConsentProvider>
       </body>
     </html>
   );
