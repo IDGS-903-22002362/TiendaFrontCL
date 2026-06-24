@@ -7,6 +7,8 @@ import { EmptyState } from "@/components/storefront/shared/empty-state";
 import { ProductGridSkeleton } from "@/components/storefront/catalog/product-grid-skeleton";
 import {
   calcularPreciosOfertasPublicas,
+  hasActiveOfferFromPricing,
+  hasValidSalePrice,
   type ProductOfferPricing,
 } from "@/lib/ofertas-public";
 import { isOfertasCatalogSort } from "@/lib/api/storefront";
@@ -21,22 +23,6 @@ function isProductSoldOut(product: Product): boolean {
   const stock = product.stockTotal ?? product.stock;
 
   return typeof stock === "number" && stock <= 0;
-}
-
-function productHasActiveOfferFromPricing(
-  product: Product,
-  pricingOferta: ProductOfferPricing,
-) {
-  const precioOriginal = Number(
-    pricingOferta.precioOriginal || product.price || 0,
-  );
-  const precioFinal = Number(pricingOferta.precioFinal || 0);
-
-  return (
-    Boolean(pricingOferta.ofertaAplicadaId || pricingOferta.ofertaTitulo) &&
-    precioFinal > 0 &&
-    precioFinal < precioOriginal
-  );
 }
 
 function productHasActiveOfferFromCatalog(product: Product) {
@@ -55,18 +41,28 @@ function productHasActiveOffer(
   product: Product,
   pricingOferta?: ProductOfferPricing,
 ) {
-  if (pricingOferta && productHasActiveOfferFromPricing(product, pricingOferta)) {
+  if (hasActiveOfferFromPricing(product, pricingOferta)) {
     return true;
   }
 
   return productHasActiveOfferFromCatalog(product);
 }
 
-function getMissingOfferPricingProducts(
+function getProductsNeedingOfferPricing(
   products: Product[],
   pricing: Record<string, ProductOfferPricing>,
 ) {
-  return products.filter((product) => !pricing[product.id]);
+  return products.filter((product) => {
+    if (pricing[product.id]) {
+      return false;
+    }
+
+    if (hasValidSalePrice(product)) {
+      return false;
+    }
+
+    return true;
+  });
 }
 
 export function ProductGrid({ products, offerPricing = {} }: ProductGridProps) {
@@ -77,11 +73,6 @@ export function ProductGrid({ products, offerPricing = {} }: ProductGridProps) {
     searchParams.get("tag") === "sale" ||
     searchParams.get("onlyOffers") === "true";
 
-  const discountParam = Number(searchParams.get("discount") || 0);
-
-  const selectedDiscount = Number.isFinite(discountParam)
-    ? discountParam
-    : 0;
   const [localPricing, setLocalPricing] = useState<
     Record<string, ProductOfferPricing>
   >({});
@@ -93,7 +84,7 @@ export function ProductGrid({ products, offerPricing = {} }: ProductGridProps) {
       mostrarSoloOfertas &&
       products.length > 0 &&
       !products.some((product) => productHasActiveOfferFromCatalog(product)) &&
-      getMissingOfferPricingProducts(products, offerPricing).length > 0,
+      getProductsNeedingOfferPricing(products, offerPricing).length > 0,
   );
 
   const productIdsKey = useMemo(() => {
@@ -104,17 +95,7 @@ export function ProductGrid({ products, offerPricing = {} }: ProductGridProps) {
     let cancelled = false;
 
     async function cargarOfertas() {
-      if (!mostrarSoloOfertas) {
-        setIsLoadingOffers(false);
-        return;
-      }
-
       if (products.length === 0) {
-        setIsLoadingOffers(false);
-        return;
-      }
-
-      if (products.some((product) => productHasActiveOfferFromCatalog(product))) {
         setIsLoadingOffers(false);
         return;
       }
@@ -123,7 +104,7 @@ export function ProductGrid({ products, offerPricing = {} }: ProductGridProps) {
         ...localPricingRef.current,
         ...offerPricing,
       };
-      const missingProducts = getMissingOfferPricingProducts(
+      const missingProducts = getProductsNeedingOfferPricing(
         products,
         knownPricing,
       );
@@ -134,7 +115,9 @@ export function ProductGrid({ products, offerPricing = {} }: ProductGridProps) {
       }
 
       try {
-        setIsLoadingOffers(true);
+        if (mostrarSoloOfertas) {
+          setIsLoadingOffers(true);
+        }
 
         const items = missingProducts.map((product) => ({
           productoId: product.id,

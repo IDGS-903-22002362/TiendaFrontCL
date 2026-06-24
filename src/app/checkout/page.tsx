@@ -514,11 +514,11 @@ function OrderSummaryPanel({
     checkoutPricing && checkoutPricing.subtotal > 0
       ? checkoutPricing
       :
-    getExpectedCheckoutPricing(
-      subtotalConCodigo,
-      fulfillmentMethod,
-      shippingSelection?.selectedOption.amount ?? MANUAL_FEDEX_SHIPPING_COST,
-    );
+      getExpectedCheckoutPricing(
+        subtotalConCodigo,
+        fulfillmentMethod,
+        shippingSelection?.selectedOption.amount ?? MANUAL_FEDEX_SHIPPING_COST,
+      );
 
   return (
     <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
@@ -634,7 +634,7 @@ function OrderSummaryPanel({
           </div>
           {fulfillmentMethod === "DELIVERY" ? (
             <div className="flex items-center justify-between gap-3">
-              <span>Mensajeria</span>
+              <span>Mensajería</span>
               <span className="text-right">
                 {shippingSelection?.selectedOption.serviceName ??
                   MANUAL_FEDEX_SERVICE_NAME}
@@ -655,17 +655,6 @@ function OrderSummaryPanel({
           <p className="mt-2 font-headline text-4xl font-semibold uppercase leading-none tracking-[0.03em]">
             {formatCurrency(pricing.total)}
           </p>
-        </div>
-
-        <div className="rounded-[1.4rem] border border-border bg-muted/45 px-4 py-3">
-          <div className="flex items-start gap-3">
-            <ShieldCheck className="mt-0.5 h-5 w-5 text-primary" />
-            <p className="text-xs leading-5 text-muted-foreground">
-              La orden backend confirma el total final antes de iniciar el pago.
-              La personalización de jersey se muestra en la UI y no modifica el
-              total backend en esta versión.
-            </p>
-          </div>
         </div>
       </CardContent>
     </Card>
@@ -694,7 +683,7 @@ function FulfillmentSelector({
       {
         value: "PICKUP",
         title: "Recoger en tienda",
-        description: "Compra en línea y recoge en una sucursal disponible.",
+        description: "Compra en línea y recoge en sucursal",
         icon: Store,
       },
     ];
@@ -889,6 +878,7 @@ function ShippingAddressStep({
       addressValidationStatus,
     ),
   );
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     setShippingQuote(null);
@@ -1125,7 +1115,7 @@ function ShippingAddressStep({
       toast({
         variant: "destructive",
         title: "Sesión requerida",
-        description: "Debes iniciar sesión para completar checkout.",
+        description: "Debes iniciar sesión para completar el pago.",
       });
       return;
     }
@@ -1507,7 +1497,7 @@ function ShippingAddressStep({
                             Envio a domicilio FedEx manual
                           </p>
                           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                            El costo es fijo. La guia y el seguimiento se preparan manualmente despues de confirmar el pago.
+                            El costo es fijo. La guía y el seguimiento se preparan manualmente después de confirmar el pago.
                           </p>
                         </div>
                       </div>
@@ -1593,6 +1583,76 @@ function ShippingAddressStep({
                       </RadioGroup>
                     )}
                   </div>
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setVisible(!visible);
+                      }}
+                      className={cn(
+                        "group relative flex w-full items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition-all duration-300",
+                        "border-2 border-primary/20 bg-primary/5 hover:bg-primary/10 hover:border-primary/40",
+                        "hover:shadow-[0_8px_24px_-12px_rgba(7,58,38,0.3)]",
+                        "active:scale-[0.98]",
+                        visible
+                          ? "text-primary"
+                          : "text-muted-foreground hover:text-primary"
+                      )}
+                    >
+                      <span className="relative z-10 flex items-center gap-2">
+                        {visible ? (
+                          <>
+                            <svg
+                              className="h-4 w-4 transition-transform duration-300 group-hover:rotate-180"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                            </svg>
+                            Ocultar mapa
+                          </>
+                        ) : (
+                          <>
+                            <svg
+                              className="h-4 w-4 transition-transform duration-300 group-hover:scale-110"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                            </svg>
+                            Mostrar mapa
+                          </>
+                        )}
+                      </span>
+                      {/* Efecto de brillo al hover */}
+                      <span className="absolute inset-0 -z-10 rounded-full bg-gradient-to-r from-primary/0 via-primary/5 to-primary/0 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+                    </button>
+
+                    <div
+                      className={cn(
+                        "overflow-hidden transition-all duration-500 ease-in-out",
+                        visible ? "max-h-[400px] opacity-100" : "max-h-0 opacity-0"
+                      )}
+                    >
+                      <div className="overflow-hidden rounded-[1.2rem] border border-border bg-muted/30 p-1">
+                        <div className="relative w-full aspect-video min-h-[120px] md:min-h-[200px]">
+                          <iframe
+                            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d7443.8102161839015!2d-101.6572609!3d21.116349000000003!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x842bbe55bb311815%3A0xe91c2a286e55a187!2sLa%20Guarida%20del%20Le%C3%B3n!5e0!3m2!1ses-419!2smx!4v1782330207653!5m2!1ses-419!2smx"
+                            width="100%"
+                            height="100%"
+                            style={{ border: 0 }}
+                            loading="lazy"
+                            referrerPolicy="strict-origin-when-cross-origin"
+                            className="absolute inset-0 h-full w-full rounded-[1rem]"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
 
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="space-y-2 md:col-span-2">
@@ -1675,9 +1735,6 @@ function ShippingAddressStep({
                   }
                   className="min-h-[96px] rounded-[1rem]"
                 />
-                <p className="text-xs leading-5 text-muted-foreground">
-                  Campo opcional, solo queda preparado en esta pantalla.
-                </p>
               </div>
 
             </form>
@@ -1728,19 +1785,9 @@ const MSI_NOTICE =
 
 const PAYMENT_REASSURANCES = [
   {
-    icon: Lock,
-    title: "Cifrado de extremo a extremo",
-    description: "Tus datos viajan protegidos con la seguridad PCI de Stripe.",
-  },
-  {
     icon: CreditCard,
     title: "No guardamos tu tarjeta",
     description: "Stripe procesa el cobro; la tienda nunca ve tus datos bancarios.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Total verificado por backend",
-    description: "Confirmamos el monto final antes de cobrarte, sin sorpresas.",
   },
 ] as const;
 
@@ -1867,10 +1914,6 @@ function CardPaymentStep({
                 <CardTitle className="mt-0.5 leading-none">Pago seguro</CardTitle>
               </div>
             </div>
-            <span className="hidden items-center gap-1.5 rounded-full border border-success/30 bg-success/12 px-3 py-1.5 text-xs font-medium text-success sm:inline-flex">
-              <ShieldCheck className="h-3.5 w-3.5" />
-              Conexión cifrada
-            </span>
           </div>
         </CardHeader>
 
@@ -1900,7 +1943,7 @@ function CardPaymentStep({
             <>
               <div className="relative overflow-hidden rounded-[1.6rem] border border-primary/15 bg-[linear-gradient(135deg,rgba(7,58,38,0.06),rgba(246,248,243,0.6))] p-5">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-start gap-3">
+                  <div className="flex items-center gap-3">
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-card text-primary">
                       <CreditCard className="h-5 w-5" />
                     </div>
@@ -1944,9 +1987,6 @@ function CardPaymentStep({
                     {formatCurrency(total)}
                   </p>
                 </div>
-                <p className="max-w-[11rem] text-right text-xs leading-5 text-muted-foreground">
-                  Confirmamos el monto con el backend antes de cobrarte.
-                </p>
               </div>
 
               <ul className="grid gap-2.5">
@@ -2364,7 +2404,7 @@ export default function CheckoutPage() {
   };
 
   if (isLoading) {
-    return <div className="container py-14 text-center text-muted-foreground">Cargando checkout...</div>;
+    return <div className="container py-14 text-center text-muted-foreground">Cargando pago...</div>;
   }
 
   if (totalItems === 0) {
@@ -2372,7 +2412,7 @@ export default function CheckoutPage() {
       <div className="container py-10">
         <EmptyState
           title="Carrito vacío"
-          description="Necesitas al menos un producto antes de continuar a checkout."
+          description="Necesitas al menos un producto antes de continuar al pago."
           ctaLabel="Ir al catálogo"
         />
       </div>
@@ -2386,7 +2426,7 @@ export default function CheckoutPage() {
           items={[
             { label: "Inicio", href: "/" },
             { label: "Carrito", href: "/cart" },
-            { label: "Checkout" },
+            { label: "Pago" },
           ]}
         />
         <div className="flex items-center gap-3">
@@ -2400,7 +2440,7 @@ export default function CheckoutPage() {
           </Button>
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary/74">
-              Checkout
+              Pago
             </p>
             <h1 className="mt-1 font-headline text-4xl font-semibold uppercase leading-none tracking-[0.04em] md:text-6xl">
               Finaliza tu compra
@@ -2496,7 +2536,7 @@ export default function CheckoutPage() {
           <PaymentMethodStrip
             className="mt-6"
             title="Métodos de pago disponibles"
-            description="Aceptamos tarjetas, SPEI y billeteras digitales para que el cierre del checkout se vea completo y claro desde el primer paso."
+            description="Aceptamos tarjetas, SPEI y billeteras digitales para el cierre del pago, elige el que mejor te convenga"
           />
         </div>
 

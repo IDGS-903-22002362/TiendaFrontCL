@@ -25,7 +25,14 @@ export function StorefrontShell({ children }: StorefrontShellProps) {
 
   // Redirigir a complete-profile si el usuario está autenticado pero su perfil no está completo
   useEffect(() => {
-    if (!isLoading && isAuthenticated && user && !user.perfilCompleto && pathname !== "/complete-profile") {
+    if (
+      !isLoading &&
+      isAuthenticated &&
+      user &&
+      !user.perfilCompleto &&
+      pathname !== "/complete-profile" &&
+      pathname !== "/register"
+    ) {
       router.push("/complete-profile");
     }
   }, [isAuthenticated, user, isLoading, pathname, router]);
