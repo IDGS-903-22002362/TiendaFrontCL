@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { Logo } from "@/components/icons";
+import { CookieSettingsFooterLink } from "@/components/cookies/cookie-settings-footer-link";
 import { useIsFromMobileApp } from "@/hooks/use-from-mobile-app";
 
 const footerColumns = [
@@ -19,7 +20,7 @@ const footerColumns = [
       { href: "/order-history", label: "Pedidos" },
       { href: "/checkout", label: "Envíos y devoluciones" },
       { href: "/login", label: "Cuenta" },
-      { href: "/products?category=accesorios", label: "Ayuda" },
+      { href: "/politica-cookies", label: "Política de cookies" },
     ],
   },
 ];
@@ -71,10 +72,13 @@ export function StorefrontFooter() {
               <p>La Guarida</p>
             </div>
           </div>
-          <p className="text-xs uppercase tracking-[0.22em] text-white/42">
-            {new Date().getFullYear()} La Guarida. Todos los derechos
-            reservados.
-          </p>
+          <div className="flex flex-col gap-2 md:items-end">
+            <CookieSettingsFooterLink />
+            <p className="text-xs uppercase tracking-[0.22em] text-white/42">
+              {new Date().getFullYear()} La Guarida. Todos los derechos
+              reservados.
+            </p>
+          </div>
         </div>
       </div>
     </footer>

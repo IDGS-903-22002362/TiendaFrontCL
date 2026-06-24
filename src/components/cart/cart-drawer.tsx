@@ -897,24 +897,29 @@ export function CartDrawer() {
                         return (
                           <article
                             key={variantKey}
-                            className="rounded-[1.15rem] border border-black/14 bg-white p-3 shadow-none"
+                            className="rounded-[1.15rem] border border-black/14 bg-white p-3 shadow-none transition-colors hover:border-primary/25 hover:bg-[rgb(252_252_250)]"
                           >
                             <div className="flex gap-3">
-                              <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-[0.95rem] border border-black/12 bg-white">
+                              <Link
+                                href={`/products/${item.id}`}
+                                className="group relative h-24 w-24 shrink-0 overflow-hidden rounded-[0.95rem] border border-black/12 bg-white transition hover:border-primary/35"
+                                onClick={() => setIsDrawerOpen(false)}
+                                aria-label={`Ver ${item.name}`}
+                              >
                                 <Image
                                   src={item.image}
-                                  alt={item.name}
+                                  alt=""
                                   fill
-                                  className="object-cover"
+                                  className="object-cover transition duration-300 group-hover:scale-105"
                                 />
-                              </div>
+                              </Link>
 
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-start justify-between gap-3">
                                   <div>
                                     <Link
                                       href={`/products/${item.id}`}
-                                      className="line-clamp-2 font-headline text-xl font-semibold uppercase leading-none tracking-[0.03em] text-foreground"
+                                      className="line-clamp-2 font-headline text-xl font-semibold uppercase leading-none tracking-[0.03em] text-foreground transition hover:text-primary"
                                       onClick={() => setIsDrawerOpen(false)}
                                     >
                                       {item.name}

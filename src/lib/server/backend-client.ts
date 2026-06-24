@@ -1,4 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  csrfForbiddenResponse,
+  isMutatingMethod,
+  setCsrfCookie,
+  validateCsrfRequest,
+} from "@/lib/server/csrf";
 import { getApiTokenFromRequest } from "@/lib/server/session";
 
 const FALLBACK_API_BASE = "http://localhost:3000/api";
@@ -70,6 +76,8 @@ type ProxyOptions = {
   method?: "GET" | "POST" | "PUT" | "DELETE";
   rawResponse?: boolean;
   streamMultipart?: boolean;
+  /** Omitir validación CSRF (p. ej. login inicial). */
+  skipCsrf?: boolean;
 };
 
 export async function proxyToBackend({
@@ -79,7 +87,19 @@ export async function proxyToBackend({
   method,
   rawResponse = false,
   streamMultipart = false,
+  skipCsrf = false,
 }: ProxyOptions) {
+  const nextMethod = method ?? (request.method as ProxyOptions["method"]);
+
+  if (
+    !skipCsrf &&
+    nextMethod &&
+    isMutatingMethod(nextMethod) &&
+    !validateCsrfRequest(request)
+  ) {
+    return csrfForbiddenResponse();
+  }
+
   const tokenFromCookie = getApiTokenFromRequest(request);
   const authorization =
     request.headers.get("authorization") ||
@@ -118,7 +138,6 @@ export async function proxyToBackend({
     headers.set("Accept", accept);
   }
 
-  const nextMethod = method ?? (request.method as ProxyOptions["method"]);
   const url = `${joinUrl(resolveBackendBase(), backendPath)}${request.nextUrl.search}`;
   const hasBody = nextMethod !== "GET";
 
@@ -170,10 +189,16 @@ export async function proxyToBackend({
       console.error(`Backend returned ${response.status} for ${url}`);
       console.error("Backend Error Payload:", JSON.stringify(payload, null, 2));
     }
-    return NextResponse.json(payload, {
+    const jsonResponse = NextResponse.json(payload, {
       status: response.status,
       headers: responseHeaders,
     });
+
+    if (nextMethod === "GET") {
+      setCsrfCookie(jsonResponse);
+    }
+
+    return jsonResponse;
   } catch {
     return NextResponse.json(
       { success: false, message: "No se pudo conectar con el backend" },

@@ -11,7 +11,8 @@
     "lint": "next lint",
     "typegen": "next typegen",
     "typecheck": "npm run typegen && tsc --noEmit",
-    "deploy:frontend": "firebase deploy --only apphosting:ecomerce-next-front --project e-comerce-leon"
+    "deploy:frontend": "firebase deploy --only apphosting:ecomerce-next-front --project e-comerce-leon",
+    "test:e2e:cookies": "playwright test e2e/cookie-consent.spec.ts"
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.28.0",
@@ -66,6 +67,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/google.maps": "^3.64.1",
     "@types/node": "^20",
     "@types/react": "^19.2.1",

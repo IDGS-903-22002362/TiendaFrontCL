@@ -1,0 +1,132 @@
+import {
+  ALL_ACCEPTED_CONSENT,
+  COOKIE_POLICY_VERSION,
+  DEFAULT_CONSENT,
+  type ConsentCategories,
+  type CookieCategory,
+} from "./constants";
+
+export type CookieConsentRecord = {
+  version: string;
+  decidedAt: string;
+  expiresAt: string;
+  categories: ConsentCategories;
+};
+
+function normalizeCategories(raw: unknown): ConsentCategories | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const source = raw as Record<string, unknown>;
+  const categories: ConsentCategories = { ...DEFAULT_CONSENT };
+
+  for (const key of Object.keys(categories) as CookieCategory[]) {
+    if (key in source && typeof source[key] === "boolean") {
+      categories[key] = source[key] as boolean;
+    }
+  }
+
+  categories.necessary = true;
+  return categories;
+}
+
+export function buildConsentRecord(
+  categories: Partial<ConsentCategories>,
+  now = new Date(),
+): CookieConsentRecord {
+  const expiresAt = new Date(now);
+  expiresAt.setSeconds(
+    expiresAt.getSeconds() + 60 * 60 * 24 * 395,
+  );
+
+  return {
+    version: COOKIE_POLICY_VERSION,
+    decidedAt: now.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+    categories: {
+      ...DEFAULT_CONSENT,
+      ...categories,
+      necessary: true,
+    },
+  };
+}
+
+export function parseConsentRecord(raw: string | null | undefined): CookieConsentRecord | null {
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const decoded = decodeURIComponent(raw);
+    const parsed = JSON.parse(decoded) as Partial<CookieConsentRecord>;
+
+    if (typeof parsed.version !== "string" || typeof parsed.decidedAt !== "string") {
+      return null;
+    }
+
+    const categories = normalizeCategories(parsed.categories);
+    if (!categories) {
+      return null;
+    }
+
+    return {
+      version: parsed.version,
+      decidedAt: parsed.decidedAt,
+      expiresAt:
+        typeof parsed.expiresAt === "string"
+          ? parsed.expiresAt
+          : new Date(0).toISOString(),
+      categories,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function serializeConsentRecord(record: CookieConsentRecord): string {
+  return encodeURIComponent(JSON.stringify(record));
+}
+
+export function isConsentExpired(record: CookieConsentRecord, now = new Date()): boolean {
+  const expires = new Date(record.expiresAt);
+  return Number.isNaN(expires.getTime()) || expires <= now;
+}
+
+export function isConsentVersionStale(record: CookieConsentRecord): boolean {
+  return record.version !== COOKIE_POLICY_VERSION;
+}
+
+export function isValidConsent(record: CookieConsentRecord | null, now = new Date()): boolean {
+  if (!record) {
+    return false;
+  }
+  if (isConsentExpired(record, now)) {
+    return false;
+  }
+  if (isConsentVersionStale(record)) {
+    return false;
+  }
+  return true;
+}
+
+export function hasCategoryConsent(
+  record: CookieConsentRecord | null,
+  category: CookieCategory,
+): boolean {
+  if (category === "necessary") {
+    return true;
+  }
+  if (!record || !isValidConsent(record)) {
+    return false;
+  }
+  return Boolean(record.categories[category]);
+}
+
+export function acceptAllConsent(now = new Date()): CookieConsentRecord {
+  return buildConsentRecord(ALL_ACCEPTED_CONSENT, now);
+}
+
+export function rejectNonEssentialConsent(now = new Date()): CookieConsentRecord {
+  return buildConsentRecord(DEFAULT_CONSENT, now);
+}
