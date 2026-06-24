@@ -121,10 +121,23 @@ function LoginPageContent() {
   }, [isAuthenticated, isLoading, role, user?.perfilCompleto, router]);
 
   useEffect(() => {
+    const emailParam = searchParams.get("email");
+    if (emailParam?.trim()) {
+      setEmail(emailParam.trim());
+    }
+
+    if (searchParams.get("mode") === "password") {
+      setShowPasswordLogin(true);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       setIsSubmitting(false);
       setShowVerification(false);
-      setShowPasswordLogin(false);
+      if (searchParams.get("mode") !== "password") {
+        setShowPasswordLogin(false);
+      }
       setShowPasswordRecovery(false);
       setVerificationCode("");
       setPendingEmail("");
@@ -133,7 +146,7 @@ function LoginPageContent() {
       setAttempts(3);
       setResendTimer(0);
     }
-  }, [isAuthenticated, isLoading]);
+  }, [isAuthenticated, isLoading, searchParams]);
 
   // Timer para reenviar código
   useEffect(() => {
