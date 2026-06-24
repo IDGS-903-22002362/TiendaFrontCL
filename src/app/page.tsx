@@ -1,30 +1,29 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 import {
   buildHomeDestacadosRailProducts,
   HOME_DESTACADOS_RAIL_LIMIT,
 } from "@/lib/api/home-sections";
+import { lineasApi } from "@/lib/api/lineas";
 import {
   DESTACADOS_CATALOG_FETCH_LIMIT,
-  fetchCategories,
   fetchDestacadosProducts,
   fetchProducts,
 } from "@/lib/api/storefront";
 import type { Product } from "@/lib/types";
 import {
-  getCategoryCards,
   getHeroProduct,
+  getHomeLineaCards,
   isPersonalizableProduct,
 } from "@/lib/storefront";
 import { CategoryGrid } from "@/components/storefront/home/category-grid";
 import { EditorialSplit } from "@/components/storefront/home/editorial-split";
 import { HeroEditorial } from "@/components/storefront/home/hero-editorial";
 import { HomeDynamicRails } from "@/components/storefront/home/home-dynamic-rails";
+import { HomeEditorialGrid } from "@/components/storefront/home/home-editorial-grid";
 import { ProductRail } from "@/components/storefront/home/product-rail";
-import { SectionHeader } from "@/components/storefront/home/section-header";
-import LineaSection from "@/components/storefront/home/line-section";
 import CategorySection from "@/components/storefront/home/category-section";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Inicio",
@@ -46,9 +45,9 @@ function dedupeProducts(products: Array<Product | null | undefined>) {
 }
 
 export default async function Home() {
-  const [products, categories, featuredFromAnalytics] = await Promise.all([
+  const [products, lineas, featuredFromAnalytics] = await Promise.all([
     fetchProducts(),
-    fetchCategories(),
+    lineasApi.getAll({ fresh: true }),
     fetchDestacadosProducts(DESTACADOS_CATALOG_FETCH_LIMIT),
   ]);
 
@@ -68,10 +67,7 @@ export default async function Home() {
   }
 
   const destacadosProducts = dedupeProducts(featuredFromAnalytics);
-  const categoryCards = getCategoryCards(categories, products);
-  const homeCategories = [...categoryCards]
-    .sort((left, right) => right.count - left.count)
-    .slice(0, 4);
+  const homeLineaCards = getHomeLineaCards(lineas, products);
 
   const customizableProduct =
     destacadosProducts.find(isPersonalizableProduct) ||
@@ -105,12 +101,8 @@ export default async function Home() {
     : "Descubre nuestro nuevo lanzamiento dando clic en 'Ver colección', adquierela y luce los colores esmeralda.";
 
   return (
-    <div className="pb-16 md:pb-24">
+    <div className="pb-10 md:pb-16">
       <HeroEditorial />
-
-      <section className="home-section">
-        <LineaSection />
-      </section>
 
       <div className="home-container-compact">
         <EditorialSplit
@@ -138,34 +130,16 @@ export default async function Home() {
       </div>
 
 
-      {homeCategories.length > 0 ? (
+      {homeLineaCards.length > 0 ? (
         <section className="home-section">
-          <div className="container">
-            <SectionHeader
-              eyebrow="Explora nuestras colecciones"
-              title="Tendencias y calidad en una sola colección."
-              description="Cada colección reúne nuestra identidad como equipo, siempre pensadas para acompañarte en cada etapa de torneo."
-              action={
-                <Link
-                  href="/products"
-                  className="editorial-link text-foreground/72 hover:text-primary"
-                >
-                  Ver catálogo
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              }
-            />
-          </div>
-          <div className="mt-8">
-            <CategoryGrid categories={homeCategories} />
-          </div>
+          <CategoryGrid categories={homeLineaCards} />
         </section>
       ) : null}
 
       {featuredRailProducts.length > 0 ? (
         <div className="home-container-compact">
           <ProductRail
-            eyebrow="Analytics"
+            eyebrow="Continúa explorando"
             title="Destacados"
             description="Los artículos con mayor interacción real en la tienda."
             products={featuredRailProducts}
@@ -176,9 +150,11 @@ export default async function Home() {
         </div>
       ) : null}
 
+      <HomeEditorialGrid />
+
       <HomeDynamicRails />
 
-      <section className="home-section">
+      <section className="home-section pb-0">
         <CategorySection />
       </section>
     </div>

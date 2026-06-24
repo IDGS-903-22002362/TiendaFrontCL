@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
     Users,
-    ,
+    LogOut,
     Menu,
     User,
 } from "lucide-react";

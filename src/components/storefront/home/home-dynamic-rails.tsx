@@ -6,12 +6,9 @@ import { useStorefront } from "@/hooks/use-storefront";
 import {
   loadBuyAgainRailProducts,
   loadFavoritesRailProducts,
-  loadNewArrivalsRailProducts,
   loadRecentlyViewedRailProducts,
-  loadRecommendationRailProducts,
 } from "@/lib/api/home-sections";
 import { HomeRailSection } from "./home-rail-section";
-import { HomeOfertasSection } from "./home-ofertas-section";
 
 export function HomeDynamicRails() {
   const { token, isAuthenticated } = useAuth();
@@ -31,16 +28,6 @@ export function HomeDynamicRails() {
     return loadBuyAgainRailProducts(token);
   }, [token]);
 
-  const loadPopulares = useCallback(
-    () => loadRecommendationRailProducts("popularidad", token),
-    [token],
-  );
-
-  const loadMasComprados = useCallback(
-    () => loadRecommendationRailProducts("mas_vendidos", token),
-    [token],
-  );
-
   const loadRecentlyViewed = useCallback(
     () =>
       loadRecentlyViewedRailProducts(
@@ -48,8 +35,6 @@ export function HomeDynamicRails() {
       ),
     [token],
   );
-
-  const loadNovedades = useCallback(() => loadNewArrivalsRailProducts(), []);
 
   return (
     <>
@@ -77,43 +62,12 @@ export function HomeDynamicRails() {
 
       <HomeRailSection
         reloadKey={token}
-        title="Populares"
-        eyebrow="Alta demanda"
-        description="Lo más visitado y guardado por la afición en La Guarida."
-        href="/products?sort=populares"
-        hrefLabel="Ver populares"
-        loadProducts={loadPopulares}
-      />
-
-      <HomeRailSection
-        reloadKey={token}
-        title="Más comprados"
-        eyebrow="Top ventas"
-        description="Los artículos que más se llevan al checkout."
-        href="/products?sort=mas_comprados"
-        hrefLabel="Ver más comprados"
-        loadProducts={loadMasComprados}
-      />
-
-      <HomeRailSection
-        reloadKey={token}
         title="Vistos recientemente"
         eyebrow="Continúa explorando"
         description="Retoma las piezas que acabas de descubrir."
         showCategoryTabs={false}
         loadProducts={loadRecentlyViewed}
       />
-
-      <HomeRailSection
-        title="Novedades"
-        eyebrow="Recién llegados"
-        description="Lo último en entrar al catálogo oficial."
-        href="/products?sort=recientes"
-        hrefLabel="Ver novedades"
-        loadProducts={loadNovedades}
-      />
-
-      <HomeOfertasSection />
     </>
   );
 }

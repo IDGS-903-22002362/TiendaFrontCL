@@ -25,7 +25,14 @@ export function StorefrontShell({ children }: StorefrontShellProps) {
 
   // Redirigir a complete-profile si el usuario está autenticado pero su perfil no está completo
   useEffect(() => {
-    if (!isLoading && isAuthenticated && user && !user.perfilCompleto && pathname !== "/complete-profile") {
+    if (
+      !isLoading &&
+      isAuthenticated &&
+      user &&
+      !user.perfilCompleto &&
+      pathname !== "/complete-profile" &&
+      pathname !== "/register"
+    ) {
       router.push("/complete-profile");
     }
   }, [isAuthenticated, user, isLoading, pathname, router]);
@@ -67,16 +74,18 @@ export function StorefrontShell({ children }: StorefrontShellProps) {
     );
   }
 
+  if (isAuthFullscreenRoute) {
+    return <>{children}</>;
+  }
+
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-clip">
-      {!isAuthFullscreenRoute && (
-        <Suspense fallback={null}>
-          <Header />
-        </Suspense>
-      )}
+      <Suspense fallback={null}>
+        <Header />
+      </Suspense>
       <main
         className={cn(
-          "relative flex-grow", !isAuthFullscreenRoute && "pt-[var(--storefront-header-reserved-height,var(--storefront-header-mobile-height))] lg:pt-[var(--storefront-header-reserved-height,var(--storefront-header-desktop-height))]",
+          "relative flex-grow pt-[var(--storefront-header-reserved-height,var(--storefront-header-mobile-height))] lg:pt-[var(--storefront-header-reserved-height,var(--storefront-header-desktop-height))]",
           showBottomNav
             ? "pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+1rem)] md:pb-12"
             : "",
@@ -86,13 +95,12 @@ export function StorefrontShell({ children }: StorefrontShellProps) {
           "pb-[calc(var(--checkout-mobile-cta-height)+1.5rem)] ",
           pathname === "/ai" &&
           "pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+1.25rem)] ",
-          isAuthFullscreenRoute && "min-h-[100svh] p-0",
         )}
       >
         {children}
       </main>
-      {!isCheckoutRoute && !isFromMobileApp && !isAuthFullscreenRoute ? <Footer /> : null}
-      {showBottomNav && !isFromMobileApp && !isAuthFullscreenRoute ? (
+      {!isCheckoutRoute && !isFromMobileApp ? <Footer /> : null}
+      {showBottomNav && !isFromMobileApp ? (
         <Suspense fallback={null}>
           <MobileBottomNav />
         </Suspense>

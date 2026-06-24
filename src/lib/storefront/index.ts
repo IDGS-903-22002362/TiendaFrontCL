@@ -179,6 +179,145 @@ export function getCategoryCards(
     .filter((category) => category.count > 0);
 }
 
+function getLineaDescription(nombre: string) {
+  const normalized = normalizeStorefrontText(nombre);
+
+  if (normalized.includes("accesor")) {
+    return "Adquiere los complementos perfectos para tu conjunto esmeralda.";
+  }
+
+  if (normalized.includes("adolescent") || normalized.includes("juvenil")) {
+    return "Piezas pensadas para acompañar cada etapa con estilo oficial.";
+  }
+
+  if (normalized.includes("infantil") || normalized.includes("nino")) {
+    return "La identidad esmeralda en tallas para los más pequeños.";
+  }
+
+  if (normalized.includes("mujer") || normalized.includes("femenin")) {
+    return "Colección diseñada para lucir los colores del Club León.";
+  }
+
+  if (normalized.includes("hombre") || normalized.includes("masculin")) {
+    return "Prendas oficiales para vivir el fútbol con orgullo esmeralda.";
+  }
+
+  if (normalized.includes("jersey") || normalized.includes("playera")) {
+    return "Cada playera representa una forma de vivir el fútbol. Encuentra la tuya.";
+  }
+
+  return "Selección oficial con enfoque en producto y uso real.";
+}
+
+function getLineaEyebrow(nombre: string) {
+  const normalized = normalizeStorefrontText(nombre);
+
+  if (normalized.includes("accesor")) {
+    return "Accesorios";
+  }
+
+  if (normalized.includes("adolescent") || normalized.includes("juvenil")) {
+    return "Juvenil";
+  }
+
+  if (normalized.includes("infantil") || normalized.includes("nino")) {
+    return "Infantil";
+  }
+
+  if (normalized.includes("mujer") || normalized.includes("femenin")) {
+    return "Mujer";
+  }
+
+  if (normalized.includes("hombre") || normalized.includes("masculin")) {
+    return "Hombre";
+  }
+
+  if (normalized.includes("jersey") || normalized.includes("playera")) {
+    return "Matchday";
+  }
+
+  return "Línea";
+}
+
+function countProductsForLinea(linea: Linea, products: Product[]) {
+  const lineaNombre = normalizeStorefrontText(linea.nombre);
+
+  return products.filter((product) => {
+    if (product.lineId === linea.id) {
+      return true;
+    }
+
+    const productLineName = normalizeStorefrontText(product.lineName ?? "");
+    return productLineName.length > 0 && productLineName === lineaNombre;
+  }).length;
+}
+
+export function getLineaCards(
+  lineas: Linea[],
+  products: Product[],
+): StorefrontCategoryCard[] {
+  return lineas
+    .filter((linea) => linea.activo)
+    .sort((left, right) => left.codigo - right.codigo)
+    .map((linea) => ({
+      id: linea.id,
+      name: linea.nombre,
+      slug: String(linea.codigo),
+      description: getLineaDescription(linea.nombre),
+      eyebrow: getLineaEyebrow(linea.nombre),
+      href: `/products?line=${linea.id}`,
+      count: countProductsForLinea(linea, products),
+      imagenPrincipal: linea.imagenPrincipal ?? null,
+    }));
+}
+
+function isHomeGridExcludedLinea(linea: Linea) {
+  const normalized = normalizeStorefrontText(`${linea.id} ${linea.nombre}`);
+  return normalized.includes("viejito");
+}
+
+function isDamaLinea(linea: Linea) {
+  const normalized = normalizeStorefrontText(`${linea.id} ${linea.nombre}`);
+  return (
+    normalized.includes("dama") ||
+    normalized.includes("mujer") ||
+    normalized.includes("femenin")
+  );
+}
+
+const HOME_LINEA_EYEBROW = "LÍNEA";
+
+function getHomeLineaDisplayName(linea: Linea) {
+  const normalized = normalizeStorefrontText(`${linea.id} ${linea.nombre}`);
+
+  if (normalized.includes("adolescent")) {
+    return "Juvenil";
+  }
+
+  return linea.nombre;
+}
+
+/** Home CategoryGrid: excludes Viejito and expands Dama to two grid cells. */
+export function getHomeLineaCards(
+  lineas: Linea[],
+  products: Product[],
+): StorefrontCategoryCard[] {
+  return lineas
+    .filter((linea) => linea.activo && !isHomeGridExcludedLinea(linea))
+    .sort((left, right) => left.codigo - right.codigo)
+    .map((linea) => ({
+      id: linea.id,
+      name: getHomeLineaDisplayName(linea),
+      slug: String(linea.codigo),
+      description: getLineaDescription(linea.nombre),
+      eyebrow: HOME_LINEA_EYEBROW,
+      href: `/products?line=${linea.id}`,
+      count: countProductsForLinea(linea, products),
+      imagenPrincipal: linea.imagenPrincipal ?? null,
+      ...(isDamaLinea(linea) ? { gridColSpan: 2 } : {}),
+    }));
+}
+
 function getCategoryDescription(slug: string) {
   const normalized = normalizeStorefrontText(slug);
 

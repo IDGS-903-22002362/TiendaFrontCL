@@ -121,10 +121,23 @@ function LoginPageContent() {
   }, [isAuthenticated, isLoading, role, user?.perfilCompleto, router]);
 
   useEffect(() => {
+    const emailParam = searchParams.get("email");
+    if (emailParam?.trim()) {
+      setEmail(emailParam.trim());
+    }
+
+    if (searchParams.get("mode") === "password") {
+      setShowPasswordLogin(true);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       setIsSubmitting(false);
       setShowVerification(false);
-      setShowPasswordLogin(false);
+      if (searchParams.get("mode") !== "password") {
+        setShowPasswordLogin(false);
+      }
       setShowPasswordRecovery(false);
       setVerificationCode("");
       setPendingEmail("");
@@ -133,7 +146,7 @@ function LoginPageContent() {
       setAttempts(3);
       setResendTimer(0);
     }
-  }, [isAuthenticated, isLoading]);
+  }, [isAuthenticated, isLoading, searchParams]);
 
   // Timer para reenviar código
   useEffect(() => {
@@ -571,64 +584,58 @@ function LoginPageContent() {
   }
 
   return (
-    <div className="relative flex h-[100svh] flex-col overflow-hidden bg-white">
-      {/* Fondo de partículas a pantalla completa */}
-      <div
-        className="pointer-events-none absolute inset-0 z-0 overflow-hidden [&_canvas]:pointer-events-none [&_canvas]:!z-0"
-        aria-hidden="true"
-      >
-        <Antigravity
-          count={250}
-          magnetRadius={9}
-          ringRadius={8}
-          waveSpeed={0.7}
-          waveAmplitude={1.5}
-          particleSize={1.5}
-          lerpSpeed={0.1}
-          color="#006A54"
-          autoAnimate
-          particleVariance={0.8}
-          rotationSpeed={0}
-          depthFactor={0.6}
-          pulseSpeed={3}
-          particleShape="sphere"
-          fieldStrength={10}
-        />
+    <div className="relative flex min-h-[100dvh] w-full flex-col overflow-x-hidden bg-white">
+      <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
+        <div className="h-full w-full">
+          <Antigravity
+            count={250}
+            magnetRadius={9}
+            ringRadius={8}
+            waveSpeed={0.7}
+            waveAmplitude={1.5}
+            particleSize={1.5}
+            lerpSpeed={0.1}
+            color="#006A54"
+            autoAnimate
+            particleVariance={0.8}
+            rotationSpeed={0}
+            depthFactor={0.6}
+            pulseSpeed={3}
+            particleShape="sphere"
+            fieldStrength={10}
+          />
+        </div>
       </div>
 
       {/* Botón volver */}
       {!isFromMobileApp ? (
-        <div className="absolute left-[max(0.75rem,env(safe-area-inset-left))] top-[max(0.75rem,env(safe-area-inset-top))] z-30 sm:left-5 sm:top-5">
+        <div className="absolute left-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 sm:left-5">
           <button
+            type="button"
             onClick={handleGoBack}
-            className="flex min-h-11 min-w-[44px] items-center gap-2 rounded-full bg-black/30 px-3 py-2 text-white backdrop-blur-md transition-all hover:bg-black/45 sm:px-4"
+            aria-label="Volver"
+            className="flex items-center gap-2 rounded-full bg-black/30 px-3 py-2 text-white backdrop-blur-md transition-all hover:bg-black/45 sm:px-4"
           >
-            <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+            <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true" />
             <span className="text-sm font-medium">Volver</span>
           </button>
         </div>
       ) : null}
 
-      {/* Contenido central — todo junto, fluido y centrado (scroll solo como último recurso) */}
-      <main className="relative z-20 flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(3.5rem,calc(env(safe-area-inset-top)+3rem))] sm:px-6">
-          <section className="mx-auto w-full min-w-0 max-w-[min(92vw,26rem)] sm:max-w-md">
-          {/* Container blanco principal */}
-          <div className="rounded-3xl border border-[#e3ece8] bg-white p-[clamp(1.1rem,3vh,1.75rem)] shadow-xl">
-          {/* Marca */}
-          <div className="mb-[clamp(0.85rem,2.5vh,1.5rem)] flex flex-col items-center text-center">
-            <img
-              src="/images/leon.png"
-              alt="Club León Logo"
-              className="h-[clamp(3rem,9vh,6.5rem)] w-auto max-w-[80%] object-contain drop-shadow-lg"
-            />
-            <h1 className="mt-[clamp(0.4rem,1.5vh,0.85rem)] text-balance text-[clamp(1.6rem,5.5vh,3rem)] font-black leading-none tracking-tight text-[#06543b]">
-              CLUB LEÓN
-            </h1>
-            <p className="mx-auto mt-[clamp(0.35rem,1.2vh,0.65rem)] hidden max-w-sm text-pretty text-sm leading-relaxed text-gray-600 sm:block lg:text-base">
-              Consulta contenido exclusivo del Club León, regístrate, guarda tu progreso y desbloquea grandes beneficios.
-            </p>
-          </div>
+      {/* Main content */}
+      <div className="pointer-events-none relative z-10 flex w-full flex-1 items-start justify-center overflow-y-auto px-[clamp(0.75rem,4vw,1.5rem)] pt-[max(5rem,calc(env(safe-area-inset-top)+4rem))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center sm:px-6 sm:pt-[max(5.5rem,calc(env(safe-area-inset-top)+4.5rem))] sm:pb-8 lg:pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] lg:pb-12">
+        <section className="pointer-events-auto relative mx-auto w-[min(100%,calc(100vw-1.5rem))] min-w-0 max-w-md rounded-[1.25rem] border border-white/55 bg-white/95 px-[clamp(1rem,4vw,2rem)] pb-[clamp(1.25rem,4vw,2rem)] pt-[clamp(3.5rem,10vw,5rem)] shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-md sm:max-w-lg sm:rounded-[2rem] md:max-w-xl lg:pb-12 lg:pt-24">
+          <img
+            src="/images/leon.png"
+            alt="Club León Logo"
+            className="absolute left-1/2 top-0 h-[clamp(3.5rem,12vw,5rem)] w-auto max-w-[min(85%,12rem)] -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-lg sm:h-24 md:h-28 lg:h-32"
+          />
+
+          <h1 className="text-center text-[clamp(1.375rem,5vw,2.25rem)] font-black tracking-tight text-[#06543b] sm:text-4xl lg:text-5xl">CLUB LEÓN</h1>
+
+          <p className="mx-auto mt-2 max-w-sm text-pretty text-center text-[clamp(0.6875rem,2.8vw,0.9375rem)] leading-relaxed text-gray-600 sm:text-sm lg:text-base">
+            Consulta contenido exclusivo del Club León, regístrate, guarda tu progreso y desbloquea grandes beneficios.
+          </p>
 
           {/* Error message */}
           {errorMessage && (
@@ -677,7 +684,7 @@ function LoginPageContent() {
             <>
               {!showVerification && !showPasswordLogin && !showPasswordRecovery ? (
                 // Pantalla inicial: Email + Google/Apple
-                <div className="space-y-[clamp(0.6rem,1.8vh,1rem)] rounded-2xl border border-[#eef3f1] bg-[#f8fbf9] p-[clamp(0.85rem,2.2vh,1.1rem)]">
+                <div className="mt-6 space-y-4 rounded-3xl border border-[#e7ece9] bg-[#f8fbf9] p-[clamp(0.75rem,3vw,1.25rem)] shadow-sm sm:mt-7">
                   {/* Email Input */}
                   <div className="relative w-full min-w-0">
                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
@@ -691,15 +698,16 @@ function LoginPageContent() {
                       inputMode="email"
                       autoComplete="email"
                       placeholder="Correo electrónico"
+                      aria-label="Correo electrónico"
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
                       disabled={isRequestingCode}
-                      className="h-[clamp(2.75rem,6vh,3.5rem)] min-h-[44px] w-full min-w-0 rounded-2xl border border-gray-200 bg-white pl-12 pr-4 text-base text-gray-900 placeholder-gray-500 transition-all focus:border-[#007A53] focus:ring-2 focus:ring-[#007A53]/15"
+                      className="h-11 rounded-2xl border border-gray-200 bg-white pl-12 pr-4 text-gray-900 placeholder-gray-500 transition-all focus:border-[#007A53] focus:ring-2 focus:ring-[#007A53]/15 sm:h-12 md:h-14"
                     />
                   </div>
 
                   <Button
-                    className="h-[clamp(2.75rem,6vh,3.5rem)] min-h-[44px] w-full rounded-2xl bg-[#007A53] text-base font-bold text-white shadow-lg shadow-[#007A53]/30 transition-all hover:bg-[#006248] disabled:opacity-70"
+                    className="h-11 w-full rounded-2xl bg-[#007A53] text-sm font-bold text-white shadow-lg shadow-[#007A53]/30 transition-all hover:bg-[#006248] disabled:opacity-70 sm:h-12 sm:text-base md:h-14 md:text-lg"
                     onClick={onRequestVerificationCode}
                     disabled={isRequestingCode}
                   >
@@ -717,12 +725,12 @@ function LoginPageContent() {
                 </div>
               ) : showVerification && !showPasswordLogin && !showPasswordRecovery ? (
                 // Formulario de verificación de código
-                <div className="space-y-[clamp(0.6rem,1.8vh,1rem)] rounded-2xl border border-[#eef3f1] bg-[#f8fbf9] p-[clamp(0.85rem,2.2vh,1.1rem)]">
+                <div className="mt-6 space-y-4 rounded-3xl border border-[#e7ece9] bg-[#f8fbf9] p-[clamp(0.75rem,3vw,1.25rem)] shadow-sm sm:mt-7">
                   <div className="text-center">
                     <p className="text-sm text-gray-600">
                       Hemos enviado un código de verificación a
                     </p>
-                    <p className="mt-1 break-all font-semibold text-[#007A53]">
+                    <p className="mt-1 break-all px-1 font-semibold text-[#007A53]">
                       {pendingEmail}
                     </p>
                   </div>
@@ -732,7 +740,7 @@ function LoginPageContent() {
                     <p className="text-center text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
                       Código de 6 dígitos
                     </p>
-                    <div className="flex max-w-full items-center justify-center gap-1.5 sm:gap-2 md:gap-3">
+                    <div className="grid grid-cols-6 gap-1.5 sm:gap-2 md:gap-3">
                       {Array.from({ length: 6 }).map((_, index) => {
                         const digit = verificationCode[index] ?? "";
 
@@ -751,7 +759,7 @@ function LoginPageContent() {
                             disabled={isSubmitting}
                             onChange={(event) => handleOtpChange(index, event.target.value)}
                             onKeyDown={(event) => handleOtpKeyDown(index, event)}
-                            className="h-[clamp(2.75rem,6vh,3.5rem)] min-h-[44px] w-[clamp(2.25rem,9vw,3rem)] min-w-0 flex-1 rounded-xl border border-gray-200 bg-white text-center text-lg font-bold text-gray-900 shadow-sm transition-all focus:border-[#007A53] focus:ring-2 focus:ring-[#007A53]/20 sm:flex-none sm:text-xl md:text-2xl"
+                            className="aspect-square h-auto w-full min-w-0 max-h-14 rounded-xl border border-gray-200 bg-white text-center text-lg font-bold text-gray-900 shadow-sm transition-all focus:border-[#007A53] focus:ring-2 focus:ring-[#007A53]/20 sm:text-xl md:text-2xl"
                             aria-label={`Dígito ${index + 1} del código`}
                           />
                         );
@@ -766,7 +774,7 @@ function LoginPageContent() {
                   )}
 
                   <Button
-                    className="h-[clamp(2.75rem,6vh,3.5rem)] min-h-[44px] w-full rounded-2xl bg-[#007A53] text-base font-bold text-white shadow-lg shadow-[#007A53]/30 transition-all hover:bg-[#006248] disabled:opacity-70"
+                    className="h-11 w-full rounded-2xl bg-[#007A53] text-sm font-bold text-white shadow-lg shadow-[#007A53]/30 transition-all hover:bg-[#006248] disabled:opacity-70 sm:h-12 sm:text-base md:h-14 md:text-lg"
                     onClick={onVerifyAndLogin}
                     disabled={isSubmitting || verificationCode.length !== 6 || !esOtpValido}
                   >
@@ -825,7 +833,7 @@ function LoginPageContent() {
                 </div>
               ) : showPasswordLogin ? (
                 // Formulario de correo y contraseña
-                <div className="space-y-[clamp(0.6rem,1.8vh,1rem)] rounded-2xl border border-[#eef3f1] bg-[#f8fbf9] p-[clamp(0.85rem,2.2vh,1.1rem)]">
+                <div className="mt-6 space-y-4 rounded-3xl border border-[#e7ece9] bg-[#f8fbf9] p-[clamp(0.75rem,3vw,1.25rem)] shadow-sm sm:mt-7">
                   {/* Email Input */}
                   <div className="relative w-full min-w-0">
                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
@@ -839,10 +847,11 @@ function LoginPageContent() {
                       inputMode="email"
                       autoComplete="email"
                       placeholder="Correo electrónico"
+                      aria-label="Correo electrónico"
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
                       disabled={isSubmitting}
-                      className="h-[clamp(2.75rem,6vh,3.5rem)] min-h-[44px] w-full min-w-0 rounded-2xl border border-gray-200 bg-white pl-12 pr-4 text-base text-gray-900 placeholder-gray-500 transition-all focus:border-[#007A53] focus:ring-2 focus:ring-[#007A53]/15"
+                      className="h-11 rounded-2xl border border-gray-200 bg-white pl-12 pr-4 text-gray-900 placeholder-gray-500 transition-all focus:border-[#007A53] focus:ring-2 focus:ring-[#007A53]/15 sm:h-12 md:h-14"
                     />
                   </div>
 
@@ -857,6 +866,7 @@ function LoginPageContent() {
                       type={showPassword ? "text" : "password"}
                       autoComplete="current-password"
                       placeholder="Contraseña"
+                      aria-label="Contraseña"
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
                       disabled={isSubmitting}
@@ -865,7 +875,8 @@ function LoginPageContent() {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-1 top-1/2 flex h-11 w-11 min-h-[44px] min-w-[44px] -translate-y-1/2 items-center justify-center rounded-full text-gray-400 transition-colors hover:text-gray-600"
+                      aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-gray-600"
                       disabled={isSubmitting}
                       aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                     >
@@ -878,7 +889,7 @@ function LoginPageContent() {
                   </div>
 
                   <Button
-                    className="h-[clamp(2.75rem,6vh,3.5rem)] min-h-[44px] w-full rounded-2xl bg-[#007A53] text-base font-bold text-white shadow-lg shadow-[#007A53]/30 transition-all hover:bg-[#006248] disabled:opacity-70"
+                    className="h-11 w-full rounded-2xl bg-[#007A53] text-sm font-bold text-white shadow-lg shadow-[#007A53]/30 transition-all hover:bg-[#006248] disabled:opacity-70 sm:h-12 sm:text-base md:h-14 md:text-lg"
                     onClick={onEmailPasswordLogin}
                     disabled={isSubmitting}
                   >
@@ -902,7 +913,7 @@ function LoginPageContent() {
                 </div>
               ) : showPasswordRecovery ? (
                 // Pantalla de recuperación de contraseña
-                <div className="space-y-[clamp(0.6rem,1.8vh,1rem)] rounded-2xl border border-[#eef3f1] bg-[#f8fbf9] p-[clamp(0.85rem,2.2vh,1.1rem)]">
+                <div className="mt-6 space-y-4 rounded-3xl border border-[#e7ece9] bg-[#f8fbf9] p-[clamp(0.75rem,3vw,1.25rem)] shadow-sm sm:mt-7">
                   {!recoveryEmailSent ? (
                     <>
                       <div className="text-center mb-4">
@@ -929,15 +940,16 @@ function LoginPageContent() {
                           inputMode="email"
                           autoComplete="email"
                           placeholder="Correo electrónico"
+                          aria-label="Correo electrónico para recuperación"
                           value={recoveryEmail}
                           onChange={(event) => setRecoveryEmail(event.target.value)}
                           disabled={isSubmitting}
-                          className="h-[clamp(2.75rem,6vh,3.5rem)] min-h-[44px] w-full min-w-0 rounded-2xl border border-gray-200 bg-white pl-12 pr-4 text-base text-gray-900 placeholder-gray-500 transition-all focus:border-[#007A53] focus:ring-2 focus:ring-[#007A53]/15"
+                          className="h-11 rounded-2xl border border-gray-200 bg-white pl-12 pr-4 text-gray-900 placeholder-gray-500 transition-all focus:border-[#007A53] focus:ring-2 focus:ring-[#007A53]/15 sm:h-12 md:h-14"
                         />
                       </div>
 
                       <Button
-                        className="h-[clamp(2.75rem,6vh,3.5rem)] min-h-[44px] w-full rounded-2xl bg-[#007A53] text-base font-bold text-white shadow-lg shadow-[#007A53]/30 transition-all hover:bg-[#006248] disabled:opacity-70"
+                        className="h-11 w-full rounded-2xl bg-[#007A53] text-sm font-bold text-white shadow-lg shadow-[#007A53]/30 transition-all hover:bg-[#006248] disabled:opacity-70 sm:h-12 sm:text-base md:h-14 md:text-lg"
                         onClick={onSendPasswordReset}
                         disabled={isSubmitting}
                       >
@@ -991,10 +1003,7 @@ function LoginPageContent() {
           )}
           </div>
 
-          {/* Login social — botones full-width debajo del container */}
-          {!isSubmitting && firebaseReady && (
-            <>
-              <div className="my-[clamp(0.75rem,2.5vh,1.25rem)] flex items-center gap-3 sm:gap-4">
+              <div className="my-6 flex min-w-0 items-center gap-2 sm:gap-4">
                 <div className="h-px min-w-0 flex-1 bg-gray-300" />
                 <span className="shrink-0 text-xs font-medium text-gray-500 sm:text-sm">O inicia con</span>
                 <div className="h-px min-w-0 flex-1 bg-gray-300" />
@@ -1002,8 +1011,7 @@ function LoginPageContent() {
 
               <div className="space-y-[clamp(0.5rem,1.5vh,0.75rem)]">
                 <Button
-                  variant="outline"
-                  className="flex h-[clamp(2.75rem,6vh,3.25rem)] min-h-[44px] w-full items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 shadow-sm transition-all hover:bg-gray-50 hover:shadow disabled:opacity-70 sm:text-base"
+                  className="h-11 w-full min-w-0 justify-center gap-2 rounded-full border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-900 transition-all hover:bg-gray-50 disabled:opacity-70 sm:h-12 sm:gap-3 sm:px-4 sm:text-sm md:h-14 md:text-base"
                   onClick={onGoogleLogin}
                   disabled={isSubmitting || isRequestingCode}
                 >
@@ -1029,7 +1037,7 @@ function LoginPageContent() {
                 </Button>
 
                 <Button
-                  className="flex h-[clamp(2.75rem,6vh,3.25rem)] min-h-[44px] w-full items-center justify-center gap-3 rounded-2xl bg-black text-sm font-semibold text-white shadow-sm transition-all hover:bg-gray-900 hover:shadow disabled:opacity-70 sm:text-base"
+                  className="h-11 w-full min-w-0 justify-center gap-2 rounded-full bg-black px-3 text-xs font-semibold text-white transition-all hover:bg-gray-900 disabled:opacity-70 sm:h-12 sm:gap-3 sm:px-4 sm:text-sm md:h-14 md:text-base"
                   onClick={onAppleLogin}
                   disabled={isSubmitting || isRequestingCode}
                 >
@@ -1052,13 +1060,8 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex h-[100svh] flex-col items-center justify-center gap-4 bg-white px-4 text-center">
-          <img
-            src="/images/leon.png"
-            alt="Club León Logo"
-            className="h-[clamp(3.5rem,9vh,6rem)] w-auto object-contain drop-shadow-lg"
-          />
-          <p className="text-sm font-semibold text-[#06543b]">Cargando...</p>
+        <div className="flex min-h-[100svh] items-center justify-center bg-[#007A53] px-4 text-center text-white">
+          Cargando...
         </div>
       }
     >

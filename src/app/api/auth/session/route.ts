@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { UserRole } from "@/lib/types";
 import {
+  csrfForbiddenResponse,
+  setCsrfCookie,
+  validateCsrfRequest,
+} from "@/lib/server/csrf";
+import {
   clearSessionCookies,
   getApiTokenFromRequest,
   getUserRoleFromRequest,
@@ -43,10 +48,12 @@ export async function GET(request: NextRequest) {
   const role = getUserRoleFromRequest(request);
 
   if (!token) {
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: { isAuthenticated: false, token: "", role: "", user: null },
     });
+    setCsrfCookie(response);
+    return response;
   }
 
   // Recuperar datos del usuario desde el backend
@@ -63,6 +70,7 @@ export async function GET(request: NextRequest) {
         data: { isAuthenticated: false, token: "", role: "", user: null },
       });
       clearSessionCookies(response);
+      setCsrfCookie(response);
       return response;
     }
 
@@ -93,13 +101,16 @@ export async function GET(request: NextRequest) {
       role: payload.usuario?.rol ?? role,
       user: payload.usuario ?? null,
     });
+    setCsrfCookie(response);
 
     return response;
   } catch {
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: { isAuthenticated: false, token: "", role: "", user: null },
     });
+    setCsrfCookie(response);
+    return response;
   }
 }
 
@@ -139,6 +150,7 @@ export async function POST(request: NextRequest) {
       role: body.user.rol ?? "",
       user: body.user,
     });
+    setCsrfCookie(response);
 
     return response;
   }
@@ -198,6 +210,7 @@ export async function POST(request: NextRequest) {
       role: payload.usuario?.rol ?? "",
       user: payload.usuario ?? null,
     });
+    setCsrfCookie(response);
 
     return response;
   } catch {
@@ -208,8 +221,13 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
+  if (!validateCsrfRequest(request)) {
+    return csrfForbiddenResponse();
+  }
+
   const response = NextResponse.json({ success: true });
   clearSessionCookies(response);
+  setCsrfCookie(response);
   return response;
 }

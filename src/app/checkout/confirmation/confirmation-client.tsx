@@ -18,6 +18,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ordersApi } from "@/lib/api/orders";
 import { paymentsApi } from "@/lib/api/payments";
+import {
+  clearCheckoutIdempotencyKey,
+  getCheckoutAttemptStatus,
+} from "@/lib/api/checkout-attempt";
 import { useCart } from "@/hooks/use-cart";
 import type { Orden } from "@/lib/types";
 
@@ -106,11 +110,15 @@ type VerificationState =
 export function ConfirmationClient() {
   const searchParams = useSearchParams();
   const { reloadCart } = useCart();
+  const attemptId = searchParams.get("attemptId") || "";
   const orderId = searchParams.get("ordenId") || "";
   const paymentId = searchParams.get("pagoId") || "";
   const sessionId =
     searchParams.get("session_id") || searchParams.get("sessionId") || "";
   const fallbackTotal = searchParams.get("total") || "";
+
+  const [resolvedOrderId, setResolvedOrderId] = useState(orderId);
+  const [attemptStatus, setAttemptStatus] = useState("");
 
   const [orderStatus, setOrderStatus] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("");
@@ -119,22 +127,75 @@ export function ConfirmationClient() {
   const [total, setTotal] = useState(fallbackTotal);
   const [order, setOrder] = useState<Orden | null>(null);
   const [verificationState, setVerificationState] =
-    useState<VerificationState>(orderId ? "checking" : "pending");
+    useState<VerificationState>(
+      attemptId || orderId ? "checking" : "pending",
+    );
   const [attempts, setAttempts] = useState(0);
   const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stripePaidRef = useRef(false);
 
   const checkStatus = useCallback(async () => {
-    if (!orderId) {
+    if (!attemptId && !resolvedOrderId) {
       setVerificationState("pending");
       return false;
     }
 
-    const [nextOrder, payment, checkoutSession] = await Promise.all([
-      ordersApi.getById(orderId),
-      paymentId ? paymentsApi.getById(paymentId) : paymentsApi.getByOrden(orderId),
-      sessionId ? paymentsApi.getCheckoutSession(sessionId) : Promise.resolve(null),
+    let activeOrderId = resolvedOrderId;
+    let activePaymentId = paymentId;
+
+    const checkoutSession = sessionId
+      ? await paymentsApi.getCheckoutSession(sessionId)
+      : null;
+    const nextSessionPaymentStatus = checkoutSession?.paymentStatus || "";
+    const nextSessionStatus = checkoutSession?.status || "";
+    setSessionPaymentStatus(nextSessionPaymentStatus);
+    setSessionStatus(nextSessionStatus);
+
+    if (attemptId) {
+      const attempt = await getCheckoutAttemptStatus(attemptId);
+      setAttemptStatus(attempt.status);
+      if (attempt.orderId) {
+        activeOrderId = attempt.orderId;
+        setResolvedOrderId(attempt.orderId);
+      }
+      if (attempt.pagoId) {
+        activePaymentId = attempt.pagoId;
+      }
+      if (
+        typeof attempt.total === "number" &&
+        Number.isFinite(attempt.total) &&
+        attempt.total > 0
+      ) {
+        setTotal(attempt.total.toFixed(2));
+      }
+
+      if (!activeOrderId) {
+        if (isStripePaid(nextSessionPaymentStatus)) {
+          stripePaidRef.current = true;
+          setVerificationState("syncing");
+          return false;
+        }
+        if (
+          attempt.status === "failed" ||
+          attempt.status === "canceled" ||
+          attempt.status === "expired"
+        ) {
+          setVerificationState("failed");
+          return true;
+        }
+        setVerificationState("syncing");
+        return false;
+      }
+    }
+
+    const [nextOrder, payment] = await Promise.all([
+      activeOrderId ? ordersApi.getById(activeOrderId) : Promise.resolve(null),
+      activePaymentId
+        ? paymentsApi.getById(activePaymentId)
+        : activeOrderId
+          ? paymentsApi.getByOrden(activeOrderId)
+          : Promise.resolve(null),
     ]);
 
     if (nextOrder) {
@@ -150,12 +211,8 @@ export function ConfirmationClient() {
 
     const nextPaymentStatus =
       payment?.status || String(nextOrder?.paymentStatus || "") || "";
-    const nextSessionPaymentStatus = checkoutSession?.paymentStatus || "";
-    const nextSessionStatus = checkoutSession?.status || "";
 
     setPaymentStatus(nextPaymentStatus);
-    setSessionPaymentStatus(nextSessionPaymentStatus);
-    setSessionStatus(nextSessionStatus);
     setLastCheckedAt(new Date());
 
     if (isBackendPaid(nextOrder, nextPaymentStatus)) {
@@ -176,7 +233,7 @@ export function ConfirmationClient() {
 
     setVerificationState("checking");
     return false;
-  }, [orderId, paymentId, sessionId]);
+  }, [attemptId, resolvedOrderId, paymentId, sessionId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -219,6 +276,7 @@ export function ConfirmationClient() {
     }
 
     cartReloadedRef.current = true;
+    clearCheckoutIdempotencyKey();
     void reloadCart();
   }, [verificationState, reloadCart]);
 
@@ -236,7 +294,7 @@ export function ConfirmationClient() {
   const title = isPaid
     ? "Pago confirmado"
     : isSyncing
-      ? "Pago recibido, sincronizando pedido"
+      ? "Confirmando tu pago"
     : isFailed
       ? "No pudimos confirmar el pago"
       : isChecking
@@ -291,7 +349,13 @@ export function ConfirmationClient() {
                 Pedido
               </p>
               <p className="mt-2 break-all font-mono text-sm font-semibold text-foreground">
-                {orderId || "N/D"}
+                {isPaid && resolvedOrderId
+                  ? resolvedOrderId
+                  : isSyncing
+                    ? "Confirmando..."
+                    : attemptId
+                      ? `Intento ${attemptId.slice(0, 8)}…`
+                      : "Pendiente"}
               </p>
             </div>
             <div className="rounded-2xl border border-border bg-muted/35 p-4">

@@ -55,11 +55,21 @@ function mapLineasList(payload: unknown): Linea[] {
   return data.map(mapLinea).filter((linea) => Boolean(linea.id));
 }
 
+type LineasReadOptions = {
+  /** Bypass Next.js fetch cache on the server (e.g. home tiles after admin image updates). */
+  fresh?: boolean;
+};
+
 export const lineasApi = {
-  async getAll(): Promise<Linea[]> {
-    const payload = await apiFetch<ApiEnvelope<unknown[]>>("/api/lineas", {
-      method: "GET",
-    }, getReadOptions());
+  async getAll(options?: LineasReadOptions): Promise<Linea[]> {
+    const payload = await apiFetch<ApiEnvelope<unknown[]>>(
+      "/api/lineas",
+      {
+        method: "GET",
+        ...(options?.fresh ? { cache: "no-store" as const } : {}),
+      },
+      getReadOptions(),
+    );
 
     return mapLineasList(payload);
   },

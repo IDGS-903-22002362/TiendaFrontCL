@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { type UseFormReturn, useForm } from "react-hook-form";
@@ -25,7 +26,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { useStorefront } from "@/hooks/use-storefront";
 import { ApiError } from "@/lib/api/client";
 import {
-  checkoutCart,
   fetchCart,
   getCartVariantKey,
   getOrCreateSessionId,
@@ -33,7 +33,10 @@ import {
   type ResultadoCodigoPromocionCarrito,
   type ValidarCodigoPromocionCarritoItem,
 } from "@/lib/api/cart";
-import { ordersApi } from "@/lib/api/orders";
+import {
+  getCheckoutAttemptStatus,
+  startCheckoutAttempt,
+} from "@/lib/api/checkout-attempt";
 import { paymentsApi } from "@/lib/api/payments";
 import {
   pickupApi,
@@ -533,21 +536,28 @@ function OrderSummaryPanel({
             return (
               <div
                 key={variantKey}
-                className="flex gap-3 rounded-[1.25rem] border border-border bg-muted/45 p-3"
+                className="flex gap-3 rounded-[1.25rem] border border-border bg-muted/45 p-3 transition-colors hover:border-primary/25 hover:bg-muted/70"
               >
-                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-[1rem] border border-border bg-card">
+                <Link
+                  href={`/products/${item.id}`}
+                  className="group relative h-16 w-16 shrink-0 overflow-hidden rounded-[1rem] border border-border bg-card transition hover:border-primary/35"
+                  aria-label={`Ver ${item.name}`}
+                >
                   <Image
                     src={item.image}
-                    alt={item.name}
+                    alt=""
                     fill
-                    className="object-cover"
+                    className="object-cover transition duration-300 group-hover:scale-105"
                   />
-                </div>
+                </Link>
 
                 <div className="min-w-0 flex-1">
-                  <p className="line-clamp-2 text-sm font-medium text-foreground">
+                  <Link
+                    href={`/products/${item.id}`}
+                    className="line-clamp-2 text-sm font-medium text-foreground transition hover:text-primary"
+                  >
                     {item.name}
-                  </p>
+                  </Link>
 
                   <p className="mt-1 text-xs text-muted-foreground">
                     {item.quantity} × {formatCurrency(offerLine.precioUnitario)}
@@ -1754,8 +1764,9 @@ function CardPaymentStep({
   const [isProcessing, setIsProcessing] = useState(false);
   const [embeddedClientSecret, setEmbeddedClientSecret] = useState<string | null>(null);
   const [orderContext, setOrderContext] = useState<{
-    ordenId: string;
+    attemptId: string;
     total: number;
+    pagoId?: string;
   } | null>(null);
 
   const handlePrepareEmbeddedCheckout = async () => {
@@ -1793,42 +1804,22 @@ function CardPaymentStep({
         }
       }
 
-const checkoutResult = await checkoutCart(
-  buildCheckoutPayload(values, "TARJETA", codigoPromocion),
-);
-
-      const ordenId = getOrderIdFromCheckoutResult(checkoutResult);
-      if (!ordenId) {
-        throw new Error("No se recibió un ID de orden válido");
-      }
-
-      const createdOrder = await ordersApi.getById(ordenId);
-      if (!createdOrder) {
-        throw new Error("No se pudo consultar la orden creada antes de procesar el pago");
-      }
-
-      validateOrderPricing({
-        order: createdOrder,
-        expectedSubtotal,
+      const attempt = await startCheckoutAttempt({
+        ...buildCheckoutPayload(values, "TARJETA", codigoPromocion),
+        successUrl: `${window.location.origin}/checkout/confirmation?attemptId={CHECKOUT_ATTEMPT_ID}&session_id={CHECKOUT_SESSION_ID}&status=processing&total=${encodeURIComponent(total.toFixed(2))}`,
+        cancelUrl: `${window.location.origin}/checkout`,
       });
 
-      const successUrl = `${window.location.origin}/checkout/confirmation?ordenId=${encodeURIComponent(ordenId)}&session_id={CHECKOUT_SESSION_ID}&status=processing&total=${encodeURIComponent((createdOrder.total ?? total).toFixed(2))}`;
-      const cancelUrl = `${window.location.origin}/checkout?ordenId=${encodeURIComponent(ordenId)}`;
-      const session = await paymentsApi.createEmbeddedCheckoutSession(
-        ordenId,
-        successUrl,
-        cancelUrl,
-      );
-
-      if (!session.clientSecret) {
-        throw new Error("No se recibió clientSecret para montar Stripe Embedded Checkout");
+      if (!attempt.attemptId || !attempt.clientSecret) {
+        throw new Error("No se recibió un intento de checkout válido");
       }
 
       setOrderContext({
-        ordenId,
-        total: createdOrder.total ?? total,
+        attemptId: attempt.attemptId,
+        total: attempt.total ?? total,
+        pagoId: attempt.pagoId,
       });
-      setEmbeddedClientSecret(session.clientSecret);
+      setEmbeddedClientSecret(attempt.clientSecret);
     } catch (error) {
       const retryValues = buildRetryDeliveryValuesFromCheckoutError(
         values,
@@ -1877,8 +1868,7 @@ const checkoutResult = await checkoutCart(
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
                 <p>
                   Completa tu pago abajo. Stripe valida el total final con el
-                  backend para la orden{" "}
-                  <span className="font-semibold">{orderContext?.ordenId}</span>.
+                  backend. Tu pedido se creará cuando el pago quede confirmado.
                 </p>
               </div>
               <EmbeddedCheckoutProvider
@@ -1973,7 +1963,11 @@ const checkoutResult = await checkoutCart(
               <Button
                 type="button"
                 className="h-12 flex-1 rounded-full"
-                onClick={() => router.push(`/checkout/confirmation?ordenId=${encodeURIComponent(orderContext?.ordenId ?? "")}&status=processing`)}
+                onClick={() =>
+                  router.push(
+                    `/checkout/confirmation?attemptId=${encodeURIComponent(orderContext?.attemptId ?? "")}&status=processing`,
+                  )
+                }
               >
                 Ver estado del pedido
               </Button>
@@ -2000,7 +1994,11 @@ const checkoutResult = await checkoutCart(
           <Button
             type="button"
             className="h-12 flex-1 rounded-full"
-            onClick={() => router.push(`/checkout/confirmation?ordenId=${encodeURIComponent(orderContext?.ordenId ?? "")}&status=processing`)}
+            onClick={() =>
+              router.push(
+                `/checkout/confirmation?attemptId=${encodeURIComponent(orderContext?.attemptId ?? "")}&status=processing`,
+              )
+            }
           >
             Ver estado
           </Button>
