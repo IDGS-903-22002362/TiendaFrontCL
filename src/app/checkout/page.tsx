@@ -152,7 +152,7 @@ function getStringArrayFromCartItem(
   return [];
 }
 
-if (IS_DEVELOPMENT && typeof window !== "undefined") {
+if (process.env.NODE_ENV === "development" && typeof window !== "undefined") {
   console.log(
     "Google Maps key loaded:",
     Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY),
