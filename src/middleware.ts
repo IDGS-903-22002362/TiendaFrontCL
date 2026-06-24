@@ -187,7 +187,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (perfilCompleto === false && pathname !== "/complete-profile") {
+  if (perfilCompleto === false && pathname !== "/complete-profile" && pathname !== "/register") {
     const url = request.nextUrl.clone();
     url.pathname = "/complete-profile";
     url.search = "";

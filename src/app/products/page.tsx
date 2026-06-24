@@ -11,11 +11,12 @@ import {
   resolveCatalogOnlyAvailable,
 } from "@/lib/api/storefront";
 import {
-  buildOfferPricingFromCatalogItems,
+  enrichCatalogProductsWithOfferPricing,
   type ProductOfferPricing,
 } from "@/lib/ofertas-public";
 import { lineasApi } from "@/lib/api/lineas";
 import { tallasApi } from "@/lib/api/tallas";
+import { mapCatalogProductToProductCardViewModel } from "@/lib/api/storefront";
 export const dynamic = "force-dynamic";
 
 const CATALOG_SORTS: CatalogSort[] = [
@@ -134,8 +135,18 @@ export default async function ProductsPage({
     tallasApi.getAll(),
   ]);
 
-  const initialOfferPricing: Record<string, ProductOfferPricing> =
-    buildOfferPricingFromCatalogItems(initialPage.items);
+  const mappedInitialProducts = initialPage.items.map(
+    mapCatalogProductToProductCardViewModel,
+  );
+
+  const { products: initialProducts, pricing: initialOfferPricing } =
+    await enrichCatalogProductsWithOfferPricing(
+      mappedInitialProducts,
+      initialPage.items,
+    ).catch(() => ({
+      products: mappedInitialProducts,
+      pricing: {} as Record<string, ProductOfferPricing>,
+    }));
 
   return (
     <div className="container py-6 md:py-8 lg:py-10">
@@ -143,6 +154,7 @@ export default async function ProductsPage({
         <ProductFilters
           key={queryKey}
           initialPage={initialPage}
+          initialProducts={initialProducts}
           initialOfferPricing={initialOfferPricing}
           categories={categories}
           lineas={lineas}

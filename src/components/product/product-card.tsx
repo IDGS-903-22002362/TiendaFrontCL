@@ -52,10 +52,9 @@ export function ProductCard({
   const precioFinalOferta = Number(pricingOferta?.precioFinal || 0);
 
   const tieneOfertaBackend =
-  !estaAgotado &&
-  Boolean(pricingOferta?.ofertaAplicadaId || pricingOferta?.ofertaTitulo) &&
-  precioFinalOferta > 0 &&
-  precioFinalOferta < precioOriginalOferta;
+    !estaAgotado &&
+    precioFinalOferta > 0 &&
+    precioFinalOferta < precioOriginalOferta;
 
   const tieneOfertaLocal =
   !estaAgotado &&

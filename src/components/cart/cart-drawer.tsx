@@ -25,15 +25,26 @@ import {
 } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/storefront";
-import { fetchProducts } from "@/lib/api/storefront";
+import {
+  fetchCatalogPage,
+  getOfertasPopularesCatalogQuery,
+  getPopularesCatalogQuery,
+} from "@/lib/api/storefront";
+import type { CatalogProductCard } from "@/lib/types";
 import {
   buildCartOfferPricingItems,
+  buildOfferPricingFromCatalogItems,
   calcularPreciosOfertasPublicas,
   getCartItemOfferLine,
   type ProductOfferPricing,
 } from "@/lib/ofertas-public";
 
 const PROMO_CODE_STORAGE_KEY = "tiendafront_codigo_promocion";
+const SUGGESTED_PRODUCTS_LIMIT = 6;
+const OFFERS_FETCH_LIMIT = 12;
+const POPULAR_PRODUCTS_FETCH_LIMIT = 12;
+
+const suggestionsSessionCache = new Map<string, OfferSuggestionProduct[]>();
 
 function getStringArrayFromCartItem(item: unknown, keys: string[]): string[] {
   const record =
@@ -62,6 +73,136 @@ type OfferSuggestionProduct = {
   salePrice: number;
   offerLabel?: string;
 };
+
+function catalogCardToSuggestion(
+  card: CatalogProductCard,
+  cartProductIds: Set<string>,
+): OfferSuggestionProduct | null {
+  if (!card.id || !card.nombre || card.precioOriginal <= 0) {
+    return null;
+  }
+
+  if (cartProductIds.has(card.id)) {
+    return null;
+  }
+
+  const image =
+    card.imagenes?.[0] || card.imagenPrincipal || "/placeholder.svg";
+  const originalPrice = card.precioOriginal;
+  const hasOffer =
+    card.tieneOferta &&
+    card.precioFinal > 0 &&
+    card.precioFinal < originalPrice;
+  const finalPrice = hasOffer ? card.precioFinal : originalPrice;
+
+  return {
+    id: card.id,
+    name: card.nombre,
+    image,
+    price: originalPrice,
+    salePrice: finalPrice,
+    ...(hasOffer && card.ofertaTitulo ? { offerLabel: card.ofertaTitulo } : {}),
+  };
+}
+
+function applyOfferPricingToSuggestions(
+  suggestions: OfferSuggestionProduct[],
+  pricing: Record<string, ProductOfferPricing>,
+): OfferSuggestionProduct[] {
+  return suggestions.map((suggestion) => {
+    const offerPricing = pricing[suggestion.id];
+
+    if (!offerPricing) {
+      return suggestion;
+    }
+
+    const originalPrice = Number(
+      offerPricing.precioOriginal || suggestion.price || 0,
+    );
+    const finalPrice = Number(offerPricing.precioFinal || 0);
+    const hasOffer =
+      finalPrice > 0 &&
+      finalPrice < originalPrice &&
+      Boolean(
+        offerPricing.ofertaAplicadaId || offerPricing.ofertaTitulo,
+      );
+
+    if (!hasOffer) {
+      return suggestion;
+    }
+
+    const offerLabel =
+      typeof offerPricing.ofertaTitulo === "string"
+        ? offerPricing.ofertaTitulo
+        : "";
+
+    return {
+      ...suggestion,
+      price: originalPrice,
+      salePrice: finalPrice,
+      ...(offerLabel ? { offerLabel } : {}),
+    };
+  });
+}
+
+function buildSuggestionsFromCatalog(
+  offerCards: CatalogProductCard[],
+  popularCards: CatalogProductCard[],
+  cartProductIds: Set<string>,
+  pricing: Record<string, ProductOfferPricing> = {},
+): OfferSuggestionProduct[] {
+  const suggestions: OfferSuggestionProduct[] = [];
+  const usedProductIds = new Set<string>();
+
+  for (const card of offerCards) {
+    if (suggestions.length >= SUGGESTED_PRODUCTS_LIMIT) {
+      break;
+    }
+
+    const suggestion = catalogCardToSuggestion(card, cartProductIds);
+
+    if (!suggestion || usedProductIds.has(suggestion.id)) {
+      continue;
+    }
+
+    const [pricedSuggestion] = applyOfferPricingToSuggestions(
+      [suggestion],
+      pricing,
+    );
+    const hasOffer = pricedSuggestion.salePrice < pricedSuggestion.price;
+
+    if (!hasOffer) {
+      continue;
+    }
+
+    suggestions.push(pricedSuggestion);
+    usedProductIds.add(pricedSuggestion.id);
+  }
+
+  if (suggestions.length < SUGGESTED_PRODUCTS_LIMIT) {
+    for (const card of popularCards) {
+      if (suggestions.length >= SUGGESTED_PRODUCTS_LIMIT) {
+        break;
+      }
+
+      const suggestion = catalogCardToSuggestion(card, cartProductIds);
+
+      if (!suggestion || usedProductIds.has(suggestion.id)) {
+        continue;
+      }
+
+      const [pricedSuggestion] = applyOfferPricingToSuggestions(
+        [suggestion],
+        pricing,
+      );
+
+      suggestions.push(pricedSuggestion);
+      usedProductIds.add(pricedSuggestion.id);
+    }
+  }
+
+  return suggestions;
+}
 
 function getRecordValue(record: Record<string, unknown>, keys: string[]) {
   for (const key of keys) {
@@ -101,47 +242,6 @@ function getProductNumber(record: Record<string, unknown>, keys: string[]) {
   }
 
   return 0;
-}
-
-function getProductImage(record: Record<string, unknown>) {
-  const directImage = getProductString(record, [
-    "image",
-    "imagen",
-    "imageUrl",
-    "imagenUrl",
-    "thumbnail",
-  ]);
-
-  if (directImage) {
-    return directImage;
-  }
-
-  const images = getRecordValue(record, ["images", "imagenes"]);
-
-  if (Array.isArray(images)) {
-    const firstStringImage = images.find(
-      (entry) => typeof entry === "string" && entry.trim(),
-    );
-
-    if (typeof firstStringImage === "string") {
-      return firstStringImage;
-    }
-
-    const firstObjectImage = images.find(
-      (entry) => entry && typeof entry === "object",
-    );
-
-    if (firstObjectImage && typeof firstObjectImage === "object") {
-      const imageRecord = firstObjectImage as Record<string, unknown>;
-      const objectImage = getProductString(imageRecord, ["url", "src", "image"]);
-
-      if (objectImage) {
-        return objectImage;
-      }
-    }
-  }
-
-  return "/placeholder.svg";
 }
 
 function getCodigoResultadoItems(
@@ -266,124 +366,157 @@ export function CartDrawer() {
   useEffect(() => {
     let cancelled = false;
 
+    function commitSuggestions(next: OfferSuggestionProduct[]) {
+      if (cancelled) {
+        return;
+      }
+
+      const limited = next.slice(0, SUGGESTED_PRODUCTS_LIMIT);
+      setSuggestedOfferProducts(limited);
+      setIsLoadingSuggestedOffers(false);
+
+      if (limited.length > 0) {
+        suggestionsSessionCache.set(cartProductIdsKey, limited);
+      }
+    }
+
     async function cargarProductosSugeridosEnOferta() {
       if (!isDrawerOpen) {
         return;
       }
 
-      try {
-        setIsLoadingSuggestedOffers(true);
+      const cachedSuggestions = suggestionsSessionCache.get(cartProductIdsKey);
 
-        const response: unknown = await fetchProducts();
+      if (cachedSuggestions?.length) {
+        setSuggestedOfferProducts(cachedSuggestions);
+        setIsLoadingSuggestedOffers(false);
+        return;
+      }
 
-        const products = Array.isArray(response)
-          ? response
-          : Array.isArray((response as { products?: unknown[] })?.products)
-            ? (response as { products: unknown[] }).products
-            : Array.isArray((response as { items?: unknown[] })?.items)
-              ? (response as { items: unknown[] }).items
-              : [];
+      setIsLoadingSuggestedOffers(true);
 
-        const cartProductIds = new Set(state.items.map((item) => item.id));
+      const cartProductIds = new Set(state.items.map((item) => item.id));
+      let partialSuggestions: OfferSuggestionProduct[] = [];
 
-        const catalogProducts = products
-          .map((product) => {
-            const record =
-              product && typeof product === "object"
-                ? (product as Record<string, unknown>)
-                : {};
+      const offersPromise = fetchCatalogPage(
+        getOfertasPopularesCatalogQuery(OFFERS_FETCH_LIMIT),
+      );
+      const popularPromise = fetchCatalogPage(
+        getPopularesCatalogQuery(POPULAR_PRODUCTS_FETCH_LIMIT),
+      );
 
-            const id = getProductString(record, ["id", "_id", "productoId"]);
-            const name = getProductString(record, [
-              "name",
-              "nombre",
-              "descripcion",
-              "title",
-            ]);
-            const image = getProductImage(record);
-            const price = getProductNumber(record, [
-              "price",
-              "precio",
-              "precioPublico",
-              "precioUnitario",
-            ]);
-
-            return {
-              id,
-              name,
-              image,
-              price,
-            };
-          })
-          .filter((product) => {
-            return product.id && product.name && product.price > 0;
-          })
-          .filter((product) => !cartProductIds.has(product.id));
-
-        if (catalogProducts.length === 0) {
-          if (!cancelled) {
-            setSuggestedOfferProducts([]);
+      void offersPromise
+        .then((offersPage) => {
+          if (cancelled) {
+            return;
           }
-          return;
+
+          partialSuggestions = buildSuggestionsFromCatalog(
+            offersPage.items,
+            [],
+            cartProductIds,
+          );
+
+          if (partialSuggestions.length > 0) {
+            commitSuggestions(partialSuggestions);
+          }
+        })
+        .catch((error) => {
+          console.error("Failed to load offer suggestions", error);
+        });
+
+      void popularPromise
+        .then((popularPage) => {
+          if (cancelled) {
+            return;
+          }
+
+          const popularOnly = buildSuggestionsFromCatalog(
+            [],
+            popularPage.items,
+            cartProductIds,
+          );
+
+          if (partialSuggestions.length === 0 && popularOnly.length > 0) {
+            commitSuggestions(popularOnly);
+          }
+        })
+        .catch((error) => {
+          console.error("Failed to load popular suggested products", error);
+        });
+
+      try {
+        const [offersResult, popularResult] = await Promise.allSettled([
+          offersPromise,
+          popularPromise,
+        ]);
+
+        const offerCards =
+          offersResult.status === "fulfilled" ? offersResult.value.items : [];
+        const popularCards =
+          popularResult.status === "fulfilled" ? popularResult.value.items : [];
+
+        if (offersResult.status === "rejected") {
+          console.error(
+            "Failed to load offer suggestions",
+            offersResult.reason,
+          );
         }
 
-        const pricing = await calcularPreciosOfertasPublicas(
-          catalogProducts.map((product) => ({
-            productoId: product.id,
-            cantidad: 1,
-          })),
-        );
+        if (popularResult.status === "rejected") {
+          console.error(
+            "Failed to load popular suggested products",
+            popularResult.reason,
+          );
+        }
 
-        const offerProducts = catalogProducts.reduce<OfferSuggestionProduct[]>(
-          (acc, product) => {
-            const offerPricing = pricing[product.id];
+        const allCards = [...offerCards, ...popularCards];
+        const snapshotPricing = buildOfferPricingFromCatalogItems(allCards);
 
-            const originalPrice = Number(
-              offerPricing?.precioOriginal || product.price || 0,
-            );
-            const finalPrice = Number(offerPricing?.precioFinal || 0);
+        const pricingProductIds = new Set<string>();
 
-            const hasOffer =
-              finalPrice > 0 &&
-              finalPrice < originalPrice &&
-              Boolean(
-                offerPricing?.ofertaAplicadaId || offerPricing?.ofertaTitulo,
-              );
+        for (const card of offerCards) {
+          if (!snapshotPricing[card.id]) {
+            pricingProductIds.add(card.id);
+          }
+        }
 
-            if (!hasOffer) {
-              return acc;
-            }
+        for (const card of popularCards) {
+          if (!snapshotPricing[card.id]) {
+            pricingProductIds.add(card.id);
+          }
+        }
 
-            const offerLabel =
-              typeof offerPricing?.ofertaTitulo === "string"
-                ? offerPricing.ofertaTitulo
-                : "";
+        const needsPricing = [...pricingProductIds].map((productoId) => ({
+          productoId,
+          cantidad: 1,
+        }));
 
-            acc.push({
-              id: product.id,
-              name: product.name,
-              image: product.image || "/placeholder.svg",
-              price: originalPrice,
-              salePrice: finalPrice,
-              ...(offerLabel ? { offerLabel } : {}),
-            });
+        const fetchedPricing =
+          needsPricing.length > 0
+            ? await calcularPreciosOfertasPublicas(needsPricing)
+            : {};
 
-            return acc;
-          },
-          [],
+        const mergedPricing = {
+          ...snapshotPricing,
+          ...fetchedPricing,
+        };
+
+        const suggestions = buildSuggestionsFromCatalog(
+          offerCards,
+          popularCards,
+          cartProductIds,
+          mergedPricing,
         );
 
         if (!cancelled) {
-          setSuggestedOfferProducts(offerProducts.slice(0, 6));
+          commitSuggestions(suggestions);
         }
       } catch (error) {
         console.error("Failed to load suggested offer products", error);
 
         if (!cancelled) {
           setSuggestedOfferProducts([]);
-        }
-      } finally {
-        if (!cancelled) {
           setIsLoadingSuggestedOffers(false);
         }
       }
@@ -394,7 +527,7 @@ export function CartDrawer() {
     return () => {
       cancelled = true;
     };
-  }, [isDrawerOpen, cartProductIdsKey]);
+  }, [isDrawerOpen, cartProductIdsKey, state.items]);
 
   const subtotalConOfertas = useMemo(() => {
     return state.items.reduce((total, item) => {
@@ -747,8 +880,7 @@ export function CartDrawer() {
 
       <SheetContent className="flex w-full border-l border-black/14 bg-white px-0 sm:max-w-[420px] lg:max-w-[560px] xl:max-w-[620px]">
         <div className="flex h-full min-h-0 w-full">
-          {state.items.length > 0 &&
-            (isLoadingSuggestedOffers || suggestedOfferProducts.length > 0) ? (
+          {isLoadingSuggestedOffers || suggestedOfferProducts.length > 0 ? (
             <aside className="hidden w-[180px] shrink-0 border-r border-black/12 bg-[rgb(249_249_246)] px-4 py-5 lg:flex lg:flex-col">
               <p className="mb-4 text-[11px] font-bold uppercase tracking-[0.28em] text-foreground">
                 Podría interesarte
@@ -758,48 +890,60 @@ export function CartDrawer() {
                 <div className="space-y-5 pb-5">
                   {isLoadingSuggestedOffers ? (
                     <p className="text-xs leading-5 text-muted-foreground">
-                      Buscando productos en oferta...
+                      Buscando sugerencias...
                     </p>
                   ) : suggestedOfferProducts.length === 0 ? (
                     <p className="text-xs leading-5 text-muted-foreground">
-                      No hay sugerencias en oferta por ahora.
+                      No hay sugerencias por ahora.
                     </p>
                   ) : (
-                    suggestedOfferProducts.map((product) => (
-                      <Link
-                        key={product.id}
-                        href={`/products/${product.id}`}
-                        className="block group"
-                        onClick={() => setIsDrawerOpen(false)}
-                      >
-                        <div className="aspect-square overflow-hidden bg-[rgb(247_247_244)]">
-                          <img
-                            src={product.image || "/placeholder.svg"}
-                            alt={product.name}
-                            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-                          />
-                        </div>
+                    suggestedOfferProducts.map((product) => {
+                      const hasOffer = product.salePrice < product.price;
 
-                        <p className="mt-2 line-clamp-2 text-sm leading-5 text-foreground">
-                          {product.name}
-                        </p>
+                      return (
+                        <Link
+                          key={product.id}
+                          href={`/products/${product.id}`}
+                          className="block group"
+                          onClick={() => setIsDrawerOpen(false)}
+                        >
+                          <div className="aspect-square overflow-hidden bg-[rgb(247_247_244)]">
+                            <img
+                              src={product.image || "/placeholder.svg"}
+                              alt={product.name}
+                              className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                            />
+                          </div>
 
-                        <div className="mt-1 flex items-center gap-2">
-                          <span className="text-xs font-semibold text-red-600">
-                            {formatCurrency(product.salePrice)}
-                          </span>
-                          <span className="text-xs text-muted-foreground line-through">
-                            {formatCurrency(product.price)}
-                          </span>
-                        </div>
-
-                        {product.offerLabel ? (
-                          <p className="mt-1 line-clamp-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
-                            {product.offerLabel}
+                          <p className="mt-2 line-clamp-2 text-sm leading-5 text-foreground">
+                            {product.name}
                           </p>
-                        ) : null}
-                      </Link>
-                    ))
+
+                          <div className="mt-1 flex items-center gap-2">
+                            {hasOffer ? (
+                              <>
+                                <span className="text-xs font-semibold text-red-600">
+                                  {formatCurrency(product.salePrice)}
+                                </span>
+                                <span className="text-xs text-muted-foreground line-through">
+                                  {formatCurrency(product.price)}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-xs font-semibold text-foreground">
+                                {formatCurrency(product.price)}
+                              </span>
+                            )}
+                          </div>
+
+                          {product.offerLabel ? (
+                            <p className="mt-1 line-clamp-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
+                              {product.offerLabel}
+                            </p>
+                          ) : null}
+                        </Link>
+                      );
+                    })
                   )}
                 </div>
               </ScrollArea>
