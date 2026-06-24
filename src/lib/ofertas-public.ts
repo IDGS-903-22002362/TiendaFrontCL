@@ -126,8 +126,16 @@ async function requestOfferPricingBatch(
 
     return lista.reduce<Record<string, ProductOfferPricing>>((acc, item) => {
       if (item.productoId) {
-        resolvedProductPricing.set(item.productoId, item);
-        acc[item.productoId] = item;
+        // Cache only per-unit fields; subtotals depend on quantity at request time.
+        const unitPricing: ProductOfferPricing = {
+          productoId: item.productoId,
+          precioOriginal: item.precioOriginal,
+          precioFinal: item.precioFinal,
+          ofertaAplicadaId: item.ofertaAplicadaId,
+          ofertaTitulo: item.ofertaTitulo,
+        };
+        resolvedProductPricing.set(item.productoId, unitPricing);
+        acc[item.productoId] = unitPricing;
       }
 
       return acc;
@@ -319,24 +327,19 @@ export function getCartItemOfferLine(
   );
   const precioFinalUnitario = Number(pricingOferta?.precioFinal ?? 0);
 
-  const subtotalOriginal = Number(
-    pricingOferta?.subtotalOriginal ?? precioOriginalUnitario * quantity,
-  );
-  const subtotalFinal = Number(
-    pricingOferta?.subtotalFinal ?? precioFinalUnitario * quantity,
-  );
-
   const tieneOferta =
-    subtotalFinal > 0 &&
-    subtotalFinal < subtotalOriginal &&
+    precioFinalUnitario > 0 &&
+    precioOriginalUnitario > 0 &&
+    precioFinalUnitario < precioOriginalUnitario &&
     Boolean(
       pricingOferta?.ofertaAplicadaId ||
         pricingOferta?.ofertaTitulo ||
-        (precioFinalUnitario > 0 && precioFinalUnitario < precioOriginalUnitario),
+        precioFinalUnitario < precioOriginalUnitario,
     );
 
-  const totalItem = tieneOferta ? subtotalFinal : item.price * quantity;
-  const precioUnitario = totalItem / quantity;
+  const precioUnitario = tieneOferta ? precioFinalUnitario : item.price;
+  const subtotalOriginal = precioOriginalUnitario * quantity;
+  const totalItem = precioUnitario * quantity;
 
   return {
     pricingOferta,
