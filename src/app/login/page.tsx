@@ -1001,8 +1001,10 @@ function LoginPageContent() {
               ) : null}
             </>
           )}
-          </div>
 
+          {/* Login social — botones full-width dentro del container */}
+          {!isSubmitting && firebaseReady && (
+            <>
               <div className="my-6 flex min-w-0 items-center gap-2 sm:gap-4">
                 <div className="h-px min-w-0 flex-1 bg-gray-300" />
                 <span className="shrink-0 text-xs font-medium text-gray-500 sm:text-sm">O inicia con</span>
@@ -1051,7 +1053,6 @@ function LoginPageContent() {
           )}
           </section>
         </div>
-      </main>
     </div>
   );
 }
