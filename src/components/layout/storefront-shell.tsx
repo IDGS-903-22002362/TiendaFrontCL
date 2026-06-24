@@ -86,7 +86,7 @@ export function StorefrontShell({ children }: StorefrontShellProps) {
           "pb-[calc(var(--checkout-mobile-cta-height)+1.5rem)] ",
           pathname === "/ai" &&
           "pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+1.25rem)] ",
-          isAuthFullscreenRoute && "",
+          isAuthFullscreenRoute && "min-h-[100svh] p-0",
         )}
       >
         {children}

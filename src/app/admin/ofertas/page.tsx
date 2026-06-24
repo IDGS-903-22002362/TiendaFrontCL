@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Edit, Plus, RefreshCw } from "lucide-react";
+import { Edit, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { fetchCategories, fetchProducts } from "@/lib/api/storefront";
 import { lineasApi } from "@/lib/api/lineas";
 import { tallasApi } from "@/lib/api/tallas";
@@ -13,6 +13,7 @@ import {
   EntityPicker,
   type EntityOption,
 } from "@/components/admin/entity-picker";
+import { DateTimePickerField } from "@/components/admin/datetime-picker-field";
 import {
   Table,
   TableBody,
@@ -31,6 +32,24 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type TipoDescuento = "porcentaje" | "precio_fijo";
 type AplicaA = "productos" | "categorias" | "lineas";
@@ -141,6 +160,140 @@ type CodigoPromocion = {
   stockUsadoCodigo: number;
 };
 
+const ADMIN_LIST_PAGE_SIZE = 10;
+
+type DeleteTarget =
+  | { type: "oferta"; item: Oferta }
+  | { type: "codigo"; item: CodigoPromocion };
+
+function getVisiblePages(currentPage: number, totalPages: number) {
+  if (totalPages <= 5) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const start = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
+  return Array.from({ length: 5 }, (_, index) => start + index);
+}
+
+function canDeleteEntity(statusLabel: string) {
+  return statusLabel === "Desactivada" || statusLabel === "Vencida";
+}
+
+type AdminListPaginationProps = {
+  currentPage: number;
+  totalItems: number;
+  itemLabel: string;
+  onPageChange: (page: number) => void;
+};
+
+function AdminListPagination({
+  currentPage,
+  totalItems,
+  itemLabel,
+  onPageChange,
+}: AdminListPaginationProps) {
+  const totalPages = Math.max(
+    1,
+    Math.ceil(totalItems / ADMIN_LIST_PAGE_SIZE),
+  );
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStart = (safeCurrentPage - 1) * ADMIN_LIST_PAGE_SIZE;
+  const showingFrom = totalItems === 0 ? 0 : pageStart + 1;
+  const showingTo = Math.min(pageStart + ADMIN_LIST_PAGE_SIZE, totalItems);
+  const visiblePages = getVisiblePages(safeCurrentPage, totalPages);
+
+  if (totalItems === 0) {
+    return null;
+  }
+
+  const goToPage = (page: number) => {
+    onPageChange(Math.max(1, Math.min(totalPages, page)));
+  };
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-border bg-muted/20 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="text-xs text-muted-foreground">
+        Mostrando{" "}
+        <span className="font-semibold text-foreground">
+          {showingFrom}-{showingTo}
+        </span>{" "}
+        de{" "}
+        <span className="font-semibold text-foreground">{totalItems}</span>{" "}
+        {itemLabel}
+      </div>
+
+      <Pagination className="mx-0 w-full justify-start lg:w-auto lg:justify-end">
+        <PaginationContent>
+          <PaginationItem>
+            <PaginationPrevious
+              href="#"
+              aria-disabled={safeCurrentPage === 1}
+              className={
+                safeCurrentPage === 1
+                  ? "pointer-events-none opacity-45"
+                  : undefined
+              }
+              onClick={(event) => {
+                event.preventDefault();
+                goToPage(safeCurrentPage - 1);
+              }}
+            />
+          </PaginationItem>
+
+          {visiblePages.map((page) => (
+            <PaginationItem key={page} className="hidden sm:block">
+              <PaginationLink
+                href="#"
+                isActive={page === safeCurrentPage}
+                onClick={(event) => {
+                  event.preventDefault();
+                  goToPage(page);
+                }}
+              >
+                {page}
+              </PaginationLink>
+            </PaginationItem>
+          ))}
+
+          <PaginationItem>
+            <PaginationNext
+              href="#"
+              aria-disabled={safeCurrentPage === totalPages}
+              className={
+                safeCurrentPage === totalPages
+                  ? "pointer-events-none opacity-45"
+                  : undefined
+              }
+              onClick={(event) => {
+                event.preventDefault();
+                goToPage(safeCurrentPage + 1);
+              }}
+            />
+          </PaginationItem>
+        </PaginationContent>
+      </Pagination>
+    </div>
+  );
+}
+
+function paginateItems<T>(items: T[], currentPage: number) {
+  const totalPages = Math.max(
+    1,
+    Math.ceil(items.length / ADMIN_LIST_PAGE_SIZE),
+  );
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStart = (safeCurrentPage - 1) * ADMIN_LIST_PAGE_SIZE;
+
+  return {
+    totalPages,
+    safeCurrentPage,
+    paginatedItems: items.slice(
+      pageStart,
+      pageStart + ADMIN_LIST_PAGE_SIZE,
+    ),
+  };
+}
+
 const EMPTY_FORM: OfertaForm = {
   titulo: "",
   descripcion: "",
@@ -249,6 +402,14 @@ function toStringArray(value: unknown): string[] {
   return [];
 }
 
+function resolveProductoIds(item: Record<string, unknown>): string[] {
+  const fromArray = toStringArray(item.productoIds);
+  if (fromArray.length > 0) return fromArray;
+
+  const legacyProductoId = toStringValue(item.productoId).trim();
+  return legacyProductoId ? [legacyProductoId] : [];
+}
+
 type FirestoreTimestampLike = {
   seconds?: number;
   _seconds?: number;
@@ -339,7 +500,7 @@ function normalizeOferta(raw: unknown): Oferta {
     ) as TipoDescuento,
     valorDescuento: toNumberValue(item.valorDescuento),
     aplicaA: toStringValue(item.aplicaA, "productos") as AplicaA,
-    productoIds: toStringArray(item.productoIds),
+    productoIds: resolveProductoIds(item),
     categoriaIds: toStringArray(item.categoriaIds),
     lineaIds: toStringArray(item.lineaIds),
     fechaInicio: toDateStringValue(item.fechaInicio),
@@ -370,7 +531,7 @@ function normalizeCodigoPromocion(raw: unknown): CodigoPromocion {
     tipoDescuento: "porcentaje",
     valorDescuento: toNumberValue(item.valorDescuento),
     aplicaA: toStringValue(item.aplicaA, "productos") as AplicaA,
-    productoIds: toStringArray(item.productoIds),
+    productoIds: resolveProductoIds(item),
     categoriaIds: toStringArray(item.categoriaIds),
     lineaIds: toStringArray(item.lineaIds),
     tallaIds: toStringArray(item.tallaIds),
@@ -434,6 +595,18 @@ async function updateCodigoPromocion(
   return apiRequest<unknown>(`/api/codigos-promocion/${id}`, {
     method: "PUT",
     body: JSON.stringify(payload),
+  });
+}
+
+async function deleteOferta(id: string) {
+  return apiRequest<unknown>(`/api/ofertas/${id}`, {
+    method: "DELETE",
+  });
+}
+
+async function deleteCodigoPromocion(id: string) {
+  return apiRequest<unknown>(`/api/codigos-promocion/${id}`, {
+    method: "DELETE",
   });
 }
 
@@ -688,6 +861,11 @@ const [codigoCategoriaQuery, setCodigoCategoriaQuery] = useState("");
 const [codigoLineaQuery, setCodigoLineaQuery] = useState("");
 const [codigoTallaQuery, setCodigoTallaQuery] = useState("");
 
+  const [ofertasPage, setOfertasPage] = useState(1);
+  const [codigosPage, setCodigosPage] = useState(1);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const { toast } = useToast();
 
   const loadOfertas = useCallback(async () => {
@@ -842,6 +1020,44 @@ const [codigoTallaQuery, setCodigoTallaQuery] = useState("");
     });
   }, [ofertaSearchQuery, ofertas, selectedOfertaId]);
 
+  const { paginatedItems: paginatedOfertas, totalPages: ofertasTotalPages } =
+    useMemo(() => {
+    const pagination = paginateItems(filteredOfertas, ofertasPage);
+
+    return {
+      paginatedItems: pagination.paginatedItems,
+      safeCurrentPage: pagination.safeCurrentPage,
+      totalPages: pagination.totalPages,
+    };
+  }, [filteredOfertas, ofertasPage]);
+
+  const { paginatedItems: paginatedCodigos, totalPages: codigosTotalPages } =
+    useMemo(() => {
+    const pagination = paginateItems(codigosPromocion, codigosPage);
+
+    return {
+      paginatedItems: pagination.paginatedItems,
+      safeCurrentPage: pagination.safeCurrentPage,
+      totalPages: pagination.totalPages,
+    };
+  }, [codigosPromocion, codigosPage]);
+
+  useEffect(() => {
+    if (ofertasPage > ofertasTotalPages) {
+      setOfertasPage(ofertasTotalPages);
+    }
+  }, [ofertasPage, ofertasTotalPages]);
+
+  useEffect(() => {
+    if (codigosPage > codigosTotalPages) {
+      setCodigosPage(codigosTotalPages);
+    }
+  }, [codigosPage, codigosTotalPages]);
+
+  useEffect(() => {
+    setOfertasPage(1);
+  }, [ofertaSearchQuery, selectedOfertaId]);
+
   const resetDialogState = () => {
     setIsDialogOpen(false);
     setEditingOfertaId(null);
@@ -922,7 +1138,7 @@ const [codigoTallaQuery, setCodigoTallaQuery] = useState("");
         tipoDescuento: "porcentaje",
         valorDescuento: String(oferta.valorDescuento),
         aplicaA: oferta.aplicaA,
-        productoIds: oferta.productoIds.slice(0, 1),
+        productoIds: oferta.productoIds,
         categoriaIds: oferta.categoriaIds.slice(0, 1),
         lineaIds: oferta.lineaIds.slice(0, 1),
         tallaIds: oferta.tallaIds,
@@ -966,7 +1182,8 @@ stockLimiteOferta:
   id: string,
   checked: boolean,
 ) => {
-  const isSingleSelectionField = field !== "tallaIds";
+  const isSingleSelectionField =
+    field === "categoriaIds" || field === "lineaIds";
 
   setFormData((prev) => ({
     ...prev,
@@ -1093,7 +1310,9 @@ if (selectedIds.length === 0) {
     variant: "destructive",
     title: "Falta seleccionar alcance",
     description:
-      "Selecciona un producto, categoría o línea para la oferta.",
+      formData.aplicaA === "productos"
+        ? "Selecciona al menos un producto para la oferta."
+        : "Selecciona una categoría o línea para la oferta.",
   });
   return null;
 }
@@ -1158,7 +1377,7 @@ return {
   aplicaA: formData.aplicaA,
 
   productoIds:
-  formData.aplicaA === "productos" ? formData.productoIds.slice(0, 1) : [],
+  formData.aplicaA === "productos" ? formData.productoIds : [],
 categoriaIds:
   formData.aplicaA === "categorias" ? formData.categoriaIds.slice(0, 1) : [],
 lineaIds:
@@ -1443,12 +1662,57 @@ const handleSaveCodigoPromocion = async () => {
   }
 };
 
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+
+    setIsDeleting(true);
+
+    try {
+      if (deleteTarget.type === "oferta") {
+        await deleteOferta(deleteTarget.item.id);
+
+        toast({
+          title: "Oferta eliminada",
+          description: `La oferta "${deleteTarget.item.titulo}" se eliminó permanentemente.`,
+        });
+
+        setSelectedOfertaId((current) =>
+          current === deleteTarget.item.id ? "" : current,
+        );
+        void loadOfertas();
+      } else {
+        await deleteCodigoPromocion(deleteTarget.item.id);
+
+        toast({
+          title: "Código promocional eliminado",
+          description: `El código ${deleteTarget.item.codigo} se eliminó permanentemente.`,
+        });
+
+        void loadCodigosPromocion();
+      }
+
+      setDeleteTarget(null);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title:
+          deleteTarget.type === "oferta"
+            ? "Error al eliminar oferta"
+            : "Error al eliminar código promocional",
+        description: getApiErrorMessage(error),
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
 
 
  const targetOptionsByAplicaA: Record<AplicaA, ActiveTargetOptionConfig> = {
   productos: {
-    title: "Producto de la oferta",
-    description: "Selecciona un solo producto al que aplicará el descuento.",
+    title: "Productos de la oferta",
+    description:
+      "Selecciona uno o más productos a los que aplicará el descuento.",
     options: productOptions,
     selectedIds: formData.productoIds,
     query: productoQuery,
@@ -1630,8 +1894,9 @@ const activeCodigoTargetOptions =
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredOfertas.map((oferta) => {
+                paginatedOfertas.map((oferta) => {
                   const status = getOfertaStatus(oferta);
+                  const canDelete = canDeleteEntity(status.label);
                   const alcanceTotal =
                     oferta.aplicaA === "productos"
                       ? oferta.productoIds.length
@@ -1698,6 +1963,21 @@ const activeCodigoTargetOptions =
       <Edit className="h-4 w-4 mr-1" />
       Editar
     </Button>
+    <Button
+      variant="outline"
+      size="sm"
+      className="h-8 px-2 text-destructive hover:text-destructive"
+      disabled={!canDelete}
+      title={
+        canDelete
+          ? "Eliminar oferta permanentemente"
+          : "Solo puedes eliminar ofertas desactivadas o vencidas"
+      }
+      onClick={() => setDeleteTarget({ type: "oferta", item: oferta })}
+    >
+      <Trash2 className="h-4 w-4 mr-1" />
+      Eliminar
+    </Button>
   </div>
 </TableCell>
                     </TableRow>
@@ -1707,6 +1987,15 @@ const activeCodigoTargetOptions =
             </TableBody>
           </Table>
         </div>
+
+        {!isLoading && filteredOfertas.length > 0 ? (
+          <AdminListPagination
+            currentPage={ofertasPage}
+            totalItems={filteredOfertas.length}
+            itemLabel="ofertas"
+            onPageChange={setOfertasPage}
+          />
+        ) : null}
       </div>
 
             <div className="rounded-md border bg-card">
@@ -1752,8 +2041,9 @@ const activeCodigoTargetOptions =
                   </TableCell>
                 </TableRow>
               ) : (
-                codigosPromocion.map((codigoPromo) => {
+                paginatedCodigos.map((codigoPromo) => {
                   const status = getOfertaStatus(codigoPromo);
+                  const canDelete = canDeleteEntity(status.label);
 
                   const alcanceTotal =
                     codigoPromo.aplicaA === "productos"
@@ -1826,6 +2116,23 @@ const activeCodigoTargetOptions =
                             <Edit className="h-4 w-4 mr-1" />
                             Editar
                           </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-2 text-destructive hover:text-destructive"
+                            disabled={!canDelete}
+                            title={
+                              canDelete
+                                ? "Eliminar código permanentemente"
+                                : "Solo puedes eliminar códigos desactivados o vencidos"
+                            }
+                            onClick={() =>
+                              setDeleteTarget({ type: "codigo", item: codigoPromo })
+                            }
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Eliminar
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -1835,7 +2142,67 @@ const activeCodigoTargetOptions =
             </TableBody>
           </Table>
         </div>
+
+        {!isLoadingCodigos && codigosPromocion.length > 0 ? (
+          <AdminListPagination
+            currentPage={codigosPage}
+            totalItems={codigosPromocion.length}
+            itemLabel="códigos promocionales"
+            onPageChange={setCodigosPage}
+          />
+        ) : null}
       </div>
+
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !isDeleting) {
+            setDeleteTarget(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {deleteTarget?.type === "oferta"
+                ? "Eliminar oferta"
+                : "Eliminar código promocional"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget?.type === "oferta" ? (
+                <>
+                  ¿Eliminar permanentemente la oferta{" "}
+                  <span className="font-semibold text-foreground">
+                    {deleteTarget.item.titulo}
+                  </span>
+                  ? Esta acción no se puede deshacer.
+                </>
+              ) : deleteTarget?.type === "codigo" ? (
+                <>
+                  ¿Eliminar permanentemente el código{" "}
+                  <span className="font-semibold text-foreground">
+                    {deleteTarget.item.codigo}
+                  </span>
+                  ? Esta acción no se puede deshacer.
+                </>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isDeleting}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleConfirmDelete();
+              }}
+            >
+              {isDeleting ? "Eliminando..." : "Eliminar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -1962,7 +2329,7 @@ const activeCodigoTargetOptions =
   }
   disabled={isSaving || isLoadingMeta}
   emptyMessage={activeTargetOptions.emptyMessage}
-  singleSelection
+  singleSelection={formData.aplicaA !== "productos"}
 />
 
 {formData.aplicaA === "productos" && (
@@ -2038,42 +2405,40 @@ const activeCodigoTargetOptions =
             />
 
             <div className="grid gap-4 sm:grid-cols-2">
-  <div className="space-y-2">
-    <Label htmlFor="fechaInicio">Fecha de inicio *</Label>
-    <Input
-      id="fechaInicio"
-      type="datetime-local"
-      step="60"
-      max={formData.fechaFin || undefined}
-      value={formData.fechaInicio}
-      onChange={(event) =>
-        setFormData((prev) => ({
-          ...prev,
-          fechaInicio: event.target.value,
-        }))
-      }
-      disabled={isSaving}
-    />
-  </div>
+              <div className="space-y-2">
+                <Label htmlFor="fechaInicio">Fecha de inicio *</Label>
+                <DateTimePickerField
+                  id="fechaInicio"
+                  value={formData.fechaInicio}
+                  max={formData.fechaFin || undefined}
+                  onChange={(fechaInicio) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      fechaInicio,
+                    }))
+                  }
+                  disabled={isSaving}
+                  placeholder="Elige cuándo inicia la oferta"
+                />
+              </div>
 
-  <div className="space-y-2">
-    <Label htmlFor="fechaFin">Fecha de fin *</Label>
-    <Input
-      id="fechaFin"
-      type="datetime-local"
-      step="60"
-      min={formData.fechaInicio || undefined}
-      value={formData.fechaFin}
-      onChange={(event) =>
-        setFormData((prev) => ({
-          ...prev,
-          fechaFin: event.target.value,
-        }))
-      }
-      disabled={isSaving}
-    />
-  </div>
-</div>
+              <div className="space-y-2">
+                <Label htmlFor="fechaFin">Fecha de fin *</Label>
+                <DateTimePickerField
+                  id="fechaFin"
+                  value={formData.fechaFin}
+                  min={formData.fechaInicio || undefined}
+                  onChange={(fechaFin) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      fechaFin,
+                    }))
+                  }
+                  disabled={isSaving}
+                  placeholder="Elige cuándo termina la oferta"
+                />
+              </div>
+            </div>
 
             <div className="flex justify-end gap-2 pt-2">
               <Button
@@ -2323,37 +2688,35 @@ const activeCodigoTargetOptions =
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="fechaInicioCodigo">Fecha de inicio *</Label>
-                <Input
+                <DateTimePickerField
                   id="fechaInicioCodigo"
-                  type="datetime-local"
-                  step="60"
-                  max={codigoFormData.fechaFin || undefined}
                   value={codigoFormData.fechaInicio}
-                  onChange={(event) =>
+                  max={codigoFormData.fechaFin || undefined}
+                  onChange={(fechaInicio) =>
                     setCodigoFormData((prev) => ({
                       ...prev,
-                      fechaInicio: event.target.value,
+                      fechaInicio,
                     }))
                   }
                   disabled={isSavingCodigo}
+                  placeholder="Elige cuándo inicia el código"
                 />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="fechaFinCodigo">Fecha de fin *</Label>
-                <Input
+                <DateTimePickerField
                   id="fechaFinCodigo"
-                  type="datetime-local"
-                  step="60"
-                  min={codigoFormData.fechaInicio || undefined}
                   value={codigoFormData.fechaFin}
-                  onChange={(event) =>
+                  min={codigoFormData.fechaInicio || undefined}
+                  onChange={(fechaFin) =>
                     setCodigoFormData((prev) => ({
                       ...prev,
-                      fechaFin: event.target.value,
+                      fechaFin,
                     }))
                   }
                   disabled={isSavingCodigo}
+                  placeholder="Elige cuándo termina el código"
                 />
               </div>
             </div>
