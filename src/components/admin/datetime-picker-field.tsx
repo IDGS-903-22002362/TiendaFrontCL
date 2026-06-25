@@ -63,6 +63,11 @@ function endOfDay(date: Date) {
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, hour) => hour);
 const MINUTE_OPTIONS = Array.from({ length: 60 }, (_, minute) => minute);
 
+// Rango de años navegable por dropdown en el calendario. Se permite retroceder
+// algunos años (para editar ofertas antiguas) y avanzar varios hacia el futuro.
+const CALENDAR_YEARS_BACK = 5;
+const CALENDAR_YEARS_FORWARD = 5;
+
 function isPortaledPickerTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
 
@@ -152,6 +157,27 @@ export function DateTimePickerField({
     "0",
   );
 
+  const { startMonth, endMonth } = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+
+    const candidateYears = [
+      currentYear,
+      selectedDate?.getFullYear(),
+      minDate?.getFullYear(),
+      maxDate?.getFullYear(),
+    ].filter((year): year is number => typeof year === "number");
+
+    const minYear =
+      Math.min(...candidateYears, currentYear - CALENDAR_YEARS_BACK);
+    const maxYear =
+      Math.max(...candidateYears, currentYear + CALENDAR_YEARS_FORWARD);
+
+    return {
+      startMonth: new Date(minYear, 0, 1),
+      endMonth: new Date(maxYear, 11, 31),
+    };
+  }, [maxDate, minDate, selectedDate]);
+
   const keepPopoverOpen = (event: Event) => {
     if (isPortaledPickerTarget(event.target)) {
       event.preventDefault();
@@ -190,6 +216,10 @@ export function DateTimePickerField({
             required
             locale={es}
             className="w-full [--cell-size:2.5rem]"
+            captionLayout="dropdown"
+            startMonth={startMonth}
+            endMonth={endMonth}
+            defaultMonth={selectedDate ?? undefined}
             selected={selectedDate ?? undefined}
             onSelect={handleDateSelect}
             disabled={isDayDisabled}
