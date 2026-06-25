@@ -716,6 +716,7 @@ export type CheckoutPayload = {
     email?: string;
   };
   metodoPago: PaymentMethod;
+  codigoPromocion?: string;
   shippingQuoteId?: string;
   selectedShippingOptionId?: string;
   selectedServiceType?: string;

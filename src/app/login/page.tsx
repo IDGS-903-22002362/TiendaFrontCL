@@ -554,6 +554,18 @@ function LoginPageContent() {
     }
   };
 
+  const resetToMainLogin = () => {
+    setShowVerification(false);
+    setShowPasswordLogin(false);
+    setVerificationCode("");
+    setPendingEmail("");
+    setErrorMessage("");
+    setAttempts(3);
+    setResendTimer(0);
+    setEmail("");
+    hasAutoSubmitted.current = false;
+  };
+
   const handleGoBack = () => {
     if (showPasswordRecovery) {
       setShowPasswordRecovery(false);
@@ -567,14 +579,7 @@ function LoginPageContent() {
       setErrorMessage("");
       setShowPassword(false);
     } else if (showVerification) {
-      // Volver a la pantalla de email/contraseña
-      setShowVerification(false);
-      setVerificationCode("");
-      setPendingEmail("");
-      setErrorMessage("");
-      setAttempts(3);
-      setEmail("");
-      setShowPasswordLogin(true);
+      resetToMainLogin();
     } else {
       router.push("/");
     }
@@ -796,6 +801,10 @@ function LoginPageContent() {
                     </button>
                   </div>
 
+                  <p className="text-center text-xs text-gray-500">
+                    Si no recibes el código, revisa tu bandeja de spam o correo no deseado.
+                  </p>
+
                   <div className="space-y-3 border-t border-gray-200 pt-[clamp(0.6rem,1.8vh,1rem)]">
                     <p className="text-center text-sm font-semibold text-gray-600">
                       ¿Prefieres iniciar sesión con correo y contraseña?
@@ -819,15 +828,8 @@ function LoginPageContent() {
 
                   <div className="text-center">
                     <button
-                      onClick={() => {
-                        setShowVerification(false);
-                        setShowPasswordLogin(true);
-                        setVerificationCode("");
-                        setPendingEmail("");
-                        setErrorMessage("");
-                        setAttempts(3);
-                        setEmail("");
-                      }}
+                      type="button"
+                      onClick={resetToMainLogin}
                       className="text-sm text-gray-500 hover:text-gray-700"
                     >
                       ← Usar otro correo
