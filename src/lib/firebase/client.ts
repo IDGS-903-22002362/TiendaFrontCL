@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import {
   initializeAppCheck,
@@ -166,6 +167,13 @@ function getFirebaseApp() {
 
 export function getFirebaseAuth() {
   return getAuth(getFirebaseApp());
+}
+
+const STORE_FIRESTORE_DATABASE =
+  process.env.NEXT_PUBLIC_FIRESTORE_DATABASE?.trim() || "tiendacl";
+
+export function getFirebaseFirestore() {
+  return getFirestore(getFirebaseApp(), STORE_FIRESTORE_DATABASE);
 }
 
 export function getFirebaseStorage() {

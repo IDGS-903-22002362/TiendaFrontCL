@@ -6,6 +6,7 @@ import {
   validateCsrfRequest,
 } from "@/lib/server/csrf";
 import { getApiTokenFromRequest } from "@/lib/server/session";
+import { resolveAuthorizationHeader } from "@/lib/cookies/constants";
 
 const FALLBACK_API_BASE = "http://localhost:3000/api";
 
@@ -101,9 +102,10 @@ export async function proxyToBackend({
   }
 
   const tokenFromCookie = getApiTokenFromRequest(request);
-  const authorization =
-    request.headers.get("authorization") ||
-    (tokenFromCookie ? `Bearer ${tokenFromCookie}` : "");
+  const authorization = resolveAuthorizationHeader(
+    request.headers.get("authorization"),
+    tokenFromCookie,
+  );
 
   if (requireAuth && !authorization) {
     return NextResponse.json(

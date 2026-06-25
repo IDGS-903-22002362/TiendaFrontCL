@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchCategories, fetchProducts } from "@/lib/api/storefront";
 import { lineasApi } from "@/lib/api/lineas";
 import { inventarioApi } from "@/lib/api/inventario";
@@ -24,6 +24,9 @@ import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { ArrowRightLeft } from "lucide-react";
+import { buildMovementsPrefillHref } from "@/lib/inventory-prefill";
+
+const ALERTS_PAGE_SIZE = 25;
 
 export default function InventoryLowStockAlertsPage() {
   const { token, role } = useAuth();
@@ -36,6 +39,7 @@ export default function InventoryLowStockAlertsPage() {
 
   const [rows, setRows] = useState<InventoryAlert[]>([]);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(0);
 
   const [productQuery, setProductQuery] = useState("");
   const [productoId, setProductoId] = useState("");
@@ -47,9 +51,12 @@ export default function InventoryLowStockAlertsPage() {
   const [categoriaId, setCategoriaId] = useState("");
 
   const [soloCriticas, setSoloCriticas] = useState(false);
+  const [searchVersion, setSearchVersion] = useState(0);
 
   const canUseInventory = useMemo(
-    () => Boolean(token) && role === "ADMIN",
+    () =>
+      Boolean(token) &&
+      (role === "ADMIN" || role === "EMPLEADO" || role === "SUPER_ADMIN"),
     [role, token],
   );
 
@@ -112,7 +119,7 @@ export default function InventoryLowStockAlertsPage() {
     void loadCatalog();
   }, [canUseInventory, toast]);
 
-  const onSearch = async () => {
+  const loadAlerts = useCallback(async () => {
     if (!token) return;
 
     setLoading(true);
@@ -122,9 +129,10 @@ export default function InventoryLowStockAlertsPage() {
         lineaId: lineaId || undefined,
         categoriaId: categoriaId || undefined,
         soloCriticas,
-        limit: 100,
+        limit: 200,
       });
       setRows(result.data);
+      setPage(0);
     } catch (error) {
       toast({
         variant: "destructive",
@@ -134,7 +142,25 @@ export default function InventoryLowStockAlertsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [
+    token,
+    productoId,
+    lineaId,
+    categoriaId,
+    soloCriticas,
+    toast,
+  ]);
+
+  useEffect(() => {
+    if (!canUseInventory) return;
+    void loadAlerts();
+  }, [canUseInventory, searchVersion, loadAlerts]);
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / ALERTS_PAGE_SIZE));
+  const pagedRows = useMemo(() => {
+    const start = page * ALERTS_PAGE_SIZE;
+    return rows.slice(start, start + ALERTS_PAGE_SIZE);
+  }, [page, rows]);
 
   const isFiltered = Boolean(productoId || lineaId || categoriaId || soloCriticas);
 
@@ -216,7 +242,7 @@ export default function InventoryLowStockAlertsPage() {
 
                 <Button
                   variant="secondary"
-                  onClick={() => void onSearch()}
+                  onClick={() => setSearchVersion((current) => current + 1)}
                   disabled={loading}
                 >
                   Buscar
@@ -233,7 +259,7 @@ export default function InventoryLowStockAlertsPage() {
                       setCategoriaQuery("");
                       setCategoriaId("");
                       setSoloCriticas(false);
-                      void onSearch();
+                      setSearchVersion((current) => current + 1);
                     }}
                   >
                     Limpiar
@@ -271,7 +297,7 @@ export default function InventoryLowStockAlertsPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    rows.map((row) => (
+                    pagedRows.map((row) => (
                       <TableRow key={`${row.productoId}-${row.tallaId ?? "na"}`}>
                         <TableCell>
                           {row.productoNombre ?? row.productoId}
@@ -287,7 +313,12 @@ export default function InventoryLowStockAlertsPage() {
                         </TableCell>
                         <TableCell className="text-right">
                           <Button asChild variant="outline" size="sm" className="gap-2">
-                            <Link href="/admin/inventario/ajustes">
+                            <Link
+                              href={buildMovementsPrefillHref(
+                                row.productoId,
+                                row.tallaId,
+                              )}
+                            >
                               <ArrowRightLeft className="h-3 w-3" />
                               Ajustar
                             </Link>
@@ -298,6 +329,39 @@ export default function InventoryLowStockAlertsPage() {
                   )}
                 </TableBody>
               </Table>
+
+              {rows.length > ALERTS_PAGE_SIZE ? (
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    Mostrando {page * ALERTS_PAGE_SIZE + 1}-
+                    {Math.min((page + 1) * ALERTS_PAGE_SIZE, rows.length)} de{" "}
+                    {rows.length} alertas
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page === 0 || loading}
+                      onClick={() => setPage((current) => Math.max(0, current - 1))}
+                    >
+                      Anterior
+                    </Button>
+                    <span className="text-sm text-muted-foreground">
+                      Página {page + 1} de {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page >= totalPages - 1 || loading}
+                      onClick={() =>
+                        setPage((current) => Math.min(totalPages - 1, current + 1))
+                      }
+                    >
+                      Siguiente
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         </>

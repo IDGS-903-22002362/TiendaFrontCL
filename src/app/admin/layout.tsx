@@ -14,7 +14,6 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
-  Bot,
   Coins,
   BadgePercent,
   Sparkles,
@@ -61,7 +60,6 @@ const navGroups = [
     title: "Integraciones",
     links: [
       { href: "/admin/fedex", label: "FedEx", icon: Truck, adminOnly: false, empleadoOnly: false },
-      { href: "/admin/ai", label: "AI", icon: Bot, adminOnly: true, empleadoOnly: false },
     ],
   }
 ];
@@ -199,7 +197,7 @@ export default function AdminLayout({
             Panel de Administración
           </span>
           <div className="flex items-center gap-2">
-            <AdminNotificationsPanel token={token} />
+            <AdminNotificationsPanel token={token} role={role} />
             <span className="text-xs uppercase text-text-muted">{role}</span>
           </div>
         </div>
@@ -212,7 +210,7 @@ export default function AdminLayout({
               <Package className="h-6 w-6 text-secondary" />
               <span className="font-headline text-xl">Admin Tienda</span>
             </Link>
-            <AdminNotificationsPanel token={token} className="hidden md:inline-flex" />
+            <AdminNotificationsPanel token={token} role={role} className="hidden md:inline-flex" />
           </div>
           <div className="flex-1 overflow-auto py-2">
             <nav className="grid items-start gap-1 px-2 text-sm font-medium lg:px-4">

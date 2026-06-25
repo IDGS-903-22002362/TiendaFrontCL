@@ -1,4 +1,5 @@
 import type { CatalogProductCard, Product } from "@/lib/types";
+import { resolveClientBearerToken } from "@/lib/cookies/constants";
 import { apiFetch, unwrapData } from "./client";
 import { mapCatalogProductToProductCardViewModel } from "./storefront";
 import { getOrCreateSessionId } from "./cart";
@@ -39,18 +40,10 @@ export type RecommendationEventType =
   | "compra"
   | "favorito";
 
-function resolveAuthToken(token?: string) {
-  if (!token || token === "cookie-session") {
-    return undefined;
-  }
-
-  return token;
-}
-
 function getClientOptions(token?: string) {
   return {
     local: true as const,
-    token: resolveAuthToken(token),
+    token: resolveClientBearerToken(token),
     sessionId: typeof window !== "undefined" ? getOrCreateSessionId() : undefined,
   };
 }

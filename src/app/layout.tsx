@@ -30,6 +30,11 @@ export const metadata: Metadata = {
     template: "%s | La Guarida",
   },
   description: "Tienda oficial del Club León con experiencia premium deportiva.",
+  icons: {
+    icon: [{ url: "/images/leon.ico", type: "image/x-icon" }],
+    shortcut: "/images/leon.ico",
+    apple: "/images/leon.ico",
+  },
 };
 
 export default function RootLayout({

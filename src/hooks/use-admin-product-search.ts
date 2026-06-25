@@ -9,11 +9,21 @@ export function mergeProductNameMap(
   current: Map<string, string>,
   options: EntityOption[],
 ): Map<string, string> {
+  if (options.length === 0) {
+    return current;
+  }
+
+  let changed = false;
   const next = new Map(current);
+
   options.forEach((option) => {
-    next.set(option.id, option.label);
+    if (next.get(option.id) !== option.label) {
+      next.set(option.id, option.label);
+      changed = true;
+    }
   });
-  return next;
+
+  return changed ? next : current;
 }
 
 function mapProductsToOptions(

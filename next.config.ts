@@ -54,6 +54,14 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  async rewrites() {
+    return [
+      {
+        source: "/favicon.ico",
+        destination: "/images/leon.ico",
+      },
+    ];
+  },
   async headers() {
     return [
       {

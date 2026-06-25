@@ -11,6 +11,7 @@ import {
   getUserRoleFromRequest,
   setSessionCookies,
 } from "@/lib/server/session";
+import { isBearerJwt } from "@/lib/cookies/constants";
 
 const FALLBACK_API_BASE = "http://localhost:3000/api";
 
@@ -81,6 +82,7 @@ export async function GET(request: NextRequest) {
       success: true,
       data: {
         isAuthenticated: true,
+        authMode: isBearerJwt(token) ? "bearer" : "cookie",
         role: payload.usuario?.rol ?? role,
         user: {
           id: payload.usuario?.id ?? payload.usuario?.uid,
@@ -147,6 +149,7 @@ export async function POST(request: NextRequest) {
       const response = NextResponse.json({
         success: true,
         data: {
+          authMode: "cookie" as const,
           role: usuario.rol ?? "",
           user: {
             id: usuario.uid,
@@ -212,6 +215,7 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json({
       success: true,
       data: {
+        authMode: "cookie" as const,
         role: payload.usuario?.rol ?? "",
         user: {
           id: payload.usuario?.id ?? payload.usuario?.uid,

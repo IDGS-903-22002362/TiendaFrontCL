@@ -18,6 +18,7 @@ import {
 import { mergeRecommendationIdentity } from "@/lib/api/recommendations";
 import { getOrCreateSessionId } from "@/lib/api/cart";
 import { resetAuthRecoveryCache } from "@/lib/api/client";
+import { COOKIE_SESSION_TOKEN } from "@/lib/cookies/constants";
 import {
   checkInUserStreak,
   completeUserProfile,
@@ -68,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const nextUser = response.data?.user ?? null;
 
       setRole(nextRole);
-      setToken(authenticated ? nextToken || "cookie-session" : "");
+      setToken(authenticated ? nextToken || COOKIE_SESSION_TOKEN : "");
       setUser(authenticated ? nextUser : null);
 
       if (!authenticated) {
@@ -91,11 +92,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithFirebase = useCallback(async (firebaseIdToken: string) => {
     const response = await createLocalSessionFromFirebaseToken(firebaseIdToken);
 
-    setToken(response.data?.token || "cookie-session");
+    setToken(response.data?.token || COOKIE_SESSION_TOKEN);
     setRole(response.data?.role ?? "");
     setUser(response.data?.user ?? null);
 
-    const sessionToken = response.data?.token || "cookie-session";
+    const sessionToken = response.data?.token || COOKIE_SESSION_TOKEN;
     const sessionId = getOrCreateSessionId();
     if (sessionId) {
       void mergeRecommendationIdentity(sessionToken, sessionId).catch(() => undefined);

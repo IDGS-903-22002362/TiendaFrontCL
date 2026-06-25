@@ -19,6 +19,7 @@ import {
   removeCartItem,
   updateCartItem,
 } from "@/lib/api/cart";
+import { resolveClientBearerToken } from "@/lib/cookies/constants";
 import { useAuth } from "@/hooks/use-auth";
 import {
   getApiErrorMessage,
@@ -65,7 +66,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   } | null>(null);
   
   const { token, isAuthenticated } = useAuth();
-  const authToken = token && token !== "cookie-session" ? token : undefined;
+  const authToken = resolveClientBearerToken(token);
 
   const reloadCart = useCallback(async () => {
     const activeSessionId = sessionId || getOrCreateSessionId();
