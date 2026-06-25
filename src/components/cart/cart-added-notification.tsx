@@ -20,6 +20,7 @@ export function CartAddedNotification({
 
   return (
     <div
+      data-cart-added-notification=""
       className="pointer-events-auto fixed bottom-4 right-4 z-[80] w-[min(100vw-2rem,22rem)]"
       onClick={stop}
       onMouseDown={stop}
