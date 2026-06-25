@@ -311,7 +311,7 @@ export default function RegisterPage() {
                     description: "Tu cuenta está lista. Inicia sesión con tu correo.",
                 });
                 router.replace(
-                    `/login?email=${encodeURIComponent(pendingEmail)}&mode=password`,
+                    `/login?email=${encodeURIComponent(pendingEmail)}`,
                 );
                 return;
             }
@@ -558,6 +558,10 @@ export default function RegisterPage() {
                                         : "¿No recibiste el código? Reenviar"}
                                 </button>
                             </div>
+
+                            <p className="text-center text-xs text-gray-500">
+                                Si no recibes el código, revisa tu bandeja de spam o correo no deseado.
+                            </p>
                         </div>
                     ) : !isSubmitting ? (
                         <form onSubmit={handleSubmit} className="mt-4 space-y-3 rounded-3xl border border-[#e7ece9] bg-[#f8fbf9] p-[clamp(0.75rem,3vw,1rem)] shadow-sm sm:mt-5">
