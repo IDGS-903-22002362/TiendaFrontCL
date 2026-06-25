@@ -9,6 +9,7 @@ import type { Category, Linea, Product, Talla } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import { apiFetch } from "@/lib/api/client";
+import { cn } from "@/lib/utils";
 import {
   EntityPicker,
   type EntityOption,
@@ -689,6 +690,17 @@ function getDiscountLabel(oferta: Oferta) {
   return formatCurrency(oferta.valorDescuento);
 }
 
+function isOfertaVigenteNow(oferta: Oferta, now: number = Date.now()): boolean {
+  if (!oferta.estado) return false;
+
+  const inicio = new Date(oferta.fechaInicio).getTime();
+  const fin = new Date(oferta.fechaFin).getTime();
+
+  if (Number.isNaN(inicio) || Number.isNaN(fin)) return false;
+
+  return now >= inicio && now <= fin;
+}
+
 function getAplicaALabel(value: AplicaA) {
   const labels: Record<AplicaA, string> = {
     productos: "Productos",
@@ -722,6 +734,9 @@ type MultiSelectBlockProps = {
   disabled?: boolean;
   emptyMessage?: string;
   singleSelection?: boolean;
+  disabledOptionIds?: Set<string>;
+  disabledOptionNote?: string;
+  noteByOptionId?: Record<string, string>;
 };
 type TargetSelectionField = "productoIds" | "categoriaIds" | "lineaIds";
 
@@ -747,6 +762,9 @@ function MultiSelectBlock({
   disabled,
   emptyMessage = "No hay opciones disponibles.",
   singleSelection = false,
+  disabledOptionIds,
+  disabledOptionNote,
+  noteByOptionId,
 }: MultiSelectBlockProps) {
 const filteredOptions = useMemo(() => {
   if (singleSelection && selectedIds.length > 0) {
@@ -787,29 +805,48 @@ const filteredOptions = useMemo(() => {
           <p className="text-sm text-muted-foreground">{emptyMessage}</p>
         ) : (
           <div className="grid gap-2">
-            {filteredOptions.map((option) => (
-              <label
-                key={option.id}
-                className="flex items-start gap-2 text-sm cursor-pointer"
-              >
-                <Checkbox
-                  checked={selectedIds.includes(option.id)}
-                  onCheckedChange={(checked) =>
-                    onToggle(option.id, checked === true)
-                  }
-                  disabled={disabled}
-                />
+            {filteredOptions.map((option) => {
+              const isChecked = selectedIds.includes(option.id);
+              const isOptionDisabled =
+                Boolean(disabledOptionIds?.has(option.id)) && !isChecked;
+              const note = disabledOptionIds?.has(option.id)
+                ? disabledOptionNote
+                : noteByOptionId?.[option.id];
 
-                <span className="flex flex-col leading-tight">
-                  <span className="font-medium">{option.label}</span>
-                  {option.subtitle && (
-                    <span className="text-xs text-muted-foreground">
-                      {option.subtitle}
-                    </span>
+              return (
+                <label
+                  key={option.id}
+                  className={cn(
+                    "flex items-start gap-2 text-sm",
+                    isOptionDisabled
+                      ? "cursor-not-allowed opacity-60"
+                      : "cursor-pointer",
                   )}
-                </span>
-              </label>
-            ))}
+                >
+                  <Checkbox
+                    checked={isChecked}
+                    onCheckedChange={(checked) =>
+                      onToggle(option.id, checked === true)
+                    }
+                    disabled={disabled || isOptionDisabled}
+                  />
+
+                  <span className="flex flex-col leading-tight">
+                    <span className="font-medium">{option.label}</span>
+                    {option.subtitle && (
+                      <span className="text-xs text-muted-foreground">
+                        {option.subtitle}
+                      </span>
+                    )}
+                    {note && (
+                      <span className="text-xs font-medium text-amber-600">
+                        {note}
+                      </span>
+                    )}
+                  </span>
+                </label>
+              );
+            })}
           </div>
         )}
       </div>
@@ -999,6 +1036,90 @@ const [codigoTallaQuery, setCodigoTallaQuery] = useState("");
       })),
     [tallas],
   );
+
+  // CAMBIO 1: productos que ya están cubiertos por OTRA oferta activa/vigente
+  // (alcance "productos"). Se excluye la oferta que se está editando para no
+  // bloquear un producto contra su propia oferta. El backend revalida esto.
+  const productosConOfertaActiva = useMemo(() => {
+    const map = new Map<string, string>();
+    const now = Date.now();
+
+    for (const oferta of ofertas) {
+      if (oferta.id === editingOfertaId) continue;
+      if (oferta.aplicaA !== "productos") continue;
+      if (!isOfertaVigenteNow(oferta, now)) continue;
+
+      for (const productoId of oferta.productoIds) {
+        if (!map.has(productoId)) {
+          map.set(productoId, oferta.titulo);
+        }
+      }
+    }
+
+    return map;
+  }, [ofertas, editingOfertaId]);
+
+  const productosConOfertaActivaIds = useMemo(
+    () => new Set(productosConOfertaActiva.keys()),
+    [productosConOfertaActiva],
+  );
+
+  // CAMBIO 2: en "Tallas específicas" mostrar solo las tallas de los productos
+  // seleccionados (unión). Solo aplica al alcance "productos"; para categorías o
+  // líneas se conserva el comportamiento actual (todas las tallas).
+  const tallasDeOferta = useMemo(() => {
+    if (formData.aplicaA !== "productos") {
+      return {
+        options: tallaOptions,
+        locked: false,
+        emptyMessage: "No hay tallas disponibles.",
+        notes: {} as Record<string, string>,
+      };
+    }
+
+    if (formData.productoIds.length === 0) {
+      return {
+        options: [] as EntityOption[],
+        locked: true,
+        emptyMessage:
+          "Selecciona productos primero para ver sus tallas disponibles.",
+        notes: {} as Record<string, string>,
+      };
+    }
+
+    const disponibles = new Set<string>();
+
+    for (const productoId of formData.productoIds) {
+      const product = products.find((item) => item.id === productoId);
+      product?.tallaIds?.forEach((tallaId) => disponibles.add(tallaId));
+    }
+
+    const base = tallaOptions.filter((option) => disponibles.has(option.id));
+    const baseIds = new Set(base.map((option) => option.id));
+    const notes: Record<string, string> = {};
+
+    // Conservar tallas ya guardadas que ya no pertenecen a los productos
+    // seleccionados, marcándolas en lugar de perderlas silenciosamente.
+    const huerfanas: EntityOption[] = formData.tallaIds
+      .filter((tallaId) => !baseIds.has(tallaId))
+      .map((tallaId) => {
+        notes[tallaId] = "Ya no está en los productos seleccionados";
+        return (
+          tallaOptions.find((option) => option.id === tallaId) ?? {
+            id: tallaId,
+            label: tallaId,
+          }
+        );
+      });
+
+    return {
+      options: [...base, ...huerfanas],
+      locked: false,
+      emptyMessage:
+        "Los productos seleccionados no tienen tallas configuradas.",
+      notes,
+    };
+  }, [formData.aplicaA, formData.productoIds, formData.tallaIds, products, tallaOptions]);
 
   const filteredOfertas = useMemo(() => {
     const query = normalizeSearchValue(ofertaSearchQuery);
@@ -2320,7 +2441,11 @@ const activeCodigoTargetOptions =
 
             <MultiSelectBlock
   title={activeTargetOptions.title}
-  description={activeTargetOptions.description}
+  description={
+    formData.aplicaA === "productos"
+      ? "Selecciona uno o más productos. Los que ya tienen una oferta activa no se pueden seleccionar."
+      : activeTargetOptions.description
+  }
   searchValue={activeTargetOptions.query}
   onSearchChange={activeTargetOptions.setQuery}
   options={activeTargetOptions.options}
@@ -2331,6 +2456,14 @@ const activeCodigoTargetOptions =
   disabled={isSaving || isLoadingMeta}
   emptyMessage={activeTargetOptions.emptyMessage}
   singleSelection={formData.aplicaA !== "productos"}
+  disabledOptionIds={
+    formData.aplicaA === "productos"
+      ? productosConOfertaActivaIds
+      : undefined
+  }
+  disabledOptionNote={
+    formData.aplicaA === "productos" ? "Ya tiene oferta activa" : undefined
+  }
 />
 
 {formData.aplicaA === "productos" && (
@@ -2396,13 +2529,14 @@ const activeCodigoTargetOptions =
               description="Opcional. Si no seleccionas tallas, la oferta aplicará sin filtrar por talla."
               searchValue={tallaQuery}
               onSearchChange={setTallaQuery}
-              options={tallaOptions}
+              options={tallasDeOferta.options}
               selectedIds={formData.tallaIds}
               onToggle={(id, checked) =>
                 handleToggleArrayValue("tallaIds", id, checked)
               }
-              disabled={isSaving || isLoadingMeta}
-              emptyMessage="No hay tallas disponibles."
+              disabled={isSaving || isLoadingMeta || tallasDeOferta.locked}
+              emptyMessage={tallasDeOferta.emptyMessage}
+              noteByOptionId={tallasDeOferta.notes}
             />
 
             <div className="grid gap-4 sm:grid-cols-2">
