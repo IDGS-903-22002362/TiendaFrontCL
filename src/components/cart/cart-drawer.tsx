@@ -878,7 +878,15 @@ export function CartDrawer() {
         </Button>
       </SheetTrigger>
 
-      <SheetContent className="flex w-full border-l border-black/14 bg-white px-0 sm:max-w-[420px] lg:max-w-[560px] xl:max-w-[620px]">
+      <SheetContent
+        onInteractOutside={(event) => {
+          const target = event.detail.originalEvent.target as HTMLElement | null;
+          if (target?.closest("[data-cart-added-notification]")) {
+            event.preventDefault();
+          }
+        }}
+        className="flex w-full border-l border-black/14 bg-white px-0 sm:max-w-[420px] lg:max-w-[560px] xl:max-w-[620px]"
+      >
         <div className="flex h-full min-h-0 w-full">
           {isLoadingSuggestedOffers || suggestedOfferProducts.length > 0 ? (
             <aside className="hidden w-[180px] shrink-0 border-r border-black/12 bg-[rgb(249_249_246)] px-4 py-5 lg:flex lg:flex-col">
