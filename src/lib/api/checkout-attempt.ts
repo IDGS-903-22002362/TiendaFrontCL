@@ -2,6 +2,7 @@ import type { CheckoutPayload } from "@/lib/types";
 import { apiFetch, unwrapData } from "./client";
 
 const IDEMPOTENCY_STORAGE_KEY = "tiendafront_checkout_idempotency_key";
+const IDEMPOTENCY_SIGNATURE_KEY = "tiendafront_checkout_idempotency_signature";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -71,6 +72,12 @@ function mapStatusResult(input: unknown): CheckoutAttemptStatusResult {
   };
 }
 
+function generateIdempotencyKey(): string {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function getOrCreateCheckoutIdempotencyKey(): string {
   if (typeof window === "undefined") {
     return `server-checkout-${Date.now()}`;
@@ -79,23 +86,54 @@ export function getOrCreateCheckoutIdempotencyKey(): string {
   if (existing && existing.length >= 8) {
     return existing;
   }
-  const key =
-    typeof crypto !== "undefined" && crypto.randomUUID
-      ? crypto.randomUUID()
-      : `checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const key = generateIdempotencyKey();
   window.sessionStorage.setItem(IDEMPOTENCY_STORAGE_KEY, key);
+  return key;
+}
+
+/**
+ * Devuelve un Idempotency-Key estable mientras la firma del carrito/pricing no
+ * cambie. Si la firma cambia (items, cantidades, tallas, oferta o código), rota
+ * la key para que el backend genere una sesión de Stripe nueva con el monto
+ * correcto y nunca se reutilice un `clientSecret` obsoleto. Reintentos con la
+ * misma firma reutilizan la key (idempotencia segura).
+ */
+export function getCheckoutIdempotencyKeyForSignature(
+  signature: string,
+): string {
+  if (typeof window === "undefined") {
+    return `server-checkout-${Date.now()}`;
+  }
+  const existingKey = window.sessionStorage.getItem(IDEMPOTENCY_STORAGE_KEY);
+  const existingSignature = window.sessionStorage.getItem(
+    IDEMPOTENCY_SIGNATURE_KEY,
+  );
+  if (
+    existingKey &&
+    existingKey.length >= 8 &&
+    existingSignature === signature
+  ) {
+    return existingKey;
+  }
+  const key = generateIdempotencyKey();
+  window.sessionStorage.setItem(IDEMPOTENCY_STORAGE_KEY, key);
+  window.sessionStorage.setItem(IDEMPOTENCY_SIGNATURE_KEY, signature);
   return key;
 }
 
 export function clearCheckoutIdempotencyKey(): void {
   if (typeof window === "undefined") return;
   window.sessionStorage.removeItem(IDEMPOTENCY_STORAGE_KEY);
+  window.sessionStorage.removeItem(IDEMPOTENCY_SIGNATURE_KEY);
 }
 
 export async function startCheckoutAttempt(
   payload: CheckoutAttemptStartPayload,
+  options?: { cartSignature?: string },
 ): Promise<CheckoutAttemptStartResult> {
-  const idempotencyKey = getOrCreateCheckoutIdempotencyKey();
+  const idempotencyKey = options?.cartSignature
+    ? getCheckoutIdempotencyKeyForSignature(options.cartSignature)
+    : getOrCreateCheckoutIdempotencyKey();
   const raw = await apiFetch<unknown>(
     "/api/checkout/attempts",
     {

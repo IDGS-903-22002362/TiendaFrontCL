@@ -2,7 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import { type UseFormReturn, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -455,6 +462,7 @@ function buildCheckoutPayload(
       pickupLocationId: values.pickupLocation.id,
       pickupContact: values.pickupContact,
       metodoPago,
+      ...promoCodeField,
     };
   }
 
@@ -464,6 +472,7 @@ function buildCheckoutPayload(
     fulfillmentMethod: "home_delivery" as const,
     direccionEnvio,
     metodoPago,
+    ...promoCodeField,
   };
 }
 
@@ -1842,6 +1851,7 @@ function CardPaymentStep({
   total,
   expectedSubtotal,
   codigoPromocion,
+  paymentSignature,
   onBack,
   onRecoverableDeliveryError,
   stripePromise,
@@ -1852,13 +1862,21 @@ function CardPaymentStep({
   total: number;
   expectedSubtotal: number;
   codigoPromocion?: string;
+  paymentSignature: string;
   onBack: () => void;
   onRecoverableDeliveryError: (values: DeliveryCheckoutValues) => void;
   stripePromise: ReturnType<typeof useStripeConfig>;
 }) {
   const router = useRouter();
   const [isProcessing, setIsProcessing] = useState(false);
-  const checkoutSessionStartedRef = useRef(false);
+  // El usuario "activa" el pago al pulsar "Pagar". A partir de ahí, cualquier
+  // cambio de carrito/pricing debe recrear la sesión automáticamente.
+  const [paymentActivated, setPaymentActivated] = useState(false);
+  // Guarda en vuelo para evitar POST duplicados/loops aunque cambien estados.
+  const preparingRef = useRef(false);
+  // Firma para la que ya existe (o se está creando) una sesión de Stripe.
+  // Sirve para deduplicar: solo recreamos cuando la firma realmente cambia.
+  const sessionSignatureRef = useRef<string | null>(null);
   const [embeddedClientSecret, setEmbeddedClientSecret] = useState<string | null>(null);
   const [orderContext, setOrderContext] = useState<{
     attemptId: string;
@@ -1866,13 +1884,12 @@ function CardPaymentStep({
     pagoId?: string;
   } | null>(null);
 
-  const handlePrepareEmbeddedCheckout = async () => {
-    if (
-      isProcessing ||
-      checkoutSessionStartedRef.current ||
-      embeddedClientSecret ||
-      typeof window === "undefined"
-    ) {
+  const prepareEmbeddedCheckout = useCallback(async () => {
+    if (preparingRef.current || typeof window === "undefined") {
+      return;
+    }
+    // Ya tenemos una sesión válida para esta firma: no recrear (evita loops).
+    if (sessionSignatureRef.current === paymentSignature && embeddedClientSecret) {
       return;
     }
 
@@ -1884,11 +1901,11 @@ function CardPaymentStep({
       return;
     }
 
+    preparingRef.current = true;
     setIsProcessing(true);
 
     try {
       assertDeliveryShippingReady(values);
-
 
       if (values.fulfillmentMethod === "PICKUP") {
         const pickupCart = await resolveCartIdForPickup(cartId);
@@ -1905,11 +1922,14 @@ function CardPaymentStep({
         }
       }
 
-      const attempt = await startCheckoutAttempt({
-        ...buildCheckoutPayload(values, "TARJETA", codigoPromocion),
-        successUrl: `${window.location.origin}/checkout/confirmation?attemptId={CHECKOUT_ATTEMPT_ID}&session_id={CHECKOUT_SESSION_ID}&status=processing&total=${encodeURIComponent(total.toFixed(2))}`,
-        cancelUrl: `${window.location.origin}/checkout`,
-      });
+      const attempt = await startCheckoutAttempt(
+        {
+          ...buildCheckoutPayload(values, "TARJETA", codigoPromocion),
+          successUrl: `${window.location.origin}/checkout/confirmation?attemptId={CHECKOUT_ATTEMPT_ID}&session_id={CHECKOUT_SESSION_ID}&status=processing&total=${encodeURIComponent(total.toFixed(2))}`,
+          cancelUrl: `${window.location.origin}/checkout`,
+        },
+        { cartSignature: paymentSignature },
+      );
 
       if (!attempt.attemptId || !attempt.clientSecret) {
         throw new Error("No se recibió un intento de checkout válido");
@@ -1920,7 +1940,7 @@ function CardPaymentStep({
         total: attempt.total ?? total,
         pagoId: attempt.pagoId,
       });
-      checkoutSessionStartedRef.current = true;
+      sessionSignatureRef.current = paymentSignature;
       setEmbeddedClientSecret(attempt.clientSecret);
     } catch (error) {
       const retryValues = buildRetryDeliveryValuesFromCheckoutError(
@@ -1935,9 +1955,48 @@ function CardPaymentStep({
         description: getCheckoutErrorMessage(error),
       });
     } finally {
+      preparingRef.current = false;
       setIsProcessing(false);
     }
-  };
+  }, [
+    cartId,
+    codigoPromocion,
+    embeddedClientSecret,
+    onRecoverableDeliveryError,
+    paymentSignature,
+    stripePromise,
+    total,
+    values,
+  ]);
+
+  // Si cambia el carrito/pricing (items, cantidades, tallas, oferta o código)
+  // descartamos el clientSecret y el intento previos: el amount de una Checkout
+  // Session de Stripe es inmutable, así que hay que recrear la sesión con el
+  // monto correcto en lugar de reutilizar el embebido obsoleto. Si el usuario ya
+  // activó el pago, recreamos automáticamente; si no, solo limpiamos y dejamos
+  // el botón "Pagar" con el total actualizado.
+  useEffect(() => {
+    if (sessionSignatureRef.current === paymentSignature) {
+      return;
+    }
+    if (embeddedClientSecret) {
+      setEmbeddedClientSecret(null);
+    }
+    setOrderContext(null);
+    if (paymentActivated) {
+      void prepareEmbeddedCheckout();
+    }
+  }, [
+    paymentSignature,
+    paymentActivated,
+    embeddedClientSecret,
+    prepareEmbeddedCheckout,
+  ]);
+
+  const handlePrepareEmbeddedCheckout = useCallback(() => {
+    setPaymentActivated(true);
+    void prepareEmbeddedCheckout();
+  }, [prepareEmbeddedCheckout]);
 
   return (
     <>
@@ -1972,6 +2031,7 @@ function CardPaymentStep({
                 {PAYMENT_METHODS_NOTICE} {MSI_NOTICE}
               </p>
               <EmbeddedCheckoutProvider
+                key={embeddedClientSecret}
                 stripe={stripePromise}
                 options={{ clientSecret: embeddedClientSecret }}
               >
@@ -2388,7 +2448,7 @@ export default function CheckoutPage() {
   const pricing = useMemo(
     () =>
       getExpectedCheckoutPricing(
-        subtotal,
+        subtotalConCodigo,
         fulfillmentMethod,
         fulfillmentMethod === "PICKUP"
           ? 0
@@ -2400,7 +2460,7 @@ export default function CheckoutPage() {
     [
       checkoutValues,
       fulfillmentMethod,
-      subtotal,
+      subtotalConCodigo,
       watchedDeliveryPostalCode,
     ],
   );
@@ -2416,6 +2476,28 @@ export default function CheckoutPage() {
     [state.items],
   );
   const total = pricing.total;
+
+  // Firma del carrito + pricing que determina el monto a cobrar en Stripe.
+  // Incluye items (vía cartSignature), total, subtotal con código, código
+  // aplicado y método de entrega. Si cambia, el intento/clientSecret deben
+  // recrearse para evitar cobrar un monto obsoleto.
+  const paymentSignature = useMemo(
+    () =>
+      [
+        `cart=${cartSignature}`,
+        `total=${roundCurrency(total)}`,
+        `subtotal=${roundCurrency(subtotalConCodigo)}`,
+        `codigo=${codigoPromocionAplicado}`,
+        `fulfillment=${fulfillmentMethod}`,
+      ].join("||"),
+    [
+      cartSignature,
+      total,
+      subtotalConCodigo,
+      codigoPromocionAplicado,
+      fulfillmentMethod,
+    ],
+  );
 
   const activeCheckoutValues =
     checkoutValues ??
@@ -2444,7 +2526,7 @@ export default function CheckoutPage() {
         shippingForm.getValues("zip"),
       ),
       checkoutPricing: getExpectedCheckoutPricing(
-        subtotal,
+        subtotalConCodigo,
         "DELIVERY",
         getDeliveryShippingAmount(shippingForm.getValues("zip")),
       ),
@@ -2560,7 +2642,8 @@ export default function CheckoutPage() {
               cartItems={state.items}
               total={total}
               expectedSubtotal={subtotalConCodigo}
-              codigoPromocion={codigoPromocion}
+              codigoPromocion={codigoPromocionAplicado}
+              paymentSignature={paymentSignature}
               onBack={() => setCurrentStep(0)}
               onRecoverableDeliveryError={handleRecoverableDeliveryError}
               stripePromise={stripePromise}

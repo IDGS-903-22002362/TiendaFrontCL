@@ -1088,7 +1088,7 @@ const [codigoTallaQuery, setCodigoTallaQuery] = useState("");
         estado: codigoPromo.estado,
         valorDescuento: String(codigoPromo.valorDescuento),
         aplicaA: codigoPromo.aplicaA,
-        productoIds: codigoPromo.productoIds.slice(0, 1),
+        productoIds: codigoPromo.productoIds,
         categoriaIds: codigoPromo.categoriaIds.slice(0, 1),
         lineaIds: codigoPromo.lineaIds.slice(0, 1),
         tallaIds: codigoPromo.tallaIds,
@@ -1202,7 +1202,8 @@ const handleToggleCodigoArrayValue = (
   id: string,
   checked: boolean,
 ) => {
-  const isSingleSelectionField = field !== "tallaIds";
+  const isSingleSelectionField =
+    field === "categoriaIds" || field === "lineaIds";
 
   setCodigoFormData((prev) => ({
     ...prev,
@@ -1317,12 +1318,12 @@ if (selectedIds.length === 0) {
   return null;
 }
 
-if (selectedIds.length > 1) {
+if (formData.aplicaA !== "productos" && selectedIds.length > 1) {
   toast({
     variant: "destructive",
     title: "Solo puedes seleccionar una opción",
     description:
-      "La oferta solo puede aplicar a un producto, una categoría o una línea.",
+      "La oferta solo puede aplicar a una categoría o una línea.",
   });
   return null;
 }
@@ -1515,12 +1516,12 @@ stockLimiteOferta:
     return null;
   }
 
-  if (selectedIds.length > 1) {
+  if (codigoFormData.aplicaA !== "productos" && selectedIds.length > 1) {
     toast({
       variant: "destructive",
       title: "Solo puedes seleccionar una opción",
       description:
-        "El código promocional solo puede aplicar a un producto, una categoría o una línea.",
+        "El código promocional solo puede aplicar a una categoría o una línea.",
     });
     return null;
   }
@@ -1585,7 +1586,7 @@ if (!Number.isFinite(montoMinimoCompra) || montoMinimoCompra <= 0) {
 
     productoIds:
       codigoFormData.aplicaA === "productos"
-        ? codigoFormData.productoIds.slice(0, 1)
+        ? codigoFormData.productoIds
         : [],
     categoriaIds:
       codigoFormData.aplicaA === "categorias"
@@ -1750,8 +1751,8 @@ const activeTargetOptions =
   ActiveTargetOptionConfig
 > = {
   productos: {
-    title: "Producto del código promocional",
-    description: "Selecciona un solo producto al que aplicará el código.",
+    title: "Productos del código promocional",
+    description: "Selecciona uno o más productos a los que aplicará el código.",
     options: productOptions,
     selectedIds: codigoFormData.productoIds,
     query: codigoProductoQuery,
@@ -2612,7 +2613,7 @@ const activeCodigoTargetOptions =
               }
               disabled={isSavingCodigo || isLoadingMeta}
               emptyMessage={activeCodigoTargetOptions.emptyMessage}
-              singleSelection
+              singleSelection={codigoFormData.aplicaA !== "productos"}
             />
 
             {codigoFormData.aplicaA === "productos" && (
