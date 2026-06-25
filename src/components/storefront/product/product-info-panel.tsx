@@ -12,7 +12,11 @@ import { Badge } from "@/components/ui/badge";
 import { useCart } from "@/hooks/use-cart";
 import { useAuth } from "@/hooks/use-auth";
 import { useStorefront } from "@/hooks/use-storefront";
-import { useToast } from "@/hooks/use-toast";
+import {
+  showErrorToast,
+  showInfoToast,
+  showSuccessToast,
+} from "@/lib/app-toast";
 import { getCartVariantKey } from "@/lib/api/cart";
 import {
   getEditorialProductCopy,
@@ -36,7 +40,6 @@ export function ProductInfoPanel({
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const { clearPersonalization, getPersonalization, setPersonalization } =
     useStorefront();
-  const { toast } = useToast();
   const sizes = useMemo(
     () =>
       (product.sizes ?? []).filter(
@@ -153,7 +156,7 @@ export function ProductInfoPanel({
 
   const handleRateProduct = async (score: 1 | 2 | 3 | 4 | 5) => {
     if (!isAuthenticated) {
-      toast({
+      showInfoToast({
         title: "Inicia sesión para calificar",
         description: "Necesitas una sesión activa y una compra entregada.",
       });
@@ -161,7 +164,7 @@ export function ProductInfoPanel({
     }
 
     if (!canRate) {
-      toast({
+      showInfoToast({
         title: "Calificación no disponible",
         description: ratingHint,
       });
@@ -175,7 +178,7 @@ export function ProductInfoPanel({
     try {
       await rateProduct(product.id, score);
       await onRefreshDetail?.();
-      toast({
+      showSuccessToast({
         title: previousScore
           ? "Calificación actualizada"
           : "Calificación registrada",
@@ -183,8 +186,7 @@ export function ProductInfoPanel({
       });
     } catch (error) {
       setSelectedRating(previousScore);
-      toast({
-        variant: "destructive",
+      showErrorToast({
         title: "No se pudo guardar la calificación",
         description: getApiErrorMessage(error),
       });

@@ -13,7 +13,7 @@ import { addFavorite, getFavorites, removeFavorite } from "@/lib/api/favorites";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import type { ProductPersonalization } from "@/lib/storefront/types";
 import { useAuth } from "./use-auth";
-import { useToast } from "./use-toast";
+import { showErrorToast, showSuccessToast } from "@/lib/app-toast";
 
 type PersonalizationMap = Record<string, ProductPersonalization>;
 
@@ -103,7 +103,7 @@ function writeLocalStorage(key: string, value: unknown) {
 
 export function StorefrontProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
-  const { toast } = useToast();
+  
   const [wishlistIds, setWishlistIds] = useState<string[]>([]);
   const [isWishlistLoading, setIsWishlistLoading] = useState(false);
   const [personalizationByVariant, setPersonalizationByVariant] =
@@ -141,8 +141,8 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
         // Los datos viven en el backend
       } else {
         setWishlistIds([]);
-        toast({
-          variant: "destructive",
+        showErrorToast({
+          
           title: "Error al cargar favoritos",
           description: "No se pudieron cargar tus favoritos",
         });
@@ -150,15 +150,15 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("Error loading favorites:", error);
       setWishlistIds([]);
-      toast({
-        variant: "destructive",
+      showErrorToast({
+        
         title: "Error al cargar favoritos",
         description: getApiErrorMessage(error),
       });
     } finally {
       setIsWishlistLoading(false);
     }
-  }, [isAuthenticated, toast, clearFavorites]);
+  }, [isAuthenticated, clearFavorites]);
 
   // Efecto para manejar cambios en autenticación
   useEffect(() => {
@@ -197,8 +197,8 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
 
       // Si no está autenticado, mostrar mensaje y no permitir
       if (!isAuthenticated) {
-        toast({
-          variant: "destructive",
+        showErrorToast({
+          
           title: "Inicia sesión",
           description: "Necesitas iniciar sesión para guardar favoritos",
         });
@@ -217,7 +217,7 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
       try {
         if (currentlyWishlisted) {
           await removeFavorite(productId);
-          toast({
+          showSuccessToast({
             title: "Eliminado de favoritos",
             description: "El producto ha sido eliminado de tus favoritos",
           });
@@ -225,7 +225,7 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
         }
 
         await addFavorite(productId);
-        toast({
+        showSuccessToast({
           title: "Agregado a favoritos",
           description: "El producto ha sido agregado a tus favoritos",
         });
@@ -238,8 +238,8 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
             : currentIds.filter((id) => id !== productId),
         );
 
-        toast({
-          variant: "destructive",
+        showErrorToast({
+          
           title: currentlyWishlisted
             ? "No se pudo quitar de favoritos"
             : "No se pudo agregar a favoritos",
@@ -249,7 +249,7 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
         return currentlyWishlisted;
       }
     },
-    [isAuthenticated, toast, wishlistIds],
+    [isAuthenticated, wishlistIds],
   );
 
   const setPersonalization = useCallback(

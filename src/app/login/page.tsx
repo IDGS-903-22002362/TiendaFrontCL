@@ -17,7 +17,8 @@ import {
   isFirebaseConfigured,
 } from "@/lib/firebase/client";
 import { getApiErrorMessage } from "@/lib/api/errors";
-import { useToast } from "@/hooks/use-toast";
+import { showErrorToast, showInfoToast, showSuccessToast } from "@/lib/app-toast";
+import { AppNotificationBanner } from "@/components/ui/app-notification";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Antigravity from "@/components/Antigravity";
@@ -53,7 +54,7 @@ function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { signInWithFirebase, isAuthenticated, isLoading, role, user, refreshSession } = useAuth();
-  const { toast } = useToast();
+  
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -280,8 +281,8 @@ function LoginPageContent() {
   // Solicitar código de verificación
   const onRequestVerificationCode = async () => {
     if (!email.trim()) {
-      toast({
-        variant: "destructive",
+      showErrorToast({
+        
         title: "Datos incompletos",
         description: "Por favor, ingresa tu correo electrónico.",
       });
@@ -306,14 +307,14 @@ function LoginPageContent() {
         setShowVerification(true);
         setAttempts(3);
         setResendTimer(60);
-        toast({
+        showInfoToast({
           title: "Código enviado",
           description: `Hemos enviado un código de verificación a ${email.trim()}`,
         });
       } else {
         setErrorMessage(response.message || "Error al enviar el código");
-        toast({
-          variant: "destructive",
+        showErrorToast({
+          
           title: "Error",
           description: response.message || "Error al enviar el código de verificación",
         });
@@ -321,8 +322,8 @@ function LoginPageContent() {
     } catch (error) {
       const errorMsg = getApiErrorMessage(error);
       setErrorMessage(errorMsg);
-      toast({
-        variant: "destructive",
+      showErrorToast({
+        
         title: "Error",
         description: errorMsg,
       });
@@ -351,20 +352,20 @@ function LoginPageContent() {
       if (response.success) {
         setResendTimer(60);
         setAttempts(3);
-        toast({
+        showInfoToast({
           title: "Código reenviado",
           description: "Revisa tu correo electrónico",
         });
       } else {
-        toast({
-          variant: "destructive",
+        showErrorToast({
+          
           title: "Error",
           description: response.message || "Error al reenviar el código",
         });
       }
     } catch (error) {
-      toast({
-        variant: "destructive",
+      showErrorToast({
+        
         title: "Error",
         description: getApiErrorMessage(error),
       });
@@ -376,8 +377,8 @@ function LoginPageContent() {
   // Verificar código e iniciar sesión
   const onVerifyAndLogin = async () => {
     if (!verificationCode.trim() || verificationCode.length !== 6) {
-      toast({
-        variant: "destructive",
+      showErrorToast({
+        
         title: "Código inválido",
         description: "Por favor, ingresa el código de 6 dígitos",
       });
@@ -409,7 +410,7 @@ function LoginPageContent() {
           }
         );
         await refreshSession();
-        toast({ title: "¡Bienvenido!", description: "Sesión iniciada correctamente." });
+        showSuccessToast({ title: "¡Bienvenido!", description: "Sesión iniciada correctamente." });
       } else {
         setAttempts(response.remainingAttempts || attempts - 1);
         setErrorMessage(response.message || "Código incorrecto");
@@ -418,14 +419,14 @@ function LoginPageContent() {
           setShowVerification(false);
           setVerificationCode("");
           setPendingEmail("");
-          toast({
-            variant: "destructive",
+          showErrorToast({
+            
             title: "Demasiados intentos",
             description: "Por favor, solicita un nuevo código",
           });
         } else {
-          toast({
-            variant: "destructive",
+          showErrorToast({
+            
             title: "Código incorrecto",
             description: response.message || `Te quedan ${response.remainingAttempts || attempts - 1} intentos`,
           });
@@ -434,8 +435,8 @@ function LoginPageContent() {
     } catch (error) {
       const errorMsg = getApiErrorMessage(error);
       setErrorMessage(errorMsg);
-      toast({
-        variant: "destructive",
+      showErrorToast({
+        
         title: "Error al verificar",
         description: errorMsg,
       });
@@ -447,8 +448,8 @@ function LoginPageContent() {
   const onEmailPasswordLogin = async () => {
     if (!email.trim() || !password.trim()) {
       setErrorMessage("Por favor ingresa correo y contraseña");
-      toast({
-        variant: "destructive",
+      showErrorToast({
+        
         title: "Datos incompletos",
         description: "Por favor ingresa correo y contraseña",
       });
@@ -464,12 +465,12 @@ function LoginPageContent() {
         password.trim()
       );
       await signInWithFirebase(firebaseIdToken);
-      toast({ title: "¡Bienvenido!", description: "Sesión iniciada correctamente." });
+      showSuccessToast({ title: "¡Bienvenido!", description: "Sesión iniciada correctamente." });
     } catch (error) {
       const errorMsg = getApiErrorMessage(error);
       setErrorMessage(errorMsg);
-      toast({
-        variant: "destructive",
+      showErrorToast({
+        
         title: "Error al iniciar sesión",
         description: errorMsg,
       });
@@ -485,12 +486,12 @@ function LoginPageContent() {
     try {
       const firebaseIdToken = await getFirebaseIdTokenWithGooglePopup();
       await signInWithFirebase(firebaseIdToken);
-      toast({ title: "¡Bienvenido!", description: "Sesión iniciada con Google." });
+      showSuccessToast({ title: "¡Bienvenido!", description: "Sesión iniciada con Google." });
     } catch (error) {
       const errorMsg = getApiErrorMessage(error);
       setErrorMessage(errorMsg);
-      toast({
-        variant: "destructive",
+      showErrorToast({
+        
         title: "Error",
         description: errorMsg,
       });
@@ -505,12 +506,12 @@ function LoginPageContent() {
     try {
       const firebaseIdToken = await getFirebaseIdTokenWithApplePopup();
       await signInWithFirebase(firebaseIdToken);
-      toast({ title: "¡Bienvenido!", description: "Sesión iniciada con Apple." });
+      showSuccessToast({ title: "¡Bienvenido!", description: "Sesión iniciada con Apple." });
     } catch (error) {
       const errorMsg = getApiErrorMessage(error);
       setErrorMessage(errorMsg);
-      toast({
-        variant: "destructive",
+      showErrorToast({
+        
         title: "Error",
         description: errorMsg,
       });
@@ -522,8 +523,8 @@ function LoginPageContent() {
   const onSendPasswordReset = async () => {
     if (!recoveryEmail.trim()) {
       setErrorMessage("Por favor ingresa tu correo electrónico");
-      toast({
-        variant: "destructive",
+      showErrorToast({
+        
         title: "Correo requerido",
         description: "Por favor ingresa tu correo electrónico",
       });
@@ -536,15 +537,15 @@ function LoginPageContent() {
     try {
       await sendPasswordReset(recoveryEmail.trim());
       setRecoveryEmailSent(true);
-      toast({
+      showInfoToast({
         title: "¡Email enviado!",
         description: `Hemos enviado un enlace de recuperación a ${recoveryEmail.trim()}`,
       });
     } catch (error) {
       const errorMsg = getApiErrorMessage(error);
       setErrorMessage(errorMsg);
-      toast({
-        variant: "destructive",
+      showErrorToast({
+        
         title: "Error al enviar email",
         description: errorMsg,
       });
@@ -637,12 +638,14 @@ function LoginPageContent() {
             Consulta contenido exclusivo del Club León, regístrate, guarda tu progreso y desbloquea grandes beneficios.
           </p>
 
-          {/* Error message */}
-          {errorMessage && (
-            <div className="mb-[clamp(0.6rem,1.8vh,1rem)] rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 break-words">
-              {errorMessage}
-            </div>
-          )}
+          {errorMessage ? (
+            <AppNotificationBanner
+              variant="error"
+              title="No pudimos completar la acción"
+              description={errorMessage}
+              className="mb-[clamp(0.6rem,1.8vh,1rem)] break-words"
+            />
+          ) : null}
 
           {/* Loading state */}
           {isSubmitting && (
@@ -878,7 +881,6 @@ function LoginPageContent() {
                       aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                       className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-gray-600"
                       disabled={isSubmitting}
-                      aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                     >
                       {showPassword ? (
                         <EyeOff className="h-5 w-5" />
@@ -921,11 +923,14 @@ function LoginPageContent() {
                         <p className="text-sm text-gray-600 mt-2">Ingresa tu correo para recibir un enlace de recuperación</p>
                       </div>
 
-                      {errorMessage && (
-                        <div className="rounded-xl bg-red-50 p-3 border border-red-200">
-                          <p className="text-sm text-red-700">{errorMessage}</p>
-                        </div>
-                      )}
+                      {errorMessage ? (
+                        <AppNotificationBanner
+                          variant="error"
+                          title="No pudimos enviar el correo"
+                          description={errorMessage}
+                          className="shadow-none"
+                        />
+                      ) : null}
 
                       {/* Recovery Email Input */}
                       <div className="relative w-full min-w-0">

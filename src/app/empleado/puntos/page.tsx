@@ -14,6 +14,7 @@ import { Loader2, Plus, Eye, EyeOff, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useAuth } from "@/hooks/use-auth";
+import { getApiErrorMessage } from "@/lib/api/errors";
 
 // ============================================
 // TYPES
@@ -141,7 +142,7 @@ export default function AdminAssignPoints() {
             console.error("Error fetching user:", error);
             toast({
                 title: "Error",
-                description: error instanceof Error ? error.message : "No se pudo obtener el usuario",
+                description: getApiErrorMessage(error),
                 variant: "destructive",
             });
             setUserData(null);
@@ -228,7 +229,7 @@ export default function AdminAssignPoints() {
             console.error("Error assigning points:", error);
             toast({
                 title: "Error al asignar puntos",
-                description: error instanceof Error ? error.message : "Ocurrió un error inesperado",
+                description: getApiErrorMessage(error),
                 variant: "destructive",
             });
         } finally {
@@ -276,7 +277,7 @@ export default function AdminAssignPoints() {
             console.error("Error cargando historial:", error);
             toast({
                 title: "Error",
-                description: error instanceof Error ? error.message : "No se pudo cargar el historial",
+                description: getApiErrorMessage(error),
                 variant: "destructive"
             });
         } finally {
@@ -317,7 +318,7 @@ export default function AdminAssignPoints() {
             console.error("Error cargando historial completo:", error);
             toast({
                 title: "Error",
-                description: error instanceof Error ? error.message : "No se pudo cargar el historial",
+                description: getApiErrorMessage(error),
                 variant: "destructive"
             });
         } finally {

@@ -84,7 +84,7 @@ import type {
 import type {
   CheckoutShippingAddress,
 } from "@/types/shipping";
-import { useToast } from "@/hooks/use-toast";
+import { showErrorToast } from "@/lib/app-toast";
 import { useStripeConfig } from "@/hooks/use-stripe-config";
 import {
   GooglePlaceAutocompleteElement,
@@ -838,7 +838,6 @@ function ShippingAddressStep({
   initialDeliveryValues?: DeliveryCheckoutValues | null;
   onContinue: (values: CheckoutValues) => void;
 }) {
-  const { toast } = useToast();
   const [addressError, setAddressError] = useState<string | null>(null);
   const [shippingError, setShippingError] = useState<string | null>(null);
   const [deliveryReferences, setDeliveryReferences] = useState("");
@@ -1146,8 +1145,7 @@ function ShippingAddressStep({
 
   const handleContinue = async () => {
     if (!isAuthenticated) {
-      toast({
-        variant: "destructive",
+      showErrorToast({
         title: "Sesión requerida",
         description: "Debes iniciar sesión para completar el pago.",
       });
@@ -1859,7 +1857,6 @@ function CardPaymentStep({
   stripePromise: ReturnType<typeof useStripeConfig>;
 }) {
   const router = useRouter();
-  const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
   const checkoutSessionStartedRef = useRef(false);
   const [embeddedClientSecret, setEmbeddedClientSecret] = useState<string | null>(null);
@@ -1880,8 +1877,7 @@ function CardPaymentStep({
     }
 
     if (!stripePromise) {
-      toast({
-        variant: "destructive",
+      showErrorToast({
         title: "Stripe no está listo",
         description: "Intenta nuevamente en unos segundos.",
       });
@@ -1934,8 +1930,7 @@ function CardPaymentStep({
       if (retryValues) {
         onRecoverableDeliveryError(retryValues);
       }
-      toast({
-        variant: "destructive",
+      showErrorToast({
         title: "No se pudo preparar el pago",
         description: getCheckoutErrorMessage(error),
       });

@@ -1,31 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import type { UserRole } from "@/lib/types";
 
 const API_TOKEN_COOKIE = "tiendafront_api_token";
 const USER_DATA_COOKIE = "tiendafront_user_data";
-const USER_ROLE_COOKIE = "tiendafront_user_role";
 const BLOCKED_PAGE_IMAGE = "/images/fondopaginaporx.png";
-
-const AUTH_REQUIRED_PREFIXES = [
-  "/profile",
-  "/dashboard",
-  "/order-history",
-];
-
-const ADMIN_PREFIXES = ["/admin"];
-const SUPER_ADMIN_PREFIXES = ["/super-admin"];
-const EMPLEADO_PREFIXES = ["/empleado"];
-const EMPLEADO_CLUB_PREFIXES = ["/empleado-club"];
-
-const ADMIN_ROLES = new Set<UserRole>(["ADMIN", "EMPLEADO", "SUPER_ADMIN"]);
-const SUPER_ADMIN_ROLES = new Set<UserRole>(["SUPER_ADMIN"]);
-const EMPLEADO_ROLES = new Set<UserRole>(["EMPLEADO", "ADMIN", "SUPER_ADMIN"]);
-const EMPLEADO_CLUB_ROLES = new Set<UserRole>([
-  "EMPLEADO_CLUB",
-  "ADMIN",
-  "SUPER_ADMIN",
-]);
 
 const EXCLUDED_PATH_PREFIXES = [
   "/_next",
@@ -163,59 +141,6 @@ function forbiddenPage() {
   );
 }
 
-function getRoleFromCookie(request: NextRequest): UserRole | "" {
-  const roleCookie = request.cookies.get(USER_ROLE_COOKIE)?.value;
-  if (
-    roleCookie === "ADMIN" ||
-    roleCookie === "EMPLEADO" ||
-    roleCookie === "CLIENTE" ||
-    roleCookie === "EMPLEADO_CLUB" ||
-    roleCookie === "SUPER_ADMIN"
-  ) {
-    return roleCookie;
-  }
-
-  const rawUserData = request.cookies.get(USER_DATA_COOKIE)?.value;
-  if (!rawUserData) {
-    return "";
-  }
-
-  try {
-    const parsed = JSON.parse(decodeURIComponent(rawUserData)) as {
-      rol?: UserRole;
-    };
-    return parsed.rol ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function matchesPrefix(pathname: string, prefixes: string[]) {
-  return prefixes.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
-}
-
-function isSafeInternalRedirect(path: string): boolean {
-  const trimmed = path.trim();
-  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
-    return false;
-  }
-  if (trimmed.indexOf("://") !== -1 || trimmed.indexOf("\\") !== -1) {
-    return false;
-  }
-  return true;
-}
-
-function redirectToLogin(request: NextRequest, returnPath: string) {
-  const url = request.nextUrl.clone();
-  url.pathname = "/login";
-  url.search = isSafeInternalRedirect(returnPath)
-    ? `redirect=${encodeURIComponent(returnPath)}`
-    : "";
-  return NextResponse.redirect(url);
-}
-
 function getPerfilCompletoFromCookie(request: NextRequest): boolean | undefined {
   const rawUserData = request.cookies.get(USER_DATA_COOKIE)?.value;
   if (!rawUserData) {
@@ -250,71 +175,19 @@ export function middleware(request: NextRequest) {
 
   const token = request.cookies.get(API_TOKEN_COOKIE)?.value;
   const perfilCompleto = getPerfilCompletoFromCookie(request);
-  const role = getRoleFromCookie(request);
 
   if (!token) {
     if (pathname === "/complete-profile") {
-      return redirectToLogin(request, "/complete-profile");
-    }
-
-    if (
-      matchesPrefix(pathname, AUTH_REQUIRED_PREFIXES) ||
-      matchesPrefix(pathname, ADMIN_PREFIXES) ||
-      matchesPrefix(pathname, SUPER_ADMIN_PREFIXES) ||
-      matchesPrefix(pathname, EMPLEADO_PREFIXES) ||
-      matchesPrefix(pathname, EMPLEADO_CLUB_PREFIXES)
-    ) {
-      return redirectToLogin(request, pathname);
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.search = "redirect=/complete-profile";
+      return NextResponse.redirect(url);
     }
 
     return NextResponse.next();
   }
 
-  if (
-    matchesPrefix(pathname, ADMIN_PREFIXES) &&
-    role &&
-    !ADMIN_ROLES.has(role)
-  ) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    url.search = "";
-    return NextResponse.redirect(url);
-  }
-
-  if (
-    matchesPrefix(pathname, SUPER_ADMIN_PREFIXES) &&
-    role &&
-    !SUPER_ADMIN_ROLES.has(role)
-  ) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    url.search = "";
-    return NextResponse.redirect(url);
-  }
-
-  if (
-    matchesPrefix(pathname, EMPLEADO_PREFIXES) &&
-    role &&
-    !EMPLEADO_ROLES.has(role)
-  ) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    url.search = "";
-    return NextResponse.redirect(url);
-  }
-
-  if (
-    matchesPrefix(pathname, EMPLEADO_CLUB_PREFIXES) &&
-    role &&
-    !EMPLEADO_CLUB_ROLES.has(role)
-  ) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    url.search = "";
-    return NextResponse.redirect(url);
-  }
-
-  if (perfilCompleto === false && pathname !== "/complete-profile") {
+  if (perfilCompleto === false && pathname !== "/complete-profile" && pathname !== "/register") {
     const url = request.nextUrl.clone();
     url.pathname = "/complete-profile";
     url.search = "";

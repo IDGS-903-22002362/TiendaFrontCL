@@ -2,6 +2,53 @@ import { ApiError } from "./client";
 
 type FirebaseLikeError = Error & { code?: string };
 
+const DEFAULT_FALLBACK =
+  "Ocurrió un error inesperado. Intenta nuevamente en unos momentos.";
+
+const TECHNICAL_MESSAGE_PATTERNS: RegExp[] = [
+  /\bauth\/[a-z0-9-]+\b/i,
+  /\bstripe\b/i,
+  /\baplazo\b/i,
+  /\bfirestore\b/i,
+  /\bfirebase\b/i,
+  /\bECONNREFUSED\b/,
+  /\bETIMEDOUT\b/,
+  /\bENOTFOUND\b/,
+  /\bstack trace\b/i,
+  /\bat\s+\S+\s+\(/i,
+  /requires an index/i,
+  /permission[- ]denied/i,
+  /No se pudo conectar con la API \(/i,
+  /sk_(live|test)_/i,
+  /process\.env/i,
+  /HTTP Error \d+/i,
+  /Error HTTP \d+/i,
+];
+
+export function isTechnicalUserMessage(message: string): boolean {
+  const normalized = message.trim();
+  if (!normalized) {
+    return true;
+  }
+
+  return TECHNICAL_MESSAGE_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
+export function sanitizeUserFacingMessage(
+  message: string | null | undefined,
+  fallback = DEFAULT_FALLBACK,
+): string {
+  if (!message || !message.trim()) {
+    return fallback;
+  }
+
+  if (isTechnicalUserMessage(message)) {
+    return fallback;
+  }
+
+  return message.trim();
+}
+
 function getFirebaseAuthCode(error: unknown): string | null {
   if (!(error instanceof Error)) {
     return null;
@@ -30,6 +77,22 @@ function getFirebaseAuthMessage(
   }
 
   switch (code) {
+    case "auth/invalid-email":
+      return "Correo electrónico inválido.";
+    case "auth/user-disabled":
+      return "Esta cuenta está deshabilitada. Contacta soporte.";
+    case "auth/user-not-found":
+    case "auth/wrong-password":
+    case "auth/invalid-credential":
+      return "Correo o contraseña incorrectos.";
+    case "auth/too-many-requests":
+      return "Demasiados intentos. Espera unos minutos e inténtalo de nuevo.";
+    case "auth/email-already-in-use":
+    case "auth/email-already-exists":
+      return "No fue posible completar el registro con este correo.";
+    case "auth/weak-password":
+    case "auth/invalid-password":
+      return "La contraseña no cumple los requisitos mínimos.";
     case "auth/operation-not-allowed":
       return "El proveedor de inicio de sesión no está habilitado en Firebase. Activa Google/Apple en Authentication > Sign-in method y verifica el dominio autorizado.";
     case "auth/popup-closed-by-user":
@@ -42,32 +105,69 @@ function getFirebaseAuthMessage(
       return "Ya existe una cuenta con ese correo usando otro método de acceso. Inicia sesión con el proveedor original y después vincula Apple.";
     case "auth/network-request-failed":
       return "No se pudo conectar con Firebase. Revisa tu conexión e inténtalo nuevamente.";
+    case "auth/invalid-verification-code":
+      return "El código de verificación no es válido.";
+    case "auth/code-expired":
+      return "El código de verificación expiró. Solicita uno nuevo.";
     default:
       return null;
   }
 }
 
+function getApiPayloadMessage(error: ApiError): string | null {
+  const errors = error.payload?.errors;
+
+  if (Array.isArray(errors) && errors.length > 0) {
+    return errors
+      .map(
+        (item) => `${item.campo ?? "campo"}: ${item.mensaje ?? "inválido"}`,
+      )
+      .join(" | ");
+  }
+
+  if (
+    error.payload?.error &&
+    typeof error.payload.error === "object" &&
+    typeof error.payload.error.message === "string"
+  ) {
+    return error.payload.error.message;
+  }
+
+  if (typeof error.payload?.message === "string" && error.payload.message) {
+    return error.payload.message;
+  }
+
+  return error.message || null;
+}
+
+const CART_STOCK_EXCEEDED_MESSAGE =
+  "La cantidad excede la disponibilidad del producto";
+
+function isCartStockExceededError(error: unknown): boolean {
+  if (!(error instanceof ApiError)) {
+    return false;
+  }
+
+  if (error.code === "CHECKOUT_STOCK_UNAVAILABLE") {
+    return true;
+  }
+
+  const payloadMessage = getApiPayloadMessage(error) ?? error.message;
+  return /stock insuficiente/i.test(payloadMessage);
+}
+
+export function getCartQuantityUpdateErrorMessage(error: unknown): string {
+  if (isCartStockExceededError(error)) {
+    return CART_STOCK_EXCEEDED_MESSAGE;
+  }
+
+  return getApiErrorMessage(error);
+}
+
 export function getApiErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
-    const errors = error.payload?.errors;
-
-    if (Array.isArray(errors) && errors.length > 0) {
-      return errors
-        .map(
-          (item) => `${item.campo ?? "campo"}: ${item.mensaje ?? "inválido"}`,
-        )
-        .join(" | ");
-    }
-
-    if (
-      error.payload?.error &&
-      typeof error.payload.error === "object" &&
-      typeof error.payload.error.message === "string"
-    ) {
-      return error.payload.error.message;
-    }
-
-    return error.message;
+    const payloadMessage = getApiPayloadMessage(error);
+    return sanitizeUserFacingMessage(payloadMessage, DEFAULT_FALLBACK);
   }
 
   if (error instanceof Error) {
@@ -80,10 +180,12 @@ export function getApiErrorMessage(error: unknown): string {
       if (firebaseMessage) {
         return firebaseMessage;
       }
+
+      return DEFAULT_FALLBACK;
     }
 
-    return error.message;
+    return sanitizeUserFacingMessage(error.message, DEFAULT_FALLBACK);
   }
 
-  return "Ocurrió un error inesperado";
+  return DEFAULT_FALLBACK;
 }

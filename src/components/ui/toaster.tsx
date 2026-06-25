@@ -2,30 +2,39 @@
 
 import { useToast } from "@/hooks/use-toast"
 import {
+  AppNotificationLayout,
+  toastVariantToAppVariant,
+} from "@/components/ui/app-notification"
+import {
   Toast,
   ToastClose,
-  ToastDescription,
   ToastProvider,
-  ToastTitle,
   ToastViewport,
 } from "@/components/ui/toast"
 
 export function Toaster() {
-  const { toasts } = useToast()
+  const { toasts, dismiss } = useToast()
 
   return (
-    <ToastProvider>
-      {toasts.map(function ({ id, title, description, action, ...props }) {
+    <ToastProvider swipeDirection="right">
+      {toasts.map(function ({ id, title, description, action, variant, ...props }) {
+        const appVariant = toastVariantToAppVariant(variant)
+
         return (
-          <Toast key={id} {...props}>
-            <div className="grid gap-1">
-              {title && <ToastTitle>{title}</ToastTitle>}
-              {description && (
-                <ToastDescription>{description}</ToastDescription>
-              )}
+          <Toast key={id} variant={variant} {...props}>
+            <div className="w-full p-4 pr-12">
+              <AppNotificationLayout
+                variant={appVariant}
+                title={title ?? "Aviso"}
+                description={description}
+                role={appVariant === "error" ? "alert" : "status"}
+              />
+              {action ? <div className="mt-3 px-1">{action}</div> : null}
             </div>
-            {action}
-            <ToastClose />
+            <ToastClose
+              aria-label="Cerrar notificación"
+              onClick={() => dismiss(id)}
+            />
           </Toast>
         )
       })}

@@ -272,15 +272,10 @@ export async function apiFetch<T>(
         init.cache ??
         (typeof window !== "undefined" ? "no-store" : "force-cache"),
     });
-  } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Error de red al conectar con el backend";
-
+  } catch {
     throw new ApiError(
       0,
-      `No se pudo conectar con la API (${endpoint}): ${message}`,
+      "No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.",
     );
   }
 

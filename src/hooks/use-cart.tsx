@@ -9,7 +9,7 @@ import React, {
   useState,
 } from "react";
 import type { CartItem } from "@/lib/types";
-import { useToast } from "@/hooks/use-toast";
+import { showErrorToast } from "@/lib/app-toast";
 import {
   addCartItem,
   clearCart,
@@ -20,7 +20,10 @@ import {
   updateCartItem,
 } from "@/lib/api/cart";
 import { useAuth } from "@/hooks/use-auth";
-import { getApiErrorMessage } from "@/lib/api/errors";
+import {
+  getApiErrorMessage,
+  getCartQuantityUpdateErrorMessage,
+} from "@/lib/api/errors";
 
 type CartContextType = {
   state: { id?: string; items: CartItem[] };
@@ -61,7 +64,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     description?: string;
   } | null>(null);
   
-  const { toast } = useToast();
   const { token, isAuthenticated } = useAuth();
   const authToken = token && token !== "cookie-session" ? token : undefined;
 
@@ -97,8 +99,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         setItems(cart.items);
       } catch (error) {
         console.error("Failed to load cart from API", error);
-        toast({
-          variant: "destructive",
+        showErrorToast({
           title: "No se pudo cargar el carrito",
           description: "Intenta nuevamente en unos segundos.",
         });
@@ -108,7 +109,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     void loadCart();
-  }, [toast, isAuthenticated, authToken]);
+  }, [isAuthenticated, authToken]);
 
   useEffect(() => {
     if (!isAuthenticated || !sessionId || mergedToken === token) {
@@ -124,8 +125,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         setMergedToken(token);
       } catch (error) {
         console.error("Failed to merge guest cart", error);
-        toast({
-          variant: "destructive",
+        showErrorToast({
           title: "No se pudo fusionar tu carrito",
           description: "Puedes seguir comprando y reintentar más tarde.",
         });
@@ -133,7 +133,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     void mergeAndReload();
-  }, [isAuthenticated, mergedToken, sessionId, toast, token, authToken]);
+  }, [isAuthenticated, mergedToken, sessionId, token, authToken]);
 
   const addToCart = async (
     item: Omit<CartItem, "quantity"> & { quantity?: number },
@@ -163,8 +163,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
       });
     } catch (error) {
       console.error("Failed to add item to cart", error);
-      toast({
-        variant: "destructive",
+      showErrorToast({
         title: "No se pudo agregar al carrito",
         description: getApiErrorMessage(error),
       });
@@ -186,8 +185,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
       setItems(cart.items);
     } catch (error) {
       console.error("Failed to remove cart item", error);
-      toast({
-        variant: "destructive",
+      showErrorToast({
         title: "No se pudo eliminar el producto",
         description: "Intenta nuevamente.",
       });
@@ -213,10 +211,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
       setItems(cart.items);
     } catch (error) {
       console.error("Failed to update cart item quantity", error);
-      toast({
-        variant: "destructive",
+      showErrorToast({
         title: "No se pudo actualizar la cantidad",
-        description: "Intenta nuevamente.",
+        description: getCartQuantityUpdateErrorMessage(error),
       });
     }
   };
@@ -235,8 +232,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
       setItems(cart.items);
     } catch (error) {
       console.error("Failed to clear cart", error);
-      toast({
-        variant: "destructive",
+      showErrorToast({
         title: "No se pudo vaciar el carrito",
         description: "Intenta nuevamente.",
       });

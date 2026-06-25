@@ -6,7 +6,8 @@ import Link from "next/link";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getApiErrorMessage } from "@/lib/api/errors";
-import { useToast } from "@/hooks/use-toast";
+import { showErrorToast, showInfoToast, showSuccessToast } from "@/lib/app-toast";
+import { AppNotificationBanner } from "@/components/ui/app-notification";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -30,7 +31,7 @@ const VALID_GENEROS = ["M", "F", "O"] as const;
 export default function RegisterPage() {
     const router = useRouter();
     const { clearSession } = useAuth();
-    const { toast } = useToast();
+    
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -207,8 +208,8 @@ export default function RegisterPage() {
 
     const onRequestRegistrationCode = async () => {
         if (!VALID_GENEROS.includes(form.genero as (typeof VALID_GENEROS)[number])) {
-            toast({
-                variant: "destructive",
+            showErrorToast({
+                
                 title: "Genero requerido",
                 description: "Selecciona una opcion de genero valida.",
             });
@@ -233,7 +234,7 @@ export default function RegisterPage() {
                 setShowVerification(true);
                 setAttempts(3);
                 setResendTimer(60);
-                toast({
+                showInfoToast({
                     title: "Código enviado",
                     description: `Hemos enviado un código de verificación a ${form.email.trim()}`,
                 });
@@ -242,8 +243,8 @@ export default function RegisterPage() {
 
             const message = response.message || "Error al enviar el código";
             setErrorMessage(message);
-            toast({
-                variant: "destructive",
+            showErrorToast({
+                
                 title: "Error",
                 description: message,
             });
@@ -251,8 +252,8 @@ export default function RegisterPage() {
         } catch (error) {
             const errorMsg = getApiErrorMessage(error);
             setErrorMessage(errorMsg);
-            toast({
-                variant: "destructive",
+            showErrorToast({
+                
                 title: "Error",
                 description: errorMsg,
             });
@@ -270,8 +271,8 @@ export default function RegisterPage() {
 
     const onVerifyCode = async () => {
         if (!verificationCode.trim() || verificationCode.length !== 6) {
-            toast({
-                variant: "destructive",
+            showErrorToast({
+                
                 title: "Código inválido",
                 description: "Por favor, ingresa el código de 6 dígitos",
             });
@@ -305,7 +306,7 @@ export default function RegisterPage() {
                 keepLoading = true;
                 setIsVerificationComplete(true);
                 await clearSession();
-                toast({
+                showSuccessToast({
                     title: "Correo verificado",
                     description: "Tu cuenta está lista. Inicia sesión con tu correo.",
                 });
@@ -323,14 +324,14 @@ export default function RegisterPage() {
                 setShowVerification(false);
                 setVerificationCode("");
                 setPendingEmail("");
-                toast({
-                    variant: "destructive",
+                showErrorToast({
+                    
                     title: "Demasiados intentos",
                     description: "Por favor, solicita un nuevo código",
                 });
             } else {
-                toast({
-                    variant: "destructive",
+                showErrorToast({
+                    
                     title: "Código incorrecto",
                     description:
                         response.message ||
@@ -341,8 +342,8 @@ export default function RegisterPage() {
             hasAutoSubmitted.current = false;
             const errorMsg = getApiErrorMessage(error);
             setErrorMessage(errorMsg);
-            toast({
-                variant: "destructive",
+            showErrorToast({
+                
                 title: "Error al verificar",
                 description: errorMsg,
             });
@@ -356,8 +357,8 @@ export default function RegisterPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!form.nombre.trim() || !form.email.trim() || !form.password.trim()) {
-            toast({
-                variant: "destructive",
+            showErrorToast({
+                
                 title: "Campos obligatorios",
                 description: "Nombre, email y contrasena son requeridos.",
             });
@@ -365,8 +366,8 @@ export default function RegisterPage() {
         }
 
         if (form.password !== form.confirmPassword) {
-            toast({
-                variant: "destructive",
+            showErrorToast({
+                
                 title: "Contrasenas no coinciden",
                 description: "Por favor, asegurate de que las contrasenas coincidan.",
             });
@@ -374,8 +375,8 @@ export default function RegisterPage() {
         }
 
         if (!acceptedTerms) {
-            toast({
-                variant: "destructive",
+            showErrorToast({
+                
                 title: "Terminos y condiciones",
                 description: "Debes aceptar los terminos y condiciones para crear tu cuenta.",
             });
@@ -383,8 +384,8 @@ export default function RegisterPage() {
         }
 
         if (!VALID_GENEROS.includes(form.genero as (typeof VALID_GENEROS)[number])) {
-            toast({
-                variant: "destructive",
+            showErrorToast({
+                
                 title: "Genero requerido",
                 description: "Selecciona una opcion de genero valida.",
             });
@@ -452,9 +453,12 @@ export default function RegisterPage() {
                     </p>
 
                     {errorMessage ? (
-                        <div className="mt-4 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
-                            {errorMessage}
-                        </div>
+                        <AppNotificationBanner
+                            variant="error"
+                            title="No pudimos completar el registro"
+                            description={errorMessage}
+                            className="mt-4 shadow-none"
+                        />
                     ) : null}
 
                     {isSubmitting && (
