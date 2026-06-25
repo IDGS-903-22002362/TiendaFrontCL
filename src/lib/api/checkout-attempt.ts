@@ -3,6 +3,9 @@ import { apiFetch, unwrapData } from "./client";
 
 const IDEMPOTENCY_STORAGE_KEY = "tiendafront_checkout_idempotency_key";
 const IDEMPOTENCY_SIGNATURE_KEY = "tiendafront_checkout_idempotency_signature";
+const ACTIVE_ATTEMPT_STORAGE_KEY = "tiendafront_checkout_active_attempt_id";
+export const CHECKOUT_PAYMENT_REDIRECTING_KEY =
+  "tiendafront_checkout_payment_redirecting";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -127,6 +130,35 @@ export function clearCheckoutIdempotencyKey(): void {
   window.sessionStorage.removeItem(IDEMPOTENCY_SIGNATURE_KEY);
 }
 
+export function setActiveCheckoutAttemptId(attemptId: string): void {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.setItem(ACTIVE_ATTEMPT_STORAGE_KEY, attemptId);
+}
+
+export function clearActiveCheckoutAttemptId(): void {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.removeItem(ACTIVE_ATTEMPT_STORAGE_KEY);
+}
+
+export function getActiveCheckoutAttemptId(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.sessionStorage.getItem(ACTIVE_ATTEMPT_STORAGE_KEY);
+}
+
+export function markCheckoutPaymentRedirecting(): void {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.setItem(CHECKOUT_PAYMENT_REDIRECTING_KEY, "1");
+  clearActiveCheckoutAttemptId();
+}
+
+export async function cancelActiveCheckoutAttemptIfAny(): Promise<void> {
+  const attemptId = getActiveCheckoutAttemptId();
+  if (!attemptId) {
+    return;
+  }
+  await cancelCheckoutAttempt(attemptId);
+}
+
 export async function startCheckoutAttempt(
   payload: CheckoutAttemptStartPayload,
   options?: { cartSignature?: string },
@@ -152,6 +184,9 @@ export async function cancelCheckoutAttempt(attemptId: string): Promise<void> {
     { method: "POST" },
     { local: true },
   );
+  if (getActiveCheckoutAttemptId() === attemptId) {
+    clearActiveCheckoutAttemptId();
+  }
 }
 
 export async function getCheckoutAttemptStatus(

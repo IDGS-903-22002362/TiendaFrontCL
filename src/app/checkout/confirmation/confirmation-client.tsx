@@ -19,7 +19,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ordersApi } from "@/lib/api/orders";
 import { paymentsApi } from "@/lib/api/payments";
 import {
-  cancelCheckoutAttempt,
   clearCheckoutIdempotencyKey,
   getCheckoutAttemptStatus,
 } from "@/lib/api/checkout-attempt";

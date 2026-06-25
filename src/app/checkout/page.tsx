@@ -42,7 +42,11 @@ import {
 } from "@/lib/api/cart";
 import {
   cancelCheckoutAttempt,
+  cancelActiveCheckoutAttemptIfAny,
+  CHECKOUT_PAYMENT_REDIRECTING_KEY,
   getCheckoutAttemptStatus,
+  markCheckoutPaymentRedirecting,
+  setActiveCheckoutAttemptId,
   startCheckoutAttempt,
 } from "@/lib/api/checkout-attempt";
 import { paymentsApi } from "@/lib/api/payments";
@@ -1879,6 +1883,8 @@ function CardPaymentStep({
   // Firma para la que ya existe (o se está creando) una sesión de Stripe.
   // Sirve para deduplicar: solo recreamos cuando la firma realmente cambia.
   const sessionSignatureRef = useRef<string | null>(null);
+  const attemptIdRef = useRef<string | null>(null);
+  const paymentRedirectingRef = useRef(false);
   const [embeddedClientSecret, setEmbeddedClientSecret] = useState<string | null>(null);
   const [orderContext, setOrderContext] = useState<{
     attemptId: string;
@@ -1887,24 +1893,38 @@ function CardPaymentStep({
   } | null>(null);
 
   const releaseActiveCheckoutAttempt = useCallback(async () => {
-    const attemptId = orderContext?.attemptId;
+    const attemptId = attemptIdRef.current;
     if (!attemptId) {
       return;
     }
+
     try {
       await cancelCheckoutAttempt(attemptId);
-    } catch {
-      // Best-effort: liberar reserva al abandonar el paso de pago.
+    } catch (error) {
+      showErrorToast({
+        title: "No se pudo liberar la reserva",
+        description: getCheckoutErrorMessage(error),
+      });
+      throw error;
     }
+
+    attemptIdRef.current = null;
     setEmbeddedClientSecret(null);
     setOrderContext(null);
     sessionSignatureRef.current = null;
     setPaymentActivated(false);
-  }, [orderContext?.attemptId]);
+  }, []);
 
   const handleBack = useCallback(async () => {
-    await releaseActiveCheckoutAttempt();
-    onBack();
+    setIsProcessing(true);
+    try {
+      await releaseActiveCheckoutAttempt();
+      onBack();
+    } catch {
+      // Mantener al usuario en pago si no se liberó la reserva.
+    } finally {
+      setIsProcessing(false);
+    }
   }, [releaseActiveCheckoutAttempt, onBack]);
 
   useEffect(() => {
@@ -1967,6 +1987,8 @@ function CardPaymentStep({
         total: attempt.total ?? total,
         pagoId: attempt.pagoId,
       });
+      attemptIdRef.current = attempt.attemptId;
+      setActiveCheckoutAttemptId(attempt.attemptId);
       sessionSignatureRef.current = paymentSignature;
       setEmbeddedClientSecret(attempt.clientSecret);
     } catch (error) {
@@ -2006,19 +2028,32 @@ function CardPaymentStep({
     if (sessionSignatureRef.current === paymentSignature) {
       return;
     }
-    if (embeddedClientSecret) {
-      setEmbeddedClientSecret(null);
-    }
-    setOrderContext(null);
-    if (paymentActivated) {
-      void prepareEmbeddedCheckout();
-    }
-  }, [
-    paymentSignature,
-    paymentActivated,
-    embeddedClientSecret,
-    prepareEmbeddedCheckout,
-  ]);
+
+    const cancelStaleAttempt = async () => {
+      const staleAttemptId = attemptIdRef.current;
+      if (staleAttemptId) {
+        try {
+          await cancelCheckoutAttempt(staleAttemptId);
+        } catch {
+          // No limpiar refs si la reserva sigue activa en backend.
+          return;
+        }
+        attemptIdRef.current = null;
+      }
+
+      if (embeddedClientSecret) {
+        setEmbeddedClientSecret(null);
+      }
+      setOrderContext(null);
+      sessionSignatureRef.current = null;
+
+      if (paymentActivated) {
+        void prepareEmbeddedCheckout();
+      }
+    };
+
+    void cancelStaleAttempt();
+  }, [paymentSignature, paymentActivated, prepareEmbeddedCheckout]);
 
   const handlePrepareEmbeddedCheckout = useCallback(() => {
     setPaymentActivated(true);
@@ -2061,6 +2096,11 @@ function CardPaymentStep({
                 key={embeddedClientSecret}
                 stripe={stripePromise}
                 options={{ clientSecret: embeddedClientSecret }}
+                onComplete={() => {
+                  paymentRedirectingRef.current = true;
+                  attemptIdRef.current = null;
+                  markCheckoutPaymentRedirecting();
+                }}
               >
                 <div className="rounded-[1.5rem] border border-border bg-card p-2">
                   <EmbeddedCheckout />
@@ -2152,8 +2192,9 @@ function CardPaymentStep({
               variant="outline"
               className="h-12 flex-1 rounded-full"
               onClick={() => void handleBack()}
+              disabled={isProcessing}
             >
-              Volver
+              {isProcessing ? "Liberando reserva..." : "Volver"}
             </Button>
             {!embeddedClientSecret ? (
               <Button
@@ -2176,8 +2217,9 @@ function CardPaymentStep({
           variant="outline"
           className="h-12 flex-1 rounded-full"
           onClick={() => void handleBack()}
+          disabled={isProcessing}
         >
-          Volver
+          {isProcessing ? "Liberando reserva..." : "Volver"}
         </Button>
         {!embeddedClientSecret ? (
           <Button
@@ -2234,6 +2276,19 @@ export default function CheckoutPage() {
     if (storedCode?.trim()) {
       setCodigoPromocion(storedCode.trim().toUpperCase());
     }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window === "undefined") {
+        return;
+      }
+      if (window.sessionStorage.getItem(CHECKOUT_PAYMENT_REDIRECTING_KEY) === "1") {
+        window.sessionStorage.removeItem(CHECKOUT_PAYMENT_REDIRECTING_KEY);
+        return;
+      }
+      void cancelActiveCheckoutAttemptIfAny().catch(() => undefined);
+    };
   }, []);
 
   const offerItemsKey = useMemo(() => {
@@ -2588,7 +2643,8 @@ export default function CheckoutPage() {
               if (currentStep > 0) {
                 void leavePaymentStepRef
                   .current?.()
-                  .finally(() => setCurrentStep(currentStep - 1));
+                  .then(() => setCurrentStep(currentStep - 1))
+                  .catch(() => undefined);
                 return;
               }
               router.back();
