@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
-import { fetchProducts } from "@/lib/api/storefront";
-import type { Product } from "@/lib/types";
+import {
+  fetchCatalogPage,
+  getRecientesCatalogQuery,
+} from "@/lib/api/storefront";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -21,21 +23,28 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { normalizeStorefrontText } from "@/lib/storefront";
 
 type SearchDrawerProps = {
   isDesktop: boolean;
+};
+
+type SearchSuggestion = {
+  id: string;
+  name: string;
+  category: string;
 };
 
 function SearchPanel({
   query,
   setQuery,
   suggestions,
+  isLoadingSuggestions,
   onSearch,
 }: {
   query: string;
   setQuery: (value: string) => void;
-  suggestions: Product[];
+  suggestions: SearchSuggestion[];
+  isLoadingSuggestions: boolean;
   onSearch: (value: string) => void;
 }) {
   return (
@@ -65,22 +74,36 @@ function SearchPanel({
           Sugerencias
         </p>
         <div className="space-y-1">
-          {suggestions.map((product) => (
-            <button
-              key={product.id}
-              type="button"
-              onClick={() => onSearch(product.name)}
-              className="flex w-full items-center justify-between border-b border-black/8 px-3 py-3 text-left transition-[background-color,border-color,transform] last:border-b-0 hover:-translate-y-px hover:bg-muted/50"
-            >
-              <div>
-                <p className="text-sm font-medium text-foreground">{product.name}</p>
-                <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                  {product.category}
-                </p>
-              </div>
-              <Search className="h-4 w-4 text-muted-foreground" />
-            </button>
-          ))}
+          {isLoadingSuggestions ? (
+            <p className="px-3 py-3 text-sm text-muted-foreground">
+              Buscando productos...
+            </p>
+          ) : suggestions.length === 0 ? (
+            <p className="px-3 py-3 text-sm text-muted-foreground">
+              {query.trim()
+                ? "Sin coincidencias. Prueba con otra palabra o revisa el catálogo completo."
+                : "Escribe para ver sugerencias del catálogo."}
+            </p>
+          ) : (
+            suggestions.map((product) => (
+              <button
+                key={product.id}
+                type="button"
+                onClick={() => onSearch(product.name)}
+                className="flex w-full items-center justify-between border-b border-black/8 px-3 py-3 text-left transition-[background-color,border-color,transform] last:border-b-0 hover:-translate-y-px hover:bg-muted/50"
+              >
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    {product.name}
+                  </p>
+                  <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    {product.category}
+                  </p>
+                </div>
+                <Search className="h-4 w-4 text-muted-foreground" />
+              </button>
+            ))
+          )}
         </div>
       </div>
     </form>
@@ -90,48 +113,43 @@ function SearchPanel({
 export function SearchDrawer({ isDesktop }: SearchDrawerProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [products, setProducts] = useState<Product[]>([]);
   const [query, setQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
 
   useEffect(() => {
-    if (!open || products.length > 0) {
+    if (!open) {
       return;
     }
 
-    const loadProducts = async () => {
-      const nextProducts = await fetchProducts();
-      setProducts(nextProducts);
-    };
+    const trimmedQuery = query.trim();
+    const timer = globalThis.setTimeout(async () => {
+      setIsLoadingSuggestions(true);
 
-    void loadProducts();
-  }, [open, products.length]);
+      try {
+        const catalogQuery = trimmedQuery
+          ? getRecientesCatalogQuery(8, { q: trimmedQuery })
+          : getRecientesCatalogQuery(6);
 
-  const suggestions = useMemo(() => {
-    const normalizedQuery = normalizeStorefrontText(query);
-    const list = products.filter(Boolean);
-
-    if (!normalizedQuery) {
-      return list.slice(0, 6);
-    }
-
-    return list
-      .map((product) => {
-        const haystack = normalizeStorefrontText(
-          `${product.name} ${product.description} ${product.category}`,
+        const response = await fetchCatalogPage(catalogQuery);
+        setSuggestions(
+          response.items.map((item) => ({
+            id: item.id,
+            name: item.nombre,
+            category: item.categoriaLabel || item.categoria,
+          })),
         );
-        const score = haystack.startsWith(normalizedQuery)
-          ? 3
-          : haystack.includes(normalizedQuery)
-            ? 2
-            : 0;
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setIsLoadingSuggestions(false);
+      }
+    }, 250);
 
-        return { product, score };
-      })
-      .filter((item) => item.score > 0)
-      .sort((left, right) => right.score - left.score)
-      .slice(0, 6)
-      .map((item) => item.product);
-  }, [products, query]);
+    return () => {
+      globalThis.clearTimeout(timer);
+    };
+  }, [open, query]);
 
   const runSearch = (value: string) => {
     const nextQuery = value.trim();
@@ -169,6 +187,7 @@ export function SearchDrawer({ isDesktop }: SearchDrawerProps) {
             query={query}
             setQuery={setQuery}
             suggestions={suggestions}
+            isLoadingSuggestions={isLoadingSuggestions}
             onSearch={runSearch}
           />
         </DialogContent>
@@ -199,6 +218,7 @@ export function SearchDrawer({ isDesktop }: SearchDrawerProps) {
           query={query}
           setQuery={setQuery}
           suggestions={suggestions}
+          isLoadingSuggestions={isLoadingSuggestions}
           onSearch={runSearch}
         />
       </SheetContent>
