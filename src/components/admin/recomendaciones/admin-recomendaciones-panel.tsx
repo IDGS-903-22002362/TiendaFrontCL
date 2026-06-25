@@ -15,14 +15,15 @@ import { getApiErrorMessage } from "@/lib/api/errors";
 import {
   cleanupRecommendationData,
   fetchAdminRecommendationConfig,
+  fetchAdminRecommendationMetrics,
   rebuildRecommendationAggregates,
   updateAdminRecommendationConfig,
   type RecommendationAdminConfig,
+  type RecommendationAdminMetricsRow,
   type RecommendationConfigSection,
   type RecommendationConfigWeight,
   type RecommendationStrategy,
 } from "@/lib/api/recommendations";
-import { apiFetch, unwrapData } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -44,15 +45,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-type MetricsRow = {
-  fecha: string;
-  impresiones: number;
-  clics: number;
-  agregadosCarrito: number;
-  compras: number;
-  conversionesAtribuidas: number;
-};
 
 const STRATEGY_OPTIONS: RecommendationStrategy[] = [
   "recientemente_vistos",
@@ -84,7 +76,7 @@ export function AdminRecomendacionesPanel() {
   const { token } = useAuth();
   const { toast } = useToast();
   const [config, setConfig] = useState<RecommendationAdminConfig | null>(null);
-  const [metrics, setMetrics] = useState<MetricsRow[]>([]);
+  const [metrics, setMetrics] = useState<RecommendationAdminMetricsRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isMaintaining, setIsMaintaining] = useState(false);
@@ -102,16 +94,12 @@ export function AdminRecomendacionesPanel() {
     if (!token) return;
     setIsLoading(true);
     try {
-      const [configData, metricsPayload] = await Promise.all([
+      const [configData, metricsData] = await Promise.all([
         fetchAdminRecommendationConfig(token),
-        apiFetch<{ data: MetricsRow[] }>(
-          "/api/recomendaciones/admin/metricas?days=30",
-          { method: "GET" },
-          { local: true, token },
-        ),
+        fetchAdminRecommendationMetrics(token),
       ]);
       setConfig(configData);
-      setMetrics(unwrapData(metricsPayload));
+      setMetrics(metricsData);
       setError(null);
     } catch (loadError) {
       setError(getApiErrorMessage(loadError));

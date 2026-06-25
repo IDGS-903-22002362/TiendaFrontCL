@@ -153,7 +153,7 @@ export async function mergeRecommendationIdentity(token: string, sessionId: stri
       method: "POST",
       body: JSON.stringify({ sessionId }),
     },
-    { local: true, token, sessionId },
+    getClientOptions(token),
   );
 }
 
@@ -190,11 +190,29 @@ export type RecommendationAdminConfig = {
   abVariant?: string;
 };
 
+export type RecommendationAdminMetricsRow = {
+  fecha: string;
+  impresiones: number;
+  clics: number;
+  agregadosCarrito: number;
+  compras: number;
+  conversionesAtribuidas: number;
+};
+
 export async function fetchAdminRecommendationConfig(token: string) {
   const payload = await apiFetch<{ data: RecommendationAdminConfig }>(
     "/api/recomendaciones/admin/config",
     { method: "GET" },
-    { local: true, token },
+    getClientOptions(token),
+  );
+  return unwrapData(payload);
+}
+
+export async function fetchAdminRecommendationMetrics(token: string, days = 30) {
+  const payload = await apiFetch<{ data: RecommendationAdminMetricsRow[] }>(
+    `/api/recomendaciones/admin/metricas?days=${days}`,
+    { method: "GET" },
+    getClientOptions(token),
   );
   return unwrapData(payload);
 }
@@ -209,7 +227,7 @@ export async function updateAdminRecommendationConfig(
       method: "PUT",
       body: JSON.stringify(config),
     },
-    { local: true, token },
+    getClientOptions(token),
   );
   return unwrapData(payload);
 }
@@ -261,7 +279,7 @@ export async function cleanupRecommendationData(token: string) {
   const payload = await apiFetch<{ data: { eventsDeleted: number; cacheDeleted: number } }>(
     "/api/recomendaciones/admin/cleanup",
     { method: "POST" },
-    { local: true, token },
+    getClientOptions(token),
   );
   return unwrapData(payload);
 }
@@ -270,6 +288,6 @@ export async function rebuildRecommendationAggregates(token: string) {
   await apiFetch(
     "/api/recomendaciones/admin/rebuild",
     { method: "POST" },
-    { local: true, token },
+    getClientOptions(token),
   );
 }
