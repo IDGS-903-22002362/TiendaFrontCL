@@ -2388,7 +2388,7 @@ export default function CheckoutPage() {
   const pricing = useMemo(
     () =>
       getExpectedCheckoutPricing(
-        subtotal,
+        subtotalConCodigo,
         fulfillmentMethod,
         fulfillmentMethod === "PICKUP"
           ? 0
@@ -2400,7 +2400,7 @@ export default function CheckoutPage() {
     [
       checkoutValues,
       fulfillmentMethod,
-      subtotal,
+      subtotalConCodigo,
       watchedDeliveryPostalCode,
     ],
   );
@@ -2444,7 +2444,7 @@ export default function CheckoutPage() {
         shippingForm.getValues("zip"),
       ),
       checkoutPricing: getExpectedCheckoutPricing(
-        subtotal,
+        subtotalConCodigo,
         "DELIVERY",
         getDeliveryShippingAmount(shippingForm.getValues("zip")),
       ),
