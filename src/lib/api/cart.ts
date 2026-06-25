@@ -529,6 +529,7 @@ export async function consultarDisponibilidadCodigosPromocionCarrito(payload: {
   return mapDisponibilidadCodigosPromocion(response);
 }
 
+/** @deprecated Usa startCheckoutAttempt + Stripe Embedded Checkout. */
 export async function checkoutCart(payload: {
   fulfillmentMethod?: CheckoutFulfillmentMethod;
   direccionEnvio?: {

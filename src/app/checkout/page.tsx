@@ -41,6 +41,7 @@ import {
   type ValidarCodigoPromocionCarritoItem,
 } from "@/lib/api/cart";
 import {
+  cancelCheckoutAttempt,
   getCheckoutAttemptStatus,
   startCheckoutAttempt,
 } from "@/lib/api/checkout-attempt";
@@ -1853,6 +1854,7 @@ function CardPaymentStep({
   codigoPromocion,
   paymentSignature,
   onBack,
+  onRegisterLeaveHandler,
   onRecoverableDeliveryError,
   stripePromise,
 }: {
@@ -1864,10 +1866,10 @@ function CardPaymentStep({
   codigoPromocion?: string;
   paymentSignature: string;
   onBack: () => void;
+  onRegisterLeaveHandler?: (handler: () => Promise<void>) => void;
   onRecoverableDeliveryError: (values: DeliveryCheckoutValues) => void;
   stripePromise: ReturnType<typeof useStripeConfig>;
 }) {
-  const router = useRouter();
   const [isProcessing, setIsProcessing] = useState(false);
   // El usuario "activa" el pago al pulsar "Pagar". A partir de ahí, cualquier
   // cambio de carrito/pricing debe recrear la sesión automáticamente.
@@ -1883,6 +1885,31 @@ function CardPaymentStep({
     total: number;
     pagoId?: string;
   } | null>(null);
+
+  const releaseActiveCheckoutAttempt = useCallback(async () => {
+    const attemptId = orderContext?.attemptId;
+    if (!attemptId) {
+      return;
+    }
+    try {
+      await cancelCheckoutAttempt(attemptId);
+    } catch {
+      // Best-effort: liberar reserva al abandonar el paso de pago.
+    }
+    setEmbeddedClientSecret(null);
+    setOrderContext(null);
+    sessionSignatureRef.current = null;
+    setPaymentActivated(false);
+  }, [orderContext?.attemptId]);
+
+  const handleBack = useCallback(async () => {
+    await releaseActiveCheckoutAttempt();
+    onBack();
+  }, [releaseActiveCheckoutAttempt, onBack]);
+
+  useEffect(() => {
+    onRegisterLeaveHandler?.(releaseActiveCheckoutAttempt);
+  }, [onRegisterLeaveHandler, releaseActiveCheckoutAttempt]);
 
   const prepareEmbeddedCheckout = useCallback(async () => {
     if (preparingRef.current || typeof window === "undefined") {
@@ -2120,22 +2147,15 @@ function CardPaymentStep({
           )}
 
           <div className="hidden gap-3 md:flex">
-            <Button type="button" variant="outline" className="h-12 flex-1 rounded-full" onClick={onBack}>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 flex-1 rounded-full"
+              onClick={() => void handleBack()}
+            >
               Volver
             </Button>
-            {embeddedClientSecret ? (
-              <Button
-                type="button"
-                className="h-12 flex-1 rounded-full"
-                onClick={() =>
-                  router.push(
-                    `/checkout/confirmation?attemptId=${encodeURIComponent(orderContext?.attemptId ?? "")}&status=processing`,
-                  )
-                }
-              >
-                Ver estado del pedido
-              </Button>
-            ) : (
+            {!embeddedClientSecret ? (
               <Button
                 type="button"
                 className="h-12 flex-1 gap-2 rounded-full"
@@ -2145,28 +2165,21 @@ function CardPaymentStep({
                 <Lock className="h-4 w-4" />
                 {isProcessing ? "Preparando pago seguro..." : `Pagar ${formatCurrency(total)}`}
               </Button>
-            )}
+            ) : null}
           </div>
         </CardContent>
       </Card>
 
       <MobileCheckoutActions>
-        <Button type="button" variant="outline" className="h-12 flex-1 rounded-full" onClick={onBack}>
+        <Button
+          type="button"
+          variant="outline"
+          className="h-12 flex-1 rounded-full"
+          onClick={() => void handleBack()}
+        >
           Volver
         </Button>
-        {embeddedClientSecret ? (
-          <Button
-            type="button"
-            className="h-12 flex-1 rounded-full"
-            onClick={() =>
-              router.push(
-                `/checkout/confirmation?attemptId=${encodeURIComponent(orderContext?.attemptId ?? "")}&status=processing`,
-              )
-            }
-          >
-            Ver estado
-          </Button>
-        ) : (
+        {!embeddedClientSecret ? (
           <Button
             type="button"
             className="h-12 flex-1 gap-2 rounded-full"
@@ -2176,7 +2189,7 @@ function CardPaymentStep({
             <Lock className="h-4 w-4" />
             {isProcessing ? "Preparando..." : `Pagar ${formatCurrency(total)}`}
           </Button>
-        )}
+        ) : null}
       </MobileCheckoutActions>
     </>
   );
@@ -2198,6 +2211,7 @@ export default function CheckoutPage() {
     null,
   );
   const router = useRouter();
+  const leavePaymentStepRef = useRef<(() => Promise<void>) | null>(null);
   const { state, subtotal, totalItems, isLoading } = useCart();
   const { isAuthenticated, user, isLoading: isAuthLoading } = useAuth();
   const stripePromise = useStripeConfig();
@@ -2570,7 +2584,15 @@ export default function CheckoutPage() {
             variant="ghost"
             size="icon"
             className="h-10 w-10 rounded-full border border-border"
-            onClick={() => (currentStep > 0 ? setCurrentStep(currentStep - 1) : router.back())}
+            onClick={() => {
+              if (currentStep > 0) {
+                void leavePaymentStepRef
+                  .current?.()
+                  .finally(() => setCurrentStep(currentStep - 1));
+                return;
+              }
+              router.back();
+            }}
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
@@ -2645,6 +2667,9 @@ export default function CheckoutPage() {
               codigoPromocion={codigoPromocionAplicado}
               paymentSignature={paymentSignature}
               onBack={() => setCurrentStep(0)}
+              onRegisterLeaveHandler={(handler) => {
+                leavePaymentStepRef.current = handler;
+              }}
               onRecoverableDeliveryError={handleRecoverableDeliveryError}
               stripePromise={stripePromise}
             />

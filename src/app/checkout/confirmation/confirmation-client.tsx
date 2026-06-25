@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertCircle,
   CheckCircle2,
@@ -19,6 +19,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ordersApi } from "@/lib/api/orders";
 import { paymentsApi } from "@/lib/api/payments";
 import {
+  cancelCheckoutAttempt,
   clearCheckoutIdempotencyKey,
   getCheckoutAttemptStatus,
 } from "@/lib/api/checkout-attempt";
@@ -108,6 +109,7 @@ type VerificationState =
   | "failed";
 
 export function ConfirmationClient() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const { reloadCart } = useCart();
   const attemptId = searchParams.get("attemptId") || "";
@@ -135,14 +137,21 @@ export function ConfirmationClient() {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stripePaidRef = useRef(false);
 
+  useEffect(() => {
+    if (!attemptId && !sessionId && !orderId) {
+      router.replace("/checkout");
+    }
+  }, [attemptId, sessionId, orderId, router]);
+
   const checkStatus = useCallback(async () => {
-    if (!attemptId && !resolvedOrderId) {
+    if (!attemptId && !resolvedOrderId && !sessionId) {
       setVerificationState("pending");
       return false;
     }
 
     let activeOrderId = resolvedOrderId;
     let activePaymentId = paymentId;
+    let currentAttemptStatus = attemptStatus;
 
     const checkoutSession = sessionId
       ? await paymentsApi.getCheckoutSession(sessionId)
@@ -154,6 +163,7 @@ export function ConfirmationClient() {
 
     if (attemptId) {
       const attempt = await getCheckoutAttemptStatus(attemptId);
+      currentAttemptStatus = attempt.status;
       setAttemptStatus(attempt.status);
       if (attempt.orderId) {
         activeOrderId = attempt.orderId;
@@ -170,23 +180,41 @@ export function ConfirmationClient() {
         setTotal(attempt.total.toFixed(2));
       }
 
+      if (
+        attempt.status === "failed" ||
+        attempt.status === "canceled" ||
+        attempt.status === "expired"
+      ) {
+        setVerificationState("failed");
+        return true;
+      }
+
       if (!activeOrderId) {
         if (isStripePaid(nextSessionPaymentStatus)) {
           stripePaidRef.current = true;
           setVerificationState("syncing");
           return false;
         }
-        if (
-          attempt.status === "failed" ||
-          attempt.status === "canceled" ||
-          attempt.status === "expired"
-        ) {
-          setVerificationState("failed");
-          return true;
-        }
         setVerificationState("syncing");
         return false;
       }
+    }
+
+    const stripeIndicatesPaid = isStripePaid(nextSessionPaymentStatus);
+    const attemptIndicatesPaid =
+      currentAttemptStatus === "finalized" || currentAttemptStatus === "paid";
+
+    if (
+      !activeOrderId ||
+      (!stripeIndicatesPaid && !attemptIndicatesPaid && Boolean(attemptId))
+    ) {
+      if (stripeIndicatesPaid) {
+        stripePaidRef.current = true;
+        setVerificationState("syncing");
+        return false;
+      }
+      setVerificationState("syncing");
+      return false;
     }
 
     const [nextOrder, payment] = await Promise.all([
@@ -233,7 +261,7 @@ export function ConfirmationClient() {
 
     setVerificationState("checking");
     return false;
-  }, [attemptId, resolvedOrderId, paymentId, sessionId]);
+  }, [attemptId, resolvedOrderId, paymentId, sessionId, attemptStatus]);
 
   useEffect(() => {
     let cancelled = false;
@@ -346,7 +374,7 @@ export function ConfirmationClient() {
           <div className="grid gap-4 p-5 md:grid-cols-3 md:p-8">
             <div className="rounded-2xl border border-border bg-muted/35 p-4">
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                Pedido
+                {isPaid ? "Pedido" : "Intento de pago"}
               </p>
               <p className="mt-2 break-all font-mono text-sm font-semibold text-foreground">
                 {isPaid && resolvedOrderId
@@ -416,9 +444,11 @@ export function ConfirmationClient() {
             </div>
 
             <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-              <Button asChild className="h-12 flex-1 rounded-full" size="lg">
-                <Link href="/order-history">Ver mis pedidos</Link>
-              </Button>
+              {isPaid ? (
+                <Button asChild className="h-12 flex-1 rounded-full" size="lg">
+                  <Link href="/order-history">Ver mis pedidos</Link>
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"

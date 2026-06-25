@@ -337,6 +337,7 @@ export type ListOrdenesQuery = {
 };
 
 export const ordersApi = {
+  /** @deprecated Usa startCheckoutAttempt + Stripe Embedded Checkout. */
   create(payload: Record<string, unknown>) {
     return apiFetch<unknown>(
       "/api/ordenes",

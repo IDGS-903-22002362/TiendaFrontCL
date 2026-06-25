@@ -146,6 +146,14 @@ export async function startCheckoutAttempt(
   return mapStartResult(data);
 }
 
+export async function cancelCheckoutAttempt(attemptId: string): Promise<void> {
+  await apiFetch<unknown>(
+    `/api/checkout/attempts/${encodeURIComponent(attemptId)}/cancel`,
+    { method: "POST" },
+    { local: true },
+  );
+}
+
 export async function getCheckoutAttemptStatus(
   attemptId: string,
 ): Promise<CheckoutAttemptStatusResult> {
