@@ -56,6 +56,15 @@ export function isPersonalizableProduct(product: Product) {
 
 export function getProductStockState(product: Product) {
   const stock = product.stockTotal ?? product.stock;
+  const stockFisico = product.stockFisico ?? stock;
+
+  if (stock <= 0 && stockFisico > 0) {
+    return {
+      label: "Temporalmente no disponible",
+      hint: "Unidades reservadas en checkout; vuelve a intentar pronto",
+      tone: "warning" as const,
+    };
+  }
 
   if (stock <= 0) {
     return {

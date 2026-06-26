@@ -27,6 +27,7 @@ import {
   getPreparationStatusLabel,
   getShippingStatusLabel,
 } from "@/lib/orders/status";
+import { getPickupCodeFromOrder } from "@/lib/orders/pickup-code";
 import type { Orden } from "@/lib/types";
 
 function formatDate(value?: string) {
@@ -111,6 +112,7 @@ export default function OrderDetailPage({
   }
 
   const isPickup = order.fulfillmentMethod === "PICKUP";
+  const pickupCode = isPickup ? getPickupCodeFromOrder(order) : null;
   const shipping = order.shipping;
   const trackingUrl = shipping?.trackingUrl;
   const trackingNumber = shipping?.trackingNumber || order.numeroGuia;
@@ -385,7 +387,19 @@ export default function OrderDetailPage({
                   value={getPickupStatusLabel(order.fulfillmentStatus)}
                 />
 
-                {order.pickupCodeLast4 ? (
+                {pickupCode ? (
+                  <div className="rounded-[0.9rem] border border-primary/25 bg-primary/5 px-4 py-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                      Código para recoger en tienda
+                    </p>
+                    <p className="mt-2 font-mono text-2xl font-bold tracking-[0.18em] text-foreground">
+                      {pickupCode}
+                    </p>
+                    <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                      Presenta este código en tienda para recibir tu pedido.
+                    </p>
+                  </div>
+                ) : order.pickupCodeLast4 ? (
                   <SummaryRow
                     label="Código de recolección"
                     value={`•••• ${order.pickupCodeLast4}`}

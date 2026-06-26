@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { inventarioApi } from "@/lib/api/inventario";
 import { getApiErrorMessage } from "@/lib/api/errors";
@@ -33,6 +32,7 @@ type DashboardRow = {
   entrante: number;
   disponible: number;
   bajoStock: boolean;
+  reservadaEnCheckout?: boolean;
   inventarioPorTalla: Array<{
     tallaId: string;
     cantidad: number;
@@ -120,23 +120,6 @@ export default function AdminInventoryDashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="default">
-            <Link href="/admin/inventario/movimientos">Registrar movimiento</Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/admin/inventario/ajustes">Ajuste / conteo</Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/admin/inventario/recepciones">Recepciones</Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/admin/inventario/alertas-stock">Ver alertas</Link>
-          </Button>
-        </div>
-      </div>
-
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
@@ -250,11 +233,19 @@ export default function AdminInventoryDashboardPage() {
                     <TableCell className="text-right">{row.reservada}</TableCell>
                     <TableCell className="text-right">{row.noDisponible}</TableCell>
                     <TableCell>
-                      {row.bajoStock ? (
-                        <Badge variant="destructive">Bajo stock</Badge>
-                      ) : (
-                        <Badge variant="outline">OK</Badge>
-                      )}
+                      <div className="flex flex-wrap gap-1">
+                        {row.bajoStock ? (
+                          <Badge variant="destructive">Bajo stock</Badge>
+                        ) : null}
+                        {(row.reservadaEnCheckout ?? row.reservada > 0) ? (
+                          <Badge variant="secondary">
+                            En checkout ({row.reservada})
+                          </Badge>
+                        ) : null}
+                        {!row.bajoStock && row.reservada <= 0 ? (
+                          <Badge variant="outline">OK</Badge>
+                        ) : null}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <Button

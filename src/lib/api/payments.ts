@@ -167,6 +167,7 @@ export const paymentsApi = {
     };
   },
 
+  /** @deprecated Usa startCheckoutAttempt + Stripe Embedded Checkout. */
   async createCheckoutSession(
     ordenId: string,
     successUrl: string,
@@ -188,6 +189,7 @@ export const paymentsApi = {
     };
   },
 
+ /** @deprecated Usa startCheckoutAttempt + Stripe Embedded Checkout. */
  async createEmbeddedCheckoutSession(
   ordenId: string,
   successUrl: string,

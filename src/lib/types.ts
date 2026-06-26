@@ -15,6 +15,7 @@ export type Product = {
   colors?: string[];
   stock: number;
   stockTotal?: number;
+  stockFisico?: number;
   tallaIds?: string[];
   inventarioPorTalla?: ProductSizeStock[];
   hasSizeInventory?: boolean;
@@ -85,6 +86,11 @@ export type Category = {
   orden?: number | null;
 };
 
+export type CartItemStockStatus =
+  | "available"
+  | "out_of_stock"
+  | "temporarily_unavailable";
+
 export type CartItem = {
   id: string;
   name: string;
@@ -94,6 +100,10 @@ export type CartItem = {
   tallaId?: string;
   size?: string;
   color?: string;
+  disponible?: number;
+  stockFisico?: number;
+  stockStatus?: CartItemStockStatus;
+  purchasable?: boolean;
 };
 
 export type Cart = {
@@ -716,6 +726,7 @@ export type CheckoutPayload = {
     email?: string;
   };
   metodoPago: PaymentMethod;
+  codigoPromocion?: string;
   shippingQuoteId?: string;
   selectedShippingOptionId?: string;
   selectedServiceType?: string;
@@ -837,6 +848,7 @@ export type CatalogProductCard = {
   imagenPrincipal: string | null;
   imagenes?: string[];
   stockTotal: number;
+  stockFisico?: number;
   disponible: boolean;
   destacado: boolean;
 };

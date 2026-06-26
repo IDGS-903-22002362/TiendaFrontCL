@@ -12,6 +12,7 @@ import type {
   ProductStockUpdatePayload,
   ProductStockUpdateResult,
 } from "@/lib/types";
+import { resolveClientBearerToken } from "@/lib/cookies/constants";
 import { apiFetch, unwrapData } from "./client";
 
 type UnknownRecord = Record<string, unknown>;
@@ -131,6 +132,125 @@ function mapProductSizeInventoryReplaceResult(
   };
 }
 
+function parseTimestamp(value: unknown): string | undefined {
+  if (typeof value === "string" && value.trim()) {
+    return value;
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as UnknownRecord & { toDate?: () => Date };
+
+    if (typeof record.toDate === "function") {
+      try {
+        const date = record.toDate();
+        if (date instanceof Date && !Number.isNaN(date.getTime())) {
+          return date.toISOString();
+        }
+      } catch {
+        // ignore invalid Firestore timestamp
+      }
+    }
+
+    const seconds = Number(record._seconds ?? record.seconds);
+    if (Number.isFinite(seconds)) {
+      return new Date(seconds * 1000).toISOString();
+    }
+  }
+
+  return undefined;
+}
+
+function mapMovementQuantity(item: UnknownRecord): number {
+  const cantidad = toNumber(item.cantidad, Number.NaN);
+  if (Number.isFinite(cantidad) && cantidad !== 0) {
+    return cantidad;
+  }
+
+  const diferencia = toNumber(item.diferencia, Number.NaN);
+  if (Number.isFinite(diferencia) && diferencia !== 0) {
+    return Math.abs(diferencia);
+  }
+
+  const cantidadAnterior = toNumber(item.cantidadAnterior);
+  const cantidadNueva = toNumber(item.cantidadNueva);
+  if (cantidadNueva !== cantidadAnterior) {
+    return Math.abs(cantidadNueva - cantidadAnterior);
+  }
+
+  return Number.isFinite(cantidad) ? cantidad : 0;
+}
+
+function flattenStockAlerts(payload: unknown): InventoryAlert[] {
+  const root = (
+    payload && typeof payload === "object" ? payload : {}
+  ) as UnknownRecord;
+
+  let alertasRaw: unknown[] = [];
+  if (Array.isArray(root.alertas)) {
+    alertasRaw = root.alertas;
+  } else if (Array.isArray(payload)) {
+    alertasRaw = payload;
+  }
+
+  const rows: InventoryAlert[] = [];
+
+  for (const rawAlert of alertasRaw) {
+    if (!rawAlert || typeof rawAlert !== "object") continue;
+
+    const product = rawAlert as UnknownRecord;
+    const productoId = toStringValue(product.productoId);
+    if (!productoId) continue;
+
+    const productoNombre =
+      toStringValue(product.descripcion ?? product.clave ?? product.productoNombre) ||
+      undefined;
+    const lineaId = toStringValue(product.lineaId) || undefined;
+    const categoriaId = toStringValue(product.categoriaId) || undefined;
+
+    if (toBoolean(product.globalBajoStock)) {
+      const stockMinimo = toNumber(product.stockMinimoGlobal);
+      const stockActual = toNumber(product.existencias);
+      rows.push({
+        productoId,
+        productoNombre,
+        stockActual,
+        stockMinimo,
+        esCritica: stockMinimo - stockActual >= 5,
+        lineaId,
+        categoriaId,
+      });
+    }
+
+    const tallas = Array.isArray(product.tallasBajoStock)
+      ? product.tallasBajoStock
+      : [];
+
+    for (const rawTalla of tallas) {
+      if (!rawTalla || typeof rawTalla !== "object") continue;
+
+      const talla = rawTalla as UnknownRecord;
+      const deficit = toNumber(talla.deficit);
+
+      rows.push({
+        productoId,
+        productoNombre,
+        tallaId: toStringValue(talla.tallaId) || undefined,
+        stockActual: toNumber(talla.cantidadActual),
+        stockMinimo: toNumber(talla.minimo),
+        esCritica: deficit >= 5,
+        lineaId,
+        categoriaId,
+      });
+    }
+  }
+
+  return rows;
+}
+
 function mapMovement(input: unknown): InventoryMovement {
   const item = (
     input && typeof input === "object" ? input : {}
@@ -141,32 +261,15 @@ function mapMovement(input: unknown): InventoryMovement {
     tipo: toStringValue(item.tipo, "entrada") as InventoryMovementType,
     productoId: toStringValue(item.productoId),
     tallaId: toStringValue(item.tallaId) || undefined,
-    cantidad: toNumber(item.cantidad),
+    cantidad: mapMovementQuantity(item),
     motivo: toStringValue(item.motivo) || undefined,
     referencia: toStringValue(item.referencia) || undefined,
     ordenId: toStringValue(item.ordenId) || undefined,
     usuarioId: toStringValue(item.usuarioId) || undefined,
-    createdAt: toStringValue(item.createdAt ?? item.fecha) || undefined,
-  };
-}
-
-function mapAlert(input: unknown): InventoryAlert {
-  const item = (
-    input && typeof input === "object" ? input : {}
-  ) as UnknownRecord;
-
-  return {
-    productoId: toStringValue(item.productoId),
-    productoNombre:
-      toStringValue(item.productoNombre ?? item.nombreProducto) || undefined,
-    tallaId: toStringValue(item.tallaId) || undefined,
-    tallaCodigo:
-      toStringValue(item.tallaCodigo ?? item.codigoTalla) || undefined,
-    stockActual: toNumber(item.stockActual ?? item.stock),
-    stockMinimo: toNumber(item.stockMinimo, 0),
-    esCritica: toBoolean(item.esCritica, false),
-    lineaId: toStringValue(item.lineaId) || undefined,
-    categoriaId: toStringValue(item.categoriaId) || undefined,
+    createdAt:
+      parseTimestamp(item.createdAt ?? item.fecha) ||
+      toStringValue(item.createdAt ?? item.fecha) ||
+      undefined,
   };
 }
 
@@ -182,6 +285,13 @@ function buildQuery(
 
   const qs = query.toString();
   return qs ? `?${qs}` : "";
+}
+
+function localAuthOptions(token?: string) {
+  return {
+    local: true as const,
+    token: resolveClientBearerToken(token),
+  };
 }
 
 export type ListMovementsParams = {
@@ -226,7 +336,7 @@ export const inventarioApi = {
         method: "PUT",
         body: JSON.stringify(payload),
       },
-      { token, local: true },
+      localAuthOptions(token),
     );
 
     return mapProductStockUpdateResult(unwrapData<unknown>(response));
@@ -243,7 +353,7 @@ export const inventarioApi = {
         method: "PUT",
         body: JSON.stringify(payload),
       },
-      { token, local: true },
+      localAuthOptions(token),
     );
 
     return mapProductSizeInventoryReplaceResult(unwrapData<unknown>(response));
@@ -256,7 +366,7 @@ export const inventarioApi = {
         method: "POST",
         body: JSON.stringify(payload),
       },
-      { token, local: true },
+      localAuthOptions(token),
     );
   },
 
@@ -271,7 +381,7 @@ export const inventarioApi = {
         method: "POST",
         body: JSON.stringify(payload),
       },
-      { token, idempotencyKey, local: true },
+      { ...localAuthOptions(token), idempotencyKey },
     );
   },
 
@@ -279,7 +389,7 @@ export const inventarioApi = {
     const payload = await apiFetch<ApiEnvelope<unknown[]>>(
       `/api/inventario/movimientos${buildQuery(params)}`,
       { method: "GET" },
-      { token, local: true },
+      localAuthOptions(token),
     );
 
     const data = unwrapData<unknown>(payload);
@@ -293,14 +403,14 @@ export const inventarioApi = {
   },
 
   async listLowStockAlerts(token: string, params: ListAlertsParams = {}) {
-    const payload = await apiFetch<ApiEnvelope<unknown[]>>(
+    const payload = await apiFetch<ApiEnvelope<unknown>>(
       `/api/inventario/alertas-stock${buildQuery(params)}`,
       { method: "GET" },
-      { token, local: true },
+      localAuthOptions(token),
     );
 
     const data = unwrapData<unknown>(payload);
-    const list = Array.isArray(data) ? data.map(mapAlert) : [];
+    const list = flattenStockAlerts(data);
 
     return {
       data: list,
@@ -322,7 +432,7 @@ export const inventarioApi = {
     const payload = await apiFetch<ApiEnvelope<unknown[]>>(
       `/api/inventario/dashboard${buildQuery(params)}`,
       { method: "GET" },
-      { token, local: true },
+      localAuthOptions(token),
     );
 
     const data = unwrapData<unknown>(payload);
@@ -339,7 +449,7 @@ export const inventarioApi = {
     const payload = await apiFetch<ApiEnvelope<unknown>>(
       `/api/inventario/diagnostico/${productoId}`,
       { method: "GET" },
-      { token, local: true },
+      localAuthOptions(token),
     );
 
     return unwrapData<unknown>(payload);
@@ -358,7 +468,7 @@ export const inventarioApi = {
     const payload = await apiFetch<ApiEnvelope<unknown[]>>(
       `/api/inventario/recepciones${buildQuery(params)}`,
       { method: "GET" },
-      { token, local: true },
+      localAuthOptions(token),
     );
 
     const data = unwrapData<unknown>(payload);
@@ -375,7 +485,7 @@ export const inventarioApi = {
     const payload = await apiFetch<ApiEnvelope<unknown>>(
       `/api/inventario/recepciones/${recepcionId}`,
       { method: "GET" },
-      { token, local: true },
+      localAuthOptions(token),
     );
 
     return unwrapData<unknown>(payload);
@@ -385,7 +495,7 @@ export const inventarioApi = {
     return apiFetch<ApiEnvelope<unknown>>(
       "/api/inventario/recepciones",
       { method: "POST", body: JSON.stringify(body) },
-      { token, local: true },
+      localAuthOptions(token),
     );
   },
 
@@ -398,7 +508,7 @@ export const inventarioApi = {
     return apiFetch<ApiEnvelope<unknown>>(
       `/api/inventario/recepciones/${recepcionId}/confirmar`,
       { method: "POST", body: JSON.stringify(body) },
-      { token, idempotencyKey, local: true },
+      { ...localAuthOptions(token), idempotencyKey },
     );
   },
 
@@ -406,7 +516,7 @@ export const inventarioApi = {
     return apiFetch<ApiEnvelope<unknown>>(
       `/api/inventario/recepciones/${recepcionId}/cerrar`,
       { method: "POST", body: JSON.stringify({}) },
-      { token, local: true },
+      localAuthOptions(token),
     );
   },
 
@@ -420,7 +530,7 @@ export const inventarioApi = {
     }>>(
       "/api/inventario/resumen-operativo",
       { method: "GET", cache: "no-store" },
-      { local: true, token: token === "cookie-session" ? undefined : token },
+      localAuthOptions(token),
     );
 
     const data = unwrapData(payload);
@@ -446,7 +556,7 @@ export const inventarioApi = {
     }>>(
       "/api/inventario/notificaciones-admin",
       { method: "GET", cache: "no-store" },
-      { local: true, token: token === "cookie-session" ? undefined : token },
+      localAuthOptions(token),
     );
 
     const data = unwrapData(payload);
@@ -471,7 +581,7 @@ export const inventarioApi = {
         method: "POST",
         body: JSON.stringify({ ids }),
       },
-      { local: true, token: token === "cookie-session" ? undefined : token },
+      localAuthOptions(token),
     );
 
     const data = unwrapData(payload);
@@ -493,7 +603,7 @@ export const inventarioApi = {
     }>>(
       "/api/inventario/notificaciones-admin/read-all",
       { method: "POST" },
-      { local: true, token: token === "cookie-session" ? undefined : token },
+      localAuthOptions(token),
     );
 
     const data = unwrapData(payload);

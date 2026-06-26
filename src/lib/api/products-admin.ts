@@ -5,6 +5,7 @@ import type {
   ProductFedexShipping,
   ProductSizeStock,
 } from "@/lib/types";
+import { resolveClientBearerToken } from "@/lib/cookies/constants";
 import { apiFetch } from "./client";
 
 export type ProductCreatePayload = {
@@ -61,13 +62,6 @@ export type ProductCreateResponse = {
   };
 };
 
-function normalizeToken(token?: string) {
-  if (!token || token === "cookie-session") {
-    return undefined;
-  }
-
-  return token;
-}
 
 function toStringValue(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -117,7 +111,7 @@ export const productsAdminApi = {
       {
         method: "GET",
       },
-      { local: true, token: normalizeToken(token) },
+      { local: true, token },
     );
   },
 
@@ -128,7 +122,7 @@ export const productsAdminApi = {
         method: "POST",
         body: JSON.stringify(payload),
       },
-      { local: true, token: normalizeToken(token) },
+      { local: true, token },
     );
 
     return {
@@ -146,7 +140,7 @@ export const productsAdminApi = {
       {
         method: "GET",
       },
-      { local: true, token: normalizeToken(token) },
+      { local: true, token },
     );
   },
 
@@ -162,7 +156,7 @@ export const productsAdminApi = {
         method: "GET",
         cache: "no-store",
       },
-      { local: true, token: normalizeToken(token) },
+      { local: true, token },
     );
 
     return Array.isArray(payload.data) ? payload.data : [];
@@ -175,7 +169,7 @@ export const productsAdminApi = {
         method: "PATCH",
         body: JSON.stringify({ activo }),
       },
-      { local: true, token: normalizeToken(token) },
+      { local: true, token },
     );
   },
 
@@ -186,7 +180,7 @@ export const productsAdminApi = {
         method: "PUT",
         body: JSON.stringify(payload),
       },
-      { local: true, token: normalizeToken(token) },
+      { local: true, token },
     );
   },
 
@@ -194,15 +188,15 @@ export const productsAdminApi = {
     return apiFetch<{ success: true }>(
       `/api/productos/${id}`,
       { method: "DELETE" },
-      { local: true, token: normalizeToken(token) },
+      { local: true, token },
     );
   },
 
   async uploadImages(id: string, formData: FormData, token?: string) {
     const headers = new Headers();
-    const normalizedToken = normalizeToken(token);
-    if (normalizedToken) {
-      headers.set("Authorization", `Bearer ${normalizedToken}`);
+    const bearerToken = resolveClientBearerToken(token);
+    if (bearerToken) {
+      headers.set("Authorization", `Bearer ${bearerToken}`);
     }
 
     const files = Array.from(formData.values()).filter(
@@ -272,7 +266,7 @@ export const productsAdminApi = {
         method: "DELETE",
         body: JSON.stringify({ imageUrl }),
       },
-      { local: true, token: normalizeToken(token) },
+      { local: true, token },
     );
   },
 
@@ -283,7 +277,7 @@ export const productsAdminApi = {
         method: "GET",
         cache: "no-store",
       },
-      { local: true, token: normalizeToken(token) },
+      { local: true, token },
     );
 
     const payloadRecord =
@@ -319,7 +313,7 @@ export const productsAdminApi = {
         method: "POST",
         body: JSON.stringify(payload),
       },
-      { local: true, token: normalizeToken(token) },
+      { local: true, token },
     );
 
     return (
@@ -340,7 +334,7 @@ export const productsAdminApi = {
         method: "PUT",
         body: JSON.stringify(payload),
       },
-      { local: true, token: normalizeToken(token) },
+      { local: true, token },
     );
 
     return (
@@ -355,7 +349,7 @@ export const productsAdminApi = {
       {
         method: "DELETE",
       },
-      { local: true, token: normalizeToken(token) },
+      { local: true, token },
     );
   },
 };

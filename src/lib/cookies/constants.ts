@@ -12,6 +12,51 @@ export const CSRF_COOKIE_NAME = "tiendafront_csrf_token";
 
 export const CSRF_HEADER_NAME = "x-csrf-token";
 
+/** Marcador interno: sesion activa via cookie HttpOnly sin JWT legible en JS. */
+export const COOKIE_SESSION_TOKEN = "cookie-session";
+
+export function isCookieBoundSessionToken(token?: string | null): boolean {
+  return token === COOKIE_SESSION_TOKEN;
+}
+
+export function isBearerJwt(token?: string | null): boolean {
+  if (!token || isCookieBoundSessionToken(token)) {
+    return false;
+  }
+
+  const parts = token.split(".");
+  return parts.length === 3 && parts.every((part) => part.length > 0);
+}
+
+export function resolveClientBearerToken(
+  token?: string | null,
+): string | undefined {
+  if (!isBearerJwt(token)) {
+    return undefined;
+  }
+
+  return token ?? undefined;
+}
+
+export function resolveAuthorizationHeader(
+  headerAuthorization: string | null | undefined,
+  cookieToken: string | null | undefined,
+): string {
+  const headerValue = headerAuthorization?.startsWith("Bearer ")
+    ? headerAuthorization.slice("Bearer ".length).trim()
+    : "";
+
+  if (isBearerJwt(headerValue)) {
+    return `Bearer ${headerValue}`;
+  }
+
+  if (isBearerJwt(cookieToken)) {
+    return `Bearer ${cookieToken}`;
+  }
+
+  return "";
+}
+
 export type CookieCategory =
   | "necessary"
   | "preferences"

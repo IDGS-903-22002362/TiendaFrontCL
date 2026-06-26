@@ -1,4 +1,3 @@
-
 import { Banner, CreateBannerDTO, UpdateBannerDTO } from "../ai/types";
 import { Product } from "../types";
 import { apiFetch } from "./client";
@@ -23,11 +22,6 @@ export type BannerActiveResponse = {
     }>;
 };
 
-function normalizeToken(token?: string) {
-    if (!token || token === "cookie-session") return undefined;
-    return token;
-}
-
 export const bannersAdminApi = {
     async getAll(): Promise<Banner[]> {
         const response = await apiFetch<BannerListResponse>(
@@ -42,7 +36,7 @@ export const bannersAdminApi = {
         const response = await apiFetch<{ success: boolean; data?: Banner }>(
             `/api/banners/${id}`,
             { method: "GET" },
-            { local: true, token: normalizeToken(token) }   // ← local: true
+            { local: true, token }   // ← local: true
         );
         return response.data || null;
     },
@@ -54,7 +48,7 @@ export const bannersAdminApi = {
                 method: "POST",
                 body: JSON.stringify(payload),
             },
-            { local: true, token: normalizeToken(token) }   // ← local: true
+            { local: true, token }   // ← local: true
         );
         if (!response.data) throw new Error("No se recibió el banner creado");
         return response.data;
@@ -67,7 +61,7 @@ export const bannersAdminApi = {
                 method: "PUT",
                 body: JSON.stringify(payload),
             },
-            { local: true, token: normalizeToken(token) }   // ← local: true
+            { local: true, token }   // ← local: true
         );
         if (!response.data) throw new Error("No se recibió el banner actualizado");
         return response.data;
@@ -77,7 +71,7 @@ export const bannersAdminApi = {
         await apiFetch<{ success: boolean }>(
             `/api/banners/${id}`,
             { method: "DELETE" },
-            { local: true, token: normalizeToken(token) }   // ← local: true
+            { local: true, token }   // ← local: true
         );
     },
 
@@ -115,7 +109,7 @@ export const bannersAdminApi = {
                 method: "POST",
                 body: formData,   // apiFetch detecta FormData y no añade Content-Type
             },
-            { local: true, token: normalizeToken(token) }
+            { local: true, token }
         );
         if (!response.data?.url) throw new Error("No se recibió la URL de la imagen");
         return { url: response.data.url };
@@ -131,7 +125,7 @@ export const bannersAdminApi = {
                 method: "POST",
                 body: formData,
             },
-            { local: true, token: normalizeToken(token) }
+            { local: true, token }
         );
         if (!response.data?.url) throw new Error("No se recibió la URL del vídeo");
         return { url: response.data.url };

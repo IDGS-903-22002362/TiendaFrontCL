@@ -1,5 +1,11 @@
-import { CSRF_HEADER_NAME } from "@/lib/cookies/constants";
+import {
+  CSRF_HEADER_NAME,
+  COOKIE_SESSION_TOKEN,
+  resolveClientBearerToken,
+} from "@/lib/cookies/constants";
 import { readCsrfTokenFromDocument } from "@/lib/cookies/csrf-client";
+
+export { COOKIE_SESSION_TOKEN, resolveClientBearerToken };
 
 const FALLBACK_API_BASE = "http://localhost:3000/api";
 
@@ -233,8 +239,9 @@ export async function apiFetch<T>(
     headers.set("Content-Type", "application/json");
   }
 
-  if (options?.token) {
-    headers.set("Authorization", `Bearer ${options.token}`);
+  const bearerToken = resolveClientBearerToken(options?.token);
+  if (bearerToken) {
+    headers.set("Authorization", `Bearer ${bearerToken}`);
   }
 
   if (options?.sessionId) {
@@ -294,8 +301,11 @@ export async function apiFetch<T>(
         _authRetryAttempt: (options?._authRetryAttempt ?? 0) + 1,
       };
 
-      if (options?.token && sessionRecovery.token) {
-        nextOptions.token = sessionRecovery.token;
+      const recoveredToken = resolveClientBearerToken(sessionRecovery.token);
+      if (recoveredToken) {
+        nextOptions.token = recoveredToken;
+      } else {
+        delete nextOptions.token;
       }
 
       return apiFetch<T>(path, init, nextOptions);

@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import {
   EntityPicker,
   type EntityOption,
 } from "@/components/admin/entity-picker";
 import { useAdminProductSearch } from "@/hooks/use-admin-product-search";
+
+const EMPTY_SEED_OPTIONS: EntityOption[] = [];
 
 type ProductSearchPickerProps = {
   className?: string;
@@ -20,6 +22,7 @@ type ProductSearchPickerProps = {
   emptyLabel?: string;
   disabled?: boolean;
   showSelectedId?: boolean;
+  seedOptions?: EntityOption[];
 };
 
 export function ProductSearchPicker({
@@ -35,6 +38,7 @@ export function ProductSearchPicker({
   emptyLabel = "Sin seleccion",
   disabled = false,
   showSelectedId = true,
+  seedOptions = EMPTY_SEED_OPTIONS,
 }: ProductSearchPickerProps) {
   const {
     query,
@@ -46,9 +50,32 @@ export function ProductSearchPicker({
     resetSearch,
   } = useAdminProductSearch(token);
 
+  const mergedOptions = useMemo(() => {
+    const byId = new Map<string, EntityOption>();
+    seedOptions.forEach((option) => {
+      if (option.id) byId.set(option.id, option);
+    });
+    options.forEach((option) => {
+      if (option.id) byId.set(option.id, option);
+    });
+    return Array.from(byId.values());
+  }, [options, seedOptions]);
+
   useEffect(() => {
-    onResultsChange?.(options);
-  }, [onResultsChange, options]);
+    if (!onResultsChange) return;
+    onResultsChange(mergedOptions);
+  }, [mergedOptions, onResultsChange]);
+
+  useEffect(() => {
+    if (!value) return;
+
+    const selected = mergedOptions.find((option) => option.id === value);
+    if (!selected?.label || selected.label === "Cargando producto...") {
+      return;
+    }
+
+    setQuery((current) => (current === selected.label ? current : selected.label));
+  }, [mergedOptions, setQuery, value]);
 
   useEffect(() => {
     if (!value) {
@@ -70,7 +97,7 @@ export function ProductSearchPicker({
       selectLabel={selectLabel}
       query={query}
       value={value}
-      options={options}
+      options={mergedOptions}
       onQueryChange={setQuery}
       onValueChange={onValueChange}
       allowEmpty={allowEmpty}

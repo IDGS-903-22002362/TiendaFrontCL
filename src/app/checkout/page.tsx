@@ -2,29 +2,37 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import { type UseFormReturn, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import {
-  EmbeddedCheckout,
-  EmbeddedCheckoutProvider,
-} from "@stripe/react-stripe-js";
 import {
   ArrowLeft,
   Clock3,
   CreditCard,
   Home,
   Lock,
-  ShieldCheck,
   Store,
   Truck,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/hooks/use-cart";
 import { useAuth } from "@/hooks/use-auth";
 import { useStorefront } from "@/hooks/use-storefront";
 import { ApiError } from "@/lib/api/client";
+import {
+  formatUnavailableItemLine,
+  getUnavailableItemsFromError,
+  type UnavailableCheckoutItem,
+} from "@/lib/cart-stock";
 import {
   fetchCart,
   getCartVariantKey,
@@ -34,10 +42,23 @@ import {
   type ValidarCodigoPromocionCarritoItem,
 } from "@/lib/api/cart";
 import {
-  getCheckoutAttemptStatus,
+  abandonCheckoutAttemptWithRetry,
+  cancelCheckoutAttempt,
+  cancelActiveCheckoutAttemptIfAny,
+  CHECKOUT_PAYMENT_REDIRECTING_KEY,
+  clearCheckoutIdempotencyKey,
+  getActiveCheckoutAttemptId,
+  getPendingCheckoutAttemptId,
+  markCheckoutPaymentRedirecting,
+  setActiveCheckoutAttemptId,
+  setPendingCheckoutAttemptId,
   startCheckoutAttempt,
 } from "@/lib/api/checkout-attempt";
-import { paymentsApi } from "@/lib/api/payments";
+import {
+  clearCheckoutDraft,
+  loadCheckoutDraft,
+  saveCheckoutDraft,
+} from "@/lib/checkout-draft";
 import {
   pickupApi,
   type FulfillmentMethod,
@@ -85,7 +106,6 @@ import type {
   CheckoutShippingAddress,
 } from "@/types/shipping";
 import { showErrorToast } from "@/lib/app-toast";
-import { useStripeConfig } from "@/hooks/use-stripe-config";
 import {
   GooglePlaceAutocompleteElement,
   type ParsedGoogleCheckoutAddress,
@@ -101,6 +121,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Form,
   FormControl,
@@ -425,6 +446,12 @@ function getCheckoutErrorMessage(error: unknown): string {
       case "CHECKOUT_CART_EMPTY":
         return "Tu carrito esta vacio. Regresa al carrito para continuar.";
       default:
+        if (error.status === 409) {
+          return (
+            error.message ||
+            "No hay suficiente stock disponible para completar tu compra."
+          );
+        }
         if (error.status === 429) {
           return "Espera unos segundos antes de reintentar el checkout.";
         }
@@ -455,6 +482,7 @@ function buildCheckoutPayload(
       pickupLocationId: values.pickupLocation.id,
       pickupContact: values.pickupContact,
       metodoPago,
+      ...promoCodeField,
     };
   }
 
@@ -464,6 +492,7 @@ function buildCheckoutPayload(
     fulfillmentMethod: "home_delivery" as const,
     direccionEnvio,
     metodoPago,
+    ...promoCodeField,
   };
 }
 
@@ -1838,57 +1867,77 @@ const PAYMENT_REASSURANCES = [
 function CardPaymentStep({
   values,
   cartId,
-  cartItems,
   total,
-  expectedSubtotal,
   codigoPromocion,
+  paymentSignature,
+  paymentCanceled,
   onBack,
+  onRegisterLeaveHandler,
   onRecoverableDeliveryError,
-  stripePromise,
 }: {
   values: CheckoutValues;
   cartId?: string;
-  cartItems: CartItem[];
   total: number;
-  expectedSubtotal: number;
   codigoPromocion?: string;
+  paymentSignature: string;
+  paymentCanceled: boolean;
   onBack: () => void;
+  onRegisterLeaveHandler?: (handler: () => Promise<void>) => void;
   onRecoverableDeliveryError: (values: DeliveryCheckoutValues) => void;
-  stripePromise: ReturnType<typeof useStripeConfig>;
 }) {
-  const router = useRouter();
   const [isProcessing, setIsProcessing] = useState(false);
-  const checkoutSessionStartedRef = useRef(false);
-  const [embeddedClientSecret, setEmbeddedClientSecret] = useState<string | null>(null);
-  const [orderContext, setOrderContext] = useState<{
-    attemptId: string;
-    total: number;
-    pagoId?: string;
-  } | null>(null);
+  const [stockUnavailableItems, setStockUnavailableItems] = useState<
+    UnavailableCheckoutItem[]
+  >([]);
+  const preparingRef = useRef(false);
+  const attemptIdRef = useRef<string | null>(null);
 
-  const handlePrepareEmbeddedCheckout = async () => {
-    if (
-      isProcessing ||
-      checkoutSessionStartedRef.current ||
-      embeddedClientSecret ||
-      typeof window === "undefined"
-    ) {
+  const releaseActiveCheckoutAttempt = useCallback(async () => {
+    const attemptId = attemptIdRef.current;
+    if (!attemptId) {
       return;
     }
 
-    if (!stripePromise) {
+    try {
+      await cancelCheckoutAttempt(attemptId);
+    } catch (error) {
       showErrorToast({
-        title: "Stripe no está listo",
-        description: "Intenta nuevamente en unos segundos.",
+        title: "No se pudo liberar la reserva",
+        description: getCheckoutErrorMessage(error),
       });
+      throw error;
+    }
+
+    attemptIdRef.current = null;
+  }, []);
+
+  const handleBack = useCallback(async () => {
+    setIsProcessing(true);
+    try {
+      await releaseActiveCheckoutAttempt();
+      onBack();
+    } catch {
+      // Mantener al usuario en pago si no se liberó la reserva.
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [releaseActiveCheckoutAttempt, onBack]);
+
+  useEffect(() => {
+    onRegisterLeaveHandler?.(releaseActiveCheckoutAttempt);
+  }, [onRegisterLeaveHandler, releaseActiveCheckoutAttempt]);
+
+  const redirectToStripeCheckout = useCallback(async () => {
+    if (preparingRef.current || typeof window === "undefined") {
       return;
     }
 
+    preparingRef.current = true;
     setIsProcessing(true);
+    setStockUnavailableItems([]);
 
     try {
       assertDeliveryShippingReady(values);
-
 
       if (values.fulfillmentMethod === "PICKUP") {
         const pickupCart = await resolveCartIdForPickup(cartId);
@@ -1905,24 +1954,42 @@ function CardPaymentStep({
         }
       }
 
-      const attempt = await startCheckoutAttempt({
-        ...buildCheckoutPayload(values, "TARJETA", codigoPromocion),
-        successUrl: `${window.location.origin}/checkout/confirmation?attemptId={CHECKOUT_ATTEMPT_ID}&session_id={CHECKOUT_SESSION_ID}&status=processing&total=${encodeURIComponent(total.toFixed(2))}`,
-        cancelUrl: `${window.location.origin}/checkout`,
-      });
+      const origin = window.location.origin;
+      const attempt = await startCheckoutAttempt(
+        {
+          ...buildCheckoutPayload(values, "TARJETA", codigoPromocion),
+          successUrl: `${origin}/checkout/confirmation?attemptId={CHECKOUT_ATTEMPT_ID}&session_id={CHECKOUT_SESSION_ID}&status=processing&total=${encodeURIComponent(total.toFixed(2))}`,
+          cancelUrl: `${origin}/checkout?payment_canceled=1`,
+          retryPayment: paymentCanceled,
+        },
+        { cartSignature: paymentSignature },
+      );
 
-      if (!attempt.attemptId || !attempt.clientSecret) {
-        throw new Error("No se recibió un intento de checkout válido");
+      if (!attempt.attemptId || !attempt.url) {
+        throw new Error("No se recibió una URL de pago válida");
       }
 
-      setOrderContext({
-        attemptId: attempt.attemptId,
-        total: attempt.total ?? total,
-        pagoId: attempt.pagoId,
+      attemptIdRef.current = attempt.attemptId;
+      setActiveCheckoutAttemptId(attempt.attemptId);
+      setPendingCheckoutAttemptId(attempt.attemptId);
+      saveCheckoutDraft({
+        paymentSignature,
+        fulfillmentMethod: values.fulfillmentMethod,
+        checkoutValues: values,
+        selectedPickupLocationId:
+          values.fulfillmentMethod === "PICKUP" ? values.pickupLocation.id : "",
+        pickupContact:
+          values.fulfillmentMethod === "PICKUP"
+            ? values.pickupContact
+            : { name: "", phone: "", email: "" },
       });
-      checkoutSessionStartedRef.current = true;
-      setEmbeddedClientSecret(attempt.clientSecret);
+      markCheckoutPaymentRedirecting();
+      window.location.assign(attempt.url);
     } catch (error) {
+      const unavailableItems = getUnavailableItemsFromError(error);
+      if (unavailableItems.length > 0) {
+        setStockUnavailableItems(unavailableItems);
+      }
       const retryValues = buildRetryDeliveryValuesFromCheckoutError(
         values,
         error,
@@ -1930,14 +1997,23 @@ function CardPaymentStep({
       if (retryValues) {
         onRecoverableDeliveryError(retryValues);
       }
+      clearCheckoutIdempotencyKey();
       showErrorToast({
-        title: "No se pudo preparar el pago",
+        title: "No se pudo iniciar el pago",
         description: getCheckoutErrorMessage(error),
       });
-    } finally {
+      preparingRef.current = false;
       setIsProcessing(false);
     }
-  };
+  }, [
+    cartId,
+    codigoPromocion,
+    onRecoverableDeliveryError,
+    paymentCanceled,
+    paymentSignature,
+    total,
+    values,
+  ]);
 
   return (
     <>
@@ -1959,169 +2035,171 @@ function CardPaymentStep({
         </CardHeader>
 
         <CardContent className="space-y-5 pt-5">
-          {embeddedClientSecret ? (
-            <div className="space-y-4">
-              <div className="flex items-start gap-3 rounded-[1.4rem] border border-primary/25 bg-primary/8 px-4 py-3 text-sm text-primary">
-                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-                <p>
-                  Completa tu pago abajo. Stripe valida el total final con el
-                  backend. Tu pedido se creará cuando el pago quede confirmado.
-                </p>
-              </div>
-              <p className="text-xs leading-5 text-muted-foreground">
-                {PAYMENT_METHODS_NOTICE} {MSI_NOTICE}
-              </p>
-              <EmbeddedCheckoutProvider
-                stripe={stripePromise}
-                options={{ clientSecret: embeddedClientSecret }}
-              >
-                <div className="rounded-[1.5rem] border border-border bg-card p-2">
-                  <EmbeddedCheckout />
-                </div>
-              </EmbeddedCheckoutProvider>
-            </div>
-          ) : (
-            <>
-              <div className="relative overflow-hidden rounded-[1.6rem] border border-primary/15 bg-[linear-gradient(135deg,rgba(7,58,38,0.06),rgba(246,248,243,0.6))] p-5">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-card text-primary">
-                      <CreditCard className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-base font-semibold text-foreground">
-                        Paga con tarjeta vía Stripe
-                      </p>
-                      <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                        Tarjeta, Apple Pay, Google Pay y Link en un formulario
-                        seguro. Stripe muestra los métodos compatibles con tu
-                        dispositivo y navegador.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-5 flex flex-wrap items-center gap-2.5">
-                  {ACCEPTED_PAYMENT_BRANDS.map((brand) => (
-                    <div
-                      key={brand.name}
-                      className="flex h-9 items-center justify-center rounded-xl border border-black/6 bg-white/95 px-2.5 shadow-[0_8px_24px_-22px_rgb(8_12_10_/_0.4)]"
-                    >
-                      <Image
-                        src={brand.src}
-                        alt={brand.name}
-                        width={56}
-                        height={22}
-                        className="h-5 w-auto object-contain"
-                      />
-                    </div>
+          {stockUnavailableItems.length > 0 ? (
+            <Alert variant="destructive" className="rounded-[1.2rem]">
+              <AlertTitle>No puedes continuar con la compra</AlertTitle>
+              <AlertDescription>
+                <ul className="mt-2 list-disc space-y-1 pl-4">
+                  {stockUnavailableItems.map((item) => (
+                    <li key={`${item.productId}-${item.tallaId ?? "global"}`}>
+                      {formatUnavailableItemLine(item)}
+                    </li>
                   ))}
-                </div>
-              </div>
+                </ul>
+              </AlertDescription>
+            </Alert>
+          ) : null}
 
-              <div className="flex items-center justify-between gap-3 rounded-[1.4rem] border border-border bg-muted/45 px-5 py-4">
+          {paymentCanceled ? (
+            <Alert className="rounded-[1.2rem] border-primary/20 bg-primary/5">
+              <AlertTitle>Pago no completado</AlertTitle>
+              <AlertDescription>
+                No se realizó ningún cargo. Tu carrito sigue disponible y puedes
+                volver a intentar cuando quieras.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
+          <div className="relative overflow-hidden rounded-[1.6rem] border border-primary/15 bg-[linear-gradient(135deg,rgba(7,58,38,0.06),rgba(246,248,243,0.6))] p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-card text-primary">
+                  <CreditCard className="h-5 w-5" />
+                </div>
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    Total a pagar
+                  <p className="text-base font-semibold text-foreground">
+                    Paga con tarjeta vía Stripe
                   </p>
-                  <p className="mt-1 font-headline text-3xl font-semibold uppercase leading-none tracking-[0.02em]">
-                    {formatCurrency(total)}
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                    Serás redirigido a la página segura de Stripe para completar
+                    el pago con tarjeta, Link, Apple Pay o Google Pay según tu
+                    dispositivo.
                   </p>
                 </div>
               </div>
+            </div>
 
-              <ul className="grid gap-2.5">
-                {PAYMENT_REASSURANCES.map((item) => (
-                  <li
-                    key={item.title}
-                    className="flex items-start gap-3 rounded-[1.2rem] border border-border/70 bg-card px-4 py-3"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/15 bg-primary/8 text-primary">
-                      <item.icon className="h-4 w-4" />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-foreground">
-                        {item.title}
-                      </p>
-                      <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                        {item.description}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              <p className="text-xs leading-5 text-muted-foreground">
-                {PAYMENT_METHODS_NOTICE}
+            <div className="mt-5 flex flex-wrap items-center gap-2.5">
+              {ACCEPTED_PAYMENT_BRANDS.map((brand) => (
+                <div
+                  key={brand.name}
+                  className="flex h-9 items-center justify-center rounded-xl border border-black/6 bg-white/95 px-2.5 shadow-[0_8px_24px_-22px_rgb(8_12_10_/_0.4)]"
+                >
+                  <Image
+                    src={brand.src}
+                    alt={brand.name}
+                    width={56}
+                    height={22}
+                    className="h-5 w-auto object-contain"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 rounded-[1.4rem] border border-border bg-muted/45 px-5 py-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                Total a pagar
               </p>
-              <p className="text-xs leading-5 text-muted-foreground">
-                {MSI_NOTICE}
+              <p className="mt-1 font-headline text-3xl font-semibold uppercase leading-none tracking-[0.02em]">
+                {formatCurrency(total)}
               </p>
-            </>
-          )}
+            </div>
+          </div>
+
+          <ul className="grid gap-2.5">
+            {PAYMENT_REASSURANCES.map((item) => (
+              <li
+                key={item.title}
+                className="flex items-start gap-3 rounded-[1.2rem] border border-border/70 bg-card px-4 py-3"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/15 bg-primary/8 text-primary">
+                  <item.icon className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">
+                    {item.title}
+                  </p>
+                  <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                    {item.description}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs leading-5 text-muted-foreground">
+            {PAYMENT_METHODS_NOTICE}
+          </p>
+          <p className="text-xs leading-5 text-muted-foreground">
+            {MSI_NOTICE}
+          </p>
 
           <div className="hidden gap-3 md:flex">
-            <Button type="button" variant="outline" className="h-12 flex-1 rounded-full" onClick={onBack}>
-              Volver
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 flex-1 rounded-full"
+              onClick={() => void handleBack()}
+              disabled={isProcessing}
+            >
+              {isProcessing ? "Liberando reserva..." : "Volver"}
             </Button>
-            {embeddedClientSecret ? (
-              <Button
-                type="button"
-                className="h-12 flex-1 rounded-full"
-                onClick={() =>
-                  router.push(
-                    `/checkout/confirmation?attemptId=${encodeURIComponent(orderContext?.attemptId ?? "")}&status=processing`,
-                  )
-                }
-              >
-                Ver estado del pedido
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                className="h-12 flex-1 gap-2 rounded-full"
-                onClick={() => void handlePrepareEmbeddedCheckout()}
-                disabled={isProcessing || !stripePromise}
-              >
-                <Lock className="h-4 w-4" />
-                {isProcessing ? "Preparando pago seguro..." : `Pagar ${formatCurrency(total)}`}
-              </Button>
-            )}
+            <Button
+              type="button"
+              className="h-12 flex-1 gap-2 rounded-full"
+              onClick={() => void redirectToStripeCheckout()}
+              disabled={isProcessing}
+            >
+              <Lock className="h-4 w-4" />
+              {isProcessing
+                ? "Redirigiendo a Stripe..."
+                : paymentCanceled
+                  ? "Volver a intentar"
+                  : `Pagar ${formatCurrency(total)}`}
+            </Button>
           </div>
         </CardContent>
       </Card>
 
       <MobileCheckoutActions>
-        <Button type="button" variant="outline" className="h-12 flex-1 rounded-full" onClick={onBack}>
-          Volver
+        <Button
+          type="button"
+          variant="outline"
+          className="h-12 flex-1 rounded-full"
+          onClick={() => void handleBack()}
+          disabled={isProcessing}
+        >
+          {isProcessing ? "Liberando reserva..." : "Volver"}
         </Button>
-        {embeddedClientSecret ? (
-          <Button
-            type="button"
-            className="h-12 flex-1 rounded-full"
-            onClick={() =>
-              router.push(
-                `/checkout/confirmation?attemptId=${encodeURIComponent(orderContext?.attemptId ?? "")}&status=processing`,
-              )
-            }
-          >
-            Ver estado
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            className="h-12 flex-1 gap-2 rounded-full"
-            onClick={() => void handlePrepareEmbeddedCheckout()}
-            disabled={isProcessing || !stripePromise}
-          >
-            <Lock className="h-4 w-4" />
-            {isProcessing ? "Preparando..." : `Pagar ${formatCurrency(total)}`}
-          </Button>
-        )}
+        <Button
+          type="button"
+          className="h-12 flex-1 gap-2 rounded-full"
+          onClick={() => void redirectToStripeCheckout()}
+          disabled={isProcessing}
+        >
+          <Lock className="h-4 w-4" />
+          {isProcessing
+            ? "Redirigiendo..."
+            : paymentCanceled
+              ? "Reintentar"
+              : `Pagar ${formatCurrency(total)}`}
+        </Button>
       </MobileCheckoutActions>
     </>
   );
 }
+function readPaymentCanceledFromUrl(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return new URLSearchParams(window.location.search).get("payment_canceled") === "1";
+}
+
 export default function CheckoutPage() {
+  const [showPaymentCanceled, setShowPaymentCanceled] = useState(false);
+  const [paymentCanceledLanding] = useState(readPaymentCanceledFromUrl);
+  const paymentDraftRestoredRef = useRef(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [fulfillmentMethod, setFulfillmentMethod] =
     useState<FulfillmentMethod>("DELIVERY");
@@ -2137,10 +2215,11 @@ export default function CheckoutPage() {
   const [checkoutValues, setCheckoutValues] = useState<CheckoutValues | null>(
     null,
   );
+  const { toast } = useToast();
   const router = useRouter();
+  const leavePaymentStepRef = useRef<(() => Promise<void>) | null>(null);
   const { state, subtotal, totalItems, isLoading } = useCart();
   const { isAuthenticated, user, isLoading: isAuthLoading } = useAuth();
-  const stripePromise = useStripeConfig();
   const [pricingOfertas, setPricingOfertas] = useState<
     Record<string, ProductOfferPricing>
   >({});
@@ -2149,6 +2228,62 @@ export default function CheckoutPage() {
     useState<ResultadoCodigoPromocionCarrito | null>(null);
   const [codigoError, setCodigoError] = useState<string | null>(null);
   const [isLoadingCodigo, setIsLoadingCodigo] = useState(false);
+
+  useEffect(() => {
+    if (!paymentCanceledLanding) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      const attemptId =
+        getPendingCheckoutAttemptId() ?? getActiveCheckoutAttemptId();
+
+      if (attemptId) {
+        try {
+          const result = await abandonCheckoutAttemptWithRetry(attemptId, 1);
+          if (cancelled) {
+            return;
+          }
+          if (result.orderId) {
+            router.replace(
+              `/checkout/confirmation?attemptId=${encodeURIComponent(result.attemptId)}&status=processing`,
+            );
+            return;
+          }
+        } catch {
+          if (!cancelled) {
+            toast({
+              variant: "destructive",
+              title: "No pudimos liberar la reserva",
+              description:
+                "Tu inventario se liberará automáticamente en unos minutos. Puedes volver a intentar el pago.",
+            });
+          }
+        }
+      }
+
+      if (cancelled) {
+        return;
+      }
+
+      setShowPaymentCanceled(true);
+      clearCheckoutIdempotencyKey();
+      router.replace("/checkout", { scroll: false });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [paymentCanceledLanding, router, toast]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.sessionStorage.removeItem(CHECKOUT_PAYMENT_REDIRECTING_KEY);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -2160,6 +2295,19 @@ export default function CheckoutPage() {
     if (storedCode?.trim()) {
       setCodigoPromocion(storedCode.trim().toUpperCase());
     }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window === "undefined") {
+        return;
+      }
+      if (window.sessionStorage.getItem(CHECKOUT_PAYMENT_REDIRECTING_KEY) === "1") {
+        return;
+      }
+      clearCheckoutDraft();
+      void cancelActiveCheckoutAttemptIfAny().catch(() => undefined);
+    };
   }, []);
 
   const offerItemsKey = useMemo(() => {
@@ -2388,7 +2536,7 @@ export default function CheckoutPage() {
   const pricing = useMemo(
     () =>
       getExpectedCheckoutPricing(
-        subtotal,
+        subtotalConCodigo,
         fulfillmentMethod,
         fulfillmentMethod === "PICKUP"
           ? 0
@@ -2400,7 +2548,7 @@ export default function CheckoutPage() {
     [
       checkoutValues,
       fulfillmentMethod,
-      subtotal,
+      subtotalConCodigo,
       watchedDeliveryPostalCode,
     ],
   );
@@ -2416,6 +2564,78 @@ export default function CheckoutPage() {
     [state.items],
   );
   const total = pricing.total;
+
+  // Firma del carrito + pricing que determina el monto a cobrar en Stripe.
+  // Incluye items (vía cartSignature), total, subtotal con código, código
+  // aplicado y método de entrega. Si cambia, el intento/clientSecret deben
+  // recrearse para evitar cobrar un monto obsoleto.
+  const paymentSignature = useMemo(
+    () =>
+      [
+        `cart=${cartSignature}`,
+        `total=${roundCurrency(total)}`,
+        `subtotal=${roundCurrency(subtotalConCodigo)}`,
+        `codigo=${codigoPromocionAplicado}`,
+        `fulfillment=${fulfillmentMethod}`,
+      ].join("||"),
+    [
+      cartSignature,
+      total,
+      subtotalConCodigo,
+      codigoPromocionAplicado,
+      fulfillmentMethod,
+    ],
+  );
+
+  useEffect(() => {
+    if (!paymentCanceledLanding || paymentDraftRestoredRef.current || isLoading) {
+      return;
+    }
+
+    paymentDraftRestoredRef.current = true;
+
+    const draft = loadCheckoutDraft();
+    if (!draft) {
+      setCurrentStep(0);
+      return;
+    }
+
+    const restoredValues = draft.checkoutValues as CheckoutValues;
+
+    setFulfillmentMethod(draft.fulfillmentMethod);
+    setCheckoutValues(restoredValues);
+
+    if (draft.selectedPickupLocationId) {
+      setSelectedPickupLocationId(draft.selectedPickupLocationId);
+    }
+
+    if (draft.pickupContact) {
+      setPickupContact(draft.pickupContact);
+    }
+
+    if (
+      draft.fulfillmentMethod === "DELIVERY" &&
+      restoredValues.fulfillmentMethod === "DELIVERY"
+    ) {
+      shippingForm.reset(
+        {
+          name: restoredValues.name,
+          telefono: restoredValues.telefono,
+          calle: restoredValues.calle,
+          numero: restoredValues.numero,
+          numeroInterior: restoredValues.numeroInterior ?? "",
+          colonia: restoredValues.colonia,
+          city: restoredValues.city,
+          estado: restoredValues.estado,
+          zip: restoredValues.zip,
+          email: restoredValues.email,
+        },
+        { keepErrors: false, keepTouched: true, keepDirty: true },
+      );
+    }
+
+    setCurrentStep(1);
+  }, [isLoading, paymentCanceledLanding, shippingForm]);
 
   const activeCheckoutValues =
     checkoutValues ??
@@ -2444,7 +2664,7 @@ export default function CheckoutPage() {
         shippingForm.getValues("zip"),
       ),
       checkoutPricing: getExpectedCheckoutPricing(
-        subtotal,
+        subtotalConCodigo,
         "DELIVERY",
         getDeliveryShippingAmount(shippingForm.getValues("zip")),
       ),
@@ -2488,7 +2708,16 @@ export default function CheckoutPage() {
             variant="ghost"
             size="icon"
             className="h-10 w-10 rounded-full border border-border"
-            onClick={() => (currentStep > 0 ? setCurrentStep(currentStep - 1) : router.back())}
+            onClick={() => {
+              if (currentStep > 0) {
+                void leavePaymentStepRef
+                  .current?.()
+                  .then(() => setCurrentStep(currentStep - 1))
+                  .catch(() => undefined);
+                return;
+              }
+              router.back();
+            }}
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
@@ -2553,38 +2782,20 @@ export default function CheckoutPage() {
                 setCurrentStep(1);
               }}
             />
-          ) : stripePromise ? (
+          ) : (
             <CardPaymentStep
               values={activeCheckoutValues}
               cartId={state.id}
-              cartItems={state.items}
               total={total}
-              expectedSubtotal={subtotalConCodigo}
-              codigoPromocion={codigoPromocion}
+              codigoPromocion={codigoPromocionAplicado}
+              paymentSignature={paymentSignature}
+              paymentCanceled={showPaymentCanceled}
               onBack={() => setCurrentStep(0)}
+              onRegisterLeaveHandler={(handler) => {
+                leavePaymentStepRef.current = handler;
+              }}
               onRecoverableDeliveryError={handleRecoverableDeliveryError}
-              stripePromise={stripePromise}
             />
-          ) : (
-            <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
-              <CardHeader>
-                <CardTitle>Pago no disponible</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm leading-6 text-muted-foreground">
-                  No pudimos inicializar el pago seguro en este momento. Recarga
-                  la página o inténtalo de nuevo en unos segundos.
-                </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-12 rounded-full"
-                  onClick={() => setCurrentStep(0)}
-                >
-                  Volver a entrega
-                </Button>
-              </CardContent>
-            </Card>
           )}
 
           <PaymentMethodStrip

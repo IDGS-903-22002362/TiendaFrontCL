@@ -11,6 +11,7 @@ import { CookieConsentProvider } from "@/hooks/use-cookie-consent";
 import { CookieConsentHost } from "@/components/cookies/cookie-consent-host";
 import { Suspense } from "react";
 import { CookieSettingsOpener } from "@/components/cookies/cookie-settings-opener";
+import { PendingCheckoutReconciler } from "@/components/checkout/pending-checkout-reconciler";
 
 const bodyFont = Ubuntu({
   subsets: ["latin"],
@@ -30,6 +31,11 @@ export const metadata: Metadata = {
     template: "%s | La Guarida",
   },
   description: "Tienda oficial del Club León con experiencia premium deportiva.",
+  icons: {
+    icon: [{ url: "/images/leon.ico", type: "image/x-icon" }],
+    shortcut: "/images/leon.ico",
+    apple: "/images/leon.ico",
+  },
 };
 
 export default function RootLayout({
@@ -42,6 +48,7 @@ export default function RootLayout({
       <body className={`${bodyFont.variable} ${headlineFont.variable} font-body antialiased`}>
         <CookieConsentProvider>
           <AuthProvider>
+            <PendingCheckoutReconciler />
             <StorefrontProvider>
               <CartProvider>
                 <StorefrontShell>{children}</StorefrontShell>

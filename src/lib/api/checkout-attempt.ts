@@ -2,17 +2,26 @@ import type { CheckoutPayload } from "@/lib/types";
 import { apiFetch, unwrapData } from "./client";
 
 const IDEMPOTENCY_STORAGE_KEY = "tiendafront_checkout_idempotency_key";
+const IDEMPOTENCY_SIGNATURE_KEY = "tiendafront_checkout_idempotency_signature";
+const ACTIVE_ATTEMPT_STORAGE_KEY = "tiendafront_checkout_active_attempt_id";
+export const PENDING_ATTEMPT_STORAGE_KEY =
+  "tiendafront_checkout_pending_attempt_id";
+const PENDING_ATTEMPT_LOCAL_KEY = PENDING_ATTEMPT_STORAGE_KEY;
+export const CHECKOUT_PAYMENT_REDIRECTING_KEY =
+  "tiendafront_checkout_payment_redirecting";
 
 type UnknownRecord = Record<string, unknown>;
 
 export type CheckoutAttemptStartPayload = CheckoutPayload & {
   successUrl: string;
   cancelUrl: string;
+  retryPayment?: boolean;
 };
 
 export type CheckoutAttemptStartResult = {
   attemptId: string;
   status: string;
+  url?: string;
   clientSecret?: string;
   sessionId?: string;
   pagoId?: string;
@@ -48,6 +57,7 @@ function mapStartResult(input: unknown): CheckoutAttemptStartResult {
   return {
     attemptId: toStringValue(record.attemptId),
     status: toStringValue(record.status),
+    url: toStringValue(record.url) || undefined,
     clientSecret: toStringValue(record.clientSecret) || undefined,
     sessionId: toStringValue(record.sessionId) || undefined,
     pagoId: toStringValue(record.pagoId) || undefined,
@@ -71,6 +81,12 @@ function mapStatusResult(input: unknown): CheckoutAttemptStatusResult {
   };
 }
 
+function generateIdempotencyKey(): string {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function getOrCreateCheckoutIdempotencyKey(): string {
   if (typeof window === "undefined") {
     return `server-checkout-${Date.now()}`;
@@ -79,23 +95,124 @@ export function getOrCreateCheckoutIdempotencyKey(): string {
   if (existing && existing.length >= 8) {
     return existing;
   }
-  const key =
-    typeof crypto !== "undefined" && crypto.randomUUID
-      ? crypto.randomUUID()
-      : `checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const key = generateIdempotencyKey();
   window.sessionStorage.setItem(IDEMPOTENCY_STORAGE_KEY, key);
+  return key;
+}
+
+/**
+ * Devuelve un Idempotency-Key estable mientras la firma del carrito/pricing no
+ * cambie. Si la firma cambia (items, cantidades, tallas, oferta o código), rota
+ * la key para que el backend genere una sesión de Stripe nueva con el monto
+ * correcto. Reintentos con la misma firma reutilizan la key (idempotencia segura).
+ */
+export function getCheckoutIdempotencyKeyForSignature(
+  signature: string,
+): string {
+  if (typeof window === "undefined") {
+    return `server-checkout-${Date.now()}`;
+  }
+  const existingKey = window.sessionStorage.getItem(IDEMPOTENCY_STORAGE_KEY);
+  const existingSignature = window.sessionStorage.getItem(
+    IDEMPOTENCY_SIGNATURE_KEY,
+  );
+  if (
+    existingKey &&
+    existingKey.length >= 8 &&
+    existingSignature === signature
+  ) {
+    return existingKey;
+  }
+  const key = generateIdempotencyKey();
+  window.sessionStorage.setItem(IDEMPOTENCY_STORAGE_KEY, key);
+  window.sessionStorage.setItem(IDEMPOTENCY_SIGNATURE_KEY, signature);
   return key;
 }
 
 export function clearCheckoutIdempotencyKey(): void {
   if (typeof window === "undefined") return;
   window.sessionStorage.removeItem(IDEMPOTENCY_STORAGE_KEY);
+  window.sessionStorage.removeItem(IDEMPOTENCY_SIGNATURE_KEY);
+}
+
+export function setActiveCheckoutAttemptId(attemptId: string): void {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.setItem(ACTIVE_ATTEMPT_STORAGE_KEY, attemptId);
+}
+
+export function clearActiveCheckoutAttemptId(): void {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.removeItem(ACTIVE_ATTEMPT_STORAGE_KEY);
+}
+
+export function getActiveCheckoutAttemptId(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.sessionStorage.getItem(ACTIVE_ATTEMPT_STORAGE_KEY);
+}
+
+export type CheckoutAttemptAbandonResult = {
+  attemptId: string;
+  status: string;
+  orderId?: string;
+  alreadyAbandoned?: boolean;
+};
+
+function mapAbandonResult(input: unknown): CheckoutAttemptAbandonResult {
+  const record =
+    input && typeof input === "object" ? (input as UnknownRecord) : {};
+  return {
+    attemptId: toStringValue(record.attemptId),
+    status: toStringValue(record.status),
+    orderId: toStringValue(record.orderId) || undefined,
+    alreadyAbandoned: record.alreadyAbandoned === true,
+  };
+}
+
+export function setPendingCheckoutAttemptId(attemptId: string): void {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.setItem(PENDING_ATTEMPT_STORAGE_KEY, attemptId);
+  window.localStorage.setItem(PENDING_ATTEMPT_LOCAL_KEY, attemptId);
+}
+
+export function getPendingCheckoutAttemptId(): string | null {
+  if (typeof window === "undefined") return null;
+  return (
+    window.sessionStorage.getItem(PENDING_ATTEMPT_STORAGE_KEY) ||
+    window.localStorage.getItem(PENDING_ATTEMPT_LOCAL_KEY)
+  );
+}
+
+export function clearPendingCheckoutAttemptId(): void {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.removeItem(PENDING_ATTEMPT_STORAGE_KEY);
+  window.localStorage.removeItem(PENDING_ATTEMPT_LOCAL_KEY);
+}
+
+export function markCheckoutPaymentRedirecting(): void {
+  if (typeof window === "undefined") return;
+  const attemptId = getActiveCheckoutAttemptId();
+  if (attemptId) {
+    setPendingCheckoutAttemptId(attemptId);
+  }
+  window.sessionStorage.setItem(CHECKOUT_PAYMENT_REDIRECTING_KEY, "1");
+}
+
+export async function cancelActiveCheckoutAttemptIfAny(): Promise<void> {
+  const attemptId =
+    getActiveCheckoutAttemptId() ?? getPendingCheckoutAttemptId();
+  if (!attemptId) {
+    return;
+  }
+  await cancelCheckoutAttempt(attemptId);
 }
 
 export async function startCheckoutAttempt(
   payload: CheckoutAttemptStartPayload,
+  options?: { cartSignature?: string },
 ): Promise<CheckoutAttemptStartResult> {
-  const idempotencyKey = getOrCreateCheckoutIdempotencyKey();
+  const idempotencyKey = options?.cartSignature
+    ? getCheckoutIdempotencyKeyForSignature(options.cartSignature)
+    : getOrCreateCheckoutIdempotencyKey();
   const raw = await apiFetch<unknown>(
     "/api/checkout/attempts",
     {
@@ -106,6 +223,97 @@ export async function startCheckoutAttempt(
   );
   const data = unwrapData<unknown>(raw);
   return mapStartResult(data);
+}
+
+export async function cancelCheckoutAttempt(attemptId: string): Promise<void> {
+  await apiFetch<unknown>(
+    `/api/checkout/attempts/${encodeURIComponent(attemptId)}/cancel`,
+    { method: "POST" },
+    { local: true },
+  );
+  if (getActiveCheckoutAttemptId() === attemptId) {
+    clearActiveCheckoutAttemptId();
+  }
+  if (getPendingCheckoutAttemptId() === attemptId) {
+    clearPendingCheckoutAttemptId();
+  }
+}
+
+export type CheckoutAttemptReconcilePendingResult = {
+  reconciled: number;
+  finalized: string[];
+  released: string[];
+};
+
+function mapReconcilePendingResult(
+  input: unknown,
+): CheckoutAttemptReconcilePendingResult {
+  const record =
+    input && typeof input === "object" ? (input as UnknownRecord) : {};
+  const finalized = Array.isArray(record.finalized)
+    ? record.finalized.map((item) => toStringValue(item))
+    : [];
+  const released = Array.isArray(record.released)
+    ? record.released.map((item) => toStringValue(item))
+    : [];
+  return {
+    reconciled: toNumber(record.reconciled, 0),
+    finalized,
+    released,
+  };
+}
+
+export async function reconcilePendingCheckoutAttempts(): Promise<CheckoutAttemptReconcilePendingResult> {
+  const raw = await apiFetch<unknown>(
+    "/api/checkout/attempts/reconcile-pending",
+    { method: "POST" },
+    { local: true },
+  );
+  const data = unwrapData<unknown>(raw);
+  const result = mapReconcilePendingResult(data);
+  const pendingId = getPendingCheckoutAttemptId();
+  if (
+    pendingId &&
+    (result.released.includes(pendingId) ||
+      result.finalized.includes(pendingId))
+  ) {
+    clearPendingCheckoutAttemptId();
+  }
+  return result;
+}
+
+export async function abandonCheckoutAttemptWithRetry(
+  attemptId: string,
+  retries = 1,
+): Promise<CheckoutAttemptAbandonResult> {
+  try {
+    return await abandonCheckoutAttempt(attemptId);
+  } catch (error) {
+    if (retries <= 0) {
+      throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    return abandonCheckoutAttemptWithRetry(attemptId, retries - 1);
+  }
+}
+
+export async function abandonCheckoutAttempt(
+  attemptId: string,
+): Promise<CheckoutAttemptAbandonResult> {
+  const raw = await apiFetch<unknown>(
+    `/api/checkout/attempts/${encodeURIComponent(attemptId)}/abandon`,
+    { method: "POST" },
+    { local: true },
+  );
+  const data = unwrapData<unknown>(raw);
+  const result = mapAbandonResult(data);
+  if (getActiveCheckoutAttemptId() === attemptId) {
+    clearActiveCheckoutAttemptId();
+  }
+  if (getPendingCheckoutAttemptId() === attemptId) {
+    clearPendingCheckoutAttemptId();
+  }
+  return result;
 }
 
 export async function getCheckoutAttemptStatus(

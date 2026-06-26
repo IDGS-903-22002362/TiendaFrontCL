@@ -1,0 +1,45 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+import { useAuth } from "@/hooks/use-auth";
+import {
+  abandonCheckoutAttemptWithRetry,
+  getPendingCheckoutAttemptId,
+  reconcilePendingCheckoutAttempts,
+} from "@/lib/api/checkout-attempt";
+
+/**
+ * Al volver al sitio tras Stripe (cerrar pestaña, botón atrás, etc.),
+ * reconcilia intentos PAYMENT_PENDING en backend sin depender solo de cancel_url.
+ */
+export function PendingCheckoutReconciler() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const ranRef = useRef(false);
+
+  useEffect(() => {
+    if (isLoading || !isAuthenticated || ranRef.current) {
+      return;
+    }
+
+    const pendingId = getPendingCheckoutAttemptId();
+    if (!pendingId) {
+      return;
+    }
+
+    ranRef.current = true;
+
+    void (async () => {
+      try {
+        await reconcilePendingCheckoutAttempts();
+      } catch {
+        try {
+          await abandonCheckoutAttemptWithRetry(pendingId, 1);
+        } catch {
+          // El cron backend liberará la reserva si el abandon falla.
+        }
+      }
+    })();
+  }, [isAuthenticated, isLoading]);
+
+  return null;
+}

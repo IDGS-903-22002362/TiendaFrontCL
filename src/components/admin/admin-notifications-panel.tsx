@@ -1,15 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
 import {
   Bell,
   CheckCheck,
   CreditCard,
   Package,
+  RefreshCw,
   ShoppingCart,
 } from "lucide-react";
 import { inventarioApi } from "@/lib/api/inventario";
+import { useAdminNotificationsRealtime } from "@/hooks/use-admin-notifications-realtime";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -17,6 +19,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { resolveStockNotificationHref } from "@/lib/inventory-prefill";
+import type { UserRole } from "@/lib/types";
 
 type AdminNotificationItem = {
   id: string;
@@ -30,10 +34,9 @@ type AdminNotificationItem = {
 
 type AdminNotificationsPanelProps = {
   token?: string | null;
+  role?: UserRole | "";
   className?: string;
 };
-
-const POLL_INTERVAL_MS = 60000;
 
 function getNotificationIcon(type: string) {
   if (type.startsWith("order")) {
@@ -67,78 +70,90 @@ function formatRelativeTime(isoDate: string) {
   return `Hace ${diffDays} d`;
 }
 
+function getConnectionLabel(
+  status: ReturnType<typeof useAdminNotificationsRealtime>["status"],
+): string | null {
+  switch (status) {
+    case "connecting":
+    case "reconnecting":
+      return "Conectando...";
+    case "live":
+      return "Actualizado en vivo";
+    case "paused":
+      return "Pausado (pestana oculta)";
+    case "fallback":
+      return "Modo respaldo";
+    default:
+      return null;
+  }
+}
+
 export function AdminNotificationsPanel({
   token,
+  role = "",
   className,
 }: AdminNotificationsPanelProps) {
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [items, setItems] = useState<AdminNotificationItem[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [markingRead, setMarkingRead] = useState(false);
 
-  const loadNotifications = useCallback(async () => {
+  const fetchFallback = useCallback(async () => {
     if (!token) {
-      setItems([]);
-      setUnreadCount(0);
-      return;
+      return { items: [], unreadCount: 0 };
     }
-
-    setLoading(true);
-    try {
-      const payload = await inventarioApi.listAdminNotifications(token);
-      setItems(payload.items);
-      setUnreadCount(payload.unreadCount);
-      setError(null);
-    } catch {
-      setError("No se pudieron cargar las notificaciones.");
-    } finally {
-      setLoading(false);
-    }
+    return inventarioApi.listAdminNotifications(token);
   }, [token]);
 
-  useEffect(() => {
-    void loadNotifications();
-  }, [loadNotifications]);
+  const {
+    items,
+    unreadCount,
+    status,
+    error,
+    refresh,
+    setReadState,
+  } = useAdminNotificationsRealtime({
+    enabled: Boolean(token),
+    role,
+    fetchFallback,
+  });
 
-  useEffect(() => {
-    if (!token) return;
-
-    const interval = window.setInterval(() => {
-      void loadNotifications();
-    }, POLL_INTERVAL_MS);
-
-    return () => window.clearInterval(interval);
-  }, [loadNotifications, token]);
+  const connectionLabel = getConnectionLabel(status);
+  const displayError = actionError ?? error;
 
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen);
     if (nextOpen) {
-      void loadNotifications();
+      void refresh();
     }
   };
 
   const handleMarkRead = async (id: string) => {
     if (!token) return;
 
+    setMarkingRead(true);
+    setActionError(null);
     try {
       const payload = await inventarioApi.markAdminNotificationsRead([id], token);
-      setItems(payload.items);
-      setUnreadCount(payload.unreadCount);
+      setReadState(payload.items, payload.unreadCount);
     } catch {
-      setError("No se pudo marcar la notificacion como leida.");
+      setActionError("No se pudo marcar la notificacion como leida.");
+    } finally {
+      setMarkingRead(false);
     }
   };
 
   const handleMarkAllRead = async () => {
     if (!token) return;
 
+    setMarkingRead(true);
+    setActionError(null);
     try {
       const payload = await inventarioApi.markAllAdminNotificationsRead(token);
-      setItems(payload.items);
-      setUnreadCount(payload.unreadCount);
+      setReadState(payload.items, payload.unreadCount);
     } catch {
-      setError("No se pudieron marcar todas como leidas.");
+      setActionError("No se pudieron marcar todas como leidas.");
+    } finally {
+      setMarkingRead(false);
     }
   };
 
@@ -179,28 +194,56 @@ export function AdminNotificationsPanel({
             <p className="text-xs text-muted-foreground">
               Ordenes, pagos e inventario
             </p>
+            {connectionLabel ? (
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                {connectionLabel}
+              </p>
+            ) : null}
           </div>
-          {unreadCount > 0 ? (
+          <div className="flex items-center gap-1">
             <Button
               type="button"
               variant="ghost"
-              size="sm"
-              className="h-8 gap-1 px-2 text-xs"
-              onClick={() => void handleMarkAllRead()}
+              size="icon"
+              className="h-8 w-8"
+              aria-label="Actualizar notificaciones"
+              onClick={() => void refresh()}
             >
-              <CheckCheck className="h-3.5 w-3.5" />
-              Marcar todas
+              <RefreshCw className="h-3.5 w-3.5" />
             </Button>
-          ) : null}
+            {unreadCount > 0 ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1 px-2 text-xs"
+                disabled={markingRead}
+                onClick={() => void handleMarkAllRead()}
+              >
+                <CheckCheck className="h-3.5 w-3.5" />
+                Marcar todas
+              </Button>
+            ) : null}
+          </div>
         </div>
 
         <div className="max-h-80 overflow-y-auto">
-          {loading && items.length === 0 ? (
+          {status === "connecting" && items.length === 0 ? (
             <p className="px-4 py-6 text-sm text-muted-foreground">
               Cargando notificaciones...
             </p>
-          ) : error ? (
-            <p className="px-4 py-6 text-sm text-destructive">{error}</p>
+          ) : displayError && items.length === 0 ? (
+            <div className="space-y-3 px-4 py-6">
+              <p className="text-sm text-destructive">{displayError}</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void refresh()}
+              >
+                Reintentar
+              </Button>
+            </div>
           ) : items.length === 0 ? (
             <p className="px-4 py-6 text-sm text-muted-foreground">
               No hay notificaciones recientes.
@@ -213,7 +256,7 @@ export function AdminNotificationsPanel({
                 return (
                   <li key={item.id}>
                     <Link
-                      href={item.href}
+                      href={resolveStockNotificationHref(item)}
                       onClick={() => void handleNotificationClick(item)}
                       className={cn(
                         "flex gap-3 px-4 py-3 transition-colors hover:bg-muted/60",

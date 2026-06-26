@@ -69,22 +69,29 @@ export function EntityPicker({
   const hasRemoteSearch = Boolean(onQueryChange && minQueryLength > 0);
 
   const filteredOptions = useMemo(() => {
+    const baseOptions =
+      value && !options.some((option) => option.id === value)
+        ? [{ id: value, label: value }, ...options]
+        : options;
+
     if (hasRemoteSearch) {
-      return options;
+      return baseOptions;
     }
 
     if (!normalizedQuery) {
-      return options;
+      return baseOptions;
     }
 
-    return options.filter((option) =>
+    return baseOptions.filter((option) =>
       normalize(
         `${option.label} ${option.subtitle ?? ""} ${option.searchKey ?? ""} ${option.id}`,
       ).includes(normalizedQuery),
     );
-  }, [hasRemoteSearch, normalizedQuery, options]);
+  }, [hasRemoteSearch, normalizedQuery, options, value]);
 
-  const selectedOption = options.find((option) => option.id === value);
+  const selectedOption =
+    options.find((option) => option.id === value) ??
+    filteredOptions.find((option) => option.id === value);
   const showInlineResults =
     Boolean(onQueryChange) &&
     resultsOpen &&
@@ -166,7 +173,9 @@ export function EntityPicker({
         disabled={disabled}
       >
         <SelectTrigger>
-          <SelectValue placeholder={selectLabel} />
+          <SelectValue placeholder={selectLabel}>
+            {selectedOption?.label ?? (value || selectLabel)}
+          </SelectValue>
         </SelectTrigger>
         <SelectContent>
           {allowEmpty && <SelectItem value="__none__">{emptyLabel}</SelectItem>}

@@ -693,7 +693,8 @@ export function mapCatalogProductToProductCardViewModel(
     catalogProduct.tieneOferta && catalogProduct.precioFinal < price
       ? catalogProduct.precioFinal
       : undefined;
-  const stock = catalogProduct.disponible ? catalogProduct.stockTotal : 0;
+  const stock = catalogProduct.stockTotal;
+  const stockFisico = catalogProduct.stockFisico ?? stock;
 
   const images = catalogProduct.imagenes?.length
     ? catalogProduct.imagenes
@@ -713,6 +714,7 @@ export function mapCatalogProductToProductCardViewModel(
     tags,
     stock,
     stockTotal: stock,
+    stockFisico,
     activo: true,
   };
 }

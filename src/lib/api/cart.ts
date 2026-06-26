@@ -1,6 +1,7 @@
 import type {
   Cart,
   CartItem,
+  CartItemStockStatus,
   CheckoutFulfillmentMethod,
   CheckoutPayload,
   PaymentMethod,
@@ -78,6 +79,17 @@ export function getCartVariantKey(
   return `${item.id}::${resolveTallaId(item) ?? "no-size"}`;
 }
 
+function toStockStatus(value: unknown): CartItemStockStatus | undefined {
+  if (
+    value === "available" ||
+    value === "out_of_stock" ||
+    value === "temporarily_unavailable"
+  ) {
+    return value;
+  }
+  return undefined;
+}
+
 function mapCartItem(input: unknown): CartItem {
   const item = (
     input && typeof input === "object" ? input : {}
@@ -126,6 +138,42 @@ function mapCartItem(input: unknown): CartItem {
       toStringValue(item.tallaId ?? item.talla ?? item.size) || undefined,
     size: toStringValue(item.tallaId ?? item.talla ?? item.size) || undefined,
     color: toStringValue(item.color ?? item.colour) || undefined,
+    disponible: (() => {
+      const value = toNumber(
+        item.disponible ?? product?.disponible ?? product?.existencias,
+        -1,
+      );
+      return value >= 0 ? value : undefined;
+    })(),
+    stockFisico: (() => {
+      const value = toNumber(item.stockFisico ?? product?.stockFisico, -1);
+      return value >= 0 ? value : undefined;
+    })(),
+    stockStatus: toStockStatus(item.stockStatus ?? product?.stockStatus),
+    purchasable: (() => {
+      if (typeof item.purchasable === "boolean") {
+        return item.purchasable;
+      }
+      if (typeof product?.purchasable === "boolean") {
+        return product.purchasable;
+      }
+      const status = toStockStatus(item.stockStatus ?? product?.stockStatus);
+      if (
+        status === "out_of_stock" ||
+        status === "temporarily_unavailable"
+      ) {
+        return false;
+      }
+      const disponible = toNumber(
+        item.disponible ?? product?.disponible ?? product?.existencias,
+        -1,
+      );
+      const quantity = Math.max(1, toNumber(item.cantidad ?? item.quantity, 1));
+      if (disponible >= 0 && disponible < quantity) {
+        return false;
+      }
+      return true;
+    })(),
   };
 }
 
@@ -529,6 +577,7 @@ export async function consultarDisponibilidadCodigosPromocionCarrito(payload: {
   return mapDisponibilidadCodigosPromocion(response);
 }
 
+/** @deprecated Usa startCheckoutAttempt + Stripe Embedded Checkout. */
 export async function checkoutCart(payload: {
   fulfillmentMethod?: CheckoutFulfillmentMethod;
   direccionEnvio?: {

@@ -5,9 +5,13 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
+import { useSearchParams } from "next/navigation";
 import { inventarioApi } from "@/lib/api/inventario";
+import { productsAdminApi } from "@/lib/api/products-admin";
+import { fetchProductById } from "@/lib/api/storefront";
 import { tallasApi } from "@/lib/api/tallas";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import type {
@@ -47,6 +51,7 @@ import {
   DEVOLUCIONES_POLITICA_ADMIN_NOTA,
   DEVOLUCIONES_POLITICA_TEXTO,
 } from "@/lib/inventory-policy";
+import { readMovementPrefillFromSearchParams } from "@/lib/inventory-prefill";
 import { Info } from "lucide-react";
 
 const TYPE_OPTIONS: Array<{
@@ -81,9 +86,50 @@ function getBadgeVariant(tipo: string) {
   }
 }
 
+function formatMovementDate(value?: string) {
+  if (!value) return "-";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return date.toLocaleString("es-MX", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+}
+
+function extractProductDetail(value: unknown): {
+  descripcion?: string;
+  clave?: string;
+} {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  const record = value as Record<string, unknown>;
+  const data =
+    record.data && typeof record.data === "object"
+      ? (record.data as Record<string, unknown>)
+      : record;
+
+  return {
+    descripcion:
+      typeof data.descripcion === "string" ? data.descripcion : undefined,
+    clave: typeof data.clave === "string" ? data.clave : undefined,
+  };
+}
+
 export default function InventoryMovementsPage() {
   const { token, role } = useAuth();
   const { toast } = useToast();
+  const searchParams = useSearchParams();
+  const urlPrefill = useMemo(
+    () => readMovementPrefillFromSearchParams(searchParams),
+    [searchParams],
+  );
+  const pendingTallaPrefill = useRef<string | null>(
+    urlPrefill.tallaId || null,
+  );
 
   const [tallas, setTallas] = useState<Talla[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -107,7 +153,17 @@ export default function InventoryMovementsPage() {
   const [movTipo, setMovTipo] = useState<
     "entrada" | "salida" | "venta" | "devolucion"
   >("entrada");
-  const [movProductId, setMovProductId] = useState("");
+  const [movProductId, setMovProductId] = useState(urlPrefill.productoId);
+  const [movProductSeed, setMovProductSeed] = useState<EntityOption[]>(() =>
+    urlPrefill.productoId
+      ? [
+          {
+            id: urlPrefill.productoId,
+            label: "Cargando producto...",
+          },
+        ]
+      : [],
+  );
   const [movStockSnapshot, setMovStockSnapshot] =
     useState<ProductStockSnapshot | null>(null);
   const [movTallaId, setMovTallaId] = useState("");
@@ -148,6 +204,71 @@ export default function InventoryMovementsPage() {
     void loadCatalog();
   }, [canUseInventory, loadCatalog]);
 
+  useEffect(() => {
+    if (!urlPrefill.productoId) return;
+
+    pendingTallaPrefill.current = urlPrefill.tallaId || null;
+    setMovProductId(urlPrefill.productoId);
+    setMovTipo("entrada");
+    setMovProductSeed((current) => {
+      const cached = current.find((item) => item.id === urlPrefill.productoId);
+      if (cached && cached.label !== urlPrefill.productoId) {
+        return current;
+      }
+
+      return [
+        {
+          id: urlPrefill.productoId,
+          label: cached?.label ?? "Cargando producto...",
+          subtitle: cached?.subtitle,
+        },
+      ];
+    });
+  }, [urlPrefill.productoId, urlPrefill.tallaId]);
+
+  useEffect(() => {
+    if (!canUseInventory || !urlPrefill.productoId) return;
+
+    void (async () => {
+      let label = urlPrefill.productoId;
+      let subtitle: string | undefined;
+
+      try {
+        const response = await productsAdminApi.getById(
+          urlPrefill.productoId,
+          token,
+        );
+        const product = extractProductDetail(response);
+
+        if (product.descripcion?.trim()) {
+          label = product.descripcion.trim();
+        } else if (product.clave?.trim()) {
+          label = product.clave.trim();
+        }
+
+        if (product.clave?.trim()) {
+          subtitle = `Clave: ${product.clave.trim()}`;
+        }
+      } catch {
+        const product = await fetchProductById(urlPrefill.productoId);
+        if (product?.name?.trim()) {
+          label = product.name.trim();
+        }
+        if (product?.description?.trim()) {
+          subtitle = product.description.trim();
+        }
+      }
+
+      setMovProductSeed([
+        {
+          id: urlPrefill.productoId,
+          label,
+          subtitle,
+        },
+      ]);
+    })();
+  }, [canUseInventory, token, urlPrefill.productoId]);
+
   const loadPage = useCallback(
     async (nextCursor?: string, append = false) => {
       if (!token) return;
@@ -186,16 +307,37 @@ export default function InventoryMovementsPage() {
   }, [canUseInventory, loadPage]);
 
   useEffect(() => {
-    setMovTallaId("");
     setMovStockSnapshot(null);
 
-    if (!movProductId) return;
+    if (!movProductId) {
+      setMovTallaId("");
+      if (!urlPrefill.productoId) {
+        pendingTallaPrefill.current = null;
+      }
+      return;
+    }
+
+    if (!pendingTallaPrefill.current) {
+      setMovTallaId("");
+    }
 
     const loadStock = async () => {
       try {
         const snapshot = await inventarioApi.getProductStock(movProductId);
         setMovStockSnapshot(snapshot);
+
+        const pendingTalla = pendingTallaPrefill.current;
+        if (pendingTalla) {
+          pendingTallaPrefill.current = null;
+          if (
+            snapshot.tallaIds.length === 0 ||
+            snapshot.tallaIds.includes(pendingTalla)
+          ) {
+            setMovTallaId(pendingTalla);
+          }
+        }
       } catch (error) {
+        pendingTallaPrefill.current = null;
         toast({
           variant: "destructive",
           title: "No se pudo cargar stock del producto",
@@ -205,7 +347,7 @@ export default function InventoryMovementsPage() {
     };
 
     void loadStock();
-  }, [movProductId, toast]);
+  }, [movProductId, toast, urlPrefill.productoId]);
 
   useEffect(() => {
     setFilterTallaId("");
@@ -361,8 +503,9 @@ export default function InventoryMovementsPage() {
                       onValueChange={setMovProductId}
                       token={token}
                       onResultsChange={handleProductResults}
-                      allowEmpty={false}
+                      allowEmpty
                       disabled={catalogLoading}
+                      seedOptions={movProductSeed}
                     />
                   </div>
                 </div>
@@ -590,7 +733,7 @@ export default function InventoryMovementsPage() {
                             : "-"}
                         </TableCell>
                         <TableCell>{row.cantidad}</TableCell>
-                        <TableCell>{row.createdAt ?? "-"}</TableCell>
+                        <TableCell>{formatMovementDate(row.createdAt)}</TableCell>
                       </TableRow>
                     ))
                   )}
