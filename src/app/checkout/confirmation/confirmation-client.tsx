@@ -24,6 +24,7 @@ import {
   reconcilePendingCheckoutAttempts,
 } from "@/lib/api/checkout-attempt";
 import { clearCheckoutDraft } from "@/lib/checkout-draft";
+import { getPickupCodeFromOrder } from "@/lib/orders/pickup-code";
 import { useCart } from "@/hooks/use-cart";
 import type { Orden } from "@/lib/types";
 
@@ -312,6 +313,8 @@ export function ConfirmationClient() {
   }, [verificationState, reloadCart]);
 
   const isPickup = order?.fulfillmentMethod === "PICKUP";
+  const pickupCode =
+    isPickup && order ? getPickupCodeFromOrder(order) : null;
   const isPaid = verificationState === "paid";
   const isConfirming =
     verificationState === "confirming" || verificationState === "checking";
@@ -421,6 +424,21 @@ export function ConfirmationClient() {
               </p>
             </div>
           </div>
+
+          {isPaid && isPickup && pickupCode ? (
+            <div className="mx-5 mb-5 rounded-2xl border border-primary/25 bg-primary/5 p-5 md:mx-8 md:mb-8 md:p-6">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                Código para recoger en tienda
+              </p>
+              <p className="mt-2 font-mono text-3xl font-bold tracking-[0.2em] text-foreground">
+                {pickupCode}
+              </p>
+              <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                Guarda este código. Lo necesitarás en tienda para recibir tu
+                pedido. También lo encontrarás en Mis pedidos.
+              </p>
+            </div>
+          ) : null}
 
           <div className="px-5 pb-5 md:px-8 md:pb-8">
             <div className="grid gap-3 md:grid-cols-3">
