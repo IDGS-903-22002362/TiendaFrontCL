@@ -1997,6 +1997,7 @@ function CardPaymentStep({
       if (retryValues) {
         onRecoverableDeliveryError(retryValues);
       }
+      clearCheckoutIdempotencyKey();
       showErrorToast({
         title: "No se pudo iniciar el pago",
         description: getCheckoutErrorMessage(error),
