@@ -121,7 +121,7 @@ type VerificationState =
 export function ConfirmationClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { reloadCart } = useCart();
+  const { clearAllItems } = useCart();
   const attemptId = searchParams.get("attemptId") || "";
   const orderId = searchParams.get("ordenId") || "";
   const paymentId = searchParams.get("pagoId") || "";
@@ -298,19 +298,19 @@ export function ConfirmationClient() {
     };
   }, [checkStatus]);
 
-  const cartReloadedRef = useRef(false);
+  const cartClearedRef = useRef(false);
 
   useEffect(() => {
-    if (verificationState !== "paid" || cartReloadedRef.current) {
+    if (verificationState !== "paid" || cartClearedRef.current) {
       return;
     }
 
-    cartReloadedRef.current = true;
+    cartClearedRef.current = true;
     clearCheckoutIdempotencyKey();
     clearCheckoutDraft();
     clearPendingCheckoutAttemptId();
-    void reloadCart();
-  }, [verificationState, reloadCart]);
+    void clearAllItems();
+  }, [verificationState, clearAllItems]);
 
   const isPickup = order?.fulfillmentMethod === "PICKUP";
   const pickupCode =

@@ -212,9 +212,17 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
       setItems(cart.items);
     } catch (error) {
       console.error("Failed to update cart item quantity", error);
+      const cartItem = items.find(
+        (item) =>
+          item.id === id &&
+          (!tallaId || (item.tallaId ?? item.size) === tallaId),
+      );
       showErrorToast({
         title: "No se pudo actualizar la cantidad",
-        description: getCartQuantityUpdateErrorMessage(error),
+        description: getCartQuantityUpdateErrorMessage(error, {
+          productId: id,
+          productName: cartItem?.name,
+        }),
       });
     }
   };
