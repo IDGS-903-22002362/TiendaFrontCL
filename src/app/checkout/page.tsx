@@ -23,6 +23,7 @@ import {
   Store,
   Truck,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/hooks/use-cart";
 import { useAuth } from "@/hooks/use-auth";
 import { useStorefront } from "@/hooks/use-storefront";
@@ -36,7 +37,7 @@ import {
   type ValidarCodigoPromocionCarritoItem,
 } from "@/lib/api/cart";
 import {
-  abandonCheckoutAttempt,
+  abandonCheckoutAttemptWithRetry,
   cancelCheckoutAttempt,
   cancelActiveCheckoutAttemptIfAny,
   CHECKOUT_PAYMENT_REDIRECTING_KEY,
@@ -2022,7 +2023,7 @@ function CardPaymentStep({
         <CardContent className="space-y-5 pt-5">
           {paymentCanceled ? (
             <Alert className="rounded-[1.2rem] border-primary/20 bg-primary/5">
-              <AlertTitle>Pago cancelado</AlertTitle>
+              <AlertTitle>Pago no completado</AlertTitle>
               <AlertDescription>
                 No se realizó ningún cargo. Tu carrito sigue disponible y puedes
                 volver a intentar cuando quieras.
@@ -2185,6 +2186,7 @@ export default function CheckoutPage() {
   const [checkoutValues, setCheckoutValues] = useState<CheckoutValues | null>(
     null,
   );
+  const { toast } = useToast();
   const router = useRouter();
   const leavePaymentStepRef = useRef<(() => Promise<void>) | null>(null);
   const { state, subtotal, totalItems, isLoading } = useCart();
@@ -2203,25 +2205,49 @@ export default function CheckoutPage() {
       return;
     }
 
-    const attemptId =
-      getPendingCheckoutAttemptId() ?? getActiveCheckoutAttemptId();
+    let cancelled = false;
 
-    if (attemptId) {
-      void abandonCheckoutAttempt(attemptId)
-        .then((result) => {
+    void (async () => {
+      const attemptId =
+        getPendingCheckoutAttemptId() ?? getActiveCheckoutAttemptId();
+
+      if (attemptId) {
+        try {
+          const result = await abandonCheckoutAttemptWithRetry(attemptId, 1);
+          if (cancelled) {
+            return;
+          }
           if (result.orderId) {
             router.replace(
               `/checkout/confirmation?attemptId=${encodeURIComponent(result.attemptId)}&status=processing`,
             );
+            return;
           }
-        })
-        .catch(() => undefined);
-    }
+        } catch {
+          if (!cancelled) {
+            toast({
+              variant: "destructive",
+              title: "No pudimos liberar la reserva",
+              description:
+                "Tu inventario se liberará automáticamente en unos minutos. Puedes volver a intentar el pago.",
+            });
+          }
+        }
+      }
 
-    setShowPaymentCanceled(true);
-    clearCheckoutIdempotencyKey();
-    router.replace("/checkout", { scroll: false });
-  }, [paymentCanceledLanding, router]);
+      if (cancelled) {
+        return;
+      }
+
+      setShowPaymentCanceled(true);
+      clearCheckoutIdempotencyKey();
+      router.replace("/checkout", { scroll: false });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [paymentCanceledLanding, router, toast]);
 
   useEffect(() => {
     if (typeof window === "undefined") {

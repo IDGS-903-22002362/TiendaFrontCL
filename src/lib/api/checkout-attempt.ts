@@ -6,6 +6,7 @@ const IDEMPOTENCY_SIGNATURE_KEY = "tiendafront_checkout_idempotency_signature";
 const ACTIVE_ATTEMPT_STORAGE_KEY = "tiendafront_checkout_active_attempt_id";
 export const PENDING_ATTEMPT_STORAGE_KEY =
   "tiendafront_checkout_pending_attempt_id";
+const PENDING_ATTEMPT_LOCAL_KEY = PENDING_ATTEMPT_STORAGE_KEY;
 export const CHECKOUT_PAYMENT_REDIRECTING_KEY =
   "tiendafront_checkout_payment_redirecting";
 
@@ -170,16 +171,21 @@ function mapAbandonResult(input: unknown): CheckoutAttemptAbandonResult {
 export function setPendingCheckoutAttemptId(attemptId: string): void {
   if (typeof window === "undefined") return;
   window.sessionStorage.setItem(PENDING_ATTEMPT_STORAGE_KEY, attemptId);
+  window.localStorage.setItem(PENDING_ATTEMPT_LOCAL_KEY, attemptId);
 }
 
 export function getPendingCheckoutAttemptId(): string | null {
   if (typeof window === "undefined") return null;
-  return window.sessionStorage.getItem(PENDING_ATTEMPT_STORAGE_KEY);
+  return (
+    window.sessionStorage.getItem(PENDING_ATTEMPT_STORAGE_KEY) ||
+    window.localStorage.getItem(PENDING_ATTEMPT_LOCAL_KEY)
+  );
 }
 
 export function clearPendingCheckoutAttemptId(): void {
   if (typeof window === "undefined") return;
   window.sessionStorage.removeItem(PENDING_ATTEMPT_STORAGE_KEY);
+  window.localStorage.removeItem(PENDING_ATTEMPT_LOCAL_KEY);
 }
 
 export function markCheckoutPaymentRedirecting(): void {
@@ -230,6 +236,64 @@ export async function cancelCheckoutAttempt(attemptId: string): Promise<void> {
   }
   if (getPendingCheckoutAttemptId() === attemptId) {
     clearPendingCheckoutAttemptId();
+  }
+}
+
+export type CheckoutAttemptReconcilePendingResult = {
+  reconciled: number;
+  finalized: string[];
+  released: string[];
+};
+
+function mapReconcilePendingResult(
+  input: unknown,
+): CheckoutAttemptReconcilePendingResult {
+  const record =
+    input && typeof input === "object" ? (input as UnknownRecord) : {};
+  const finalized = Array.isArray(record.finalized)
+    ? record.finalized.map((item) => toStringValue(item))
+    : [];
+  const released = Array.isArray(record.released)
+    ? record.released.map((item) => toStringValue(item))
+    : [];
+  return {
+    reconciled: toNumber(record.reconciled, 0),
+    finalized,
+    released,
+  };
+}
+
+export async function reconcilePendingCheckoutAttempts(): Promise<CheckoutAttemptReconcilePendingResult> {
+  const raw = await apiFetch<unknown>(
+    "/api/checkout/attempts/reconcile-pending",
+    { method: "POST" },
+    { local: true },
+  );
+  const data = unwrapData<unknown>(raw);
+  const result = mapReconcilePendingResult(data);
+  const pendingId = getPendingCheckoutAttemptId();
+  if (
+    pendingId &&
+    (result.released.includes(pendingId) ||
+      result.finalized.includes(pendingId))
+  ) {
+    clearPendingCheckoutAttemptId();
+  }
+  return result;
+}
+
+export async function abandonCheckoutAttemptWithRetry(
+  attemptId: string,
+  retries = 1,
+): Promise<CheckoutAttemptAbandonResult> {
+  try {
+    return await abandonCheckoutAttempt(attemptId);
+  } catch (error) {
+    if (retries <= 0) {
+      throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    return abandonCheckoutAttemptWithRetry(attemptId, retries - 1);
   }
 }
 

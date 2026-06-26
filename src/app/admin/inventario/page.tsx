@@ -32,6 +32,7 @@ type DashboardRow = {
   entrante: number;
   disponible: number;
   bajoStock: boolean;
+  reservadaEnCheckout?: boolean;
   inventarioPorTalla: Array<{
     tallaId: string;
     cantidad: number;
@@ -232,11 +233,19 @@ export default function AdminInventoryDashboardPage() {
                     <TableCell className="text-right">{row.reservada}</TableCell>
                     <TableCell className="text-right">{row.noDisponible}</TableCell>
                     <TableCell>
-                      {row.bajoStock ? (
-                        <Badge variant="destructive">Bajo stock</Badge>
-                      ) : (
-                        <Badge variant="outline">OK</Badge>
-                      )}
+                      <div className="flex flex-wrap gap-1">
+                        {row.bajoStock ? (
+                          <Badge variant="destructive">Bajo stock</Badge>
+                        ) : null}
+                        {(row.reservadaEnCheckout ?? row.reservada > 0) ? (
+                          <Badge variant="secondary">
+                            En checkout ({row.reservada})
+                          </Badge>
+                        ) : null}
+                        {!row.bajoStock && row.reservada <= 0 ? (
+                          <Badge variant="outline">OK</Badge>
+                        ) : null}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <Button

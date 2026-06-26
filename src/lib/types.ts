@@ -15,6 +15,7 @@ export type Product = {
   colors?: string[];
   stock: number;
   stockTotal?: number;
+  stockFisico?: number;
   tallaIds?: string[];
   inventarioPorTalla?: ProductSizeStock[];
   hasSizeInventory?: boolean;
@@ -838,6 +839,7 @@ export type CatalogProductCard = {
   imagenPrincipal: string | null;
   imagenes?: string[];
   stockTotal: number;
+  stockFisico?: number;
   disponible: boolean;
   destacado: boolean;
 };
