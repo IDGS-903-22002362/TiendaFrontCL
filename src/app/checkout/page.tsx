@@ -15,16 +15,11 @@ import { type UseFormReturn, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import {
-  EmbeddedCheckout,
-  EmbeddedCheckoutProvider,
-} from "@stripe/react-stripe-js";
-import {
   ArrowLeft,
   Clock3,
   CreditCard,
   Home,
   Lock,
-  ShieldCheck,
   Store,
   Truck,
 } from "lucide-react";
@@ -44,12 +39,11 @@ import {
   cancelCheckoutAttempt,
   cancelActiveCheckoutAttemptIfAny,
   CHECKOUT_PAYMENT_REDIRECTING_KEY,
-  getCheckoutAttemptStatus,
+  clearCheckoutIdempotencyKey,
   markCheckoutPaymentRedirecting,
   setActiveCheckoutAttemptId,
   startCheckoutAttempt,
 } from "@/lib/api/checkout-attempt";
-import { paymentsApi } from "@/lib/api/payments";
 import {
   pickupApi,
   type FulfillmentMethod,
@@ -97,7 +91,6 @@ import type {
   CheckoutShippingAddress,
 } from "@/types/shipping";
 import { showErrorToast } from "@/lib/app-toast";
-import { useStripeConfig } from "@/hooks/use-stripe-config";
 import {
   GooglePlaceAutocompleteElement,
   type ParsedGoogleCheckoutAddress,
@@ -113,6 +106,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Form,
   FormControl,
@@ -1852,45 +1846,27 @@ const PAYMENT_REASSURANCES = [
 function CardPaymentStep({
   values,
   cartId,
-  cartItems,
   total,
-  expectedSubtotal,
   codigoPromocion,
   paymentSignature,
+  paymentCanceled,
   onBack,
   onRegisterLeaveHandler,
   onRecoverableDeliveryError,
-  stripePromise,
 }: {
   values: CheckoutValues;
   cartId?: string;
-  cartItems: CartItem[];
   total: number;
-  expectedSubtotal: number;
   codigoPromocion?: string;
   paymentSignature: string;
+  paymentCanceled: boolean;
   onBack: () => void;
   onRegisterLeaveHandler?: (handler: () => Promise<void>) => void;
   onRecoverableDeliveryError: (values: DeliveryCheckoutValues) => void;
-  stripePromise: ReturnType<typeof useStripeConfig>;
 }) {
   const [isProcessing, setIsProcessing] = useState(false);
-  // El usuario "activa" el pago al pulsar "Pagar". A partir de ahí, cualquier
-  // cambio de carrito/pricing debe recrear la sesión automáticamente.
-  const [paymentActivated, setPaymentActivated] = useState(false);
-  // Guarda en vuelo para evitar POST duplicados/loops aunque cambien estados.
   const preparingRef = useRef(false);
-  // Firma para la que ya existe (o se está creando) una sesión de Stripe.
-  // Sirve para deduplicar: solo recreamos cuando la firma realmente cambia.
-  const sessionSignatureRef = useRef<string | null>(null);
   const attemptIdRef = useRef<string | null>(null);
-  const paymentRedirectingRef = useRef(false);
-  const [embeddedClientSecret, setEmbeddedClientSecret] = useState<string | null>(null);
-  const [orderContext, setOrderContext] = useState<{
-    attemptId: string;
-    total: number;
-    pagoId?: string;
-  } | null>(null);
 
   const releaseActiveCheckoutAttempt = useCallback(async () => {
     const attemptId = attemptIdRef.current;
@@ -1909,10 +1885,6 @@ function CardPaymentStep({
     }
 
     attemptIdRef.current = null;
-    setEmbeddedClientSecret(null);
-    setOrderContext(null);
-    sessionSignatureRef.current = null;
-    setPaymentActivated(false);
   }, []);
 
   const handleBack = useCallback(async () => {
@@ -1931,20 +1903,8 @@ function CardPaymentStep({
     onRegisterLeaveHandler?.(releaseActiveCheckoutAttempt);
   }, [onRegisterLeaveHandler, releaseActiveCheckoutAttempt]);
 
-  const prepareEmbeddedCheckout = useCallback(async () => {
+  const redirectToStripeCheckout = useCallback(async () => {
     if (preparingRef.current || typeof window === "undefined") {
-      return;
-    }
-    // Ya tenemos una sesión válida para esta firma: no recrear (evita loops).
-    if (sessionSignatureRef.current === paymentSignature && embeddedClientSecret) {
-      return;
-    }
-
-    if (!stripePromise) {
-      showErrorToast({
-        title: "Stripe no está listo",
-        description: "Intenta nuevamente en unos segundos.",
-      });
       return;
     }
 
@@ -1969,28 +1929,25 @@ function CardPaymentStep({
         }
       }
 
+      const origin = window.location.origin;
       const attempt = await startCheckoutAttempt(
         {
           ...buildCheckoutPayload(values, "TARJETA", codigoPromocion),
-          successUrl: `${window.location.origin}/checkout/confirmation?attemptId={CHECKOUT_ATTEMPT_ID}&session_id={CHECKOUT_SESSION_ID}&status=processing&total=${encodeURIComponent(total.toFixed(2))}`,
-          cancelUrl: `${window.location.origin}/checkout`,
+          successUrl: `${origin}/checkout/confirmation?attemptId={CHECKOUT_ATTEMPT_ID}&session_id={CHECKOUT_SESSION_ID}&status=processing&total=${encodeURIComponent(total.toFixed(2))}`,
+          cancelUrl: `${origin}/checkout?payment_canceled=1`,
+          retryPayment: paymentCanceled,
         },
         { cartSignature: paymentSignature },
       );
 
-      if (!attempt.attemptId || !attempt.clientSecret) {
-        throw new Error("No se recibió un intento de checkout válido");
+      if (!attempt.attemptId || !attempt.url) {
+        throw new Error("No se recibió una URL de pago válida");
       }
 
-      setOrderContext({
-        attemptId: attempt.attemptId,
-        total: attempt.total ?? total,
-        pagoId: attempt.pagoId,
-      });
       attemptIdRef.current = attempt.attemptId;
       setActiveCheckoutAttemptId(attempt.attemptId);
-      sessionSignatureRef.current = paymentSignature;
-      setEmbeddedClientSecret(attempt.clientSecret);
+      markCheckoutPaymentRedirecting();
+      window.location.assign(attempt.url);
     } catch (error) {
       const retryValues = buildRetryDeliveryValuesFromCheckoutError(
         values,
@@ -2000,65 +1957,21 @@ function CardPaymentStep({
         onRecoverableDeliveryError(retryValues);
       }
       showErrorToast({
-        title: "No se pudo preparar el pago",
+        title: "No se pudo iniciar el pago",
         description: getCheckoutErrorMessage(error),
       });
-    } finally {
       preparingRef.current = false;
       setIsProcessing(false);
     }
   }, [
     cartId,
     codigoPromocion,
-    embeddedClientSecret,
     onRecoverableDeliveryError,
+    paymentCanceled,
     paymentSignature,
-    stripePromise,
     total,
     values,
   ]);
-
-  // Si cambia el carrito/pricing (items, cantidades, tallas, oferta o código)
-  // descartamos el clientSecret y el intento previos: el amount de una Checkout
-  // Session de Stripe es inmutable, así que hay que recrear la sesión con el
-  // monto correcto en lugar de reutilizar el embebido obsoleto. Si el usuario ya
-  // activó el pago, recreamos automáticamente; si no, solo limpiamos y dejamos
-  // el botón "Pagar" con el total actualizado.
-  useEffect(() => {
-    if (sessionSignatureRef.current === paymentSignature) {
-      return;
-    }
-
-    const cancelStaleAttempt = async () => {
-      const staleAttemptId = attemptIdRef.current;
-      if (staleAttemptId) {
-        try {
-          await cancelCheckoutAttempt(staleAttemptId);
-        } catch {
-          // No limpiar refs si la reserva sigue activa en backend.
-          return;
-        }
-        attemptIdRef.current = null;
-      }
-
-      if (embeddedClientSecret) {
-        setEmbeddedClientSecret(null);
-      }
-      setOrderContext(null);
-      sessionSignatureRef.current = null;
-
-      if (paymentActivated) {
-        void prepareEmbeddedCheckout();
-      }
-    };
-
-    void cancelStaleAttempt();
-  }, [paymentSignature, paymentActivated, prepareEmbeddedCheckout]);
-
-  const handlePrepareEmbeddedCheckout = useCallback(() => {
-    setPaymentActivated(true);
-    void prepareEmbeddedCheckout();
-  }, [prepareEmbeddedCheckout]);
 
   return (
     <>
@@ -2080,111 +1993,90 @@ function CardPaymentStep({
         </CardHeader>
 
         <CardContent className="space-y-5 pt-5">
-          {embeddedClientSecret ? (
-            <div className="space-y-4">
-              <div className="flex items-start gap-3 rounded-[1.4rem] border border-primary/25 bg-primary/8 px-4 py-3 text-sm text-primary">
-                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-                <p>
-                  Completa tu pago abajo. Stripe valida el total final con el
-                  backend. Tu pedido se creará cuando el pago quede confirmado.
-                </p>
-              </div>
-              <p className="text-xs leading-5 text-muted-foreground">
-                {PAYMENT_METHODS_NOTICE} {MSI_NOTICE}
-              </p>
-              <EmbeddedCheckoutProvider
-                key={embeddedClientSecret}
-                stripe={stripePromise}
-                options={{ clientSecret: embeddedClientSecret }}
-                onComplete={() => {
-                  paymentRedirectingRef.current = true;
-                  attemptIdRef.current = null;
-                  markCheckoutPaymentRedirecting();
-                }}
-              >
-                <div className="rounded-[1.5rem] border border-border bg-card p-2">
-                  <EmbeddedCheckout />
-                </div>
-              </EmbeddedCheckoutProvider>
-            </div>
-          ) : (
-            <>
-              <div className="relative overflow-hidden rounded-[1.6rem] border border-primary/15 bg-[linear-gradient(135deg,rgba(7,58,38,0.06),rgba(246,248,243,0.6))] p-5">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-card text-primary">
-                      <CreditCard className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-base font-semibold text-foreground">
-                        Paga con tarjeta vía Stripe
-                      </p>
-                      <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                        Tarjeta, Apple Pay, Google Pay y Link en un formulario
-                        seguro. Stripe muestra los métodos compatibles con tu
-                        dispositivo y navegador.
-                      </p>
-                    </div>
-                  </div>
-                </div>
+          {paymentCanceled ? (
+            <Alert className="rounded-[1.2rem] border-primary/20 bg-primary/5">
+              <AlertTitle>Pago cancelado</AlertTitle>
+              <AlertDescription>
+                No se realizó ningún cargo. Tu carrito sigue disponible y puedes
+                volver a intentar cuando quieras.
+              </AlertDescription>
+            </Alert>
+          ) : null}
 
-                <div className="mt-5 flex flex-wrap items-center gap-2.5">
-                  {ACCEPTED_PAYMENT_BRANDS.map((brand) => (
-                    <div
-                      key={brand.name}
-                      className="flex h-9 items-center justify-center rounded-xl border border-black/6 bg-white/95 px-2.5 shadow-[0_8px_24px_-22px_rgb(8_12_10_/_0.4)]"
-                    >
-                      <Image
-                        src={brand.src}
-                        alt={brand.name}
-                        width={56}
-                        height={22}
-                        className="h-5 w-auto object-contain"
-                      />
-                    </div>
-                  ))}
+          <div className="relative overflow-hidden rounded-[1.6rem] border border-primary/15 bg-[linear-gradient(135deg,rgba(7,58,38,0.06),rgba(246,248,243,0.6))] p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-card text-primary">
+                  <CreditCard className="h-5 w-5" />
                 </div>
-              </div>
-
-              <div className="flex items-center justify-between gap-3 rounded-[1.4rem] border border-border bg-muted/45 px-5 py-4">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    Total a pagar
+                  <p className="text-base font-semibold text-foreground">
+                    Paga con tarjeta vía Stripe
                   </p>
-                  <p className="mt-1 font-headline text-3xl font-semibold uppercase leading-none tracking-[0.02em]">
-                    {formatCurrency(total)}
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                    Serás redirigido a la página segura de Stripe para completar
+                    el pago con tarjeta, Link, Apple Pay o Google Pay según tu
+                    dispositivo.
                   </p>
                 </div>
               </div>
+            </div>
 
-              <ul className="grid gap-2.5">
-                {PAYMENT_REASSURANCES.map((item) => (
-                  <li
-                    key={item.title}
-                    className="flex items-start gap-3 rounded-[1.2rem] border border-border/70 bg-card px-4 py-3"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/15 bg-primary/8 text-primary">
-                      <item.icon className="h-4 w-4" />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-foreground">
-                        {item.title}
-                      </p>
-                      <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                        {item.description}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              <p className="text-xs leading-5 text-muted-foreground">
-                {PAYMENT_METHODS_NOTICE}
+            <div className="mt-5 flex flex-wrap items-center gap-2.5">
+              {ACCEPTED_PAYMENT_BRANDS.map((brand) => (
+                <div
+                  key={brand.name}
+                  className="flex h-9 items-center justify-center rounded-xl border border-black/6 bg-white/95 px-2.5 shadow-[0_8px_24px_-22px_rgb(8_12_10_/_0.4)]"
+                >
+                  <Image
+                    src={brand.src}
+                    alt={brand.name}
+                    width={56}
+                    height={22}
+                    className="h-5 w-auto object-contain"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 rounded-[1.4rem] border border-border bg-muted/45 px-5 py-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                Total a pagar
               </p>
-              <p className="text-xs leading-5 text-muted-foreground">
-                {MSI_NOTICE}
+              <p className="mt-1 font-headline text-3xl font-semibold uppercase leading-none tracking-[0.02em]">
+                {formatCurrency(total)}
               </p>
-            </>
-          )}
+            </div>
+          </div>
+
+          <ul className="grid gap-2.5">
+            {PAYMENT_REASSURANCES.map((item) => (
+              <li
+                key={item.title}
+                className="flex items-start gap-3 rounded-[1.2rem] border border-border/70 bg-card px-4 py-3"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/15 bg-primary/8 text-primary">
+                  <item.icon className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">
+                    {item.title}
+                  </p>
+                  <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                    {item.description}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs leading-5 text-muted-foreground">
+            {PAYMENT_METHODS_NOTICE}
+          </p>
+          <p className="text-xs leading-5 text-muted-foreground">
+            {MSI_NOTICE}
+          </p>
 
           <div className="hidden gap-3 md:flex">
             <Button
@@ -2196,17 +2088,19 @@ function CardPaymentStep({
             >
               {isProcessing ? "Liberando reserva..." : "Volver"}
             </Button>
-            {!embeddedClientSecret ? (
-              <Button
-                type="button"
-                className="h-12 flex-1 gap-2 rounded-full"
-                onClick={() => void handlePrepareEmbeddedCheckout()}
-                disabled={isProcessing || !stripePromise}
-              >
-                <Lock className="h-4 w-4" />
-                {isProcessing ? "Preparando pago seguro..." : `Pagar ${formatCurrency(total)}`}
-              </Button>
-            ) : null}
+            <Button
+              type="button"
+              className="h-12 flex-1 gap-2 rounded-full"
+              onClick={() => void redirectToStripeCheckout()}
+              disabled={isProcessing}
+            >
+              <Lock className="h-4 w-4" />
+              {isProcessing
+                ? "Redirigiendo a Stripe..."
+                : paymentCanceled
+                  ? "Volver a intentar"
+                  : `Pagar ${formatCurrency(total)}`}
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -2221,22 +2115,25 @@ function CardPaymentStep({
         >
           {isProcessing ? "Liberando reserva..." : "Volver"}
         </Button>
-        {!embeddedClientSecret ? (
-          <Button
-            type="button"
-            className="h-12 flex-1 gap-2 rounded-full"
-            onClick={() => void handlePrepareEmbeddedCheckout()}
-            disabled={isProcessing || !stripePromise}
-          >
-            <Lock className="h-4 w-4" />
-            {isProcessing ? "Preparando..." : `Pagar ${formatCurrency(total)}`}
-          </Button>
-        ) : null}
+        <Button
+          type="button"
+          className="h-12 flex-1 gap-2 rounded-full"
+          onClick={() => void redirectToStripeCheckout()}
+          disabled={isProcessing}
+        >
+          <Lock className="h-4 w-4" />
+          {isProcessing
+            ? "Redirigiendo..."
+            : paymentCanceled
+              ? "Reintentar"
+              : `Pagar ${formatCurrency(total)}`}
+        </Button>
       </MobileCheckoutActions>
     </>
   );
 }
 export default function CheckoutPage() {
+  const [showPaymentCanceled, setShowPaymentCanceled] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [fulfillmentMethod, setFulfillmentMethod] =
     useState<FulfillmentMethod>("DELIVERY");
@@ -2256,7 +2153,6 @@ export default function CheckoutPage() {
   const leavePaymentStepRef = useRef<(() => Promise<void>) | null>(null);
   const { state, subtotal, totalItems, isLoading } = useCart();
   const { isAuthenticated, user, isLoading: isAuthLoading } = useAuth();
-  const stripePromise = useStripeConfig();
   const [pricingOfertas, setPricingOfertas] = useState<
     Record<string, ProductOfferPricing>
   >({});
@@ -2265,6 +2161,20 @@ export default function CheckoutPage() {
     useState<ResultadoCodigoPromocionCarrito | null>(null);
   const [codigoError, setCodigoError] = useState<string | null>(null);
   const [isLoadingCodigo, setIsLoadingCodigo] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("payment_canceled") !== "1") {
+      return;
+    }
+    setShowPaymentCanceled(true);
+    setCurrentStep(1);
+    clearCheckoutIdempotencyKey();
+    router.replace("/checkout", { scroll: false });
+  }, [router]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -2713,42 +2623,20 @@ export default function CheckoutPage() {
                 setCurrentStep(1);
               }}
             />
-          ) : stripePromise ? (
+          ) : (
             <CardPaymentStep
               values={activeCheckoutValues}
               cartId={state.id}
-              cartItems={state.items}
               total={total}
-              expectedSubtotal={subtotalConCodigo}
               codigoPromocion={codigoPromocionAplicado}
               paymentSignature={paymentSignature}
+              paymentCanceled={showPaymentCanceled}
               onBack={() => setCurrentStep(0)}
               onRegisterLeaveHandler={(handler) => {
                 leavePaymentStepRef.current = handler;
               }}
               onRecoverableDeliveryError={handleRecoverableDeliveryError}
-              stripePromise={stripePromise}
             />
-          ) : (
-            <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
-              <CardHeader>
-                <CardTitle>Pago no disponible</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm leading-6 text-muted-foreground">
-                  No pudimos inicializar el pago seguro en este momento. Recarga
-                  la página o inténtalo de nuevo en unos segundos.
-                </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-12 rounded-full"
-                  onClick={() => setCurrentStep(0)}
-                >
-                  Volver a entrega
-                </Button>
-              </CardContent>
-            </Card>
           )}
 
           <PaymentMethodStrip

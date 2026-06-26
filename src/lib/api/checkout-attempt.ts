@@ -12,11 +12,13 @@ type UnknownRecord = Record<string, unknown>;
 export type CheckoutAttemptStartPayload = CheckoutPayload & {
   successUrl: string;
   cancelUrl: string;
+  retryPayment?: boolean;
 };
 
 export type CheckoutAttemptStartResult = {
   attemptId: string;
   status: string;
+  url?: string;
   clientSecret?: string;
   sessionId?: string;
   pagoId?: string;
@@ -52,6 +54,7 @@ function mapStartResult(input: unknown): CheckoutAttemptStartResult {
   return {
     attemptId: toStringValue(record.attemptId),
     status: toStringValue(record.status),
+    url: toStringValue(record.url) || undefined,
     clientSecret: toStringValue(record.clientSecret) || undefined,
     sessionId: toStringValue(record.sessionId) || undefined,
     pagoId: toStringValue(record.pagoId) || undefined,
@@ -98,8 +101,7 @@ export function getOrCreateCheckoutIdempotencyKey(): string {
  * Devuelve un Idempotency-Key estable mientras la firma del carrito/pricing no
  * cambie. Si la firma cambia (items, cantidades, tallas, oferta o código), rota
  * la key para que el backend genere una sesión de Stripe nueva con el monto
- * correcto y nunca se reutilice un `clientSecret` obsoleto. Reintentos con la
- * misma firma reutilizan la key (idempotencia segura).
+ * correcto. Reintentos con la misma firma reutilizan la key (idempotencia segura).
  */
 export function getCheckoutIdempotencyKeyForSignature(
   signature: string,
