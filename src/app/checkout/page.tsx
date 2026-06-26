@@ -45,6 +45,11 @@ import {
   startCheckoutAttempt,
 } from "@/lib/api/checkout-attempt";
 import {
+  clearCheckoutDraft,
+  loadCheckoutDraft,
+  saveCheckoutDraft,
+} from "@/lib/checkout-draft";
+import {
   pickupApi,
   type FulfillmentMethod,
   type PickupContact,
@@ -1946,6 +1951,17 @@ function CardPaymentStep({
 
       attemptIdRef.current = attempt.attemptId;
       setActiveCheckoutAttemptId(attempt.attemptId);
+      saveCheckoutDraft({
+        paymentSignature,
+        fulfillmentMethod: values.fulfillmentMethod,
+        checkoutValues: values,
+        selectedPickupLocationId:
+          values.fulfillmentMethod === "PICKUP" ? values.pickupLocation.id : "",
+        pickupContact:
+          values.fulfillmentMethod === "PICKUP"
+            ? values.pickupContact
+            : { name: "", phone: "", email: "" },
+      });
       markCheckoutPaymentRedirecting();
       window.location.assign(attempt.url);
     } catch (error) {
@@ -2132,8 +2148,17 @@ function CardPaymentStep({
     </>
   );
 }
+function readPaymentCanceledFromUrl(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return new URLSearchParams(window.location.search).get("payment_canceled") === "1";
+}
+
 export default function CheckoutPage() {
   const [showPaymentCanceled, setShowPaymentCanceled] = useState(false);
+  const [paymentCanceledLanding] = useState(readPaymentCanceledFromUrl);
+  const paymentDraftRestoredRef = useRef(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [fulfillmentMethod, setFulfillmentMethod] =
     useState<FulfillmentMethod>("DELIVERY");
@@ -2163,18 +2188,20 @@ export default function CheckoutPage() {
   const [isLoadingCodigo, setIsLoadingCodigo] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("payment_canceled") !== "1") {
+    if (!paymentCanceledLanding) {
       return;
     }
     setShowPaymentCanceled(true);
-    setCurrentStep(1);
     clearCheckoutIdempotencyKey();
     router.replace("/checkout", { scroll: false });
-  }, [router]);
+  }, [paymentCanceledLanding, router]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.sessionStorage.removeItem(CHECKOUT_PAYMENT_REDIRECTING_KEY);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -2194,9 +2221,9 @@ export default function CheckoutPage() {
         return;
       }
       if (window.sessionStorage.getItem(CHECKOUT_PAYMENT_REDIRECTING_KEY) === "1") {
-        window.sessionStorage.removeItem(CHECKOUT_PAYMENT_REDIRECTING_KEY);
         return;
       }
+      clearCheckoutDraft();
       void cancelActiveCheckoutAttemptIfAny().catch(() => undefined);
     };
   }, []);
@@ -2477,6 +2504,56 @@ export default function CheckoutPage() {
       fulfillmentMethod,
     ],
   );
+
+  useEffect(() => {
+    if (!paymentCanceledLanding || paymentDraftRestoredRef.current || isLoading) {
+      return;
+    }
+
+    paymentDraftRestoredRef.current = true;
+
+    const draft = loadCheckoutDraft();
+    if (!draft) {
+      setCurrentStep(0);
+      return;
+    }
+
+    const restoredValues = draft.checkoutValues as CheckoutValues;
+
+    setFulfillmentMethod(draft.fulfillmentMethod);
+    setCheckoutValues(restoredValues);
+
+    if (draft.selectedPickupLocationId) {
+      setSelectedPickupLocationId(draft.selectedPickupLocationId);
+    }
+
+    if (draft.pickupContact) {
+      setPickupContact(draft.pickupContact);
+    }
+
+    if (
+      draft.fulfillmentMethod === "DELIVERY" &&
+      restoredValues.fulfillmentMethod === "DELIVERY"
+    ) {
+      shippingForm.reset(
+        {
+          name: restoredValues.name,
+          telefono: restoredValues.telefono,
+          calle: restoredValues.calle,
+          numero: restoredValues.numero,
+          numeroInterior: restoredValues.numeroInterior ?? "",
+          colonia: restoredValues.colonia,
+          city: restoredValues.city,
+          estado: restoredValues.estado,
+          zip: restoredValues.zip,
+          email: restoredValues.email,
+        },
+        { keepErrors: false, keepTouched: true, keepDirty: true },
+      );
+    }
+
+    setCurrentStep(1);
+  }, [isLoading, paymentCanceledLanding, shippingForm]);
 
   const activeCheckoutValues =
     checkoutValues ??

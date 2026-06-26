@@ -22,6 +22,7 @@ import {
   clearCheckoutIdempotencyKey,
   getCheckoutAttemptStatus,
 } from "@/lib/api/checkout-attempt";
+import { clearCheckoutDraft } from "@/lib/checkout-draft";
 import { useCart } from "@/hooks/use-cart";
 import type { Orden } from "@/lib/types";
 
@@ -304,6 +305,7 @@ export function ConfirmationClient() {
 
     cartReloadedRef.current = true;
     clearCheckoutIdempotencyKey();
+    clearCheckoutDraft();
     void reloadCart();
   }, [verificationState, reloadCart]);
 
