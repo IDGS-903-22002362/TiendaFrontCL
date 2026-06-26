@@ -18,7 +18,7 @@ const footerColumns = [
     title: "Soporte",
     links: [
       { href: "/order-history", label: "Pedidos" },
-      { href: "/checkout", label: "Envíos y devoluciones" },
+      { href: "/TerminosCondiciones#politicas-generales", label: "Envíos y devoluciones" },
       { href: "/login", label: "Cuenta" },
       { href: "/politica-cookies", label: "Política de cookies" },
     ],

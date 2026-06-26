@@ -37,7 +37,7 @@ export default function TerminosCondicionesPage() {
           </p>
         </section>
 
-        <section>
+        <section id="politicas-generales">
           <h2>2. ALCANCE</h2>
           <p>
             Las presentes políticas aplican a todas las compras realizadas a través de la página web
