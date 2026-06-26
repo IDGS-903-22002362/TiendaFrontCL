@@ -140,12 +140,36 @@ function getApiPayloadMessage(error: ApiError): string | null {
   return error.message || null;
 }
 
-export function getCartQuantityUpdateErrorMessage(error: unknown): string {
-  if (error instanceof ApiError) {
-    return getApiErrorMessage(error);
+export type CartQuantityErrorContext = {
+  productId?: string;
+  productName?: string;
+};
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function humanizeCartProductMessage(
+  message: string,
+  context?: CartQuantityErrorContext,
+): string {
+  const productName = context?.productName?.trim();
+  const productId = context?.productId?.trim();
+
+  if (!productName || !productId || productName === productId) {
+    return message;
   }
 
-  return getApiErrorMessage(error);
+  const quotedId = new RegExp(`["']${escapeRegExp(productId)}["']`, "g");
+  return message.replace(quotedId, `"${productName}"`);
+}
+
+export function getCartQuantityUpdateErrorMessage(
+  error: unknown,
+  context?: CartQuantityErrorContext,
+): string {
+  const message = getApiErrorMessage(error);
+  return humanizeCartProductMessage(message, context);
 }
 
 export function getApiErrorMessage(error: unknown): string {

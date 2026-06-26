@@ -397,12 +397,14 @@ export async function updateCartItem(
   item: Pick<CartItem, "id" | "quantity" | "size" | "tallaId" | "color">,
   token?: string,
 ): Promise<Cart> {
+  const tallaId = resolveTallaId(item);
   const payload = await apiFetch<unknown>(
     `/api/carrito/items/${item.id}`,
     {
       method: "PUT",
       body: JSON.stringify({
         cantidad: item.quantity,
+        ...(tallaId ? { tallaId } : {}),
       }),
     },
     { sessionId, token, local: true },
@@ -416,10 +418,14 @@ export async function removeCartItem(
   item: Pick<CartItem, "id" | "size" | "tallaId">,
   token?: string,
 ): Promise<Cart> {
+  const tallaId = resolveTallaId(item);
   const payload = await apiFetch<unknown>(
     `/api/carrito/items/${item.id}`,
     {
       method: "DELETE",
+      ...(tallaId
+        ? { body: JSON.stringify({ tallaId }) }
+        : {}),
     },
     { sessionId, token, local: true },
   );
