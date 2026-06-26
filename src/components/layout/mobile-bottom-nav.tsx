@@ -34,7 +34,7 @@ const navItems: NavItem[] = [
   },
   {
     href: "/products",
-    label: "Shop",
+    label: "Productos",
     icon: Package2,
     matches: (pathname: string, searchParams) =>
       pathname === "/products" && searchParams.get("wishlist") !== "1",
@@ -48,7 +48,7 @@ const navItems: NavItem[] = [
   },
   {
     href: "/cart",
-    label: "Bag",
+    label: "Carrito",
     icon: ShoppingBag,
     matches: (pathname: string) => pathname === "/cart",
   },

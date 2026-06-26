@@ -42,7 +42,7 @@ export function MobileNavDrawer({
         className="w-[min(90vw,360px)] border-r border-border bg-card-elevated px-0"
       >
         <SheetHeader className="border-b border-border px-5 pb-5">
-          <p className="editorial-label text-primary/70">Store oficial</p>
+          <p className="editorial-label text-primary/70">Tienda Oficial</p>
           <SheetTitle className="mt-2">La Guarida</SheetTitle>
         </SheetHeader>
         <div className="flex h-full flex-col px-5 pb-6 pt-5">

@@ -26,7 +26,6 @@ import { useIsFromMobileApp } from "@/hooks/use-from-mobile-app";
 
 const navLinks = [
   { href: "/products", label: "Todos los productos" },
-  { href: "/products?tag=new", label: "Novedades" },
   { href: "/products?onlyOffers=true", label: "Ofertas" },
   { href: "/products?category=accesorios", label: "Accesorios" },
 ];
