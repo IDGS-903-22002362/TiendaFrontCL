@@ -36,12 +36,16 @@ import {
   type ValidarCodigoPromocionCarritoItem,
 } from "@/lib/api/cart";
 import {
+  abandonCheckoutAttempt,
   cancelCheckoutAttempt,
   cancelActiveCheckoutAttemptIfAny,
   CHECKOUT_PAYMENT_REDIRECTING_KEY,
   clearCheckoutIdempotencyKey,
+  getActiveCheckoutAttemptId,
+  getPendingCheckoutAttemptId,
   markCheckoutPaymentRedirecting,
   setActiveCheckoutAttemptId,
+  setPendingCheckoutAttemptId,
   startCheckoutAttempt,
 } from "@/lib/api/checkout-attempt";
 import {
@@ -436,6 +440,12 @@ function getCheckoutErrorMessage(error: unknown): string {
       case "CHECKOUT_CART_EMPTY":
         return "Tu carrito esta vacio. Regresa al carrito para continuar.";
       default:
+        if (error.status === 409) {
+          return (
+            error.message ||
+            "No hay suficiente stock disponible para completar tu compra."
+          );
+        }
         if (error.status === 429) {
           return "Espera unos segundos antes de reintentar el checkout.";
         }
@@ -1951,6 +1961,7 @@ function CardPaymentStep({
 
       attemptIdRef.current = attempt.attemptId;
       setActiveCheckoutAttemptId(attempt.attemptId);
+      setPendingCheckoutAttemptId(attempt.attemptId);
       saveCheckoutDraft({
         paymentSignature,
         fulfillmentMethod: values.fulfillmentMethod,
@@ -2191,6 +2202,22 @@ export default function CheckoutPage() {
     if (!paymentCanceledLanding) {
       return;
     }
+
+    const attemptId =
+      getPendingCheckoutAttemptId() ?? getActiveCheckoutAttemptId();
+
+    if (attemptId) {
+      void abandonCheckoutAttempt(attemptId)
+        .then((result) => {
+          if (result.orderId) {
+            router.replace(
+              `/checkout/confirmation?attemptId=${encodeURIComponent(result.attemptId)}&status=processing`,
+            );
+          }
+        })
+        .catch(() => undefined);
+    }
+
     setShowPaymentCanceled(true);
     clearCheckoutIdempotencyKey();
     router.replace("/checkout", { scroll: false });

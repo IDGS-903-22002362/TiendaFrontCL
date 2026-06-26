@@ -4,6 +4,8 @@ import { apiFetch, unwrapData } from "./client";
 const IDEMPOTENCY_STORAGE_KEY = "tiendafront_checkout_idempotency_key";
 const IDEMPOTENCY_SIGNATURE_KEY = "tiendafront_checkout_idempotency_signature";
 const ACTIVE_ATTEMPT_STORAGE_KEY = "tiendafront_checkout_active_attempt_id";
+export const PENDING_ATTEMPT_STORAGE_KEY =
+  "tiendafront_checkout_pending_attempt_id";
 export const CHECKOUT_PAYMENT_REDIRECTING_KEY =
   "tiendafront_checkout_payment_redirecting";
 
@@ -147,14 +149,51 @@ export function getActiveCheckoutAttemptId(): string | null {
   return window.sessionStorage.getItem(ACTIVE_ATTEMPT_STORAGE_KEY);
 }
 
+export type CheckoutAttemptAbandonResult = {
+  attemptId: string;
+  status: string;
+  orderId?: string;
+  alreadyAbandoned?: boolean;
+};
+
+function mapAbandonResult(input: unknown): CheckoutAttemptAbandonResult {
+  const record =
+    input && typeof input === "object" ? (input as UnknownRecord) : {};
+  return {
+    attemptId: toStringValue(record.attemptId),
+    status: toStringValue(record.status),
+    orderId: toStringValue(record.orderId) || undefined,
+    alreadyAbandoned: record.alreadyAbandoned === true,
+  };
+}
+
+export function setPendingCheckoutAttemptId(attemptId: string): void {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.setItem(PENDING_ATTEMPT_STORAGE_KEY, attemptId);
+}
+
+export function getPendingCheckoutAttemptId(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.sessionStorage.getItem(PENDING_ATTEMPT_STORAGE_KEY);
+}
+
+export function clearPendingCheckoutAttemptId(): void {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.removeItem(PENDING_ATTEMPT_STORAGE_KEY);
+}
+
 export function markCheckoutPaymentRedirecting(): void {
   if (typeof window === "undefined") return;
+  const attemptId = getActiveCheckoutAttemptId();
+  if (attemptId) {
+    setPendingCheckoutAttemptId(attemptId);
+  }
   window.sessionStorage.setItem(CHECKOUT_PAYMENT_REDIRECTING_KEY, "1");
-  clearActiveCheckoutAttemptId();
 }
 
 export async function cancelActiveCheckoutAttemptIfAny(): Promise<void> {
-  const attemptId = getActiveCheckoutAttemptId();
+  const attemptId =
+    getActiveCheckoutAttemptId() ?? getPendingCheckoutAttemptId();
   if (!attemptId) {
     return;
   }
@@ -189,6 +228,28 @@ export async function cancelCheckoutAttempt(attemptId: string): Promise<void> {
   if (getActiveCheckoutAttemptId() === attemptId) {
     clearActiveCheckoutAttemptId();
   }
+  if (getPendingCheckoutAttemptId() === attemptId) {
+    clearPendingCheckoutAttemptId();
+  }
+}
+
+export async function abandonCheckoutAttempt(
+  attemptId: string,
+): Promise<CheckoutAttemptAbandonResult> {
+  const raw = await apiFetch<unknown>(
+    `/api/checkout/attempts/${encodeURIComponent(attemptId)}/abandon`,
+    { method: "POST" },
+    { local: true },
+  );
+  const data = unwrapData<unknown>(raw);
+  const result = mapAbandonResult(data);
+  if (getActiveCheckoutAttemptId() === attemptId) {
+    clearActiveCheckoutAttemptId();
+  }
+  if (getPendingCheckoutAttemptId() === attemptId) {
+    clearPendingCheckoutAttemptId();
+  }
+  return result;
 }
 
 export async function getCheckoutAttemptStatus(
