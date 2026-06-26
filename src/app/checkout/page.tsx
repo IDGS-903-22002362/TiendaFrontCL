@@ -29,6 +29,11 @@ import { useAuth } from "@/hooks/use-auth";
 import { useStorefront } from "@/hooks/use-storefront";
 import { ApiError } from "@/lib/api/client";
 import {
+  formatUnavailableItemLine,
+  getUnavailableItemsFromError,
+  type UnavailableCheckoutItem,
+} from "@/lib/cart-stock";
+import {
   fetchCart,
   getCartVariantKey,
   getOrCreateSessionId,
@@ -1881,6 +1886,9 @@ function CardPaymentStep({
   onRecoverableDeliveryError: (values: DeliveryCheckoutValues) => void;
 }) {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [stockUnavailableItems, setStockUnavailableItems] = useState<
+    UnavailableCheckoutItem[]
+  >([]);
   const preparingRef = useRef(false);
   const attemptIdRef = useRef<string | null>(null);
 
@@ -1926,6 +1934,7 @@ function CardPaymentStep({
 
     preparingRef.current = true;
     setIsProcessing(true);
+    setStockUnavailableItems([]);
 
     try {
       assertDeliveryShippingReady(values);
@@ -1977,6 +1986,10 @@ function CardPaymentStep({
       markCheckoutPaymentRedirecting();
       window.location.assign(attempt.url);
     } catch (error) {
+      const unavailableItems = getUnavailableItemsFromError(error);
+      if (unavailableItems.length > 0) {
+        setStockUnavailableItems(unavailableItems);
+      }
       const retryValues = buildRetryDeliveryValuesFromCheckoutError(
         values,
         error,
@@ -2021,6 +2034,21 @@ function CardPaymentStep({
         </CardHeader>
 
         <CardContent className="space-y-5 pt-5">
+          {stockUnavailableItems.length > 0 ? (
+            <Alert variant="destructive" className="rounded-[1.2rem]">
+              <AlertTitle>No puedes continuar con la compra</AlertTitle>
+              <AlertDescription>
+                <ul className="mt-2 list-disc space-y-1 pl-4">
+                  {stockUnavailableItems.map((item) => (
+                    <li key={`${item.productId}-${item.tallaId ?? "global"}`}>
+                      {formatUnavailableItemLine(item)}
+                    </li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
           {paymentCanceled ? (
             <Alert className="rounded-[1.2rem] border-primary/20 bg-primary/5">
               <AlertTitle>Pago no completado</AlertTitle>

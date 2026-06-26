@@ -15,6 +15,11 @@ import {
   type ProductOfferPricing,
 } from "@/lib/ofertas-public";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  cartHasUnpurchasableItems,
+  getCartStockBadgeLabel,
+} from "@/lib/cart-stock";
 import { QuantitySelector } from "@/components/product/quantity-selector";
 import { EmptyState } from "@/components/storefront/shared/empty-state";
 import { Breadcrumbs } from "@/components/storefront/shared/breadcrumbs";
@@ -65,6 +70,11 @@ export default function CartPage() {
       return total + offerLine.totalItem;
     }, 0);
   }, [state.items, pricingOfertas]);
+
+  const hasUnpurchasableItems = useMemo(
+    () => cartHasUnpurchasableItems(state.items),
+    [state.items],
+  );
 
   if (isLoading) {
     return (
@@ -119,11 +129,13 @@ export default function CartPage() {
               totalItem,
               offerLabel,
             } = offerLine;
+            const stockBadgeLabel = getCartStockBadgeLabel(item.stockStatus);
+            const itemIsPurchasable = item.purchasable !== false;
 
             return (
               <article
                 key={variantKey}
-                className="rounded-[1.9rem] border border-border bg-card p-4 shadow-[var(--shadow-card)] transition-colors hover:border-primary/20 md:p-5"
+                className={`rounded-[1.9rem] border border-border bg-card p-4 shadow-[var(--shadow-card)] transition-colors hover:border-primary/20 md:p-5 ${itemIsPurchasable ? "" : "opacity-70"}`}
               >
                 <div className="flex flex-col gap-4 md:flex-row">
                   <Link
@@ -151,6 +163,18 @@ export default function CartPage() {
                         <p className="mt-2 text-sm text-muted-foreground">
                           Talla: {item.tallaId ?? item.size ?? "Sin talla"}
                         </p>
+                        {stockBadgeLabel ? (
+                          <Badge
+                            variant={
+                              item.stockStatus === "temporarily_unavailable"
+                                ? "secondary"
+                                : "outline"
+                            }
+                            className="mt-2"
+                          >
+                            {stockBadgeLabel}
+                          </Badge>
+                        ) : null}
                       </div>
 
                       <Button
@@ -249,9 +273,25 @@ export default function CartPage() {
             </div>
 
             <div className="mt-6 space-y-3">
-              <Button asChild className="h-12 w-full rounded-full">
-                <Link href="/checkout">Continuar compra</Link>
-              </Button>
+              {hasUnpurchasableItems ? (
+                <p className="text-sm font-medium text-destructive">
+                  Hay productos agotados o no disponibles en tu carrito. Quítalos
+                  o revisa más tarde.
+                </p>
+              ) : null}
+
+              {hasUnpurchasableItems ? (
+                <Button
+                  disabled
+                  className="h-12 w-full rounded-full"
+                >
+                  Continuar compra
+                </Button>
+              ) : (
+                <Button asChild className="h-12 w-full rounded-full">
+                  <Link href="/checkout">Continuar compra</Link>
+                </Button>
+              )}
 
               <Button asChild variant="outline" className="h-11 w-full rounded-full">
                 <Link href="/products">Seguir comprando</Link>

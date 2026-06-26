@@ -140,25 +140,9 @@ function getApiPayloadMessage(error: ApiError): string | null {
   return error.message || null;
 }
 
-const CART_STOCK_EXCEEDED_MESSAGE =
-  "La cantidad excede la disponibilidad del producto";
-
-function isCartStockExceededError(error: unknown): boolean {
-  if (!(error instanceof ApiError)) {
-    return false;
-  }
-
-  if (error.code === "CHECKOUT_STOCK_UNAVAILABLE") {
-    return true;
-  }
-
-  const payloadMessage = getApiPayloadMessage(error) ?? error.message;
-  return /stock insuficiente/i.test(payloadMessage);
-}
-
 export function getCartQuantityUpdateErrorMessage(error: unknown): string {
-  if (isCartStockExceededError(error)) {
-    return CART_STOCK_EXCEEDED_MESSAGE;
+  if (error instanceof ApiError) {
+    return getApiErrorMessage(error);
   }
 
   return getApiErrorMessage(error);

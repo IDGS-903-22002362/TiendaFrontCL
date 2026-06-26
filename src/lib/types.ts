@@ -86,6 +86,11 @@ export type Category = {
   orden?: number | null;
 };
 
+export type CartItemStockStatus =
+  | "available"
+  | "out_of_stock"
+  | "temporarily_unavailable";
+
 export type CartItem = {
   id: string;
   name: string;
@@ -95,6 +100,10 @@ export type CartItem = {
   tallaId?: string;
   size?: string;
   color?: string;
+  disponible?: number;
+  stockFisico?: number;
+  stockStatus?: CartItemStockStatus;
+  purchasable?: boolean;
 };
 
 export type Cart = {

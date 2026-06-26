@@ -14,6 +14,11 @@ import {
   type ValidarCodigoPromocionCarritoItem,
 } from "@/lib/api/cart";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  cartHasUnpurchasableItems,
+  getCartStockBadgeLabel,
+} from "@/lib/cart-stock";
 import { useEffect, useMemo, useState } from "react";
 import {
   Sheet,
@@ -544,6 +549,11 @@ export function CartDrawer() {
   });
 }, [state.items, pricingOfertas]);
 
+  const hasUnpurchasableItems = useMemo(
+    () => cartHasUnpurchasableItems(state.items),
+    [state.items],
+  );
+
 
     const codigoItems = useMemo<ValidarCodigoPromocionCarritoItem[]>(() => {
     return state.items.reduce<ValidarCodigoPromocionCarritoItem[]>(
@@ -1045,11 +1055,15 @@ export function CartDrawer() {
                           : tieneOferta
                             ? offerLine.subtotalOriginal
                             : 0;
+                        const stockBadgeLabel = getCartStockBadgeLabel(
+                          item.stockStatus,
+                        );
+                        const itemIsPurchasable = item.purchasable !== false;
 
                         return (
                           <article
                             key={variantKey}
-                            className="rounded-[1.15rem] border border-black/14 bg-white p-3 shadow-none transition-colors hover:border-primary/25 hover:bg-[rgb(252_252_250)]"
+                            className={`rounded-[1.15rem] border border-black/14 bg-white p-3 shadow-none transition-colors hover:border-primary/25 hover:bg-[rgb(252_252_250)] ${itemIsPurchasable ? "" : "opacity-70"}`}
                           >
                             <div className="flex gap-3">
                               <Link
@@ -1079,6 +1093,19 @@ export function CartDrawer() {
                                     <p className="mt-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
                                       {item.tallaId || item.size || "Sin talla"}
                                     </p>
+                                    {stockBadgeLabel ? (
+                                      <Badge
+                                        variant={
+                                          item.stockStatus ===
+                                          "temporarily_unavailable"
+                                            ? "secondary"
+                                            : "outline"
+                                        }
+                                        className="mt-2"
+                                      >
+                                        {stockBadgeLabel}
+                                      </Badge>
+                                    ) : null}
                                   </div>
                                   <Button
                                     variant="ghost"
@@ -1294,9 +1321,16 @@ puedeMostrarCodigoPromocional &&
                   )
                 ) : null}
 
+                {hasUnpurchasableItems ? (
+                  <p className="text-xs font-medium text-destructive">
+                    Hay productos agotados o no disponibles en tu carrito. Quítalos
+                    o revisa más tarde.
+                  </p>
+                ) : null}
+
                 <Button
                   className="h-11 w-full rounded-none text-sm font-semibold uppercase tracking-[0.18em]"
-                  disabled={state.items.length === 0}
+                  disabled={state.items.length === 0 || hasUnpurchasableItems}
                   onClick={handleCheckout}
                 >
                   Ir a detalle de compra

@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertCircle,
   CheckCircle2,
-  Clock3,
   Loader2,
   PackageCheck,
   ShieldCheck,
@@ -20,7 +19,9 @@ import { ordersApi } from "@/lib/api/orders";
 import { paymentsApi } from "@/lib/api/payments";
 import {
   clearCheckoutIdempotencyKey,
+  clearPendingCheckoutAttemptId,
   getCheckoutAttemptStatus,
+  reconcilePendingCheckoutAttempts,
 } from "@/lib/api/checkout-attempt";
 import { clearCheckoutDraft } from "@/lib/checkout-draft";
 import { useCart } from "@/hooks/use-cart";
@@ -41,8 +42,9 @@ const FAILED_STATUSES = new Set([
   "cancelado",
   "expired",
 ]);
-const POLL_INTERVAL_MS = 3000;
-const MAX_POLL_ATTEMPTS = 8; // ~24s, then show a stable pending state
+const INITIAL_POLL_MS = 3000;
+const MAX_POLL_MS = 10000;
+const MAX_POLL_ATTEMPTS = 24;
 
 function normalizeStatus(value?: string | null) {
   return String(value || "").trim().toLowerCase();
@@ -57,10 +59,17 @@ function formatCurrency(value: string | number) {
   }).format(Number.isFinite(amount) ? amount : 0);
 }
 
+function formatOrderRef(orderId?: string) {
+  if (!orderId) return null;
+  const compact = orderId.replace(/[^a-zA-Z0-9]/g, "");
+  if (compact.length <= 8) return compact.toUpperCase();
+  return compact.slice(-8).toUpperCase();
+}
+
 function getPaymentLabel(status: string): string {
   const normalized = normalizeStatus(status);
-  if (PAID_STATUSES.has(normalized)) return "Pago confirmado";
-  if (!normalized) return "Pendiente de verificación";
+  if (PAID_STATUSES.has(normalized)) return "Confirmado";
+  if (!normalized) return "En verificación";
   switch (normalized) {
     case "pendiente":
     case "pending":
@@ -71,7 +80,7 @@ function getPaymentLabel(status: string): string {
       return "Procesando";
     case "fallido":
     case "failed":
-      return "Fallido";
+      return "No completado";
     case "cancelado":
     case "canceled":
     case "cancelled":
@@ -80,7 +89,7 @@ function getPaymentLabel(status: string): string {
     case "refunded":
       return "Reembolsado";
     default:
-      return status;
+      return "En verificación";
   }
 }
 
@@ -103,9 +112,9 @@ function isPaymentFailed(paymentStatus: string, sessionStatus?: string | null) {
 
 type VerificationState =
   | "checking"
+  | "confirming"
   | "paid"
-  | "syncing"
-  | "pending"
+  | "delayed"
   | "failed";
 
 export function ConfirmationClient() {
@@ -121,8 +130,6 @@ export function ConfirmationClient() {
 
   const [resolvedOrderId, setResolvedOrderId] = useState(orderId);
   const [attemptStatus, setAttemptStatus] = useState("");
-
-  const [orderStatus, setOrderStatus] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("");
   const [sessionPaymentStatus, setSessionPaymentStatus] = useState("");
   const [sessionStatus, setSessionStatus] = useState("");
@@ -130,12 +137,9 @@ export function ConfirmationClient() {
   const [order, setOrder] = useState<Orden | null>(null);
   const [verificationState, setVerificationState] =
     useState<VerificationState>(
-      attemptId || orderId ? "checking" : "pending",
+      attemptId || orderId ? "checking" : "confirming",
     );
-  const [attempts, setAttempts] = useState(0);
-  const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const stripePaidRef = useRef(false);
+  const reconcileStartedRef = useRef(false);
 
   useEffect(() => {
     if (!attemptId && !sessionId && !orderId) {
@@ -143,9 +147,17 @@ export function ConfirmationClient() {
     }
   }, [attemptId, sessionId, orderId, router]);
 
+  useEffect(() => {
+    if (!attemptId || reconcileStartedRef.current) {
+      return;
+    }
+    reconcileStartedRef.current = true;
+    void reconcilePendingCheckoutAttempts().catch(() => undefined);
+  }, [attemptId]);
+
   const checkStatus = useCallback(async () => {
     if (!attemptId && !resolvedOrderId && !sessionId) {
-      setVerificationState("pending");
+      setVerificationState("confirming");
       return false;
     }
 
@@ -188,32 +200,17 @@ export function ConfirmationClient() {
         setVerificationState("failed");
         return true;
       }
-
-      if (!activeOrderId) {
-        if (isStripePaid(nextSessionPaymentStatus)) {
-          stripePaidRef.current = true;
-          setVerificationState("syncing");
-          return false;
-        }
-        setVerificationState("syncing");
-        return false;
-      }
     }
 
-    const stripeIndicatesPaid = isStripePaid(nextSessionPaymentStatus);
     const attemptIndicatesPaid =
       currentAttemptStatus === "finalized" || currentAttemptStatus === "paid";
 
-    if (
-      !activeOrderId ||
-      (!stripeIndicatesPaid && !attemptIndicatesPaid && Boolean(attemptId))
-    ) {
-      if (stripeIndicatesPaid) {
-        stripePaidRef.current = true;
-        setVerificationState("syncing");
+    if (!activeOrderId && !attemptIndicatesPaid) {
+      if (isStripePaid(nextSessionPaymentStatus)) {
+        setVerificationState("confirming");
         return false;
       }
-      setVerificationState("syncing");
+      setVerificationState("confirming");
       return false;
     }
 
@@ -228,7 +225,6 @@ export function ConfirmationClient() {
 
     if (nextOrder) {
       setOrder(nextOrder);
-      if (nextOrder.estado) setOrderStatus(nextOrder.estado);
       if (
         typeof nextOrder.total === "number" &&
         Number.isFinite(nextOrder.total)
@@ -241,16 +237,17 @@ export function ConfirmationClient() {
       payment?.status || String(nextOrder?.paymentStatus || "") || "";
 
     setPaymentStatus(nextPaymentStatus);
-    setLastCheckedAt(new Date());
 
-    if (isBackendPaid(nextOrder, nextPaymentStatus)) {
+    if (
+      isBackendPaid(nextOrder, nextPaymentStatus) ||
+      attemptIndicatesPaid
+    ) {
       setVerificationState("paid");
       return true;
     }
 
     if (isStripePaid(nextSessionPaymentStatus)) {
-      stripePaidRef.current = true;
-      setVerificationState("syncing");
+      setVerificationState("confirming");
       return false;
     }
 
@@ -269,7 +266,6 @@ export function ConfirmationClient() {
 
     const poll = async () => {
       currentAttempt += 1;
-      setAttempts(currentAttempt);
 
       try {
         const done = await checkStatus();
@@ -279,20 +275,25 @@ export function ConfirmationClient() {
       }
 
       if (currentAttempt >= MAX_POLL_ATTEMPTS) {
-        setVerificationState(stripePaidRef.current ? "syncing" : "pending");
+        setVerificationState((prev) =>
+          prev === "checking" || prev === "confirming" ? "delayed" : prev,
+        );
         return;
       }
 
-      timerRef.current = setTimeout(() => {
+      const delay = Math.min(
+        INITIAL_POLL_MS + (currentAttempt - 1) * 1500,
+        MAX_POLL_MS,
+      );
+      window.setTimeout(() => {
         void poll();
-      }, POLL_INTERVAL_MS);
+      }, delay);
     };
 
     void poll();
 
     return () => {
       cancelled = true;
-      if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [checkStatus]);
 
@@ -306,39 +307,48 @@ export function ConfirmationClient() {
     cartReloadedRef.current = true;
     clearCheckoutIdempotencyKey();
     clearCheckoutDraft();
+    clearPendingCheckoutAttemptId();
     void reloadCart();
   }, [verificationState, reloadCart]);
 
   const isPickup = order?.fulfillmentMethod === "PICKUP";
   const isPaid = verificationState === "paid";
-  const isSyncing = verificationState === "syncing";
+  const isConfirming =
+    verificationState === "confirming" || verificationState === "checking";
+  const isDelayed = verificationState === "delayed";
   const isFailed = verificationState === "failed";
-  const isChecking = verificationState === "checking";
+  const orderRef = formatOrderRef(resolvedOrderId);
   const paymentLabel = getPaymentLabel(
-    sessionPaymentStatus || paymentStatus || searchParams.get("status") || "",
+    paymentStatus || sessionPaymentStatus || searchParams.get("status") || "",
   );
   const deliveryTitle = isPickup ? "Recoger en tienda" : "Envío a domicilio";
   const DeliveryIcon = isPickup ? Store : Truck;
 
   const title = isPaid
-    ? "Pago confirmado"
-    : isSyncing
-      ? "Confirmando tu pago"
+    ? "¡Gracias por tu compra!"
     : isFailed
-      ? "No pudimos confirmar el pago"
-      : isChecking
-        ? "Estamos verificando tu pago"
-        : "Pago en verificación";
+      ? "No pudimos completar el pago"
+      : isDelayed
+        ? "Tu pago está en proceso"
+        : "Estamos confirmando tu pago";
 
   const description = isPaid
     ? isPickup
-      ? "Tu pedido quedó pagado y entra a preparación para recoger en tienda."
-      : "Tu pedido quedó pagado y entra a preparación. La guía aparecerá cuando sea entregado a FedEx."
-    : isSyncing
-      ? "Stripe ya marcó el pago como recibido. Estamos esperando que el webhook actualice la orden en el sistema antes de pasarla a preparación."
+      ? "Tu pago fue recibido. Estamos preparando tu pedido para que lo recojas en tienda."
+      : "Tu pago fue recibido. Estamos preparando tu pedido y te avisaremos cuando avance el envío."
     : isFailed
-      ? "Stripe no confirmó este intento de pago. Puedes volver a intentarlo desde tu pedido."
-      : "Estamos esperando la confirmación segura de Stripe. Si tarda, puedes revisar de nuevo en unos segundos; no generes otro pago si ya viste el cargo.";
+      ? "El pago no se completó. Puedes volver al carrito e intentarlo de nuevo."
+      : isDelayed
+        ? "Si ya viste el cargo en tu banco, tu pedido se actualizará pronto. Revisa Mis pedidos en unos minutos; no vuelvas a pagar."
+        : "Esto suele tardar unos segundos. No vuelvas a pagar si ya viste el cargo en tu banco.";
+
+  const statusMessage = isPaid
+    ? "Tu pedido ya está confirmado"
+    : isFailed
+      ? "El pago no se completó"
+      : isDelayed
+        ? "Seguimos procesando tu pago"
+        : "Confirmando tu compra";
 
   return (
     <main className="min-h-[calc(100vh-5rem)] bg-[radial-gradient(circle_at_top_left,rgba(8,104,72,0.16),transparent_34%),linear-gradient(180deg,hsl(var(--background)),hsl(var(--muted))/0.55)] px-4 py-6 md:py-10">
@@ -362,7 +372,10 @@ export function ConfirmationClient() {
                 <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-white/70">
                   Confirmación de compra
                 </p>
-                <h1 className="mt-2 font-headline text-3xl font-bold leading-tight md:text-5xl">
+                <h1
+                  className="mt-2 font-headline text-3xl font-bold leading-tight md:text-5xl"
+                  aria-live="polite"
+                >
                   {title}
                 </h1>
                 <p className="mt-3 max-w-xl text-sm leading-6 text-white/82">
@@ -375,25 +388,25 @@ export function ConfirmationClient() {
           <div className="grid gap-4 p-5 md:grid-cols-3 md:p-8">
             <div className="rounded-2xl border border-border bg-muted/35 p-4">
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                {isPaid ? "Pedido" : "Intento de pago"}
+                Número de pedido
               </p>
-              <p className="mt-2 break-all font-mono text-sm font-semibold text-foreground">
-                {isPaid && resolvedOrderId
-                  ? resolvedOrderId
-                  : isSyncing
-                    ? "Confirmando..."
-                    : attemptId
-                      ? `Intento ${attemptId.slice(0, 8)}…`
-                      : "Pendiente"}
+              <p className="mt-2 text-sm font-semibold text-foreground">
+                {isPaid && orderRef
+                  ? `#${orderRef}`
+                  : isConfirming
+                    ? "Generando..."
+                    : "Pendiente"}
               </p>
             </div>
             <div className="rounded-2xl border border-border bg-muted/35 p-4">
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                Pago
+                Estado del pago
               </p>
               <div className="mt-2">
                 <Badge
-                  variant={isPaid ? "default" : isFailed ? "destructive" : "secondary"}
+                  variant={
+                    isPaid ? "default" : isFailed ? "destructive" : "secondary"
+                  }
                 >
                   {paymentLabel}
                 </Badge>
@@ -401,7 +414,7 @@ export function ConfirmationClient() {
             </div>
             <div className="rounded-2xl border border-border bg-muted/35 p-4">
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                Total
+                Total pagado
               </p>
               <p className="mt-1 font-headline text-2xl font-bold text-secondary">
                 {formatCurrency(total)}
@@ -417,7 +430,8 @@ export function ConfirmationClient() {
                   <p className="text-sm font-semibold">Pago seguro</p>
                 </div>
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  Se confirma con Stripe y webhook antes de preparar el pedido.
+                  Procesamos tu pago de forma segura antes de preparar el
+                  pedido.
                 </p>
               </div>
               <div className="rounded-2xl border border-border bg-card p-4">
@@ -427,8 +441,8 @@ export function ConfirmationClient() {
                 </div>
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">
                   {isPaid
-                    ? "El pedido pasa a preparación."
-                    : "Inicia cuando el pago quede confirmado."}
+                    ? "Tu pedido ya está en preparación."
+                    : "Iniciará en cuanto confirmemos tu pago."}
                 </p>
               </div>
               <div className="rounded-2xl border border-border bg-card p-4">
@@ -439,28 +453,35 @@ export function ConfirmationClient() {
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">
                   {isPickup
                     ? "Te avisaremos cuando esté listo para recoger."
-                    : "La guía se captura manualmente al entregar a FedEx."}
+                    : "Te notificaremos cuando tu pedido salga hacia envío."}
                 </p>
               </div>
             </div>
 
             <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-              {isPaid ? (
+              {isPaid || isDelayed ? (
                 <Button asChild className="h-12 flex-1 rounded-full" size="lg">
                   <Link href="/order-history">Ver mis pedidos</Link>
                 </Button>
               ) : null}
+              {!isPaid ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-12 flex-1 rounded-full"
+                  size="lg"
+                  onClick={() => void checkStatus()}
+                  disabled={isConfirming && !isDelayed}
+                >
+                  {isConfirming ? "Actualizando..." : "Actualizar estado"}
+                </Button>
+              ) : null}
               <Button
-                type="button"
-                variant="outline"
+                asChild
+                variant="ghost"
                 className="h-12 flex-1 rounded-full"
                 size="lg"
-                onClick={() => void checkStatus()}
-                disabled={isChecking}
               >
-                {isChecking ? "Consultando..." : "Actualizar estado"}
-              </Button>
-              <Button asChild variant="ghost" className="h-12 flex-1 rounded-full" size="lg">
                 <Link href="/products">Seguir comprando</Link>
               </Button>
             </div>
@@ -470,86 +491,45 @@ export function ConfirmationClient() {
         <aside className="space-y-5">
           <Card className="rounded-[2rem] border-border bg-card/95 shadow-[var(--shadow-card)]">
             <CardContent className="p-5 md:p-6">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                    Estado actual
-                  </p>
-                  <h2 className="mt-2 font-headline text-2xl font-bold">
-                  {isPaid
-                      ? "Listo para preparar"
-                    : isSyncing
-                      ? "Sincronizando pago"
-                      : isFailed
-                        ? "Requiere atención"
-                        : "Verificación en curso"}
-                  </h2>
-                </div>
-                <Clock3 className="h-5 w-5 text-primary" />
-              </div>
-
-              <div className="mt-5 space-y-3 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground">Orden</span>
-                  <span className="font-medium">{orderStatus || "PENDIENTE"}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground">Pago backend</span>
-                  <span className="font-medium">
-                    {getPaymentLabel(paymentStatus || "PENDIENTE")}
-                  </span>
-                </div>
-                {sessionId ? (
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-muted-foreground">Stripe</span>
-                    <span className="font-medium">
-                      {sessionPaymentStatus || sessionStatus || "Consultando"}
-                    </span>
-                  </div>
-                ) : null}
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground">Intentos</span>
-                  <span className="font-medium">
-                    {Math.min(attempts, MAX_POLL_ATTEMPTS)}/{MAX_POLL_ATTEMPTS}
-                  </span>
-                </div>
-                {lastCheckedAt ? (
-                  <p className="pt-2 text-xs text-muted-foreground">
-                    Última consulta:{" "}
-                    {lastCheckedAt.toLocaleTimeString("es-MX", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      second: "2-digit",
-                    })}
-                  </p>
-                ) : null}
-              </div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                Resumen
+              </p>
+              <h2 className="mt-2 font-headline text-2xl font-bold">
+                {statusMessage}
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                {isPaid
+                  ? "Guardamos tu compra y puedes consultarla en cualquier momento desde Mis pedidos."
+                  : isDelayed
+                    ? "A veces el banco tarda un poco en confirmar el cargo. Tu pedido aparecerá en Mis pedidos en cuanto esté listo."
+                    : "Estamos validando tu pago para asegurar que todo quede correcto."}
+              </p>
             </CardContent>
           </Card>
 
           <Card className="rounded-[2rem] border-border bg-card/95 shadow-[var(--shadow-card)]">
             <CardContent className="p-5 text-sm leading-6 text-muted-foreground md:p-6">
-              <p className="font-semibold text-foreground">Qué pasa después</p>
+              <p className="font-semibold text-foreground">Qué sigue</p>
               <ol className="mt-4 space-y-3">
                 <li className="flex gap-3">
                   <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
                     1
                   </span>
-                  Stripe confirma el pago de forma segura.
+                  Recibimos tu pago de forma segura.
                 </li>
                 <li className="flex gap-3">
                   <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
                     2
                   </span>
-                  El pedido queda en preparación.
+                  Preparamos tu pedido en tienda.
                 </li>
                 <li className="flex gap-3">
                   <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
                     3
                   </span>
                   {isPickup
-                    ? "Te avisaremos cuando puedas recogerlo."
-                    : "La tienda captura la guía cuando se entrega a FedEx."}
+                    ? "Te avisamos cuando puedas recogerlo."
+                    : "Te notificamos cuando avance el envío."}
                 </li>
               </ol>
             </CardContent>
