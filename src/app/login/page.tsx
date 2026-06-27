@@ -594,6 +594,7 @@ function LoginPageContent() {
       <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
         <div className="h-full w-full">
           <Antigravity
+            style={{ width: "100%", height: "100%" }}
             count={250}
             magnetRadius={9}
             ringRadius={8}

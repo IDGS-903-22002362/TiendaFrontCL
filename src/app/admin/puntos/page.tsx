@@ -51,7 +51,7 @@ const POINTS_PER_PESO = 1; // 1 MXN = 1 punto
 // UTILIDAD: Decodificar JWT (payload sin verificar)
 // ============================================
 
-function decodeJwt(token: string): Record<string, any> | null {
+function decodeJwt(token: string): Record<string, unknown> | null {
     try {
         const base64Url = token.split('.')[1];
         const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -67,6 +67,11 @@ function decodeJwt(token: string): Record<string, any> | null {
     }
 }
 
+function jwtStringField(payload: Record<string, unknown> | null, key: string): string | null {
+    const value = payload?.[key];
+    return typeof value === "string" && value.length > 0 ? value : null;
+}
+
 // ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
@@ -77,8 +82,11 @@ export default function AdminAssignPoints() {
 
     // Datos del admin/empleado obtenidos del token (más confiable que user)
     const tokenPayload = token ? decodeJwt(token) : null;
-    const adminUid = tokenPayload?.uid || tokenPayload?.sub || null;
-    const adminName = tokenPayload?.nombre || tokenPayload?.email || "Usuario autenticado";
+    const adminUid = jwtStringField(tokenPayload, "uid") ?? jwtStringField(tokenPayload, "sub");
+    const adminName =
+        jwtStringField(tokenPayload, "nombre") ??
+        jwtStringField(tokenPayload, "email") ??
+        "Usuario autenticado";
 
     // Estados del formulario de asignación
     const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);

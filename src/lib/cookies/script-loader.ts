@@ -77,8 +77,8 @@ function loadMetaPixel(pixelId: string): void {
     "tiendafront-meta-pixel",
     "https://connect.facebook.net/en_US/fbevents.js",
   );
-  window.fbq("init", pixelId);
-  window.fbq("track", "PageView");
+  window.fbq!("init", pixelId);
+  window.fbq!("track", "PageView");
   loaded.marketing = true;
 }
 

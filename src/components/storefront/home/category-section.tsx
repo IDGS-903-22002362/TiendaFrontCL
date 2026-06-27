@@ -58,7 +58,7 @@ export default function CategorySection() {
     }, [categorias, searchQuery, selectedCategoriaId]);
 
     // Renderizado con Enfoque en Simetría y Centrado Absoluto
-    const renderItemsGrid = (items: any[], type: "linea" | "categoria") => {
+    const renderItemsGrid = (items: Category[], type: "linea" | "categoria") => {
         if (isLoading) {
             return (
                 <div className="flex justify-center items-center h-48">
@@ -79,7 +79,7 @@ export default function CategorySection() {
             <div className="grid w-full grid-cols-3 gap-x-4 gap-y-8 sm:grid-cols-4 sm:gap-x-5 sm:gap-y-10 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-9">
                 {items.map((item) => {
                     const img = item.imagenPrincipal;
-                    const name = type === "linea" ? item.nombre : item.name;
+                    const name = item.name;
 
                     return (
                         <Link

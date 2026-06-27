@@ -103,8 +103,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Notificar a Flutter si estamos dentro de un WebView
-    if (typeof window !== "undefined" && (window as any).ClubLeonBridge) {
-      (window as any).ClubLeonBridge.postMessage(
+    if (typeof window !== "undefined" && window.ClubLeonBridge) {
+      window.ClubLeonBridge.postMessage(
         JSON.stringify({
           type: "CLUBLEON_LOGIN",
           token: response.data?.token ?? "",
@@ -213,8 +213,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      (window as any).__tiendaAuth = {
+    if (typeof window !== "undefined") {
+      window.__tiendaAuth = {
         signInWithFirebase: signInWithFirebase,
         getAuthStatus: () => ({
           isAuthenticated: Boolean(token) && !isLoading,

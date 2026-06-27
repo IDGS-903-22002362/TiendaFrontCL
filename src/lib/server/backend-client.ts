@@ -189,9 +189,8 @@ export async function proxyToBackend({
     }
 
     const payload = await parseResponsePayload(response);
-    if (!response.ok) {
-      console.error(`Backend returned ${response.status} for ${url}`);
-      console.error("Backend Error Payload:", JSON.stringify(payload, null, 2));
+    if (!response.ok && process.env.NODE_ENV !== "production") {
+      console.error(`Backend returned ${response.status} for ${backendPath}`);
     }
     const jsonResponse = NextResponse.json(payload, {
       status: response.status,

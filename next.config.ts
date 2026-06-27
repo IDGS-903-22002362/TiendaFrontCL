@@ -50,10 +50,10 @@ const checkoutCsp = [
 const nextConfig: NextConfig = {
   outputFileTracingRoot: process.cwd(),
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
   async rewrites() {
     return [
