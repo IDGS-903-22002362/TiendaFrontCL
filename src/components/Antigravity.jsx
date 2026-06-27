@@ -188,7 +188,7 @@ const AntigravityInner = ({
   );
 };
 
-const Antigravity = ({ className = '', style, ...props }) => {
+const Antigravity = ({ className = '', style = {}, ...props }) => {
   return (
     <Canvas
       className={`pointer-events-none !absolute inset-0 !z-0 h-full w-full ${className}`.trim()}

@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import type { UserRole } from "@/lib/types";
 
 const API_TOKEN_COOKIE = "tiendafront_api_token";
+const USER_ROLE_COOKIE = "tiendafront_user_role";
 const USER_DATA_COOKIE = "tiendafront_user_data";
 const BLOCKED_PAGE_IMAGE = "/images/fondopaginaporx.png";
 
@@ -163,6 +165,41 @@ function getPerfilCompletoFromCookie(request: NextRequest): boolean | undefined 
   return undefined;
 }
 
+const STAFF_ROUTE_ROLES: Array<{ prefix: string; roles: UserRole[] }> = [
+  { prefix: "/admin", roles: ["ADMIN", "EMPLEADO", "SUPER_ADMIN"] },
+  { prefix: "/super-admin", roles: ["SUPER_ADMIN"] },
+  { prefix: "/empleado", roles: ["EMPLEADO"] },
+  { prefix: "/empleado-club", roles: ["EMPLEADO_CLUB"] },
+];
+
+function getRequiredStaffRoles(pathname: string): UserRole[] | null {
+  const match = STAFF_ROUTE_ROLES.find(({ prefix }) =>
+    pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+  return match?.roles ?? null;
+}
+
+function getUserRoleFromCookie(request: NextRequest): UserRole | "" {
+  const role = request.cookies.get(USER_ROLE_COOKIE)?.value;
+  if (
+    role === "ADMIN" ||
+    role === "EMPLEADO" ||
+    role === "CLIENTE" ||
+    role === "EMPLEADO_CLUB" ||
+    role === "SUPER_ADMIN"
+  ) {
+    return role;
+  }
+  return "";
+}
+
+function redirectToLogin(request: NextRequest) {
+  const url = request.nextUrl.clone();
+  url.pathname = "/login";
+  url.search = `redirect=${encodeURIComponent(request.nextUrl.pathname)}`;
+  return NextResponse.redirect(url);
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -178,6 +215,11 @@ export function middleware(request: NextRequest) {
   const perfilCompleto = getPerfilCompletoFromCookie(request);
 
   if (!token) {
+    const staffRoles = getRequiredStaffRoles(pathname);
+    if (staffRoles) {
+      return redirectToLogin(request);
+    }
+
     if (pathname === "/complete-profile") {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
@@ -186,6 +228,17 @@ export function middleware(request: NextRequest) {
     }
 
     return NextResponse.next();
+  }
+
+  const staffRoles = getRequiredStaffRoles(pathname);
+  if (staffRoles) {
+    const role = getUserRoleFromCookie(request);
+    if (!role || !staffRoles.includes(role)) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
   }
 
   if (perfilCompleto === false && pathname !== "/complete-profile" && pathname !== "/register") {

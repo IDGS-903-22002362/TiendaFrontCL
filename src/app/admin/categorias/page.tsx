@@ -165,7 +165,6 @@ export default function AdminCategoriasPage() {
         if (form.imageDeleted && form.imagenPrincipal) {
            await categoriasApi.deleteImage(form.id);
         }
-        // @ts-ignore
         await categoriasApi.update(form.id, payload);
       } else {
         const result = await categoriasApi.create(payload);

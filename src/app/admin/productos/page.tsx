@@ -853,7 +853,7 @@ export default function AdminProductsPage() {
           : "Producto creado con éxito",
       });
       resetDialogState();
-      void loadProducts("todos");
+      void loadProducts();
     } catch (error) {
       toast({
         variant: "destructive",
@@ -968,7 +968,7 @@ export default function AdminProductsPage() {
         setSelectedProductId("");
       }
       toast({ title: "Producto eliminado" });
-      void loadProducts("todos");
+      void loadProducts();
     } catch (error) {
       toast({
         variant: "destructive",

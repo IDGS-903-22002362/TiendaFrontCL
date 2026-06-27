@@ -138,7 +138,7 @@ export function GooglePlaceAutocompleteElement({
         }
 
         const nextAutocompleteElement = new PlaceAutocompleteElementCtor(
-          apiKey ? { apiKey } : {},
+          (apiKey ? { apiKey } : undefined) as google.maps.places.PlaceAutocompleteElementOptions | undefined,
         );
         autocompleteElement = nextAutocompleteElement;
         elementRef.current = nextAutocompleteElement;

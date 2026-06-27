@@ -287,6 +287,19 @@ function buildQuery(
   return qs ? `?${qs}` : "";
 }
 
+type AdminNotificationsPayload = {
+  items: Array<{
+    id: string;
+    type: string;
+    title: string;
+    message: string;
+    href: string;
+    createdAt: string;
+    read: boolean;
+  }>;
+  unreadCount: number;
+};
+
 function localAuthOptions(token?: string) {
   return {
     local: true as const,
@@ -521,19 +534,21 @@ export const inventarioApi = {
   },
 
   async getOperationalSummary(token?: string) {
-    const payload = await apiFetch<ApiEnvelope<{
+    type OperationalSummary = {
       pendingOrdersCount: number;
       lowStockCount: number;
       activeProductsCount: number;
       recentMovementsCount: number;
       generatedAt: string;
-    }>>(
+    };
+
+    const payload = await apiFetch<ApiEnvelope<OperationalSummary>>(
       "/api/inventario/resumen-operativo",
       { method: "GET", cache: "no-store" },
       localAuthOptions(token),
     );
 
-    const data = unwrapData(payload);
+    const data = unwrapData<OperationalSummary>(payload);
     if (!data) {
       throw new Error("No se pudo cargar el resumen operativo");
     }
@@ -542,40 +557,18 @@ export const inventarioApi = {
   },
 
   async listAdminNotifications(token?: string) {
-    const payload = await apiFetch<ApiEnvelope<{
-      items: Array<{
-        id: string;
-        type: string;
-        title: string;
-        message: string;
-        href: string;
-        createdAt: string;
-        read: boolean;
-      }>;
-      unreadCount: number;
-    }>>(
+    const payload = await apiFetch<ApiEnvelope<AdminNotificationsPayload>>(
       "/api/inventario/notificaciones-admin",
       { method: "GET", cache: "no-store" },
       localAuthOptions(token),
     );
 
-    const data = unwrapData(payload);
+    const data = unwrapData<AdminNotificationsPayload>(payload);
     return data ?? { items: [], unreadCount: 0 };
   },
 
   async markAdminNotificationsRead(ids: string[], token?: string) {
-    const payload = await apiFetch<ApiEnvelope<{
-      items: Array<{
-        id: string;
-        type: string;
-        title: string;
-        message: string;
-        href: string;
-        createdAt: string;
-        read: boolean;
-      }>;
-      unreadCount: number;
-    }>>(
+    const payload = await apiFetch<ApiEnvelope<AdminNotificationsPayload>>(
       "/api/inventario/notificaciones-admin/read",
       {
         method: "POST",
@@ -584,29 +577,18 @@ export const inventarioApi = {
       localAuthOptions(token),
     );
 
-    const data = unwrapData(payload);
+    const data = unwrapData<AdminNotificationsPayload>(payload);
     return data ?? { items: [], unreadCount: 0 };
   },
 
   async markAllAdminNotificationsRead(token?: string) {
-    const payload = await apiFetch<ApiEnvelope<{
-      items: Array<{
-        id: string;
-        type: string;
-        title: string;
-        message: string;
-        href: string;
-        createdAt: string;
-        read: boolean;
-      }>;
-      unreadCount: number;
-    }>>(
+    const payload = await apiFetch<ApiEnvelope<AdminNotificationsPayload>>(
       "/api/inventario/notificaciones-admin/read-all",
       { method: "POST" },
       localAuthOptions(token),
     );
 
-    const data = unwrapData(payload);
+    const data = unwrapData<AdminNotificationsPayload>(payload);
     return data ?? { items: [], unreadCount: 0 };
   },
 };
