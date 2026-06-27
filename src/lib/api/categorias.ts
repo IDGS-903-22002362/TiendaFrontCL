@@ -83,26 +83,38 @@ export const categoriasApi = {
   },
 
   create(payload: { nombre: string; lineaId?: string; orden?: number; imagenPrincipal?: string | null }) {
-    return apiFetch<ApiEnvelope<Category>>("/api/categorias", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
+    return apiFetch<ApiEnvelope<Category>>(
+      "/api/categorias",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      { local: true },
+    );
   },
 
   update(
     id: string,
     payload: Partial<{ nombre: string; lineaId: string; orden: number; imagenPrincipal: string | null }>,
   ) {
-    return apiFetch<ApiEnvelope<Category>>(`/api/categorias/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    });
+    return apiFetch<ApiEnvelope<Category>>(
+      `/api/categorias/${id}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      },
+      { local: true },
+    );
   },
 
   remove(id: string) {
-    return apiFetch<ApiEnvelope<null>>(`/api/categorias/${id}`, {
-      method: "DELETE",
-    });
+    return apiFetch<ApiEnvelope<null>>(
+      `/api/categorias/${id}`,
+      {
+        method: "DELETE",
+      },
+      { local: true },
+    );
   },
 
   async uploadImage(id: string, file: File) {

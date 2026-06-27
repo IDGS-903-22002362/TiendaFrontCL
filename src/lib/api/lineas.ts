@@ -99,26 +99,38 @@ export const lineasApi = {
   },
 
   create(payload: { codigo: number; nombre: string; activo?: boolean; imagenPrincipal?: string | null }) {
-    return apiFetch<ApiEnvelope<Linea>>("/api/lineas", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
+    return apiFetch<ApiEnvelope<Linea>>(
+      "/api/lineas",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      { local: true },
+    );
   },
 
   update(
     id: string,
     payload: Partial<{ codigo: number; nombre: string; activo: boolean; imagenPrincipal: string | null }>,
   ) {
-    return apiFetch<ApiEnvelope<Linea>>(`/api/lineas/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    });
+    return apiFetch<ApiEnvelope<Linea>>(
+      `/api/lineas/${id}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      },
+      { local: true },
+    );
   },
 
   remove(id: string) {
-    return apiFetch<ApiEnvelope<null>>(`/api/lineas/${id}`, {
-      method: "DELETE",
-    });
+    return apiFetch<ApiEnvelope<null>>(
+      `/api/lineas/${id}`,
+      {
+        method: "DELETE",
+      },
+      { local: true },
+    );
   },
 
   async uploadImage(id: string, file: File) {
