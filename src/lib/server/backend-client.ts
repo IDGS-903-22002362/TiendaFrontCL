@@ -160,10 +160,12 @@ export async function proxyToBackend({
     }
   }
 
-  console.log("Proxy URL:", url);
-  console.log("Method:", nextMethod);
-  console.log("Content-Type:", contentType);
-  console.log("Content-Length:", request.headers.get("content-length"));
+  if (process.env.NODE_ENV !== "production") {
+    console.log("Proxy URL:", url);
+    console.log("Method:", nextMethod);
+    console.log("Content-Type:", contentType);
+    console.log("Content-Length:", request.headers.get("content-length"));
+  }
 
   try {
     const response = await fetch(url, {

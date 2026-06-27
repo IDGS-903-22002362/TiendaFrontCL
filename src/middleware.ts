@@ -13,6 +13,7 @@ const EXCLUDED_PATH_PREFIXES = [
   "/favicon",
   "/robots.txt",
   "/sitemap.xml",
+  "/monitoring",
 ];
 
 const STATIC_FILE_EXTENSIONS = [

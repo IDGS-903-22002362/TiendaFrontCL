@@ -115,7 +115,7 @@ No romper:
 * carrito
 * precios con oferta
 * códigos promocionales
-* envío fijo de $150 MXN para domicilio
+* envío a domicilio: $99 MXN (León) / $299 MXN (fuera de León)
 * pickup con envío $0
 * `expectedSubtotal`
 * Stripe Embedded Checkout
@@ -289,7 +289,7 @@ Probar en checkout:
 * código promocional
 * oferta + código
 * pickup
-* domicilio con envío $150
+* domicilio León $99 / fuera de León $299
 * carrito vacío
 * error de pago
 * mobile
@@ -677,7 +677,8 @@ Usar:
 Regla temporal:
 
 * pickup = $0
-* domicilio = $150 MXN
+* domicilio León = $99 MXN
+* domicilio fuera de León = $299 MXN
 * domicilio requiere dirección
 * FedEx no debe bloquear pago temporalmente
 

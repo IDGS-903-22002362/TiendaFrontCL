@@ -137,33 +137,38 @@ export const lineasApi = {
     const formData = new FormData();
     formData.append("imagen", file);
 
-    const res = await fetch(`/api/lineas/${id}/imagen`, {
-      method: "POST",
-      body: formData,
-    });
-
-    if (!res.ok) {
-      throw new Error("No se pudo subir la imagen de la línea");
-    }
-
-    return res.json() as Promise<{
-      success: true;
-      data: {
+    const response = await apiFetch<{
+      success: boolean;
+      data?: {
         url: string;
         linea: Linea;
       };
-    }>;
+    }>(
+      `/api/lineas/${id}/imagen`,
+      {
+        method: "POST",
+        body: formData,
+      },
+      { local: true },
+    );
+
+    if (!response.data?.url) {
+      throw new Error("No se pudo subir la imagen de la línea");
+    }
+
+    return {
+      success: true as const,
+      data: response.data,
+    };
   },
 
   async deleteImage(id: string) {
-    const res = await fetch(`/api/lineas/${id}/imagen`, {
-      method: "DELETE",
-    });
-
-    if (!res.ok) {
-      throw new Error("No se pudo eliminar la imagen de la línea");
-    }
-
-    return res.json() as Promise<{ success: true; data: Linea }>;
+    return apiFetch<{ success: true; data: Linea }>(
+      `/api/lineas/${id}/imagen`,
+      {
+        method: "DELETE",
+      },
+      { local: true },
+    );
   },
 };

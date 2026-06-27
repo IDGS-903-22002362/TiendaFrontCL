@@ -4,7 +4,7 @@
 runConfig:
   # Increase this value if you'd like to automatically spin up
   # more instances in response to increased traffic.
-  maxInstances: 1
+  maxInstances: 5
 
 # Environment variables for frontend + server runtime.
 env:
@@ -14,9 +14,10 @@ env:
   - variable: API_BASE_URL 
     value: https://us-central1-e-comerce-leon.cloudfunctions.net/api
 
-  # Frontend IP allowlist. Empty disables the restriction until real IPs are set.
+  # Frontend IP allowlist. Empty string = acceso público (sin restricción por IP).
+  # Para staging restringido, asignar IPs separadas por coma.
   - variable: ALLOWED_FRONT_IPS
-    value: "127.0.0.1,::1,189.162.86.69,172.18.2.131,189.162.72.157,189.162.106.172,189.162.86.60,189.162.42.0,187.189.168.106,189.162.49.177,189.162.55.68,189.162.34.167,189.203.205.168,89.162.34.167,187.189.248.106,177.245.230.150,189.162.34.167,189.162.70.13"
+    value: ""
 
   - variable: NEXT_PUBLIC_AUTH_FIREBASE_API_KEY
     value: AIzaSyBq_lNV0ZXJdvaHAhw8eC5diGRafuqs6Do
@@ -42,3 +43,19 @@ env:
 
   - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
     value: AIzaSyBH74ZroHtQ1VALF5eL7BjEIGU_R3OJWIE
+
+  # Sentry (opcional). Configurar DSN en Firebase Console antes de producción.
+  - variable: SENTRY_DSN
+    value: ""
+  - variable: NEXT_PUBLIC_SENTRY_DSN
+    value: ""
+
+  # Firebase App Check (opcional). Dejar vacío hasta registrar site key en Console.
+  - variable: NEXT_PUBLIC_FIREBASE_APP_CHECK_SITE_KEY
+    value: ""
+
+  # Analítica (opcional, condicionada a consentimiento de cookies).
+  - variable: NEXT_PUBLIC_GA_MEASUREMENT_ID
+    value: ""
+  - variable: NEXT_PUBLIC_GTM_ID
+    value: ""
