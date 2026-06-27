@@ -688,7 +688,7 @@ export default function RegisterPage() {
                                     </Link>{" "}
                                     y el{" "}
                                     <Link
-                                        href="/aviso-privacidad"
+                                        href="/aviso-de-privacidad"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="font-semibold text-[#007A53] underline-offset-4 hover:underline"

@@ -21,7 +21,7 @@ const footerColumns = [
       { href: "/TerminosCondiciones#politicas-generales", label: "Envíos y devoluciones" },
       { href: "/login", label: "Cuenta" },
       { href: "/politica-cookies", label: "Política de cookies" },
-      { href: "/aviso-privacidad", label: "Aviso de privacidad" },
+      { href: "/aviso-de-privacidad", label: "Aviso de privacidad" },
     ],
   },
 ];

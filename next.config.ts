@@ -63,6 +63,15 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [
+      {
+        source: "/aviso-privacidad",
+        destination: "/aviso-de-privacidad",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {
@@ -132,4 +141,12 @@ const nextConfig: NextConfig = {
 export default withSentryConfig(nextConfig, {
   silent: !process.env.CI,
   tunnelRoute: "/monitoring",
+  telemetry: false,
+  ...(process.env.SENTRY_AUTH_TOKEN
+    ? {}
+    : {
+        sourcemaps: {
+          disable: true,
+        },
+      }),
 });

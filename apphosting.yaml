@@ -14,10 +14,7 @@ env:
   - variable: API_BASE_URL 
     value: https://us-central1-e-comerce-leon.cloudfunctions.net/api
 
-  # Frontend IP allowlist. Empty string = acceso público (sin restricción por IP).
-  # Para staging restringido, asignar IPs separadas por coma.
-  - variable: ALLOWED_FRONT_IPS
-    value: ""
+  # ALLOWED_FRONT_IPS: omitir = acceso público. Para staging, agregar variable con IPs separadas por coma.
 
   - variable: NEXT_PUBLIC_AUTH_FIREBASE_API_KEY
     value: AIzaSyBq_lNV0ZXJdvaHAhw8eC5diGRafuqs6Do
@@ -44,18 +41,5 @@ env:
   - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
     value: AIzaSyBH74ZroHtQ1VALF5eL7BjEIGU_R3OJWIE
 
-  # Sentry (opcional). Configurar DSN en Firebase Console antes de producción.
-  - variable: SENTRY_DSN
-    value: ""
-  - variable: NEXT_PUBLIC_SENTRY_DSN
-    value: ""
-
-  # Firebase App Check (opcional). Dejar vacío hasta registrar site key en Console.
-  - variable: NEXT_PUBLIC_FIREBASE_APP_CHECK_SITE_KEY
-    value: ""
-
-  # Analítica (opcional, condicionada a consentimiento de cookies).
-  - variable: NEXT_PUBLIC_GA_MEASUREMENT_ID
-    value: ""
-  - variable: NEXT_PUBLIC_GTM_ID
-    value: ""
+  # Opcionales (Sentry, App Check, GA/GTM): agregar en Firebase Console con valor real o secret.
+  # No usar value: "" — App Hosting rechaza variables vacías.

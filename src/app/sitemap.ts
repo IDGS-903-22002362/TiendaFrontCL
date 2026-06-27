@@ -20,7 +20,7 @@ const STATIC_ROUTES = [
   "/login",
   "/register",
   "/TerminosCondiciones",
-  "/aviso-privacidad",
+  "/aviso-de-privacidad",
   "/politica-cookies",
 ];
 
