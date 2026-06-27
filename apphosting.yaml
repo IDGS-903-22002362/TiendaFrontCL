@@ -41,5 +41,16 @@ env:
   - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
     value: AIzaSyBH74ZroHtQ1VALF5eL7BjEIGU_R3OJWIE
 
+  # Misma clave para rutas server-side (/api/places/*). En GCP: restringir por API
+  # (Places API New), no solo por HTTP referrer, para que funcione el proxy del servidor.
+  - variable: GOOGLE_MAPS_API_KEY
+    value: AIzaSyBH74ZroHtQ1VALF5eL7BjEIGU_R3OJWIE
+
+  - variable: STORE_PUBLIC_BASE_URL
+    value: https://tiendalaguarida.com
+
+  - variable: GOOGLE_MAPS_API_REFERER
+    value: https://tiendalaguarida.com/
+
   # Opcionales (Sentry, App Check, GA/GTM): agregar en Firebase Console con valor real o secret.
   # No usar value: "" — App Hosting rechaza variables vacías.
