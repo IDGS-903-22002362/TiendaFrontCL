@@ -664,7 +664,7 @@ function OrderSummaryPanel({
 
           <div className="flex items-center justify-between">
             <span>
-              {fulfillmentMethod === "PICKUP" ? "Recoger en tienda" : "Envio FedEx manual"}
+              {fulfillmentMethod === "PICKUP" ? "Recoger en tienda" : "Envio manual"}
             </span>
             <span>
               {fulfillmentMethod === "PICKUP"
@@ -802,7 +802,7 @@ function FulfillmentSelector({
           <p className="mt-1">
             El costo se calcula automáticamente con tu código postal. El envío se
             procesa manualmente por paquetería y la guía de rastreo estará
-            disponible cuando el pedido sea entregado a FedEx.
+            disponible cuando el pedido sea enviado.
           </p>
         </div>
       ) : (

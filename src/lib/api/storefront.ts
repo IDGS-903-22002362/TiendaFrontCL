@@ -302,7 +302,13 @@ function mapProduct(input: unknown): Product {
     product.precioOferta ?? product.salePrice ?? product.precioDescuento,
     0,
   );
-  const salePrice = salePriceRaw > 0 ? salePriceRaw : undefined;
+  const tieneOfertaActiva = product.tieneOfertaActiva === true;
+  const salePrice =
+    tieneOfertaActiva &&
+    salePriceRaw > 0 &&
+    (price <= 0 || salePriceRaw < price)
+      ? salePriceRaw
+      : undefined;
   const categoryId = toStringValue(
     product.categoriaId ??
       (product.categoria as UnknownRecord | undefined)?.id ??

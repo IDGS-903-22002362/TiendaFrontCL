@@ -1,4 +1,5 @@
 import type { Product } from "@/lib/types";
+import { hasValidSalePrice } from "@/lib/ofertas-public";
 import {
   fetchBuyAgainRecommendations,
   fetchRecentlyViewedRecommendations,
@@ -46,6 +47,10 @@ export function filterVisibleHomeRailProducts(products: Product[]) {
   return products.filter(
     (product) => product.id && product.activo !== false && product.images.length > 0,
   );
+}
+
+export function filterOfertasHomeRailProducts(products: Product[]) {
+  return filterVisibleHomeRailProducts(products).filter(hasValidSalePrice);
 }
 
 export function shouldShowHomeRail(products: Product[] | null | undefined): boolean {
@@ -98,7 +103,7 @@ async function loadCatalogOfertasPopularesRailProducts(): Promise<Product[]> {
     getOfertasPopularesCatalogQuery(HOME_RAIL_LIMIT),
   );
 
-  return filterVisibleHomeRailProducts(
+  return filterOfertasHomeRailProducts(
     page.items.map(mapCatalogProductToProductCardViewModel),
   );
 }
@@ -108,7 +113,7 @@ async function loadCatalogOfertasMasCompradasRailProducts(): Promise<Product[]> 
     getOfertasMasCompradasCatalogQuery(HOME_RAIL_LIMIT),
   );
 
-  return filterVisibleHomeRailProducts(
+  return filterOfertasHomeRailProducts(
     page.items.map(mapCatalogProductToProductCardViewModel),
   );
 }
@@ -118,7 +123,7 @@ async function loadCatalogOfertasRecientesRailProducts(): Promise<Product[]> {
     getOfertasRecientesCatalogQuery(HOME_RAIL_LIMIT),
   );
 
-  return filterVisibleHomeRailProducts(
+  return filterOfertasHomeRailProducts(
     page.items.map(mapCatalogProductToProductCardViewModel),
   );
 }
