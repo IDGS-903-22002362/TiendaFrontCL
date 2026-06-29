@@ -120,6 +120,7 @@ export async function proxyToBackend({
   const idempotencyKey = request.headers.get("idempotency-key");
   const requestId = request.headers.get("x-request-id");
   const accept = request.headers.get("accept");
+  const appCheckToken = request.headers.get("x-firebase-appcheck");
 
   if (authorization) {
     headers.set("Authorization", authorization);
@@ -138,6 +139,9 @@ export async function proxyToBackend({
   }
   if (accept) {
     headers.set("Accept", accept);
+  }
+  if (appCheckToken) {
+    headers.set("X-Firebase-AppCheck", appCheckToken);
   }
 
   const url = `${joinUrl(resolveBackendBase(), backendPath)}${request.nextUrl.search}`;
