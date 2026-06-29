@@ -15,6 +15,10 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useAuth } from "@/hooks/use-auth";
 import { getApiErrorMessage } from "@/lib/api/errors";
+import {
+  AdminPageHeader,
+  AdminPageShell,
+} from "@/components/admin/admin-ui";
 
 // ============================================
 // TYPES
@@ -417,25 +421,21 @@ export default function AdminAssignPoints() {
     // No necesitamos esperar a 'user' porque obtenemos adminUid y adminName del token
 
     return (
-        <div className="container mx-auto p-4 md:p-6 space-y-6">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Asignación de Puntos</h1>
-                    <p className="text-muted-foreground">
-                        Escanea el QR del usuario, ingresa el monto total de la compra y asigna puntos automáticamente (100 MXN = 10 puntos)
-                    </p>
-                    <div className="text-sm text-muted-foreground mt-2">
-                        Asignado por: <Badge variant="secondary">{adminName}</Badge>
+        <AdminPageShell>
+            <AdminPageHeader
+                eyebrow="Marketing"
+                title="Asignación de puntos"
+                description="Escanea el QR del usuario, ingresa el monto total de la compra y asigna puntos automáticamente."
+                actions={
+                    <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+                        <Badge variant="secondary">Asignado por: {adminName}</Badge>
+                        <Button onClick={openAssignDialog}>
+                            <Plus data-icon="inline-start" />
+                            Nueva asignación
+                        </Button>
                     </div>
-                </div>
-                <div className="flex gap-2">
-                    <Button onClick={openAssignDialog}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Nueva Asignación
-                    </Button>
-                </div>
-            </div>
+                }
+            />
 
             {/* Diálogo de asignación de puntos */}
             <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
@@ -691,6 +691,6 @@ export default function AdminAssignPoints() {
                     </CardContent>
                 </Card>
             )}
-        </div>
+        </AdminPageShell>
     );
 }

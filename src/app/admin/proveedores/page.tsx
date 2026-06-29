@@ -5,8 +5,12 @@ import { providersApi } from "@/lib/api/providers";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import type { Proveedor } from "@/lib/types";
 import { EntityPicker, type EntityOption } from "@/components/admin/entity-picker";
+import {
+  AdminPageHeader,
+  AdminPageShell,
+  AdminPanelCard,
+} from "@/components/admin/admin-ui";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
@@ -175,19 +179,14 @@ export default function AdminProveedoresPage() {
   };
 
   return (
-    <div className="container mx-auto space-y-6 px-4 py-8">
-      <header>
-        <h1 className="font-headline text-3xl font-bold">Proveedores</h1>
-        <p className="text-sm text-muted-foreground">
-          Gestión de proveedores del catálogo.
-        </p>
-      </header>
+    <AdminPageShell>
+      <AdminPageHeader
+        eyebrow="Catálogo"
+        title="Proveedores"
+        description="Gestión de proveedores del catálogo."
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Búsqueda inteligente</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <AdminPanelCard title="Búsqueda inteligente">
           <EntityPicker
             label="Buscar proveedor"
             searchLabel="Buscar por nombre, contacto, email o código"
@@ -207,16 +206,9 @@ export default function AdminProveedoresPage() {
             emptyLabel="Sin selección"
             disabled={isLoading}
           />
-        </CardContent>
-      </Card>
+      </AdminPanelCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            {form.id ? "Editar proveedor" : "Crear proveedor"}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+      <AdminPanelCard title={form.id ? "Editar proveedor" : "Crear proveedor"}>
           <form className="grid gap-3 md:grid-cols-2" onSubmit={onSubmit}>
             <Input
               required
@@ -270,14 +262,10 @@ export default function AdminProveedoresPage() {
               </Button>
             </div>
           </form>
-        </CardContent>
-      </Card>
+      </AdminPanelCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Listado</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <AdminPanelCard title="Listado" noPadding contentClassName="p-0">
+          <div className="admin-table-shell overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -329,8 +317,8 @@ export default function AdminProveedoresPage() {
               )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
-    </div>
+          </div>
+      </AdminPanelCard>
+    </AdminPageShell>
   );
 }

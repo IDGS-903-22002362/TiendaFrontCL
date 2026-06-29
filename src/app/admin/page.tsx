@@ -2,11 +2,22 @@
 
 import Link from "next/link";
 import { useAuth } from "@/hooks/use-auth";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { inventarioApi } from "@/lib/api/inventario";
-import { Skeleton } from "@/components/ui/skeleton";
+import { ordersApi } from "@/lib/api/orders";
+import {
+  calculateEarningsSummary,
+  getMexicoMonthRange,
+} from "@/lib/admin/earnings";
+import {
+  AdminInlineAlert,
+  AdminMetricCard,
+  AdminPageHeader,
+  AdminPageShell,
+  AdminQuickActionCard,
+  AdminSection,
+  formatAdminCurrency,
+} from "@/components/admin/admin-ui";
 import {
   Package,
   ShoppingCart,
@@ -15,6 +26,8 @@ import {
   Plus,
   ArrowRightLeft,
   Search,
+  TrendingUp,
+  CalendarDays,
 } from "lucide-react";
 
 export default function AdminHomePage() {
@@ -28,6 +41,12 @@ export default function AdminHomePage() {
     recentMovementsCount: 0,
     pendingOrdersCount: 0,
   });
+  const [earnings, setEarnings] = useState({
+    dailyTotal: 0,
+    monthlyTotal: 0,
+    dailyOrdersCount: 0,
+    monthlyOrdersCount: 0,
+  });
 
   useEffect(() => {
     async function loadDashboardData() {
@@ -36,13 +55,25 @@ export default function AdminHomePage() {
       try {
         setLoading(true);
         setError(null);
-        const summary = await inventarioApi.getOperationalSummary(token);
+
+        const monthRange = getMexicoMonthRange();
+
+        const [summary, monthOrders] = await Promise.all([
+          inventarioApi.getOperationalSummary(token),
+          ordersApi.list({
+            fechaDesde: monthRange.fechaDesde,
+            fechaHasta: monthRange.fechaHasta,
+          }),
+        ]);
+
         setMetrics({
           productsCount: summary.activeProductsCount,
           lowStockCount: summary.lowStockCount,
           recentMovementsCount: summary.recentMovementsCount,
           pendingOrdersCount: summary.pendingOrdersCount,
         });
+
+        setEarnings(calculateEarningsSummary(monthOrders));
       } catch {
         setError("No se pudo cargar el resumen operativo.");
       } finally {
@@ -54,125 +85,114 @@ export default function AdminHomePage() {
   }, [token]);
 
   return (
-    <div className="container space-y-8 py-8 max-w-7xl mx-auto">
-      <header className="flex flex-col gap-2">
-        <h1 className="font-headline text-3xl font-bold tracking-tight">Centro de Control</h1>
-        <p className="text-text-secondary">
-          Resumen operativo y acciones rápidas para la gestión de la tienda.
-        </p>
-      </header>
+    <AdminPageShell>
+      <AdminPageHeader
+        eyebrow="Centro de control"
+        title="Dashboard operativo"
+        description="Resumen de ventas, inventario y acciones rápidas para la gestión diaria de la tienda."
+      />
 
-      {error ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          {error}
-        </p>
-      ) : null}
+      {error ? <AdminInlineAlert>{error}</AdminInlineAlert> : null}
 
-      <section>
-        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <Activity className="h-5 w-5 text-primary" />
-          Resumen Operativo
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="hover:border-primary/20 transition-colors">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between space-y-0 pb-2">
-                <p className="text-sm font-medium text-text-secondary">Órdenes Pendientes</p>
-                <ShoppingCart className="h-4 w-4 text-text-muted" />
-              </div>
-              <div className="flex items-baseline gap-2">
-                {loading ? (
-                  <Skeleton className="h-8 w-16" />
-                ) : (
-                  <span className="text-3xl font-bold">{metrics.pendingOrdersCount}</span>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:border-primary/20 transition-colors">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between space-y-0 pb-2">
-                <p className="text-sm font-medium text-text-secondary">Alertas de Stock</p>
-                <AlertTriangle className="h-4 w-4 text-warning" />
-              </div>
-              <div className="flex items-baseline gap-2">
-                {loading ? (
-                  <Skeleton className="h-8 w-16" />
-                ) : (
-                  <span className="text-3xl font-bold">{metrics.lowStockCount}</span>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:border-primary/20 transition-colors">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between space-y-0 pb-2">
-                <p className="text-sm font-medium text-text-secondary">Productos Activos</p>
-                <Package className="h-4 w-4 text-text-muted" />
-              </div>
-              <div className="flex items-baseline gap-2">
-                {loading ? (
-                  <Skeleton className="h-8 w-16" />
-                ) : (
-                  <span className="text-3xl font-bold">{metrics.productsCount}</span>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:border-primary/20 transition-colors">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between space-y-0 pb-2">
-                <p className="text-sm font-medium text-text-secondary">Movimientos Recientes</p>
-                <ArrowRightLeft className="h-4 w-4 text-text-muted" />
-              </div>
-              <div className="flex items-baseline gap-2">
-                {loading ? (
-                  <Skeleton className="h-8 w-16" />
-                ) : (
-                  <span className="text-3xl font-bold">{metrics.recentMovementsCount}</span>
-                )}
-                <span className="text-xs text-text-muted">últimos 7 días</span>
-              </div>
-            </CardContent>
-          </Card>
+      <AdminSection
+        title="Ganancias"
+        description="Totales de órdenes pagadas en zona horaria de México (America/Mexico_City)."
+        icon={TrendingUp}
+      >
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <AdminMetricCard
+            variant="earnings"
+            label="Ganancias del día"
+            icon={TrendingUp}
+            loading={loading}
+            value={formatAdminCurrency(earnings.dailyTotal)}
+            hint={
+              loading
+                ? undefined
+                : `${earnings.dailyOrdersCount} ${
+                    earnings.dailyOrdersCount === 1 ? "orden pagada" : "órdenes pagadas"
+                  } hoy`
+            }
+          />
+          <AdminMetricCard
+            variant="featured"
+            label="Ganancias del mes"
+            icon={CalendarDays}
+            loading={loading}
+            value={formatAdminCurrency(earnings.monthlyTotal)}
+            hint={
+              loading
+                ? undefined
+                : `${earnings.monthlyOrdersCount} ${
+                    earnings.monthlyOrdersCount === 1 ? "orden pagada" : "órdenes pagadas"
+                  } en el mes actual`
+            }
+          />
         </div>
-      </section>
+      </AdminSection>
 
-      <section>
-        <h2 className="text-lg font-semibold mb-4">Acciones Rápidas</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-          <Button asChild variant="outline" className="h-auto py-4 flex flex-col items-center justify-center gap-3">
-            <Link href="/admin/productos">
-              <Plus className="h-6 w-6 mb-1 text-primary" />
-              <span>Registrar Producto</span>
-            </Link>
-          </Button>
-
-          <Button asChild variant="outline" className="h-auto py-4 flex flex-col items-center justify-center gap-3">
-            <Link href="/admin/inventario/movimientos">
-              <ArrowRightLeft className="h-6 w-6 mb-1 text-primary" />
-              <span>Registrar Movimiento</span>
-            </Link>
-          </Button>
-
-          <Button asChild variant="outline" className="h-auto py-4 flex flex-col items-center justify-center gap-3">
-            <Link href="/admin/ordenes">
-              <Search className="h-6 w-6 mb-1 text-primary" />
-              <span>Consultar Órdenes</span>
-            </Link>
-          </Button>
-
-          <Button asChild variant="outline" className="h-auto py-4 flex flex-col items-center justify-center gap-3">
-            <Link href="/admin/inventario/alertas-stock">
-              <AlertTriangle className="h-6 w-6 mb-1 text-primary" />
-              <span>Ver Alertas de Stock</span>
-            </Link>
-          </Button>
+      <AdminSection title="Resumen operativo" icon={Activity}>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <AdminMetricCard
+            label="Órdenes pendientes"
+            icon={ShoppingCart}
+            loading={loading}
+            value={metrics.pendingOrdersCount}
+          />
+          <AdminMetricCard
+            label="Alertas de stock"
+            icon={AlertTriangle}
+            loading={loading}
+            value={metrics.lowStockCount}
+          />
+          <AdminMetricCard
+            label="Productos activos"
+            icon={Package}
+            loading={loading}
+            value={metrics.productsCount}
+          />
+          <AdminMetricCard
+            label="Movimientos recientes"
+            icon={ArrowRightLeft}
+            loading={loading}
+            value={metrics.recentMovementsCount}
+            hint="Últimos 7 días"
+          />
         </div>
-      </section>
-    </div>
+      </AdminSection>
+
+      <AdminSection title="Acciones rápidas">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <AdminQuickActionCard
+            href="/admin/productos"
+            label="Registrar producto"
+            icon={Plus}
+          />
+          <AdminQuickActionCard
+            href="/admin/inventario/movimientos"
+            label="Registrar movimiento"
+            icon={ArrowRightLeft}
+          />
+          <AdminQuickActionCard
+            href="/admin/ordenes"
+            label="Consultar órdenes"
+            icon={Search}
+          />
+          <AdminQuickActionCard
+            href="/admin/inventario/alertas-stock"
+            label="Ver alertas de stock"
+            icon={AlertTriangle}
+          />
+        </div>
+      </AdminSection>
+
+      <p className="text-xs text-text-muted">
+        Las ganancias se calculan desde órdenes con pago confirmado, excluyendo canceladas y reembolsadas.{" "}
+        <Link href="/admin/ordenes" className="text-primary underline-offset-4 hover:underline">
+          Ver detalle en Órdenes
+        </Link>
+        .
+      </p>
+    </AdminPageShell>
   );
 }

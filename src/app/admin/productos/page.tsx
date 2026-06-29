@@ -43,7 +43,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -56,6 +55,12 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AdminMetricCard,
+  AdminPageHeader,
+  AdminPageShell,
+  AdminPanelCard,
+} from "@/components/admin/admin-ui";
 
 const ADMIN_PRODUCTS_PAGE_SIZE = 10;
 
@@ -1000,70 +1005,48 @@ export default function AdminProductsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="font-headline text-3xl font-bold">
-            Catálogo de Productos
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Administra el inventario visible en la tienda.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => void loadProducts()}
-          >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-          <Button onClick={() => openForm()}>
-            <Plus className="mr-2 h-4 w-4" /> Agregar Producto
-          </Button>
-        </div>
+    <AdminPageShell>
+      <AdminPageHeader
+        eyebrow="Catálogo"
+        title="Catálogo de productos"
+        description="Administra el inventario visible en la tienda."
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => void loadProducts()}
+              aria-label="Refrescar productos"
+            >
+              <RefreshCw className="size-4" />
+            </Button>
+            <Button onClick={() => openForm()}>
+              <Plus data-icon="inline-start" />
+              Agregar producto
+            </Button>
+          </div>
+        }
+      />
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <AdminMetricCard
+          label="Total en catálogo"
+          loading={isLoading}
+          value={productMetrics.total}
+        />
+        <AdminMetricCard
+          label="Visibles en tienda"
+          loading={isLoading}
+          value={productMetrics.visible}
+        />
+        <AdminMetricCard
+          label="Ocultos"
+          loading={isLoading}
+          value={productMetrics.hidden}
+        />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total en catálogo
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold tabular-nums">
-              {isLoading ? "—" : productMetrics.total}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Visibles en tienda
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold tabular-nums text-green-700">
-              {isLoading ? "—" : productMetrics.visible}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Ocultos
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold tabular-nums text-muted-foreground">
-              {isLoading ? "—" : productMetrics.hidden}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="rounded-md border bg-card p-4">
+      <AdminPanelCard>
         <div className="grid gap-3 md:grid-cols-[1fr_auto]">
           <EntityPicker
             label="Búsqueda inteligente de producto"
@@ -1098,7 +1081,7 @@ export default function AdminProductsPage() {
             </Button>
           </div>
         </div>
-      </div>
+      </AdminPanelCard>
 
       <Tabs
         value={productStatus}
@@ -1119,8 +1102,8 @@ export default function AdminProductsPage() {
         </TabsList>
       </Tabs>
 
-      <div className="rounded-md border bg-card">
-        <div className="overflow-x-auto">
+      <AdminPanelCard noPadding contentClassName="p-0">
+        <div className="admin-table-shell overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -1291,7 +1274,7 @@ export default function AdminProductsPage() {
             </div>
           </div>
         ) : null}
-      </div>
+      </AdminPanelCard>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -1736,6 +1719,6 @@ export default function AdminProductsPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </AdminPageShell>
   );
 }

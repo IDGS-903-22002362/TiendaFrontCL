@@ -723,3 +723,120 @@ body[data-storefront="true"] {
     padding-bottom: clamp(3rem, 4vw, 4rem) !important;
   }
 }
+
+/* Admin dashboard shell — dark sidebar + canvas-soft inspired by DESIGN.md */
+[data-admin="true"] {
+  --background: #f6f9fc;
+  --background-deep: #eef2f7;
+  --card: #ffffff;
+  --card-elevated: #ffffff;
+  --border: #e3e8ee;
+  --border-strong: #cfd6df;
+  --muted: #f1f4f8;
+  --muted-foreground: #61718a;
+  --text-secondary: #273951;
+  --text-muted: #64748d;
+  --sidebar-background: #111715;
+  --sidebar-foreground: #f7f2e9;
+  --sidebar-primary: #0d4b38;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgb(255 255 255 / 0.08);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgb(255 255 255 / 0.1);
+  --sidebar-ring: #b99145;
+  --shadow-card: 0 1px 3px rgb(0 55 112 / 0.08);
+  --shadow-elevated: 0 8px 24px rgb(0 55 112 / 0.08), 0 2px 6px rgb(0 55 112 / 0.04);
+}
+
+[data-admin="true"] .admin-tabular,
+[data-admin="true"] .admin-metric-value,
+[data-admin="true"] .admin-table-numeric {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.02em;
+}
+
+[data-admin="true"] .admin-eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+[data-admin="true"] .admin-page-title {
+  font-size: clamp(1.75rem, 4vw, 2.125rem);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+}
+
+[data-admin="true"] .admin-section-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+[data-admin="true"] .admin-metric-value {
+  font-size: clamp(1.75rem, 4vw, 2rem);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--foreground);
+}
+
+[data-admin="true"] .admin-metric-card-featured {
+  border-color: rgb(13 75 56 / 0.18);
+  background: linear-gradient(180deg, rgb(13 75 56 / 0.06) 0%, #ffffff 100%);
+}
+
+[data-admin="true"] .admin-metric-card-earnings {
+  border-color: rgb(185 145 69 / 0.28);
+  background: linear-gradient(180deg, rgb(185 145 69 / 0.08) 0%, #ffffff 100%);
+}
+
+[data-admin="true"] .admin-sidebar-brand {
+  color: var(--sidebar-foreground);
+}
+
+[data-admin="true"] .admin-nav-link {
+  border-radius: 9999px;
+  color: rgb(247 242 233 / 0.78);
+}
+
+[data-admin="true"] .admin-nav-link:hover {
+  background: var(--sidebar-accent);
+  color: var(--sidebar-accent-foreground);
+}
+
+[data-admin="true"] .admin-nav-link[data-active="true"] {
+  background: rgb(13 75 56 / 0.88);
+  color: #ffffff;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+}
+
+[data-admin="true"] .admin-nav-group-label {
+  color: rgb(247 242 233 / 0.45);
+}
+
+[data-admin="true"] .admin-mobile-header {
+  border-color: var(--border);
+  background: rgb(255 255 255 / 0.94);
+  backdrop-filter: blur(10px);
+}
+
+[data-admin="true"] .admin-main-surface {
+  background:
+    radial-gradient(circle at top right, rgb(185 145 69 / 0.06), transparent 28%),
+    radial-gradient(circle at top left, rgb(13 75 56 / 0.05), transparent 32%),
+    var(--background);
+}
+
+[data-admin="true"] .admin-table-shell .table-head {
+  color: var(--text-muted);
+}
+
+[data-admin="true"] .admin-panel-card .table-row:hover {
+  background: rgb(246 249 252 / 0.9);
+}

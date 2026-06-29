@@ -5,7 +5,6 @@ import {
   Copy,
   CreditCard,
   RefreshCw,
-  Filter,
   Search,
   X,
   Truck,
@@ -44,7 +43,6 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,6 +56,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AdminPageHeader,
+  AdminPageShell,
+  AdminPanelCard,
+} from "@/components/admin/admin-ui";
 import {
   Select,
   SelectContent,
@@ -498,24 +501,21 @@ export default function AdminOrdersPage() {
   const selectedCurrency = selectedPayment?.moneda ?? "MXN";
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-         <div>
-            <h1 className="font-headline text-3xl font-bold">Gestión de Órdenes</h1>
-            <p className="text-sm text-muted-foreground">Administra y da seguimiento a los pedidos logísticos.</p>
-         </div>
-         <Button variant="outline" size="sm" onClick={() => void loadOrders(estadoFilter)}>
-            <RefreshCw className="mr-2 h-4 w-4" /> Refrescar
-         </Button>
-      </div>
+    <AdminPageShell>
+      <AdminPageHeader
+        eyebrow="Operación"
+        title="Gestión de órdenes"
+        description="Administra y da seguimiento a los pedidos logísticos."
+        actions={
+          <Button variant="outline" size="sm" onClick={() => void loadOrders(estadoFilter)}>
+            <RefreshCw data-icon="inline-start" />
+            Refrescar
+          </Button>
+        }
+      />
 
-      <Card>
-        <CardHeader className="pb-3 border-b">
-          <CardTitle className="flex items-center gap-2 text-lg">
-             <Filter className="h-4 w-4 text-muted-foreground"/> Filtros y Búsqueda
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-4 flex flex-col sm:flex-row gap-4">
+      <AdminPanelCard title="Filtros y búsqueda">
+        <div className="flex flex-col gap-4 sm:flex-row">
            <div className="relative flex-1">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -560,11 +560,11 @@ export default function AdminOrdersPage() {
                 </SelectContent>
               </Select>
            </div>
-        </CardContent>
-      </Card>
+        </div>
+      </AdminPanelCard>
 
-      <div className="rounded-md border bg-card">
-        <div className="overflow-x-auto">
+      <AdminPanelCard noPadding contentClassName="p-0">
+        <div className="admin-table-shell overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -799,7 +799,7 @@ export default function AdminOrdersPage() {
             </Pagination>
           </div>
         ) : null}
-      </div>
+      </AdminPanelCard>
 
       <Dialog
         open={isPaymentDialogOpen}
@@ -1426,6 +1426,6 @@ export default function AdminOrdersPage() {
             : null}
         </DialogContent>
       </Dialog>
-    </div>
+    </AdminPageShell>
   );
 }

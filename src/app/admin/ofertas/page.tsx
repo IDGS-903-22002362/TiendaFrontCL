@@ -14,6 +14,10 @@ import {
   EntityPicker,
   type EntityOption,
 } from "@/components/admin/entity-picker";
+import {
+  AdminPageHeader,
+  AdminPageShell,
+} from "@/components/admin/admin-ui";
 import { DateTimePickerField } from "@/components/admin/datetime-picker-field";
 import {
   Table,
@@ -1908,42 +1912,40 @@ const activeCodigoTargetOptions =
   codigoTargetOptionsByAplicaA.productos;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="font-headline text-3xl font-bold">Ofertas</h1>
-          <p className="text-sm text-muted-foreground">
-            Administra descuentos, promociones activas y reglas aplicadas al
-            catálogo.
-          </p>
-        </div>
+    <AdminPageShell>
+      <AdminPageHeader
+        eyebrow="Marketing"
+        title="Ofertas"
+        description="Administra descuentos, promociones activas y reglas aplicadas al catálogo."
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => {
+                void loadOfertas();
+                void loadCodigosPromocion();
+              }}
+              disabled={isLoading || isLoadingCodigos}
+              aria-label="Refrescar ofertas"
+            >
+              <RefreshCw className="size-4" />
+            </Button>
 
-        <div className="flex items-center gap-2">
-          <Button
-  variant="outline"
-  size="icon"
-  onClick={() => {
-    void loadOfertas();
-    void loadCodigosPromocion();
-  }}
-  disabled={isLoading || isLoadingCodigos}
->
-  <RefreshCw className="h-4 w-4" />
-</Button>
+            <Button variant="outline" onClick={() => openCodigoPromocionForm()}>
+              <Plus data-icon="inline-start" />
+              Código promocional
+            </Button>
 
-          <Button variant="outline" onClick={() => openCodigoPromocionForm()}>
-  <Plus className="mr-2 h-4 w-4" />
-  Código promocional
-</Button>
+            <Button onClick={() => openForm()}>
+              <Plus data-icon="inline-start" />
+              Crear oferta
+            </Button>
+          </div>
+        }
+      />
 
-<Button onClick={() => openForm()}>
-  <Plus className="mr-2 h-4 w-4" />
-  Crear oferta
-</Button>
-        </div>
-      </div>
-
-      <div className="rounded-md border bg-card p-4">
+      <div className="rounded-2xl border border-border/80 bg-card p-4 shadow-[var(--shadow-card)]">
         <div className="grid gap-3 md:grid-cols-[1fr_auto]">
           <EntityPicker
             label="Búsqueda inteligente de oferta"
@@ -2924,6 +2926,6 @@ const activeCodigoTargetOptions =
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </AdminPageShell>
   );
 }

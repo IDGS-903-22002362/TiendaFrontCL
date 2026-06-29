@@ -45,6 +45,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Banner, BannerButton, BannerContentConfig } from "@/lib/ai/types";
 import { Category, Linea, Product, Talla } from "@/lib/types";
+import {
+  AdminPageHeader,
+  AdminPageShell,
+  AdminPanelCard,
+} from "@/components/admin/admin-ui";
 import { ContentConfigBuilder } from "./content-config-builder";
 
 type ButtonDraft = BannerButton & { draftId: string };
@@ -348,21 +353,21 @@ setOfertas(offers);
     }, [banners]);
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <h1 className="font-headline text-3xl font-bold">Banners</h1>
-                    <p className="text-sm text-muted-foreground">
-                        Administra los banners del carrusel principal. Puedes mostrar productos por categoría, línea, novedades, etc.
-                    </p>
-                </div>
-                <Button onClick={() => openForm()}>
-                    <Plus className="mr-2 h-4 w-4" /> Nuevo Banner
-                </Button>
-            </div>
+        <AdminPageShell>
+            <AdminPageHeader
+                eyebrow="Marketing"
+                title="Vallas publicitarias"
+                description="Administra los banners del carrusel principal. Puedes mostrar productos por categoría, línea, novedades y más."
+                actions={
+                    <Button onClick={() => openForm()}>
+                        <Plus data-icon="inline-start" />
+                        Nuevo banner
+                    </Button>
+                }
+            />
 
-            <div className="rounded-md border bg-card">
-                <div className="overflow-x-auto">
+            <AdminPanelCard noPadding contentClassName="p-0">
+                <div className="admin-table-shell overflow-x-auto">
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -468,10 +473,10 @@ setOfertas(offers);
                         </TableBody>
                     </Table>
                 </div>
-                <div className="px-6 py-3 border-t bg-muted/30 text-sm text-muted-foreground">
+                <div className="border-t border-border/70 bg-muted/30 px-6 py-3 text-sm text-muted-foreground">
                     <span>Banners activos: <strong>{activeBannersCount}</strong> de {MAX_ACTIVE_BANNERS} máximo</span>
                 </div>
-            </div>
+            </AdminPanelCard>
 
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -636,6 +641,6 @@ setOfertas(offers);
                     </div>
                 </DialogContent>
             </Dialog>
-        </div>
+        </AdminPageShell>
     );
 }
