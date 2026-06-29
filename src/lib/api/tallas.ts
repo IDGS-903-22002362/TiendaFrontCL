@@ -85,13 +85,18 @@ function mapTallasList(payload: unknown): Talla[] {
 
 export const tallasApi = {
   async getAll(): Promise<Talla[]> {
-    const payload = await apiFetch<ApiEnvelope<unknown[]>>("/api/tallas", {
-      method: "GET",
-    }, getReadOptions());
+    try {
+      const payload = await apiFetch<ApiEnvelope<unknown[]>>("/api/tallas", {
+        method: "GET",
+      }, getReadOptions());
 
-    return mapTallasList(payload).sort(
-      (a, b) => (a.orden ?? 0) - (b.orden ?? 0),
-    );
+      return mapTallasList(payload).sort(
+        (a, b) => (a.orden ?? 0) - (b.orden ?? 0),
+      );
+    } catch (error) {
+      console.error("tallasApi.getAll failed", error);
+      return [];
+    }
   },
 
   async getById(id: string): Promise<Talla | null> {

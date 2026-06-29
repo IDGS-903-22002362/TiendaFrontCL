@@ -62,16 +62,21 @@ type LineasReadOptions = {
 
 export const lineasApi = {
   async getAll(options?: LineasReadOptions): Promise<Linea[]> {
-    const payload = await apiFetch<ApiEnvelope<unknown[]>>(
-      "/api/lineas",
-      {
-        method: "GET",
-        ...(options?.fresh ? { cache: "no-store" as const } : {}),
-      },
-      getReadOptions(),
-    );
+    try {
+      const payload = await apiFetch<ApiEnvelope<unknown[]>>(
+        "/api/lineas",
+        {
+          method: "GET",
+          ...(options?.fresh ? { cache: "no-store" as const } : {}),
+        },
+        getReadOptions(),
+      );
 
-    return mapLineasList(payload);
+      return mapLineasList(payload);
+    } catch (error) {
+      console.error("lineasApi.getAll failed", error);
+      return [];
+    }
   },
 
   async getById(id: string): Promise<Linea | null> {
