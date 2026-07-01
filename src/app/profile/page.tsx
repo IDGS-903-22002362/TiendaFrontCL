@@ -29,12 +29,7 @@ export default function ProfilePage() {
     genero: "",
   });
 
-  const fallbackPoints = useMemo(() => {
-    const possiblePoints = (user as { puntosActuales?: unknown } | null)?.puntosActuales;
-    return typeof possiblePoints === "number" ? possiblePoints : 0;
-  }, [user]);
-
-  const effectivePoints = points ?? fallbackPoints;
+  const effectivePoints = points ?? 0;
 
   const displayName = useMemo(() => {
     const sessionName = (user as { nombre?: unknown } | null)?.nombre;
@@ -78,12 +73,9 @@ export default function ProfilePage() {
 
         if (pointsResult.status === "fulfilled") {
           setPoints(pointsResult.value.points);
-        } else if (
-          profileResult.status === "fulfilled" &&
-          profileResult.value &&
-          typeof profileResult.value.puntosActuales === "number"
-        ) {
-          setPoints(profileResult.value.puntosActuales);
+          if (pointsResult.value.level) {
+            setProfileLevel(pointsResult.value.level);
+          }
         } else {
           setPoints(null);
         }
@@ -136,10 +128,6 @@ export default function ProfilePage() {
 
         if (profileData.nivel) {
           setProfileLevel(profileData.nivel);
-        }
-
-        if (typeof profileData.puntosActuales === "number") {
-          setPoints(profileData.puntosActuales);
         }
       } catch {
         if (!isMounted) {

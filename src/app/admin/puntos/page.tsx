@@ -16,6 +16,12 @@ import { es } from "date-fns/locale";
 import { useAuth } from "@/hooks/use-auth";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import {
+  earnFromStoreSale,
+  getAdminTransactions,
+  mxnToAmountCents,
+  mxnToPointsPreview,
+} from "@/lib/api/loyalty";
+import {
   AdminPageHeader,
   AdminPageShell,
 } from "@/components/admin/admin-ui";
@@ -49,7 +55,7 @@ interface MovimientoAsignacion {
 // CONFIGURACIÓN
 // ============================================
 
-const POINTS_PER_PESO = 1; // 1 MXN = 1 punto
+// Regla backend: $10 MXN = 1 punto (0.10)
 
 // ============================================
 // UTILIDAD: Decodificar JWT (payload sin verificar)
@@ -191,52 +197,45 @@ export default function AdminAssignPoints() {
             toast({ title: "Error", description: "El monto de la compra debe ser mayor a 0", variant: "destructive" });
             return;
         }
+        const saleId = description.trim();
+        if (!saleId) {
+            toast({ title: "Error", description: "Ingresa el folio o ID de venta", variant: "destructive" });
+            return;
+        }
+        if (!token) {
+            toast({ title: "Error", description: "Sesión no válida", variant: "destructive" });
+            return;
+        }
 
         setIsLoading(true);
         try {
-            const response = await fetch(`/api/usuarios/${scannedUid}/puntos/asignar-por-venta`, {
-                method: "POST",
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    dinero: moneyAmount,
-                    origenId: adminUid,
-                    descripcion: description.trim() || `Venta por $${moneyAmount} MXN`,
-                }),
+            const txn = await earnFromStoreSale({
+                memberId: scannedUid,
+                externalTransactionId: saleId,
+                amountCents: mxnToAmountCents(moneyAmount),
+                description: `Venta por $${moneyAmount} MXN`,
+                token,
             });
 
-            const json = await response.json();
+            setUserData((prev) =>
+                prev ? { ...prev, puntosActuales: txn.balanceAfter } : prev
+            );
 
-            if (!response.ok) {
-                throw new Error(json.message || 'Error al asignar puntos');
+            toast({
+                title: "¡Éxito!",
+                description: `Se asignaron ${txn.points} puntos a ${userData.nombre || userData.email}`,
+            });
+            await refreshAllHistoryData();
+
+            if (isHistoryDialogOpen) {
+                loadGlobalHistory(true);
             }
 
-            if (json.success) {
-                // Actualizar puntos del usuario en UI
-                setUserData((prev) =>
-                    prev ? { ...prev, puntosActuales: json.data.puntosActuales } : prev
-                );
-
-                toast({
-                    title: "¡Éxito!",
-                    description: `Se asignaron ${json.data.puntosAsignados} puntos a ${userData.nombre || userData.email}`,
-                });
-                await refreshAllHistoryData();
-
-                // Recargar historial si está abierto
-                if (isHistoryDialogOpen) {
-                    loadGlobalHistory(true);
-                }
-
-                // Limpiar formulario y cerrar diálogos
-                setMoneyAmount(0);
-                setPointsToAssign(0);
-                setDescription("");
-                setIsAssignDialogOpen(false);
-                setIsConfirmDialogOpen(false);
-            }
+            setMoneyAmount(0);
+            setPointsToAssign(0);
+            setDescription("");
+            setIsAssignDialogOpen(false);
+            setIsConfirmDialogOpen(false);
         } catch (error) {
             console.error("Error assigning points:", error);
             toast({
@@ -257,40 +256,38 @@ export default function AdminAssignPoints() {
 
         setIsLoadingHistory(true);
         try {
-            const cursorParam = reset ? undefined : historyCursor;
-            const url = `/api/usuarios/puntos/asignaciones?limit=20${cursorParam ? `&cursor=${encodeURIComponent(cursorParam)}` : ""}`;
-
-            const response = await fetch(url, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
+            const result = await getAdminTransactions({
+                limit: 20,
+                cursor: reset ? undefined : historyCursor ?? undefined,
+                token,
             });
 
-            const json = await response.json();
+            const mapped: MovimientoAsignacion[] = result.items.map((item) => ({
+                id: item.transactionId,
+                usuarioId: item.memberId,
+                usuarioNombre: item.memberId,
+                usuarioEmail: "",
+                puntos: item.points,
+                descripcion: item.description ?? "",
+                origenId: item.memberId,
+                adminNombre: "",
+                adminEmail: "",
+                createdAt: item.createdAt,
+            }));
 
-            if (!response.ok) {
-                throw new Error(json.message || 'Error al cargar historial');
-            }
-
-            if (json.success) {
-                const newMovements = json.data;
-                if (reset) {
-                    setAssignments(newMovements);
-                } else {
-                    setAssignments((prev) => [...prev, ...newMovements]);
-                }
-                setHistoryCursor(json.pagination?.nextCursor || null);
-                setHasMoreHistory(!!json.pagination?.hasMore);
+            if (reset) {
+                setAssignments(mapped);
             } else {
-                throw new Error(json.message || 'Error al cargar historial');
+                setAssignments((prev) => [...prev, ...mapped]);
             }
+            setHistoryCursor(result.nextCursor);
+            setHasMoreHistory(result.hasMore);
         } catch (error) {
             console.error("Error cargando historial:", error);
             toast({
                 title: "Error",
                 description: getApiErrorMessage(error),
-                variant: "destructive"
+                variant: "destructive",
             });
         } finally {
             setIsLoadingHistory(false);
@@ -308,30 +305,27 @@ export default function AdminAssignPoints() {
 
         setIsLoadingAllHistory(true);
         try {
-            const response = await fetch(`/api/usuarios/puntos/asignaciones?limit=1000`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-            });
-
-            const json = await response.json();
-
-            if (!response.ok) {
-                throw new Error(json.message || 'Error al cargar historial');
-            }
-
-            if (json.success) {
-                setAllAssignments(json.data || []);
-            } else {
-                throw new Error(json.message || 'Error al cargar historial');
-            }
+            const result = await getAdminTransactions({ limit: 100, token });
+            setAllAssignments(
+                result.items.map((item) => ({
+                    id: item.transactionId,
+                    usuarioId: item.memberId,
+                    usuarioNombre: item.memberId,
+                    usuarioEmail: "",
+                    puntos: item.points,
+                    descripcion: item.description ?? "",
+                    origenId: item.memberId,
+                    adminNombre: "",
+                    adminEmail: "",
+                    createdAt: item.createdAt,
+                })),
+            );
         } catch (error) {
             console.error("Error cargando historial completo:", error);
             toast({
                 title: "Error",
                 description: getApiErrorMessage(error),
-                variant: "destructive"
+                variant: "destructive",
             });
         } finally {
             setIsLoadingAllHistory(false);
@@ -357,7 +351,7 @@ export default function AdminAssignPoints() {
 
     const handleMoneyChange = (value: number) => {
         setMoneyAmount(value);
-        setPointsToAssign(value * POINTS_PER_PESO);
+        setPointsToAssign(mxnToPointsPreview(value));
     };
 
     const resetForm = () => {
@@ -500,14 +494,14 @@ export default function AdminAssignPoints() {
                             </div>
                             {moneyAmount > 0 && (
                                 <p className="text-xs text-green-600">
-                                    Equivalente a <strong>{pointsToAssign * 0.10}</strong> {pointsToAssign === 0.10 ? "punto" : "puntos"}
+                                    Equivalente a <strong>{pointsToAssign}</strong> {pointsToAssign === 1 ? "punto" : "puntos"} (1 punto por cada $10 MXN)
                                 </p>
                             )}
                         </div>
 
                         {/* Descripción opcional */}
                         <div className="space-y-2">
-                            <Label htmlFor="description">ID de Venta</Label>
+                            <Label htmlFor="description">Folio / ID de venta *</Label>
                             <Textarea
                                 id="description"
                                 placeholder="Ingresa el ID de la venta hecha en Tienda."
@@ -537,7 +531,7 @@ export default function AdminAssignPoints() {
                                     Asignando...
                                 </>
                             ) : (
-                                `Asignar ${pointsToAssign * 0.10} puntos`
+                                `Asignar ${pointsToAssign} puntos`
                             )}
                         </Button>
                     </DialogFooter>
