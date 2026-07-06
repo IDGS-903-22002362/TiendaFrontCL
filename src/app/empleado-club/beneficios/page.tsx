@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Ban, Gift, Plus, RefreshCw, RotateCcw } from "lucide-react";
+import { Ban, Gift, Plus, RefreshCw, RotateCcw, X } from "lucide-react";
 import { EntityPicker, type EntityOption } from "@/components/admin/entity-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,12 @@ const EMPTY_FORM = {
     titulo: "",
     descripcion: "",
     estatus: true,
+};
+
+type PendingImageUpload = {
+    id: string;
+    file: File;
+    previewUrl: string;
 };
 
 type DateValue =
@@ -124,6 +131,7 @@ export default function EmpleadoClubBeneficiosPage() {
     const [editingBeneficioId, setEditingBeneficioId] = useState<string | null>(null);
     const [isLoadingDetail, setIsLoadingDetail] = useState(false);
     const [formData, setFormData] = useState(EMPTY_FORM);
+    const [pendingImageUpload, setPendingImageUpload] = useState<PendingImageUpload | null>(null);
     const { toast } = useToast();
 
     const itemsPerPage = 10;
@@ -157,6 +165,14 @@ export default function EmpleadoClubBeneficiosPage() {
     useEffect(() => {
         setCurrentPage(1);
     }, [searchQuery, selectedBeneficioId, estatusFilter]);
+
+    useEffect(() => {
+        return () => {
+            if (pendingImageUpload) {
+                URL.revokeObjectURL(pendingImageUpload.previewUrl);
+            }
+        };
+    }, [pendingImageUpload]);
 
     const beneficioOptions: EntityOption[] = useMemo(
         () =>
@@ -205,9 +221,20 @@ export default function EmpleadoClubBeneficiosPage() {
         return filteredBeneficios.slice(start, start + itemsPerPage);
     }, [currentPage, filteredBeneficios]);
 
+    const clearPendingImage = () => {
+        setPendingImageUpload((current) => {
+            if (current) {
+                URL.revokeObjectURL(current.previewUrl);
+            }
+
+            return null;
+        });
+    };
+
     const resetForm = () => {
         setEditingBeneficioId(null);
         setFormData(EMPTY_FORM);
+        clearPendingImage();
     };
 
     const closeDialog = () => {
@@ -219,6 +246,49 @@ export default function EmpleadoClubBeneficiosPage() {
     const openCreateForm = () => {
         resetForm();
         setIsDialogOpen(true);
+    };
+
+    const handleImageSelect = (event: ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+
+        if (!file) {
+            return;
+        }
+
+        if (!file.type.startsWith("image/")) {
+            toast({
+                variant: "destructive",
+                title: "Archivo inválido",
+                description: "Solo se permiten imágenes.",
+            });
+            event.target.value = "";
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            toast({
+                variant: "destructive",
+                title: "Imagen demasiado grande",
+                description: "La imagen no puede exceder 5 MB.",
+            });
+            event.target.value = "";
+            return;
+        }
+
+        const nextUpload = {
+            id: `${file.name}-${file.size}-${Date.now()}`,
+            file,
+            previewUrl: URL.createObjectURL(file),
+        };
+
+        setPendingImageUpload((current) => {
+            if (current) {
+                URL.revokeObjectURL(current.previewUrl);
+            }
+
+            return nextUpload;
+        });
+        event.target.value = "";
     };
 
     const openEditForm = async (beneficio: Beneficio) => {
@@ -280,7 +350,11 @@ export default function EmpleadoClubBeneficiosPage() {
                     estatus: formData.estatus,
                 };
 
-                await beneficiosApi.create(payload);
+                if (pendingImageUpload?.file) {
+                    await beneficiosApi.createWithImage(payload, pendingImageUpload.file);
+                } else {
+                    await beneficiosApi.create(payload);
+                }
                 toast({
                     title: "Beneficio creado",
                     description: `"${titulo}" ha sido creado.`,
@@ -452,6 +526,7 @@ export default function EmpleadoClubBeneficiosPage() {
                     <Table>
                         <TableHeader>
                             <TableRow>
+                                <TableHead>Imagen</TableHead>
                                 <TableHead>Título</TableHead>
                                 <TableHead>Descripción</TableHead>
                                 <TableHead>Estado</TableHead>
@@ -463,19 +538,34 @@ export default function EmpleadoClubBeneficiosPage() {
                         <TableBody>
                             {isLoading ? (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                                    <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                                         Cargando beneficios...
                                     </TableCell>
                                 </TableRow>
                             ) : paginatedBeneficios.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                                    <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                                         No hay beneficios que coincidan con los filtros.
                                     </TableCell>
                                 </TableRow>
                             ) : (
                                 paginatedBeneficios.map((beneficio) => (
                                     <TableRow key={beneficio.id}>
+                                        <TableCell>
+                                            {beneficio.imagen ? (
+                                                <Image
+                                                    src={beneficio.imagen}
+                                                    alt={`Imagen de ${beneficio.titulo}`}
+                                                    width={64}
+                                                    height={48}
+                                                    className="h-12 w-16 rounded-md object-cover"
+                                                />
+                                            ) : (
+                                                <div className="flex h-12 w-16 items-center justify-center rounded-md bg-muted text-xs text-muted-foreground">
+                                                    Sin imagen
+                                                </div>
+                                            )}
+                                        </TableCell>
                                         <TableCell className="font-medium">{beneficio.titulo}</TableCell>
                                         <TableCell className="max-w-[440px] whitespace-normal text-sm text-muted-foreground">
                                             {beneficio.descripcion}
@@ -638,6 +728,46 @@ export default function EmpleadoClubBeneficiosPage() {
                                 disabled={isLoadingDetail || isSaving}
                             />
                         </div>
+
+                        {!editingBeneficioId && (
+                            <div className="space-y-2 border-t pt-4">
+                                <Label htmlFor="imagen">Imagen</Label>
+                                <Input
+                                    id="imagen"
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleImageSelect}
+                                    disabled={isLoadingDetail || isSaving}
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Opcional. Sube una imagen para mostrar este beneficio. Máximo 5 MB.
+                                </p>
+
+                                {pendingImageUpload && (
+                                    <div className="relative max-w-xs overflow-hidden rounded-md border">
+                                        <Image
+                                            src={pendingImageUpload.previewUrl}
+                                            alt="Vista previa de la imagen del beneficio"
+                                            width={320}
+                                            height={144}
+                                            unoptimized
+                                            className="h-36 w-full object-cover"
+                                        />
+                                        <Button
+                                            type="button"
+                                            size="icon"
+                                            variant="destructive"
+                                            className="absolute right-2 top-2 h-7 w-7"
+                                            onClick={clearPendingImage}
+                                            disabled={isSaving}
+                                            aria-label="Quitar imagen seleccionada"
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                     </div>
 
