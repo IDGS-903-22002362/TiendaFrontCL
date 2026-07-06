@@ -14,6 +14,7 @@ import {
   addCartItem,
   clearCart,
   fetchCart,
+  findCartItemVariant,
   getOrCreateSessionId,
   mergeCartSession,
   removeCartItem,
@@ -187,9 +188,21 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     try {
+      const matched = findCartItemVariant(items, {
+        id,
+        tallaId,
+        size: tallaId,
+        personalizacion,
+      });
+
       const cart = await removeCartItem(
         sessionId,
-        { id, tallaId, personalizacion },
+        {
+          id,
+          tallaId: matched?.tallaId ?? matched?.size ?? tallaId,
+          size: matched?.size ?? tallaId,
+          personalizacion: matched?.personalizacion ?? personalizacion,
+        },
         isAuthenticated ? authToken : undefined,
       );
       setCartId((current) => cart.id ?? current);
@@ -214,9 +227,22 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     try {
+      const matched = findCartItemVariant(items, {
+        id,
+        tallaId,
+        size: tallaId,
+        personalizacion,
+      });
+
       const cart = await updateCartItem(
         sessionId,
-        { id, tallaId, quantity, personalizacion },
+        {
+          id,
+          tallaId: matched?.tallaId ?? matched?.size ?? tallaId,
+          size: matched?.size ?? tallaId,
+          quantity,
+          personalizacion: matched?.personalizacion ?? personalizacion,
+        },
         isAuthenticated ? authToken : undefined,
       );
       setCartId((current) => cart.id ?? current);

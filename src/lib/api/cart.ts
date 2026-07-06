@@ -82,6 +82,31 @@ export function getCartVariantKey(
   return `${item.id}::${resolveTallaId(item) ?? "no-size"}::${personalizationKey}`;
 }
 
+export function findCartItemVariant(
+  items: CartItem[],
+  target: Pick<CartItem, "id" | "tallaId" | "size" | "personalizacion">,
+): CartItem | undefined {
+  const targetKey = getCartVariantKey(target);
+  const exact = items.find((item) => getCartVariantKey(item) === targetKey);
+  if (exact) {
+    return exact;
+  }
+
+  const targetTalla = resolveTallaId(target) ?? "";
+  const sameProductAndSize = items.filter(
+    (item) =>
+      item.id === target.id &&
+      (resolveTallaId(item) ?? "") === targetTalla,
+  );
+
+  if (sameProductAndSize.length === 1) {
+    return sameProductAndSize[0];
+  }
+
+  const sameProduct = items.filter((item) => item.id === target.id);
+  return sameProduct.length === 1 ? sameProduct[0] : undefined;
+}
+
 function toStockStatus(value: unknown): CartItemStockStatus | undefined {
   if (
     value === "available" ||
@@ -450,18 +475,24 @@ export async function removeCartItem(
   token?: string,
 ): Promise<Cart> {
   const tallaId = resolveTallaId(item);
-  const body: Record<string, unknown> = {};
-  if (tallaId) body.tallaId = tallaId;
-  if (item.personalizacion) body.personalizacion = item.personalizacion;
+  const params = new URLSearchParams();
+  if (tallaId) {
+    params.set("tallaId", tallaId);
+  }
+  if (item.personalizacion) {
+    params.set("personalizationMode", item.personalizacion.mode);
+    params.set("personalizationNombre", item.personalizacion.nombre);
+    params.set("personalizationNumero", item.personalizacion.numero);
+  }
+
+  const query = params.toString();
+  const path = query
+    ? `/api/carrito/items/${item.id}?${query}`
+    : `/api/carrito/items/${item.id}`;
 
   const payload = await apiFetch<unknown>(
-    `/api/carrito/items/${item.id}`,
-    {
-      method: "DELETE",
-      ...(Object.keys(body).length > 0
-        ? { body: JSON.stringify(body) }
-        : {}),
-    },
+    path,
+    { method: "DELETE" },
     { sessionId, token, local: true },
   );
 
