@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/api\/?$/, "") ||
@@ -49,16 +50,25 @@ const checkoutCsp = [
 const nextConfig: NextConfig = {
   outputFileTracingRoot: process.cwd(),
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
   async rewrites() {
     return [
       {
         source: "/favicon.ico",
         destination: "/images/leon.ico",
+      },
+    ];
+  },
+  async redirects() {
+    return [
+      {
+        source: "/aviso-privacidad",
+        destination: "/aviso-de-privacidad",
+        permanent: true,
       },
     ];
   },
@@ -128,4 +138,15 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  silent: !process.env.CI,
+  tunnelRoute: "/monitoring",
+  telemetry: false,
+  ...(process.env.SENTRY_AUTH_TOKEN
+    ? {}
+    : {
+        sourcemaps: {
+          disable: true,
+        },
+      }),
+});

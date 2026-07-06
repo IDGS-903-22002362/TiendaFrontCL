@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ChevronRight, LogOut, Package2, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,15 +34,24 @@ export function MobileNavDrawer({
   email,
   onLogout,
 }: MobileNavDrawerProps) {
+  const [open, setOpen] = useState(false);
+
+  const closeDrawer = () => setOpen(false);
+
+  const handleLogout = () => {
+    closeDrawer();
+    onLogout();
+  };
+
   return (
-    <Sheet>
+    <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <SheetContent
         side="left"
         className="w-[min(90vw,360px)] border-r border-border bg-card-elevated px-0"
       >
         <SheetHeader className="border-b border-border px-5 pb-5">
-          <p className="editorial-label text-primary/70">Store oficial</p>
+          <p className="editorial-label text-primary/70">Tienda Oficial</p>
           <SheetTitle className="mt-2">La Guarida</SheetTitle>
         </SheetHeader>
         <div className="flex h-full flex-col px-5 pb-6 pt-5">
@@ -51,6 +60,7 @@ export function MobileNavDrawer({
               <Link
                 key={link.href}
                 href={link.href}
+                onClick={closeDrawer}
                 className="flex items-center justify-between border border-border/80 bg-card/76 px-4 py-3 min-h-[44px] text-sm font-medium text-foreground transition-[background-color,border-color,transform] hover:-translate-y-px hover:border-primary/18 hover:bg-card"
               >
                 <span>{link.label}</span>
@@ -73,6 +83,7 @@ export function MobileNavDrawer({
                 </div>
                 <Link
                   href="/profile"
+                  onClick={closeDrawer}
                   className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-card"
                 >
                   <UserRound className="h-4 w-4 text-primary" />
@@ -80,6 +91,7 @@ export function MobileNavDrawer({
                 </Link>
                 <Link
                   href="/order-history"
+                  onClick={closeDrawer}
                   className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-card"
                 >
                   <Package2 className="h-4 w-4 text-primary" />
@@ -89,7 +101,7 @@ export function MobileNavDrawer({
                   type="button"
                   variant="ghost"
                   className="h-11 w-full justify-start px-3 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  onClick={onLogout}
+                  onClick={handleLogout}
                 >
                   <LogOut className="mr-2 h-4 w-4" />
                   Cerrar sesión
@@ -98,7 +110,9 @@ export function MobileNavDrawer({
             ) : (
               <div className="mt-3">
                 <Button asChild className="h-11 w-full">
-                  <Link href="/login">Iniciar sesión</Link>
+                  <Link href="/login" onClick={closeDrawer}>
+                    Iniciar sesión
+                  </Link>
                 </Button>
               </div>
             )}

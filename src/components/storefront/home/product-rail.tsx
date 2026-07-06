@@ -17,7 +17,7 @@ import { ProductCardMinimal } from "./product-card-minimal";
 export type ProductRailTab = {
   key: string;
   label: string;
-  products: Product[];
+  products?: Product[];
 };
 
 type ProductRailProps = {

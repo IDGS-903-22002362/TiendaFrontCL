@@ -15,6 +15,16 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useAuth } from "@/hooks/use-auth";
 import { getApiErrorMessage } from "@/lib/api/errors";
+import {
+  earnFromStoreSale,
+  getAdminTransactions,
+  mxnToAmountCents,
+  mxnToPointsPreview,
+} from "@/lib/api/loyalty";
+import {
+  AdminPageHeader,
+  AdminPageShell,
+} from "@/components/admin/admin-ui";
 
 // ============================================
 // TYPES
@@ -45,13 +55,13 @@ interface MovimientoAsignacion {
 // CONFIGURACIÓN
 // ============================================
 
-const POINTS_PER_PESO = 1; // 1 MXN = 1 punto
+// Regla backend: $10 MXN = 1 punto (0.10)
 
 // ============================================
 // UTILIDAD: Decodificar JWT (payload sin verificar)
 // ============================================
 
-function decodeJwt(token: string): Record<string, any> | null {
+function decodeJwt(token: string): Record<string, unknown> | null {
     try {
         const base64Url = token.split('.')[1];
         const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -67,6 +77,11 @@ function decodeJwt(token: string): Record<string, any> | null {
     }
 }
 
+function jwtStringField(payload: Record<string, unknown> | null, key: string): string | null {
+    const value = payload?.[key];
+    return typeof value === "string" && value.length > 0 ? value : null;
+}
+
 // ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
@@ -77,8 +92,11 @@ export default function AdminAssignPoints() {
 
     // Datos del admin/empleado obtenidos del token (más confiable que user)
     const tokenPayload = token ? decodeJwt(token) : null;
-    const adminUid = tokenPayload?.uid || tokenPayload?.sub || null;
-    const adminName = tokenPayload?.nombre || tokenPayload?.email || "Usuario autenticado";
+    const adminUid = jwtStringField(tokenPayload, "uid") ?? jwtStringField(tokenPayload, "sub");
+    const adminName =
+        jwtStringField(tokenPayload, "nombre") ??
+        jwtStringField(tokenPayload, "email") ??
+        "Usuario autenticado";
 
     // Estados del formulario de asignación
     const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
@@ -179,52 +197,45 @@ export default function AdminAssignPoints() {
             toast({ title: "Error", description: "El monto de la compra debe ser mayor a 0", variant: "destructive" });
             return;
         }
+        const saleId = description.trim();
+        if (!saleId) {
+            toast({ title: "Error", description: "Ingresa el folio o ID de venta", variant: "destructive" });
+            return;
+        }
+        if (!token) {
+            toast({ title: "Error", description: "Sesión no válida", variant: "destructive" });
+            return;
+        }
 
         setIsLoading(true);
         try {
-            const response = await fetch(`/api/usuarios/${scannedUid}/puntos/asignar-por-venta`, {
-                method: "POST",
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    dinero: moneyAmount,
-                    origenId: adminUid,
-                    descripcion: description.trim() || `Venta por $${moneyAmount} MXN`,
-                }),
+            const txn = await earnFromStoreSale({
+                memberId: scannedUid,
+                externalTransactionId: saleId,
+                amountCents: mxnToAmountCents(moneyAmount),
+                description: `Venta por $${moneyAmount} MXN`,
+                token,
             });
 
-            const json = await response.json();
+            setUserData((prev) =>
+                prev ? { ...prev, puntosActuales: txn.balanceAfter } : prev
+            );
 
-            if (!response.ok) {
-                throw new Error(json.message || 'Error al asignar puntos');
+            toast({
+                title: "¡Éxito!",
+                description: `Se asignaron ${txn.points} puntos a ${userData.nombre || userData.email}`,
+            });
+            await refreshAllHistoryData();
+
+            if (isHistoryDialogOpen) {
+                loadGlobalHistory(true);
             }
 
-            if (json.success) {
-                // Actualizar puntos del usuario en UI
-                setUserData((prev) =>
-                    prev ? { ...prev, puntosActuales: json.data.puntosActuales } : prev
-                );
-
-                toast({
-                    title: "¡Éxito!",
-                    description: `Se asignaron ${json.data.puntosAsignados} puntos a ${userData.nombre || userData.email}`,
-                });
-                await refreshAllHistoryData();
-
-                // Recargar historial si está abierto
-                if (isHistoryDialogOpen) {
-                    loadGlobalHistory(true);
-                }
-
-                // Limpiar formulario y cerrar diálogos
-                setMoneyAmount(0);
-                setPointsToAssign(0);
-                setDescription("");
-                setIsAssignDialogOpen(false);
-                setIsConfirmDialogOpen(false);
-            }
+            setMoneyAmount(0);
+            setPointsToAssign(0);
+            setDescription("");
+            setIsAssignDialogOpen(false);
+            setIsConfirmDialogOpen(false);
         } catch (error) {
             console.error("Error assigning points:", error);
             toast({
@@ -245,40 +256,38 @@ export default function AdminAssignPoints() {
 
         setIsLoadingHistory(true);
         try {
-            const cursorParam = reset ? undefined : historyCursor;
-            const url = `/api/usuarios/puntos/asignaciones?limit=20${cursorParam ? `&cursor=${encodeURIComponent(cursorParam)}` : ""}`;
-
-            const response = await fetch(url, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
+            const result = await getAdminTransactions({
+                limit: 20,
+                cursor: reset ? undefined : historyCursor ?? undefined,
+                token,
             });
 
-            const json = await response.json();
+            const mapped: MovimientoAsignacion[] = result.items.map((item) => ({
+                id: item.transactionId,
+                usuarioId: item.memberId,
+                usuarioNombre: item.memberId,
+                usuarioEmail: "",
+                puntos: item.points,
+                descripcion: item.description ?? "",
+                origenId: item.memberId,
+                adminNombre: "",
+                adminEmail: "",
+                createdAt: item.createdAt,
+            }));
 
-            if (!response.ok) {
-                throw new Error(json.message || 'Error al cargar historial');
-            }
-
-            if (json.success) {
-                const newMovements = json.data;
-                if (reset) {
-                    setAssignments(newMovements);
-                } else {
-                    setAssignments((prev) => [...prev, ...newMovements]);
-                }
-                setHistoryCursor(json.pagination?.nextCursor || null);
-                setHasMoreHistory(!!json.pagination?.hasMore);
+            if (reset) {
+                setAssignments(mapped);
             } else {
-                throw new Error(json.message || 'Error al cargar historial');
+                setAssignments((prev) => [...prev, ...mapped]);
             }
+            setHistoryCursor(result.nextCursor);
+            setHasMoreHistory(result.hasMore);
         } catch (error) {
             console.error("Error cargando historial:", error);
             toast({
                 title: "Error",
                 description: getApiErrorMessage(error),
-                variant: "destructive"
+                variant: "destructive",
             });
         } finally {
             setIsLoadingHistory(false);
@@ -296,30 +305,27 @@ export default function AdminAssignPoints() {
 
         setIsLoadingAllHistory(true);
         try {
-            const response = await fetch(`/api/usuarios/puntos/asignaciones?limit=1000`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-            });
-
-            const json = await response.json();
-
-            if (!response.ok) {
-                throw new Error(json.message || 'Error al cargar historial');
-            }
-
-            if (json.success) {
-                setAllAssignments(json.data || []);
-            } else {
-                throw new Error(json.message || 'Error al cargar historial');
-            }
+            const result = await getAdminTransactions({ limit: 100, token });
+            setAllAssignments(
+                result.items.map((item) => ({
+                    id: item.transactionId,
+                    usuarioId: item.memberId,
+                    usuarioNombre: item.memberId,
+                    usuarioEmail: "",
+                    puntos: item.points,
+                    descripcion: item.description ?? "",
+                    origenId: item.memberId,
+                    adminNombre: "",
+                    adminEmail: "",
+                    createdAt: item.createdAt,
+                })),
+            );
         } catch (error) {
             console.error("Error cargando historial completo:", error);
             toast({
                 title: "Error",
                 description: getApiErrorMessage(error),
-                variant: "destructive"
+                variant: "destructive",
             });
         } finally {
             setIsLoadingAllHistory(false);
@@ -345,7 +351,7 @@ export default function AdminAssignPoints() {
 
     const handleMoneyChange = (value: number) => {
         setMoneyAmount(value);
-        setPointsToAssign(value * POINTS_PER_PESO);
+        setPointsToAssign(mxnToPointsPreview(value));
     };
 
     const resetForm = () => {
@@ -409,25 +415,21 @@ export default function AdminAssignPoints() {
     // No necesitamos esperar a 'user' porque obtenemos adminUid y adminName del token
 
     return (
-        <div className="container mx-auto p-4 md:p-6 space-y-6">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Asignación de Puntos</h1>
-                    <p className="text-muted-foreground">
-                        Escanea el QR del usuario, ingresa el monto total de la compra y asigna puntos automáticamente (100 MXN = 10 puntos)
-                    </p>
-                    <div className="text-sm text-muted-foreground mt-2">
-                        Asignado por: <Badge variant="secondary">{adminName}</Badge>
+        <AdminPageShell>
+            <AdminPageHeader
+                eyebrow="Marketing"
+                title="Asignación de puntos"
+                description="Escanea el QR del usuario, ingresa el monto total de la compra y asigna puntos automáticamente."
+                actions={
+                    <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+                        <Badge variant="secondary">Asignado por: {adminName}</Badge>
+                        <Button onClick={openAssignDialog}>
+                            <Plus data-icon="inline-start" />
+                            Nueva asignación
+                        </Button>
                     </div>
-                </div>
-                <div className="flex gap-2">
-                    <Button onClick={openAssignDialog}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Nueva Asignación
-                    </Button>
-                </div>
-            </div>
+                }
+            />
 
             {/* Diálogo de asignación de puntos */}
             <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
@@ -492,14 +494,14 @@ export default function AdminAssignPoints() {
                             </div>
                             {moneyAmount > 0 && (
                                 <p className="text-xs text-green-600">
-                                    Equivalente a <strong>{pointsToAssign * 0.10}</strong> {pointsToAssign === 0.10 ? "punto" : "puntos"}
+                                    Equivalente a <strong>{pointsToAssign}</strong> {pointsToAssign === 1 ? "punto" : "puntos"} (1 punto por cada $10 MXN)
                                 </p>
                             )}
                         </div>
 
                         {/* Descripción opcional */}
                         <div className="space-y-2">
-                            <Label htmlFor="description">ID de Venta</Label>
+                            <Label htmlFor="description">Folio / ID de venta *</Label>
                             <Textarea
                                 id="description"
                                 placeholder="Ingresa el ID de la venta hecha en Tienda."
@@ -529,7 +531,7 @@ export default function AdminAssignPoints() {
                                     Asignando...
                                 </>
                             ) : (
-                                `Asignar ${pointsToAssign * 0.10} puntos`
+                                `Asignar ${pointsToAssign} puntos`
                             )}
                         </Button>
                     </DialogFooter>
@@ -683,6 +685,6 @@ export default function AdminAssignPoints() {
                     </CardContent>
                 </Card>
             )}
-        </div>
+        </AdminPageShell>
     );
 }

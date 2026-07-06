@@ -22,7 +22,7 @@ function showToast(
     description,
     duration: duration ?? (variant === "destructive" ? ERROR_DURATION : DEFAULT_DURATION),
     action,
-  });
+  } as Parameters<typeof baseToast>[0]);
 }
 
 export function showSuccessToast(options: AppToastOptions) {

@@ -1,25 +1,22 @@
 # Settings to manage and configure a Firebase App Hosting backend.
 # https://firebase.google.com/docs/app-hosting/configure
+#
+# Secretos: crear en Firebase Console o con:
+#   npx firebase apphosting:secrets:set SECRET_NAME --project e-comerce-leon
+# Luego otorgar acceso al backend de App Hosting.
 
 runConfig:
-  # Increase this value if you'd like to automatically spin up
-  # more instances in response to increased traffic.
-  maxInstances: 1
+  maxInstances: 5
 
-# Environment variables for frontend + server runtime.
 env:
   - variable: NEXT_PUBLIC_API_BASE_URL
     value: https://us-central1-e-comerce-leon.cloudfunctions.net/api
 
-  - variable: API_BASE_URL 
+  - variable: API_BASE_URL
     value: https://us-central1-e-comerce-leon.cloudfunctions.net/api
 
-  # Frontend IP allowlist. Empty disables the restriction until real IPs are set.
-  - variable: ALLOWED_FRONT_IPS
-    value: "127.0.0.1,::1,189.162.86.69,172.18.2.131,189.162.72.157,189.162.106.172,189.162.86.60,189.162.42.0,187.189.168.106,189.162.49.177,189.162.55.68,189.162.34.167,189.203.205.168,89.162.34.167,187.189.248.106,177.245.230.150,189.162.34.167,189.162.70.13"
-
   - variable: NEXT_PUBLIC_AUTH_FIREBASE_API_KEY
-    value: AIzaSyBq_lNV0ZXJdvaHAhw8eC5diGRafuqs6Do
+    secret: APPHOSTING_AUTH_FIREBASE_API_KEY
 
   - variable: NEXT_PUBLIC_AUTH_FIREBASE_AUTH_DOMAIN
     value: app-oficial-leon.firebaseapp.com
@@ -28,17 +25,30 @@ env:
     value: app-oficial-leon
 
   - variable: NEXT_PUBLIC_AUTH_FIREBASE_APP_ID
-    value: 1:795182473270:web:c1c8f15ead939e2d6a7897
+    secret: APPHOSTING_AUTH_FIREBASE_APP_ID
 
   - variable: NEXT_PUBLIC_AUTH_FIREBASE_STORAGE_BUCKET
     value: app-oficial-leon.firebasestorage.app
 
-  # Clave publishable live (pública por diseño). Debe coincidir con sk_live_* del backend.
   - variable: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-    value: pk_live_51TlczJQVAPvus3zFEkVFfo8a86rhExW4luLjHJ4OsX902ri7PLYEYbpRK7bRtYw2yttV5codkBOUQlidz7qSTXCW0066d2l0hi
+    secret: APPHOSTING_STRIPE_PUBLISHABLE_KEY
 
   - variable: NEXT_PUBLIC_APLAZO_SHOP_ID
     value: "Laguarida"
 
   - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-    value: AIzaSyBH74ZroHtQ1VALF5eL7BjEIGU_R3OJWIE
+    secret: APPHOSTING_GOOGLE_MAPS_API_KEY
+
+  - variable: GOOGLE_MAPS_API_KEY
+    secret: APPHOSTING_GOOGLE_MAPS_API_KEY
+
+  - variable: STORE_PUBLIC_BASE_URL
+    value: https://tiendalaguarida.com
+
+  - variable: GOOGLE_MAPS_API_REFERER
+    value: https://tiendalaguarida.com/
+
+  - variable: NEXT_PUBLIC_FIREBASE_APP_CHECK_SITE_KEY
+    secret: APPHOSTING_FIREBASE_APP_CHECK_SITE_KEY
+  # NEXT_PUBLIC_SENTRY_DSN / SENTRY_DSN
+  # NEXT_PUBLIC_GA_MEASUREMENT_ID, NEXT_PUBLIC_GTM_ID

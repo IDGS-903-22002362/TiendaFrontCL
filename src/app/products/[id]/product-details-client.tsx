@@ -15,7 +15,6 @@ import {
 } from "@/lib/api/storefront";
 import {
   enrichProductWithOfferPricing,
-  hasValidSalePrice,
   mergeProductPricing,
 } from "@/lib/ofertas-public";
 import { getApiErrorMessage } from "@/lib/api/errors";
@@ -64,18 +63,12 @@ export function ProductDetailsClient({
   useEffect(() => {
     let cancelled = false;
 
-    if (hasValidSalePrice(product)) {
-      return;
-    }
-
     void enrichProductWithOfferPricing(product).then((enriched) => {
       if (cancelled) {
         return;
       }
 
-      if (hasValidSalePrice(enriched)) {
-        setCurrentProduct((previous) => mergeProductPricing(previous, enriched));
-      }
+      setCurrentProduct((previous) => mergeProductPricing(previous, enriched));
     });
 
     return () => {

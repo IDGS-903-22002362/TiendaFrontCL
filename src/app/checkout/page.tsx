@@ -107,9 +107,9 @@ import type {
 } from "@/types/shipping";
 import { showErrorToast } from "@/lib/app-toast";
 import {
-  GooglePlaceAutocompleteElement,
-  type ParsedGoogleCheckoutAddress,
-} from "@/components/checkout/GooglePlaceAutocompleteElement";
+  CheckoutAddressAutocomplete,
+} from "@/components/checkout/CheckoutAddressAutocomplete";
+import type { ParsedGoogleCheckoutAddress } from "@/components/checkout/GooglePlaceAutocompleteElement";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -173,12 +173,6 @@ function getStringArrayFromCartItem(
   return [];
 }
 
-if (process.env.NODE_ENV === "development" && typeof window !== "undefined") {
-  console.log(
-    "Google Maps key loaded:",
-    Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY),
-  );
-}
 
 function getExpectedCheckoutPricing(
   subtotal: number,
@@ -664,7 +658,7 @@ function OrderSummaryPanel({
 
           <div className="flex items-center justify-between">
             <span>
-              {fulfillmentMethod === "PICKUP" ? "Recoger en tienda" : "Envio FedEx manual"}
+              {fulfillmentMethod === "PICKUP" ? "Recoger en tienda" : "Envio manual"}
             </span>
             <span>
               {fulfillmentMethod === "PICKUP"
@@ -802,7 +796,7 @@ function FulfillmentSelector({
           <p className="mt-1">
             El costo se calcula automáticamente con tu código postal. El envío se
             procesa manualmente por paquetería y la guía de rastreo estará
-            disponible cuando el pedido sea entregado a FedEx.
+            disponible cuando el pedido sea enviado.
           </p>
         </div>
       ) : (
@@ -877,7 +871,6 @@ function ShippingAddressStep({
     useState<DeliveryShippingSelection | null>(null);
   const [, setCheckoutPricing] = useState<CheckoutPricing | null>(null);
   const [isGoogleReady, setIsGoogleReady] = useState(false);
-  const [isGoogleUnavailable, setIsGoogleUnavailable] = useState(false);
   const [googleAutocompleteMessage, setGoogleAutocompleteMessage] =
     useState<string | null>(null);
   const [isLoadingAddress, setIsLoadingAddress] = useState(false);
@@ -1085,13 +1078,10 @@ function ShippingAddressStep({
 
   const handleGooglePlacesReady = () => {
     setIsGoogleReady(true);
-    setIsGoogleUnavailable(false);
     setGoogleAutocompleteMessage(null);
   };
 
   const handleGooglePlacesUnavailable = (message: string) => {
-    setIsGoogleReady(false);
-    setIsGoogleUnavailable(true);
     setGoogleAutocompleteMessage(message);
   };
 
@@ -1298,32 +1288,21 @@ function ShippingAddressStep({
                     <div
                       className={cn(
                         "rounded-[1.5rem] border bg-muted/45 p-4 transition-colors",
-                        isGoogleUnavailable
-                          ? "border-border/70 bg-muted/30"
-                          : addressError
-                            ? "border-destructive"
-                            : "border-border",
+                        addressError
+                          ? "border-destructive"
+                          : "border-border",
                       )}
                     >
-                      {isGoogleUnavailable ? (
-                        <p className="text-sm leading-6 text-muted-foreground">
-                          El autocompletado no esta disponible en este ambiente.
-                          Captura tu direccion manualmente en los campos de abajo.
-                        </p>
-                      ) : (
-                        <GooglePlaceAutocompleteElement
-                          onAddressSelected={handleGoogleAddressSelected}
-                          onReady={handleGooglePlacesReady}
-                          onError={handleGooglePlacesUnavailable}
-                        />
-                      )}
+                      <CheckoutAddressAutocomplete
+                        onAddressSelected={handleGoogleAddressSelected}
+                        onReady={handleGooglePlacesReady}
+                        onError={handleGooglePlacesUnavailable}
+                      />
                     </div>
                     <p className="text-xs leading-5 text-muted-foreground">
-                      {isGoogleUnavailable
-                        ? "Google Places no esta disponible. Puedes continuar con captura manual."
-                        : isGoogleReady
-                          ? "Google completa la direccion; revisa los campos antes de continuar."
-                          : "Cargando autocompletado de Google Places..."}
+                      {isGoogleReady
+                        ? "Escribe al menos 3 caracteres y selecciona tu direccion. Revisa los campos antes de continuar."
+                        : "Cargando buscador de direcciones..."}
                     </p>
                     {googleAutocompleteMessage ? (
                       <p className="text-xs leading-5 text-muted-foreground">

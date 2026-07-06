@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { loadGooglePlacesLibrary } from "@/lib/google-maps-loader";
 
+const GOOGLE_PLACES_REFERRER_HINT =
+  "Agrega https://tiendalaguarida.com/*, https://www.tiendalaguarida.com/* y la URL de App Hosting en restricciones HTTP de la API key.";
+
 export type ParsedGoogleCheckoutAddress = {
   formattedAddress?: string;
   street1?: string;
@@ -124,12 +127,7 @@ export function GooglePlaceAutocompleteElement({
         const placesLibrary = await loadGooglePlacesLibrary();
         const PlaceAutocompleteElementCtor =
           placesLibrary.PlaceAutocompleteElement;
-
-        console.log("Places library loaded:", Boolean(placesLibrary));
-        console.log(
-          "PlaceAutocompleteElement available:",
-          Boolean(PlaceAutocompleteElementCtor),
-        );
+        const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
         if (!PlaceAutocompleteElementCtor) {
           throw new Error("PlaceAutocompleteElement is not available");
@@ -139,7 +137,9 @@ export function GooglePlaceAutocompleteElement({
           return;
         }
 
-        const nextAutocompleteElement = new PlaceAutocompleteElementCtor({});
+        const nextAutocompleteElement = new PlaceAutocompleteElementCtor(
+          (apiKey ? { apiKey } : undefined) as google.maps.places.PlaceAutocompleteElementOptions | undefined,
+        );
         autocompleteElement = nextAutocompleteElement;
         elementRef.current = nextAutocompleteElement;
 
@@ -182,9 +182,9 @@ export function GooglePlaceAutocompleteElement({
           }
 
           hasReportedWidgetErrorRef.current = true;
-          console.error("Google Places gmp-error:", event);
           const message =
-            "Google Places rechazo la busqueda. Revisa API key, Places API (New), billing o restricciones de dominio.";
+            "Google Places no esta disponible en este momento. " +
+            GOOGLE_PLACES_REFERRER_HINT;
           setLoadError(message);
           onErrorRef.current?.(message);
         });
@@ -221,7 +221,9 @@ export function GooglePlaceAutocompleteElement({
         containerRef.current.appendChild(nextAutocompleteElement);
         onReadyRef.current?.();
       } catch (error) {
-        console.error("Google Places load error real:", error);
+        if (process.env.NODE_ENV === "development") {
+          console.error("Google Places load error:", error);
+        }
         const message =
           "Google Places no esta disponible. Puedes capturar tu direccion manualmente.";
         setLoadError(message);

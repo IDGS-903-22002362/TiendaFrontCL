@@ -23,7 +23,6 @@ export default function TerminosCondicionesPage() {
       </header>
 
       <article className="prose prose-muted max-w-none space-y-8">
-        {/* TODO: Reemplazar con tu contenido real */}
         <section>
           <h2>1. OBJETIVO</h2>
           <p>
@@ -37,7 +36,7 @@ export default function TerminosCondicionesPage() {
           </p>
         </section>
 
-        <section>
+        <section id="politicas-generales">
           <h2>2. ALCANCE</h2>
           <p>
             Las presentes políticas aplican a todas las compras realizadas a través de la página web

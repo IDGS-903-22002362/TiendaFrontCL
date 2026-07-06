@@ -75,7 +75,7 @@ export function cleanupNonEssentialStorage(categories: ConsentCategories): void 
   }
 
   if (!categories.preferences) {
-    NON_ESSENTIAL_COOKIES.forEach(deleteCookie);
+    NON_ESSENTIAL_COOKIES.forEach((name) => deleteCookie(name));
   }
 }
 

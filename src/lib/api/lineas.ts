@@ -62,16 +62,21 @@ type LineasReadOptions = {
 
 export const lineasApi = {
   async getAll(options?: LineasReadOptions): Promise<Linea[]> {
-    const payload = await apiFetch<ApiEnvelope<unknown[]>>(
-      "/api/lineas",
-      {
-        method: "GET",
-        ...(options?.fresh ? { cache: "no-store" as const } : {}),
-      },
-      getReadOptions(),
-    );
+    try {
+      const payload = await apiFetch<ApiEnvelope<unknown[]>>(
+        "/api/lineas",
+        {
+          method: "GET",
+          ...(options?.fresh ? { cache: "no-store" as const } : {}),
+        },
+        getReadOptions(),
+      );
 
-    return mapLineasList(payload);
+      return mapLineasList(payload);
+    } catch (error) {
+      console.error("lineasApi.getAll failed", error);
+      return [];
+    }
   },
 
   async getById(id: string): Promise<Linea | null> {
@@ -99,59 +104,76 @@ export const lineasApi = {
   },
 
   create(payload: { codigo: number; nombre: string; activo?: boolean; imagenPrincipal?: string | null }) {
-    return apiFetch<ApiEnvelope<Linea>>("/api/lineas", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
+    return apiFetch<ApiEnvelope<Linea>>(
+      "/api/lineas",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      { local: true },
+    );
   },
 
   update(
     id: string,
     payload: Partial<{ codigo: number; nombre: string; activo: boolean; imagenPrincipal: string | null }>,
   ) {
-    return apiFetch<ApiEnvelope<Linea>>(`/api/lineas/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    });
+    return apiFetch<ApiEnvelope<Linea>>(
+      `/api/lineas/${id}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      },
+      { local: true },
+    );
   },
 
   remove(id: string) {
-    return apiFetch<ApiEnvelope<null>>(`/api/lineas/${id}`, {
-      method: "DELETE",
-    });
+    return apiFetch<ApiEnvelope<null>>(
+      `/api/lineas/${id}`,
+      {
+        method: "DELETE",
+      },
+      { local: true },
+    );
   },
 
   async uploadImage(id: string, file: File) {
     const formData = new FormData();
     formData.append("imagen", file);
 
-    const res = await fetch(`/api/lineas/${id}/imagen`, {
-      method: "POST",
-      body: formData,
-    });
-
-    if (!res.ok) {
-      throw new Error("No se pudo subir la imagen de la línea");
-    }
-
-    return res.json() as Promise<{
-      success: true;
-      data: {
+    const response = await apiFetch<{
+      success: boolean;
+      data?: {
         url: string;
         linea: Linea;
       };
-    }>;
+    }>(
+      `/api/lineas/${id}/imagen`,
+      {
+        method: "POST",
+        body: formData,
+      },
+      { local: true },
+    );
+
+    if (!response.data?.url) {
+      throw new Error("No se pudo subir la imagen de la línea");
+    }
+
+    return {
+      success: true as const,
+      data: response.data,
+    };
   },
 
   async deleteImage(id: string) {
-    const res = await fetch(`/api/lineas/${id}/imagen`, {
-      method: "DELETE",
-    });
-
-    if (!res.ok) {
-      throw new Error("No se pudo eliminar la imagen de la línea");
-    }
-
-    return res.json() as Promise<{ success: true; data: Linea }>;
+    return apiFetch<{ success: true; data: Linea }>(
+      `/api/lineas/${id}/imagen`,
+      {
+        method: "DELETE",
+      },
+      { local: true },
+    );
   },
 };

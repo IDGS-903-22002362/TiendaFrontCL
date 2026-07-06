@@ -8,6 +8,11 @@ import type { AiAdminMetrics, TryOnJob } from "@/lib/ai/types";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AdminPageHeader,
+  AdminPageShell,
+  AdminPanelCard,
+} from "@/components/admin/admin-ui";
 
 function formatDateTime(value?: string | null) {
   if (!value) {
@@ -72,31 +77,29 @@ export default function AdminAiPage() {
 
   if (role !== "ADMIN") {
     return (
-      <div className="space-y-6">
-        <header>
-          <h1 className="font-headline text-3xl font-bold">AI Admin</h1>
+      <AdminPageShell>
+        <AdminPageHeader
+          eyebrow="Integraciones"
+          title="AI Admin"
+          description="Este módulo está disponible solo para cuentas ADMIN."
+        />
+        <AdminPanelCard>
           <p className="text-sm text-muted-foreground">
-            Este módulo está disponible solo para cuentas ADMIN.
-          </p>
-        </header>
-        <Card>
-          <CardContent className="py-6 text-sm text-muted-foreground">
             Tu sesión actual no tiene permisos para consultar métricas ni jobs
             globales del módulo AI.
-          </CardContent>
-        </Card>
-      </div>
+          </p>
+        </AdminPanelCard>
+      </AdminPageShell>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="font-headline text-3xl font-bold">AI Admin</h1>
-        <p className="text-sm text-muted-foreground">
-          Monitoreo operativo de sesiones, mensajes y jobs del módulo AI.
-        </p>
-      </header>
+    <AdminPageShell>
+      <AdminPageHeader
+        eyebrow="Integraciones"
+        title="AI Admin"
+        description="Monitoreo operativo de sesiones, mensajes y jobs del módulo AI."
+      />
 
       {isLoading ? (
         <Card>
@@ -180,6 +183,6 @@ export default function AdminAiPage() {
           </Card>
         </>
       )}
-    </div>
+    </AdminPageShell>
   );
 }

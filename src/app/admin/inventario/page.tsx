@@ -5,7 +5,10 @@ import { inventarioApi } from "@/lib/api/inventario";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AdminMetricCard,
+  AdminPanelCard,
+} from "@/components/admin/admin-ui";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -119,43 +122,18 @@ export default function AdminInventoryDashboardPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Productos</CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-bold">{resumen.total}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Bajo stock</CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-bold text-destructive">
-            {resumen.bajoStock}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Reservado checkout</CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-bold">{resumen.reservado}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Físico (página)</CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-bold">{resumen.fisico}</CardContent>
-        </Card>
+        <AdminMetricCard label="Productos" value={resumen.total} loading={loading && rows.length === 0} />
+        <AdminMetricCard label="Bajo stock" value={resumen.bajoStock} loading={loading && rows.length === 0} />
+        <AdminMetricCard label="Reservado checkout" value={resumen.reservado} loading={loading && rows.length === 0} />
+        <AdminMetricCard label="Físico (página)" value={resumen.fisico} loading={loading && rows.length === 0} />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Stock por producto</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <AdminPanelCard title="Stock por producto">
+          <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-end">
-            <div className="flex-1 space-y-2">
+            <div className="flex flex-1 flex-col gap-2">
               <Label htmlFor="inventory-search">Buscar SKU o nombre</Label>
               <Input
                 id="inventory-search"
@@ -273,15 +251,11 @@ export default function AdminInventoryDashboardPage() {
               </Button>
             </div>
           ) : null}
-        </CardContent>
-      </Card>
+          </div>
+      </AdminPanelCard>
 
       {selectedProductId ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Diagnóstico — {selectedProductId}</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <AdminPanelCard title={`Diagnóstico — ${selectedProductId}`}>
             {diagnosticLoading ? (
               <Skeleton className="h-24 w-full" />
             ) : (
@@ -289,8 +263,7 @@ export default function AdminInventoryDashboardPage() {
                 {JSON.stringify(diagnostic, null, 2)}
               </pre>
             )}
-          </CardContent>
-        </Card>
+        </AdminPanelCard>
       ) : null}
     </div>
   );

@@ -103,7 +103,7 @@ export function EntityPicker({
   };
 
   return (
-    <div className={className ? `space-y-2 ${className}` : "space-y-2"}>
+    <div className={cn("flex flex-col gap-2", className)}>
       {label ? <Label>{label}</Label> : null}
       {onQueryChange ? (
         <div className="relative">
@@ -125,7 +125,7 @@ export function EntityPicker({
 
           {showInlineResults ? (
             <div
-              className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-popover shadow-md"
+              className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-border/80 bg-popover shadow-[var(--shadow-elevated)]"
               role="listbox"
             >
               {isSearching ? (

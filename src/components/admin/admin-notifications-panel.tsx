@@ -136,7 +136,7 @@ export function AdminNotificationsPanel({
       const payload = await inventarioApi.markAdminNotificationsRead([id], token);
       setReadState(payload.items, payload.unreadCount);
     } catch {
-      setActionError("No se pudo marcar la notificacion como leida.");
+      setActionError("No se pudo marcar la notificación como leída.");
     } finally {
       setMarkingRead(false);
     }
@@ -151,7 +151,7 @@ export function AdminNotificationsPanel({
       const payload = await inventarioApi.markAllAdminNotificationsRead(token);
       setReadState(payload.items, payload.unreadCount);
     } catch {
-      setActionError("No se pudieron marcar todas como leidas.");
+      setActionError("No se pudieron marcar todas como leídas.");
     } finally {
       setMarkingRead(false);
     }
@@ -171,7 +171,10 @@ export function AdminNotificationsPanel({
           type="button"
           variant="ghost"
           size="icon"
-          className={cn("relative", className)}
+          className={cn(
+            "relative rounded-full border border-transparent hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            className,
+          )}
           aria-label={
             unreadCount > 0
               ? `Notificaciones, ${unreadCount} sin leer`
@@ -187,12 +190,12 @@ export function AdminNotificationsPanel({
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent align="end" className="w-[min(92vw,24rem)] p-0">
+      <PopoverContent align="end" className="w-[min(92vw,24rem)] overflow-hidden rounded-2xl p-0 shadow-[var(--shadow-elevated)]">
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div>
             <p className="text-sm font-semibold">Notificaciones</p>
             <p className="text-xs text-muted-foreground">
-              Ordenes, pagos e inventario
+              Órdenes, pagos e inventario
             </p>
             {connectionLabel ? (
               <p className="mt-0.5 text-[11px] text-muted-foreground">

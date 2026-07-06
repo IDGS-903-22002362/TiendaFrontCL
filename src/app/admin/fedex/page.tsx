@@ -6,11 +6,15 @@ import { fedexAdminApi } from "@/lib/api/fedex";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import {
+  AdminPageHeader,
+  AdminPageShell,
+  AdminPanelCard,
+} from "@/components/admin/admin-ui";
 
 function JsonBlock({ value }: { value: unknown }) {
   if (!value) return null;
@@ -39,7 +43,7 @@ export default function AdminFedExPage() {
     try {
       const result = await action();
       onSuccess(result);
-      toast({ title: "Operacion FedEx completada" });
+      toast({ title: "Operación FedEx completada" });
     } catch (error) {
       toast({
         variant: "destructive",
@@ -68,28 +72,23 @@ export default function AdminFedExPage() {
   const parsePickupPayload = () => JSON.parse(pickupPayload) as Record<string, unknown>;
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-headline text-3xl font-bold">FedEx</h1>
-          <p className="text-sm text-muted-foreground">
-            Monitoreo operativo, tracking, pickups y pruebas sandbox.
-          </p>
-        </div>
-        <Button onClick={() => void checkHealth()} disabled={isLoading}>
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Health FedEx
-        </Button>
-      </header>
+    <AdminPageShell>
+      <AdminPageHeader
+        eyebrow="Integraciones"
+        title="FedEx"
+        description="Monitoreo operativo, tracking, pickups y pruebas sandbox."
+        actions={
+          <Button onClick={() => void checkHealth()} disabled={isLoading}>
+            <RefreshCw data-icon="inline-start" />
+            Health FedEx
+          </Button>
+        }
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Truck className="h-5 w-5" />
-            Health
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <AdminPanelCard
+        title="Health"
+        actions={<Truck className="size-5 text-muted-foreground" aria-hidden />}
+      >
           <div className="flex flex-wrap gap-2">
             {["auth", "rates", "address"].map((key) => (
               <Badge key={key} variant={health[key] ? "secondary" : "outline"}>
@@ -98,15 +97,11 @@ export default function AdminFedExPage() {
             ))}
           </div>
           <JsonBlock value={health} />
-        </CardContent>
-      </Card>
+      </AdminPanelCard>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Tracking directo</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <AdminPanelCard title="Tracking directo">
+          <div className="flex flex-col gap-4">
             <div className="space-y-2">
               <Label htmlFor="tracking-numbers">Guias, separadas por coma o salto</Label>
               <Textarea
@@ -136,14 +131,11 @@ export default function AdminFedExPage() {
               Consultar tracking
             </Button>
             <JsonBlock value={trackingResult} />
-          </CardContent>
-        </Card>
+          </div>
+        </AdminPanelCard>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Pickups FedEx</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <AdminPanelCard title="Pickups FedEx">
+          <div className="flex flex-col gap-4">
             <div className="space-y-2">
               <Label htmlFor="pickup-payload">Payload pickup</Label>
               <Textarea
@@ -198,15 +190,12 @@ export default function AdminFedExPage() {
               </Button>
             </div>
             <JsonBlock value={pickupResult} />
-          </CardContent>
-        </Card>
+          </div>
+        </AdminPanelCard>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Sandbox label</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+      <AdminPanelCard title="Sandbox label">
+          <div className="flex flex-col gap-4">
           <div className="flex flex-wrap gap-2">
             <Button
               disabled={isLoading}
@@ -227,8 +216,8 @@ export default function AdminFedExPage() {
             </Button>
           </div>
           <JsonBlock value={sandboxResult} />
-        </CardContent>
-      </Card>
-    </div>
+          </div>
+      </AdminPanelCard>
+    </AdminPageShell>
   );
 }

@@ -59,7 +59,7 @@ export default function LineaSection() {
     }, [lineas, searchQuery, selectedLineaId]);
 
     // Renderizado con Enfoque en Simetría y Centrado Absoluto
-    const renderItemsGrid = (items: any[], type: "linea" | "categoria") => {
+    const renderItemsGrid = (items: Linea[], type: "linea" | "categoria") => {
         if (isLoading) {
             return (
                 <div className="flex justify-center items-center h-48">
@@ -81,7 +81,7 @@ export default function LineaSection() {
             <div className="flex flex-wrap justify-center gap-x-6 gap-y-1 max-w-6xl mx-auto">
                 {items.map((item) => {
                     const img = item.imagenPrincipal;
-                    const name = type === "linea" ? item.nombre : item.name;
+                    const name = item.nombre;
 
                     return (
                         <Link

@@ -120,6 +120,7 @@ export async function proxyToBackend({
   const idempotencyKey = request.headers.get("idempotency-key");
   const requestId = request.headers.get("x-request-id");
   const accept = request.headers.get("accept");
+  const appCheckToken = request.headers.get("x-firebase-appcheck");
 
   if (authorization) {
     headers.set("Authorization", authorization);
@@ -138,6 +139,9 @@ export async function proxyToBackend({
   }
   if (accept) {
     headers.set("Accept", accept);
+  }
+  if (appCheckToken) {
+    headers.set("X-Firebase-AppCheck", appCheckToken);
   }
 
   const url = `${joinUrl(resolveBackendBase(), backendPath)}${request.nextUrl.search}`;
@@ -160,10 +164,12 @@ export async function proxyToBackend({
     }
   }
 
-  console.log("Proxy URL:", url);
-  console.log("Method:", nextMethod);
-  console.log("Content-Type:", contentType);
-  console.log("Content-Length:", request.headers.get("content-length"));
+  if (process.env.NODE_ENV !== "production") {
+    console.log("Proxy URL:", url);
+    console.log("Method:", nextMethod);
+    console.log("Content-Type:", contentType);
+    console.log("Content-Length:", request.headers.get("content-length"));
+  }
 
   try {
     const response = await fetch(url, {
@@ -187,9 +193,8 @@ export async function proxyToBackend({
     }
 
     const payload = await parseResponsePayload(response);
-    if (!response.ok) {
-      console.error(`Backend returned ${response.status} for ${url}`);
-      console.error("Backend Error Payload:", JSON.stringify(payload, null, 2));
+    if (!response.ok && process.env.NODE_ENV !== "production") {
+      console.error(`Backend returned ${response.status} for ${backendPath}`);
     }
     const jsonResponse = NextResponse.json(payload, {
       status: response.status,

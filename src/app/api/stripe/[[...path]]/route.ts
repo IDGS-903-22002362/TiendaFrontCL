@@ -62,7 +62,10 @@ export function POST(
     const suffix = getSuffix(params.path);
     const response = await forward(request, params.path);
 
-    if (suffix === "/checkout-sessions") {
+    if (
+      suffix === "/checkout-sessions" &&
+      process.env.NODE_ENV !== "production"
+    ) {
       try {
         const clonedResponse = response.clone();
         const text = await clonedResponse.text();

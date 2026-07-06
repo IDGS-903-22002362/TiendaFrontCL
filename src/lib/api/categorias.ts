@@ -83,59 +83,76 @@ export const categoriasApi = {
   },
 
   create(payload: { nombre: string; lineaId?: string; orden?: number; imagenPrincipal?: string | null }) {
-    return apiFetch<ApiEnvelope<Category>>("/api/categorias", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
+    return apiFetch<ApiEnvelope<Category>>(
+      "/api/categorias",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      { local: true },
+    );
   },
 
   update(
     id: string,
     payload: Partial<{ nombre: string; lineaId: string; orden: number; imagenPrincipal: string | null }>,
   ) {
-    return apiFetch<ApiEnvelope<Category>>(`/api/categorias/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    });
+    return apiFetch<ApiEnvelope<Category>>(
+      `/api/categorias/${id}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      },
+      { local: true },
+    );
   },
 
   remove(id: string) {
-    return apiFetch<ApiEnvelope<null>>(`/api/categorias/${id}`, {
-      method: "DELETE",
-    });
+    return apiFetch<ApiEnvelope<null>>(
+      `/api/categorias/${id}`,
+      {
+        method: "DELETE",
+      },
+      { local: true },
+    );
   },
 
   async uploadImage(id: string, file: File) {
     const formData = new FormData();
     formData.append("imagen", file);
 
-    const res = await fetch(`/api/categorias/${id}/imagen`, {
-      method: "POST",
-      body: formData,
-    });
-
-    if (!res.ok) {
-      throw new Error("No se pudo subir la imagen de la categoría");
-    }
-
-    return res.json() as Promise<{
-      success: true;
-      data: {
+    const response = await apiFetch<{
+      success: boolean;
+      data?: {
         url: string;
         categoria: Category;
       };
-    }>;
+    }>(
+      `/api/categorias/${id}/imagen`,
+      {
+        method: "POST",
+        body: formData,
+      },
+      { local: true },
+    );
+
+    if (!response.data?.url) {
+      throw new Error("No se pudo subir la imagen de la categoría");
+    }
+
+    return {
+      success: true as const,
+      data: response.data,
+    };
   },
 
   async deleteImage(id: string) {
-    const res = await fetch(`/api/categorias/${id}/imagen`, {
-      method: "DELETE",
-    });
-
-    if (!res.ok) {
-      throw new Error("No se pudo eliminar la imagen de la categoría");
-    }
-
-    return res.json() as Promise<{ success: true; data: Category }>;
+    return apiFetch<{ success: true; data: Category }>(
+      `/api/categorias/${id}/imagen`,
+      {
+        method: "DELETE",
+      },
+      { local: true },
+    );
   },
 };

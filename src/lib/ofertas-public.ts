@@ -393,22 +393,6 @@ export function hasValidSalePrice(
 }
 
 export function mergeProductPricing(current: Product, incoming: Product): Product {
-  const currentHasSale = hasValidSalePrice(current);
-  const incomingHasSale = hasValidSalePrice(incoming);
-
-  if (currentHasSale && !incomingHasSale) {
-    return {
-      ...incoming,
-      price: current.price,
-      salePrice: current.salePrice,
-      tags: incoming.tags.includes("sale")
-        ? incoming.tags
-        : current.tags.includes("sale")
-          ? current.tags
-          : incoming.tags,
-    };
-  }
-
   return incoming;
 }
 

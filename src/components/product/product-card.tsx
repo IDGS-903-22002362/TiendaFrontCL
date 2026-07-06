@@ -57,11 +57,12 @@ export function ProductCard({
     precioFinalOferta < precioOriginalOferta;
 
   const tieneOfertaLocal =
-  !estaAgotado &&
-  !tieneOfertaBackend &&
-  typeof product.salePrice === "number" &&
-  product.salePrice > 0 &&
-  product.salePrice < product.price;
+    !estaAgotado &&
+    !tieneOfertaBackend &&
+    product.tags.includes("sale") &&
+    typeof product.salePrice === "number" &&
+    product.salePrice > 0 &&
+    product.salePrice < product.price;
 
   const finalPrice = tieneOfertaBackend
     ? precioFinalOferta

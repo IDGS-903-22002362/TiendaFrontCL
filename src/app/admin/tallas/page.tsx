@@ -6,8 +6,12 @@ import { getApiErrorMessage } from "@/lib/api/errors";
 import type { Talla, TallaInventorySnapshot } from "@/lib/types";
 import { ApiError } from "@/lib/api/client";
 import { EntityPicker, type EntityOption } from "@/components/admin/entity-picker";
+import {
+  AdminPageHeader,
+  AdminPageShell,
+  AdminPanelCard,
+} from "@/components/admin/admin-ui";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -194,17 +198,14 @@ export default function AdminTallasPage() {
   };
 
   return (
-    <div className="container mx-auto space-y-6 px-4 py-8">
-      <header>
-        <h1 className="font-headline text-3xl font-bold">Tallas</h1>
-        <p className="text-sm text-muted-foreground">CRUD parcial de tallas.</p>
-      </header>
+    <AdminPageShell>
+      <AdminPageHeader
+        eyebrow="Catálogo"
+        title="Tallas"
+        description="Administra códigos de talla y consulta inventario asociado."
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Búsqueda inteligente</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <AdminPanelCard title="Búsqueda inteligente">
           <EntityPicker
             label="Buscar talla"
             searchLabel="Buscar por código o descripción"
@@ -224,14 +225,9 @@ export default function AdminTallasPage() {
             emptyLabel="Sin selección"
             disabled={isLoading}
           />
-        </CardContent>
-      </Card>
+      </AdminPanelCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{form.id ? "Editar talla" : "Crear talla"}</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <AdminPanelCard title={form.id ? "Editar talla" : "Crear talla"}>
           <form className="grid gap-3 md:grid-cols-3" onSubmit={onSubmit}>
             <Input
               required
@@ -271,14 +267,10 @@ export default function AdminTallasPage() {
               </Button>
             </div>
           </form>
-        </CardContent>
-      </Card>
+      </AdminPanelCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Listado</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <AdminPanelCard title="Listado" noPadding contentClassName="p-0">
+          <div className="admin-table-shell overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -338,20 +330,17 @@ export default function AdminTallasPage() {
               )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+          </div>
+      </AdminPanelCard>
 
-      {selectedInventory && (
-        <Card>
-          <CardHeader>
-            <CardTitle>{`Inventario talla ${selectedInventory.talla.codigo}`}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+      {selectedInventory ? (
+        <AdminPanelCard title={`Inventario talla ${selectedInventory.talla.codigo}`}>
             <div className="grid gap-2 text-sm md:grid-cols-2">
               <p>{`Total productos: ${selectedInventory.resumen.totalProductos}`}</p>
               <p>{`Total unidades: ${selectedInventory.resumen.totalUnidades}`}</p>
             </div>
 
+            <div className="admin-table-shell overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -382,9 +371,9 @@ export default function AdminTallasPage() {
                 )}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+            </div>
+        </AdminPanelCard>
+      ) : null}
+    </AdminPageShell>
   );
 }

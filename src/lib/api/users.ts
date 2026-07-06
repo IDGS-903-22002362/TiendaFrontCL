@@ -1,4 +1,5 @@
 import { apiFetch } from "./client";
+import { getMyWallet } from "./loyalty";
 import type { Usuario, UserRole } from "@/lib/types";
 
 type ApiSuccess<T> = {
@@ -27,7 +28,6 @@ export type EditableProfileData = {
   fechaNacimiento?: string;
   genero?: string;
   nivel?: string;
-  puntosActuales?: number;
 };
 
 export type UserStreak = {
@@ -42,91 +42,18 @@ export type UserStreakCheckIn = UserStreak & {
   alreadyCheckedIn: boolean;
 };
 
-type UserPointsPayload = {
-  success?: boolean;
-  data?: {
-    puntos?: number;
-    puntosActuales?: number;
-    usuario?: {
-      puntos?: number | string;
-      puntosActuales?: number | string;
-    };
-    [key: string]: unknown;
-  };
-  puntos?: number | string;
-  puntosActuales?: number | string;
-  usuario?: {
-    puntos?: number | string;
-    puntosActuales?: number | string;
-  };
-  [key: string]: unknown;
-};
-
-function parsePointsValue(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    const cleaned = value.replace(/,/g, "").trim();
-    const parsed = Number(cleaned);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  return null;
-}
-
-function getPointsFromPayload(payload: UserPointsPayload): number {
-  const maybeData = payload.data;
-
-  const candidates: unknown[] = [
-    maybeData?.puntos,
-    maybeData?.puntosActuales,
-    maybeData?.usuario?.puntos,
-    maybeData?.usuario?.puntosActuales,
-    payload.puntos,
-    payload.puntosActuales,
-    payload.usuario?.puntos,
-    payload.usuario?.puntosActuales,
-  ];
-
-  for (const value of candidates) {
-    const parsed = parsePointsValue(value);
-    if (parsed !== null) {
-      return parsed;
-    }
-  }
-
-  return 0;
-}
-
 export async function getMyPoints() {
-  const endpoints = [
-    "/api/usuarios/me/getpuntos",
-    "/api/usuarios/me/puntos",
-    "/api/usuarios/me",
-  ];
-
-  let lastError: unknown;
-
-  for (const endpoint of endpoints) {
-    try {
-      const payload = await apiFetch<UserPointsPayload>(
-        endpoint,
-        { method: "GET" },
-        { local: true },
-      );
-
-      return {
-        points: getPointsFromPayload(payload),
-        payload,
-      };
-    } catch (error) {
-      lastError = error;
-    }
+  try {
+    const wallet = await getMyWallet();
+    return {
+      points: wallet.availablePoints,
+      payload: wallet,
+      level: wallet.level,
+      nextExpirationAt: wallet.nextExpirationAt,
+    };
+  } catch (error) {
+    throw error ?? new Error("No se pudo obtener puntos del usuario");
   }
-
-  throw lastError ?? new Error("No se pudo obtener puntos del usuario");
 }
 
 export async function completeUserProfile(payload: CompleteProfilePayload) {
@@ -151,21 +78,6 @@ export async function updateUserProfile(payload: UpdateProfilePayload) {
   );
 }
 
-function parseNumericValue(value: unknown): number | undefined {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    const parsed = Number(value.replace(/,/g, "").trim());
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
-  }
-
-  return undefined;
-}
-
 function normalizeEditableProfileData(payload: unknown): EditableProfileData {
   const root = payload as {
     data?: Record<string, unknown>;
@@ -188,7 +100,6 @@ function normalizeEditableProfileData(payload: unknown): EditableProfileData {
         : undefined,
     genero: typeof source.genero === "string" ? source.genero : undefined,
     nivel: typeof source.nivel === "string" ? source.nivel : undefined,
-    puntosActuales: parseNumericValue(source.puntosActuales),
   };
 }
 

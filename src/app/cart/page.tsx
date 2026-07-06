@@ -252,7 +252,7 @@ export default function CartPage() {
               </div>
 
               <div className="flex items-center justify-between">
-                <span>Envio FedEx</span>
+                <span>Envio</span>
                 <span>Cotizar en checkout</span>
               </div>
 

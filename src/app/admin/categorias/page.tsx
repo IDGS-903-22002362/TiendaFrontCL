@@ -6,8 +6,12 @@ import { lineasApi } from "@/lib/api/lineas";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import type { Category, Linea } from "@/lib/types";
 import { EntityPicker, type EntityOption } from "@/components/admin/entity-picker";
+import {
+  AdminPageHeader,
+  AdminPageShell,
+  AdminPanelCard,
+} from "@/components/admin/admin-ui";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -165,7 +169,6 @@ export default function AdminCategoriasPage() {
         if (form.imageDeleted && form.imagenPrincipal) {
            await categoriasApi.deleteImage(form.id);
         }
-        // @ts-ignore
         await categoriasApi.update(form.id, payload);
       } else {
         const result = await categoriasApi.create(payload);
@@ -230,12 +233,14 @@ export default function AdminCategoriasPage() {
       : null;
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Buscar categoría</CardTitle>
-        </CardHeader>
-        <CardContent>
+    <AdminPageShell>
+      <AdminPageHeader
+        eyebrow="Catálogo"
+        title="Categorías"
+        description="Organiza el catálogo por categorías, imágenes y orden de visualización."
+      />
+
+      <AdminPanelCard title="Buscar categoría">
           <EntityPicker
             label="Buscar categoría"
             searchLabel="Buscar por nombre o slug"
@@ -255,14 +260,9 @@ export default function AdminCategoriasPage() {
             emptyLabel="Sin selección"
             disabled={isLoading}
           />
-        </CardContent>
-      </Card>
+      </AdminPanelCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{form.id ? "Editar categoría" : "Crear categoría"}</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <AdminPanelCard title={form.id ? "Editar categoría" : "Crear categoría"}>
           <form className="grid gap-3 md:grid-cols-3" onSubmit={onSubmit}>
             <div className="md:col-span-3">
               <label className="text-sm font-medium mb-1 block">Imagen Principal</label>
@@ -332,14 +332,10 @@ export default function AdminCategoriasPage() {
               </Button>
             </div>
           </form>
-        </CardContent>
-      </Card>
+      </AdminPanelCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Listado</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <AdminPanelCard title="Listado" noPadding contentClassName="p-0">
+          <div className="admin-table-shell overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -399,8 +395,8 @@ export default function AdminCategoriasPage() {
               )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
-    </div>
+          </div>
+      </AdminPanelCard>
+    </AdminPageShell>
   );
 }

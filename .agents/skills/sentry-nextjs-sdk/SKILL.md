@@ -312,7 +312,7 @@ If you have `middleware.ts`, exclude the tunnel path from auth or redirect logic
 export const config = {
   matcher: [
     // Exclude monitoring route, Next.js internals, and static files
-    "/((?!monitoring|_next/static|_next/image|favicon.ico).*)",
+    "/((?!monitoring|_next/static|_next/image|leon.ico).*)",
   ],
 };
 ```

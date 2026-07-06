@@ -58,7 +58,7 @@ export async function fetchHomeRecommendations(token?: string) {
     { method: "GET" },
     getClientOptions(token),
   );
-  return unwrapData(payload).secciones;
+  return unwrapData<HomeRecommendationsResponse>(payload).secciones;
 }
 
 export async function fetchRecommendations(params: {
@@ -81,22 +81,22 @@ export async function fetchRecommendations(params: {
     getClientOptions(params.token),
   );
 
-  return unwrapData(payload);
+  return unwrapData<RecommendationSectionResponse>(payload);
 }
 
+export type ProductRecommendationsResponse = {
+  similares: RecommendationSectionResponse;
+  compradosJuntos: RecommendationSectionResponse;
+};
+
 export async function fetchProductRecommendations(productoId: string, token?: string) {
-  const payload = await apiFetch<{
-    data: {
-      similares: RecommendationSectionResponse;
-      compradosJuntos: RecommendationSectionResponse;
-    };
-  }>(
+  const payload = await apiFetch<{ data: ProductRecommendationsResponse }>(
     `/api/recomendaciones/producto/${productoId}`,
     { method: "GET" },
     getClientOptions(token),
   );
 
-  return unwrapData(payload);
+  return unwrapData<ProductRecommendationsResponse>(payload);
 }
 
 export async function fetchCartRecommendations(productoIdsCarrito: string[], token?: string) {
@@ -110,7 +110,7 @@ export async function fetchCartRecommendations(productoIdsCarrito: string[], tok
     getClientOptions(token),
   );
 
-  return unwrapData(payload);
+  return unwrapData<RecommendationSectionResponse>(payload);
 }
 
 export async function trackRecommendationEvent(input: {
@@ -198,7 +198,7 @@ export async function fetchAdminRecommendationConfig(token: string) {
     { method: "GET" },
     getClientOptions(token),
   );
-  return unwrapData(payload);
+  return unwrapData<RecommendationAdminConfig>(payload);
 }
 
 export async function fetchAdminRecommendationMetrics(token: string, days = 30) {
@@ -207,7 +207,7 @@ export async function fetchAdminRecommendationMetrics(token: string, days = 30) 
     { method: "GET" },
     getClientOptions(token),
   );
-  return unwrapData(payload);
+  return unwrapData<RecommendationAdminMetricsRow[]>(payload);
 }
 
 export async function updateAdminRecommendationConfig(
@@ -222,7 +222,7 @@ export async function updateAdminRecommendationConfig(
     },
     getClientOptions(token),
   );
-  return unwrapData(payload);
+  return unwrapData<RecommendationAdminConfig>(payload);
 }
 
 export async function fetchRecentlyViewedRecommendations(token?: string) {
@@ -231,7 +231,7 @@ export async function fetchRecentlyViewedRecommendations(token?: string) {
     { method: "GET" },
     getClientOptions(token),
   );
-  return unwrapData(payload);
+  return unwrapData<RecommendationSectionResponse>(payload);
 }
 
 export async function fetchBuyAgainRecommendations(token: string) {
@@ -240,7 +240,7 @@ export async function fetchBuyAgainRecommendations(token: string) {
     { method: "GET" },
     getClientOptions(token),
   );
-  return unwrapData(payload);
+  return unwrapData<RecommendationSectionResponse>(payload);
 }
 
 export async function fetchAccountRecommendations(token: string) {
@@ -256,7 +256,7 @@ export async function fetchAccountRecommendations(token: string) {
     getClientOptions(token),
   );
 
-  return unwrapData(payload);
+  return unwrapData<RecommendationSectionResponse>(payload);
 }
 
 export async function clearRecentlyViewedHistory(token?: string) {
@@ -265,7 +265,7 @@ export async function clearRecentlyViewedHistory(token?: string) {
     { method: "DELETE" },
     getClientOptions(token),
   );
-  return unwrapData(payload);
+  return unwrapData<{ deleted: number }>(payload);
 }
 
 export async function cleanupRecommendationData(token: string) {
@@ -274,7 +274,7 @@ export async function cleanupRecommendationData(token: string) {
     { method: "POST" },
     getClientOptions(token),
   );
-  return unwrapData(payload);
+  return unwrapData<{ eventsDeleted: number; cacheDeleted: number }>(payload);
 }
 
 export async function rebuildRecommendationAggregates(token: string) {

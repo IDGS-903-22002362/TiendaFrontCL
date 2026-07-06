@@ -5,8 +5,12 @@ import { lineasApi } from "@/lib/api/lineas";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import type { Linea } from "@/lib/types";
 import { EntityPicker, type EntityOption } from "@/components/admin/entity-picker";
+import {
+  AdminPageHeader,
+  AdminPageShell,
+  AdminPanelCard,
+} from "@/components/admin/admin-ui";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
@@ -216,12 +220,14 @@ export default function AdminLineasPage() {
       : null;
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Buscar línea</CardTitle>
-        </CardHeader>
-        <CardContent>
+    <AdminPageShell>
+      <AdminPageHeader
+        eyebrow="Catálogo"
+        title="Líneas"
+        description="Administra líneas de producto, visibilidad e imagen principal."
+      />
+
+      <AdminPanelCard title="Buscar línea">
           <EntityPicker
             label="Buscar línea"
             searchLabel="Buscar por nombre o código"
@@ -241,14 +247,9 @@ export default function AdminLineasPage() {
             emptyLabel="Sin selección"
             disabled={isLoading}
           />
-        </CardContent>
-      </Card>
+      </AdminPanelCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{form.id ? "Editar línea" : "Crear línea"}</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <AdminPanelCard title={form.id ? "Editar línea" : "Crear línea"}>
           <form className="grid gap-3 md:grid-cols-3" onSubmit={onSubmit}>
             <div className="md:col-span-3">
               <label className="text-sm font-medium mb-1 block">Imagen Principal</label>
@@ -320,14 +321,10 @@ export default function AdminLineasPage() {
               </Button>
             </div>
           </form>
-        </CardContent>
-      </Card>
+      </AdminPanelCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Listado</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <AdminPanelCard title="Listado" noPadding contentClassName="p-0">
+          <div className="admin-table-shell overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -385,8 +382,8 @@ export default function AdminLineasPage() {
               )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
-    </div>
+          </div>
+      </AdminPanelCard>
+    </AdminPageShell>
   );
 }
