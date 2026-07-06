@@ -30,6 +30,7 @@ import {
 
 type SearchDrawerProps = {
   isDesktop: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 type SearchSuggestion = {
@@ -296,7 +297,7 @@ function SearchPanel({
   );
 }
 
-export function SearchDrawer({ isDesktop }: SearchDrawerProps) {
+export function SearchDrawer({ isDesktop, onOpenChange }: SearchDrawerProps) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
@@ -307,6 +308,7 @@ export function SearchDrawer({ isDesktop }: SearchDrawerProps) {
 
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen);
+    onOpenChange?.(nextOpen);
     if (!nextOpen) {
       setQuery("");
       setSuggestions([]);

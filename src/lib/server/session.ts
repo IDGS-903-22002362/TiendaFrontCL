@@ -47,6 +47,7 @@ export function getUserRoleFromRequest(request: NextRequest): UserRole | "" {
     role === "EMPLEADO" ||
     role === "CLIENTE" ||
     role === "EMPLEADO_CLUB" ||
+    role === "CONCESION_VENDEDOR" ||
     role === "SUPER_ADMIN"
   ) {
     return role;

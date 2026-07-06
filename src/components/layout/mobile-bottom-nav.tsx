@@ -87,7 +87,7 @@ export function MobileBottomNav() {
           const Icon = item.icon;
           const isActive = item.matches(pathname, searchParams);
           const badgeCount =
-            item.label === "Bag"
+            item.label === "Carrito"
               ? totalItems
               : item.label === "Wish"
                 ? wishlistIds.length

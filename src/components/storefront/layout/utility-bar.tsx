@@ -1,13 +1,14 @@
 import Link from "next/link";
+import type { NavLinkItem } from "@/lib/storefront/navigation";
 
-const links = [
-  { href: "/TerminosCondiciones", label: "Ayuda" },
+const DEFAULT_LINKS: NavLinkItem[] = [
+  { href: "/TerminosCondiciones#ayuda", label: "Ayuda" },
   { href: "/order-history", label: "Pedidos" },
-  { href: "/TerminosCondiciones", label: "Devoluciones" },
-  { href: "/TerminosCondiciones#transferencias", label: "Contacto" },
+  { href: "/TerminosCondiciones#devoluciones", label: "Devoluciones" },
+  { href: "/TerminosCondiciones#contacto", label: "Contacto" },
 ];
 
-export function UtilityBar() {
+export function UtilityBar({ links = DEFAULT_LINKS }: { links?: NavLinkItem[] }) {
   return (
     <div className="hidden border-b border-black bg-black text-[10px] text-white/60 lg:block">
       <div className="storefront-frame flex h-9 items-center justify-between gap-6">
@@ -21,7 +22,7 @@ export function UtilityBar() {
         >
           {links.map((link) => (
             <Link
-              key={link.label}
+              key={`${link.label}-${link.href}`}
               href={link.href}
               className="relative py-1 hover:text-white"
             >

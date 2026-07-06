@@ -107,6 +107,8 @@ function LoginPageContent() {
         return "/admin";
       case "EMPLEADO":
         return "/admin";
+      case "CONCESION_VENDEDOR":
+        return "/empleado/puntos";
       case "EMPLEADO_CLUB":
         return "/empleado-club/noticias";
       default:

@@ -1092,6 +1092,15 @@ export default function AdminOrdersPage() {
                                   item.producto?.clave ||
                                   item.productoId}
                                 {item.tallaId ? ` · Talla ${item.tallaId}` : ""}
+                                {item.personalizacion ? (
+                                  <span className="block text-xs text-primary">
+                                    Personalizado: {item.personalizacion.nombre}{" "}
+                                    {item.personalizacion.numero}
+                                    {item.personalizationFee
+                                      ? ` (+${formatCurrency(item.personalizationFee)})`
+                                      : ""}
+                                  </span>
+                                ) : null}
                               </span>
                               <span className="font-medium">
                                 {formatCurrency(item.subtotal)}

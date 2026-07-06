@@ -185,7 +185,7 @@ function buildCatalogSearchParams(input: {
     params.set("offerPercent", String(input.selectedOfferPercent));
   }
 
-  if (!input.onlyAvailable) params.set("onlyAvailable", "false");
+  if (input.onlyAvailable) params.set("onlyAvailable", "true");
   if (input.onlyOffers) params.set("onlyOffers", "true");
   if (input.wishlistOnly) params.set("wishlist", "1");
 
@@ -794,11 +794,11 @@ export function ProductFilters({
     });
   }
 
-  if (!onlyAvailable) {
+  if (onlyAvailable) {
     activeFilters.push({
-      id: "incluyeAgotados",
-      label: "Incluye agotados",
-      onRemove: () => setOnlyAvailable(true),
+      id: "soloDisponibles",
+      label: "Solo disponibles",
+      onRemove: () => setOnlyAvailable(false),
     });
   }
 
@@ -827,7 +827,7 @@ export function ProductFilters({
     setSearchQuery("");
     setSelectedOfferPercent(null);
     setOfferDiscountPage(0);
-    setOnlyAvailable(true);
+    setOnlyAvailable(false);
     setOnlyOffers(false);
     setWishlistOnly(false);
   };

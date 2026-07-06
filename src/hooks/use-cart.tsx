@@ -29,11 +29,16 @@ import {
 type CartContextType = {
   state: { id?: string; items: CartItem[] };
   addToCart: (item: Omit<CartItem, "quantity"> & { quantity?: number }) => Promise<void>;
-  removeItem: (id: string, tallaId?: string) => Promise<void>;
+  removeItem: (
+    id: string,
+    tallaId?: string,
+    personalizacion?: CartItem["personalizacion"],
+  ) => Promise<void>;
   setItemQuantity: (
     id: string,
     tallaId: string | undefined,
     quantity: number,
+    personalizacion?: CartItem["personalizacion"],
   ) => Promise<void>;
   clearAllItems: () => Promise<void>;
   reloadCart: () => Promise<void>;
@@ -151,6 +156,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
           quantity: item.quantity ?? 1,
           tallaId: item.tallaId ?? item.size,
           color: item.color,
+          personalizacion: item.personalizacion,
         },
         isAuthenticated ? authToken : undefined,
       );
@@ -171,7 +177,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  const removeItem = async (id: string, tallaId?: string) => {
+  const removeItem = async (
+    id: string,
+    tallaId?: string,
+    personalizacion?: CartItem["personalizacion"],
+  ) => {
     if (!sessionId) {
       return;
     }
@@ -179,7 +189,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       const cart = await removeCartItem(
         sessionId,
-        { id, tallaId },
+        { id, tallaId, personalizacion },
         isAuthenticated ? authToken : undefined,
       );
       setCartId((current) => cart.id ?? current);
@@ -197,6 +207,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     id: string,
     tallaId: string | undefined,
     quantity: number,
+    personalizacion?: CartItem["personalizacion"],
   ) => {
     if (!sessionId) {
       return;
@@ -205,7 +216,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       const cart = await updateCartItem(
         sessionId,
-        { id, tallaId, quantity },
+        { id, tallaId, quantity, personalizacion },
         isAuthenticated ? authToken : undefined,
       );
       setCartId((current) => cart.id ?? current);

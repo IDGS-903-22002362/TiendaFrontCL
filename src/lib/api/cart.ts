@@ -74,9 +74,12 @@ function resolveTallaId(
 }
 
 export function getCartVariantKey(
-  item: Pick<CartItem, "id" | "tallaId" | "size">,
+  item: Pick<CartItem, "id" | "tallaId" | "size" | "personalizacion">,
 ): string {
-  return `${item.id}::${resolveTallaId(item) ?? "no-size"}`;
+  const personalizationKey = item.personalizacion
+    ? `${item.personalizacion.mode}:${item.personalizacion.nombre}:${item.personalizacion.numero}`
+    : "plain";
+  return `${item.id}::${resolveTallaId(item) ?? "no-size"}::${personalizationKey}`;
 }
 
 function toStockStatus(value: unknown): CartItemStockStatus | undefined {
@@ -108,6 +111,32 @@ function mapCartItem(input: unknown): CartItem {
     product?.imagenes ?? product?.images ?? item.imagenes,
   );
 
+  const personalizationRaw =
+    item.personalizacion && typeof item.personalizacion === "object"
+      ? (item.personalizacion as UnknownRecord)
+      : undefined;
+  const personalizacion =
+    personalizationRaw &&
+    (personalizationRaw.mode === "player" || personalizationRaw.mode === "custom") &&
+    typeof personalizationRaw.nombre === "string" &&
+    typeof personalizationRaw.numero === "string"
+      ? {
+          mode: personalizationRaw.mode as "player" | "custom",
+          nombre: personalizationRaw.nombre,
+          numero: personalizationRaw.numero,
+        }
+      : undefined;
+  const personalizationFee = toNumber(item.personalizationFee, 0);
+  const basePrice = toNumber(
+    item.precioUnitario ??
+      item.precio ??
+      item.precioPublico ??
+      product?.precio ??
+      product?.price ??
+      product?.precioPublico,
+    0,
+  );
+
   return {
     id: productId,
     name: toStringValue(
@@ -124,15 +153,7 @@ function mapCartItem(input: unknown): CartItem {
     image:
       toStringValue(item.imagen ?? item.image ?? images[0]) ||
       `https://picsum.photos/seed/cart-${productId}/300/300`,
-    price: toNumber(
-      item.precioUnitario ??
-        item.precio ??
-        item.precioPublico ??
-        product?.precio ??
-        product?.price ??
-        product?.precioPublico,
-      0,
-    ),
+    price: basePrice + personalizationFee,
     quantity: Math.max(1, toNumber(item.cantidad ?? item.quantity, 1)),
     tallaId:
       toStringValue(item.tallaId ?? item.talla ?? item.size) || undefined,
@@ -174,6 +195,8 @@ function mapCartItem(input: unknown): CartItem {
       }
       return true;
     })(),
+    ...(personalizacion ? { personalizacion } : {}),
+    ...(personalizationFee > 0 ? { personalizationFee } : {}),
   };
 }
 
@@ -372,7 +395,10 @@ export async function fetchCart(
 
 export async function addCartItem(
   sessionId: string,
-  item: Pick<CartItem, "id" | "quantity" | "size" | "tallaId" | "color">,
+  item: Pick<
+    CartItem,
+    "id" | "quantity" | "size" | "tallaId" | "color" | "personalizacion"
+  >,
   token?: string,
 ): Promise<Cart> {
   const tallaId = resolveTallaId(item);
@@ -384,6 +410,7 @@ export async function addCartItem(
         productoId: item.id,
         cantidad: item.quantity,
         ...(tallaId ? { tallaId } : {}),
+        ...(item.personalizacion ? { personalizacion: item.personalizacion } : {}),
       }),
     },
     { sessionId, token, local: true },
@@ -394,7 +421,10 @@ export async function addCartItem(
 
 export async function updateCartItem(
   sessionId: string,
-  item: Pick<CartItem, "id" | "quantity" | "size" | "tallaId" | "color">,
+  item: Pick<
+    CartItem,
+    "id" | "quantity" | "size" | "tallaId" | "color" | "personalizacion"
+  >,
   token?: string,
 ): Promise<Cart> {
   const tallaId = resolveTallaId(item);
@@ -405,6 +435,7 @@ export async function updateCartItem(
       body: JSON.stringify({
         cantidad: item.quantity,
         ...(tallaId ? { tallaId } : {}),
+        ...(item.personalizacion ? { personalizacion: item.personalizacion } : {}),
       }),
     },
     { sessionId, token, local: true },
@@ -415,16 +446,20 @@ export async function updateCartItem(
 
 export async function removeCartItem(
   sessionId: string,
-  item: Pick<CartItem, "id" | "size" | "tallaId">,
+  item: Pick<CartItem, "id" | "size" | "tallaId" | "personalizacion">,
   token?: string,
 ): Promise<Cart> {
   const tallaId = resolveTallaId(item);
+  const body: Record<string, unknown> = {};
+  if (tallaId) body.tallaId = tallaId;
+  if (item.personalizacion) body.personalizacion = item.personalizacion;
+
   const payload = await apiFetch<unknown>(
     `/api/carrito/items/${item.id}`,
     {
       method: "DELETE",
-      ...(tallaId
-        ? { body: JSON.stringify({ tallaId }) }
+      ...(Object.keys(body).length > 0
+        ? { body: JSON.stringify(body) }
         : {}),
     },
     { sessionId, token, local: true },

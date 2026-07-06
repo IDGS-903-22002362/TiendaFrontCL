@@ -151,6 +151,15 @@ export function ProductInfoPanel({
       tallaId: selectedSize,
       size: selectedSize,
       quantity,
+      ...(personalization
+        ? {
+            personalizacion: {
+              mode: personalization.mode,
+              nombre: personalization.name,
+              numero: personalization.number,
+            },
+          }
+        : {}),
     });
   };
 

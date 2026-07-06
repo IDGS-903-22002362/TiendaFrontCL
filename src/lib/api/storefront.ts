@@ -408,6 +408,10 @@ function mapProduct(input: unknown): Product {
         : typeof product.active === "boolean"
           ? product.active
           : undefined,
+    personalizable:
+      typeof product.personalizable === "boolean"
+        ? product.personalizable
+        : undefined,
     ratingSummary: mapRatingSummary(product.ratingSummary),
     fedexShipping: mapFedexShipping(product.fedexShipping),
     isFavorito:
@@ -972,7 +976,7 @@ export const DESTACADOS_CATALOG_FETCH_LIMIT = 24;
 export function resolveCatalogOnlyAvailable(
   value: string | null | undefined,
 ): boolean {
-  return value !== "false";
+  return value === "true";
 }
 
 /** Canonical catalog query for analytics-ranked Destacados (home + catalog parity). */

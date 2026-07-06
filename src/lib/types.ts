@@ -21,6 +21,7 @@ export type Product = {
   hasSizeInventory?: boolean;
   detailIds?: string[];
   activo?: boolean;
+  personalizable?: boolean;
   ratingSummary?: ProductRatingSummary;
   isFavorito?: boolean;
   ratingEligibility?: ProductRatingEligibility;
@@ -104,6 +105,12 @@ export type CartItem = {
   stockFisico?: number;
   stockStatus?: CartItemStockStatus;
   purchasable?: boolean;
+  personalizacion?: {
+    mode: "player" | "custom";
+    nombre: string;
+    numero: string;
+  };
+  personalizationFee?: number;
 };
 
 export type Cart = {
@@ -303,7 +310,17 @@ export type ConfirmRecepcionPayload = {
   idempotencyKey?: string;
 };
 
-export type UserRole = "ADMIN" | "EMPLEADO" | "CLIENTE" | "EMPLEADO_CLUB" | "SUPER_ADMIN";
+export type UserRole = "ADMIN" | "EMPLEADO" | "CLIENTE" | "EMPLEADO_CLUB" | "CONCESION_VENDEDOR" | "SUPER_ADMIN";
+
+export const ROLES_ASIGNACION_PUNTOS: UserRole[] = [
+  "ADMIN",
+  "EMPLEADO",
+  "CONCESION_VENDEDOR",
+];
+
+export function puedeAsignarPuntos(role: UserRole | ""): boolean {
+  return ROLES_ASIGNACION_PUNTOS.includes(role as UserRole);
+}
 
 export type Provider = "google" | "apple" | "email";
 
@@ -592,6 +609,12 @@ export type OrdenItem = {
   precioUnitario: number;
   subtotal: number;
   tallaId?: string;
+  personalizacion?: {
+    mode: "player" | "custom";
+    nombre: string;
+    numero: string;
+  };
+  personalizationFee?: number;
   producto?: {
     clave?: string;
     descripcion?: string;
@@ -873,6 +896,7 @@ export type AdminProductListItem = {
   disponible: boolean;
   destacado: boolean;
   activo: boolean;
+  personalizable?: boolean;
   imagenPrincipal: string | null;
   createdAt?: unknown;
   updatedAt?: unknown;

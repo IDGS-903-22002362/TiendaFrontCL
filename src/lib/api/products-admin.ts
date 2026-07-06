@@ -20,6 +20,7 @@ export type ProductCreatePayload = {
   inventarioPorTalla?: ProductSizeStock[];
   fedexShipping?: ProductFedexShipping;
   activo?: boolean;
+  personalizable?: boolean;
 };
 
 export type ProductUpdatePayload = Partial<ProductCreatePayload>;

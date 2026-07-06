@@ -15,6 +15,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useAuth } from "@/hooks/use-auth";
 import { getApiErrorMessage } from "@/lib/api/errors";
+import { puedeAsignarPuntos } from "@/lib/types";
 import {
   earnFromStoreSale,
   getAdminTransactions,
@@ -403,9 +404,9 @@ export default function AdminAssignPoints() {
     }
 
     // Validar rol usando el campo 'role' del contexto (ya disponible)
-    const isAuthorizedRole = role === "ADMIN" || role === "EMPLEADO";
+    const isAuthorizedRole = puedeAsignarPuntos(role);
     if (!isAuthorizedRole) {
-        return <div className="text-center py-12"><p className="text-destructive">Solo ADMIN y EMPLEADO pueden asignar puntos</p></div>;
+        return <div className="text-center py-12"><p className="text-destructive">No tienes permisos para asignar puntos</p></div>;
     }
 
     // No necesitamos esperar a 'user' porque obtenemos adminUid y adminName del token

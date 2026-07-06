@@ -275,7 +275,11 @@ function getCodigoResultadoItems(
   );
 }
 
-export function CartDrawer() {
+export function CartDrawer({
+  onOpenChange,
+}: {
+  onOpenChange?: (open: boolean) => void;
+} = {}) {
   const router = useRouter();
   const {
     state,
@@ -871,7 +875,13 @@ export function CartDrawer() {
   };
 
   return (
-    <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
+    <Sheet
+      open={isDrawerOpen}
+      onOpenChange={(open) => {
+        setIsDrawerOpen(open);
+        onOpenChange?.(open);
+      }}
+    >
       <SheetTrigger asChild>
         <Button
           variant="outline"
