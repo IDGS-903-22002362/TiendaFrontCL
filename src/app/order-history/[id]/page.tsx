@@ -1,9 +1,8 @@
 "use client";
 
 import { use, useCallback, useEffect, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, Package } from "lucide-react";
+import { ArrowLeft, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +17,7 @@ import { ordersApi } from "@/lib/api/orders";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import { formatCurrency } from "@/lib/storefront";
 import { OrderTimeline } from "@/components/orders/order-timeline";
+import { OrderItemsList } from "@/components/orders/order-items-list";
 import {
   getOrderStatusLabel,
   getOrderStatusVariant,
@@ -178,53 +178,7 @@ export default function OrderDetailPage({
               <CardTitle>Productos</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {(order.items ?? []).length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Sin productos disponibles.
-                </p>
-              ) : (
-                (order.items ?? []).map((item, index) => {
-                  const image = item.producto?.imagenes?.[0];
-                  const name =
-                    item.producto?.descripcion ||
-                    item.producto?.clave ||
-                    item.productoId;
-                  return (
-                    <Link
-                      key={`${item.productoId}-${item.tallaId ?? ""}-${index}`}
-                      href={`/products/${item.productoId}`}
-                      className="group flex gap-3 rounded-[1.1rem] border border-border bg-muted/40 p-3 transition-colors hover:border-primary/30 hover:bg-muted/60"
-                    >
-                      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-[0.9rem] border border-border bg-card transition group-hover:border-primary/35">
-                        {image ? (
-                          <Image
-                            src={image}
-                            alt=""
-                            fill
-                            className="object-cover transition duration-300 group-hover:scale-105"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                            <Package className="h-6 w-6" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="line-clamp-2 text-sm font-medium text-foreground transition group-hover:text-primary">
-                          {name}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {item.cantidad} × {formatCurrency(item.precioUnitario)}
-                          {item.tallaId ? ` · Talla ${item.tallaId}` : ""}
-                        </p>
-                      </div>
-                      <p className="text-sm font-medium text-foreground">
-                        {formatCurrency(item.subtotal)}
-                      </p>
-                    </Link>
-                  );
-                })
-              )}
+              <OrderItemsList items={order.items ?? []} linkProducts />
             </CardContent>
           </Card>
 

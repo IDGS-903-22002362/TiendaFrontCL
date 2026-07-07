@@ -100,12 +100,32 @@ function mapItems(input: unknown): OrdenItem[] {
         ? (item.producto as UnknownRecord)
         : undefined;
 
+    const personalizacionRaw =
+      item.personalizacion && typeof item.personalizacion === "object"
+        ? (item.personalizacion as UnknownRecord)
+        : undefined;
+    const personalizationMode = toStringValue(personalizacionRaw?.mode);
+    const personalizacion =
+      personalizacionRaw &&
+      (personalizationMode === "player" || personalizationMode === "custom")
+        ? {
+            mode: personalizationMode as "player" | "custom",
+            nombre: toStringValue(personalizacionRaw.nombre),
+            numero: toStringValue(personalizacionRaw.numero),
+          }
+        : undefined;
+
     return {
       productoId: toStringValue(item.productoId ?? item.id),
       cantidad: toNumber(item.cantidad, 0),
       precioUnitario: toNumber(item.precioUnitario, 0),
       subtotal: toNumber(item.subtotal, 0),
       tallaId: toStringValue(item.tallaId) || undefined,
+      personalizacion,
+      personalizationFee:
+        item.personalizationFee === undefined
+          ? undefined
+          : toNumber(item.personalizationFee, 0),
       producto: productoRaw
         ? {
             clave: toStringValue(productoRaw.clave) || undefined,

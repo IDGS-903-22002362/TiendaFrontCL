@@ -62,6 +62,10 @@ import {
   AdminPanelCard,
 } from "@/components/admin/admin-ui";
 import {
+  OrderItemsList,
+  OrderItemsListSkeleton,
+} from "@/components/orders/order-items-list";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -166,6 +170,9 @@ export default function AdminOrdersPage() {
   // Dialogo de gestion de entrega (envio manual / pickup)
   const [isFulfillmentOpen, setIsFulfillmentOpen] = useState(false);
   const [fulfillmentOrder, setFulfillmentOrder] = useState<Orden | null>(null);
+  const [isFulfillmentDetailsLoading, setIsFulfillmentDetailsLoading] =
+    useState(false);
+  const [fulfillmentDetailsError, setFulfillmentDetailsError] = useState("");
   const [isFulfillmentSubmitting, setIsFulfillmentSubmitting] = useState(false);
   const [trackingNumber, setTrackingNumber] = useState("");
   const [serviceName, setServiceName] = useState("");
@@ -339,8 +346,35 @@ export default function AdminOrdersPage() {
     }
   };
 
+  const loadFulfillmentOrderDetails = useCallback(
+    async (orderId: string) => {
+      setIsFulfillmentDetailsLoading(true);
+      setFulfillmentDetailsError("");
+
+      try {
+        const detailedOrder = await ordersApi.getById(orderId);
+        if (!detailedOrder) {
+          setFulfillmentDetailsError("No se pudo cargar el detalle de la orden.");
+          return;
+        }
+
+        setFulfillmentOrder((current) =>
+          current?.id === orderId
+            ? { ...current, ...detailedOrder, items: detailedOrder.items }
+            : current,
+        );
+      } catch (error) {
+        setFulfillmentDetailsError(getApiErrorMessage(error));
+      } finally {
+        setIsFulfillmentDetailsLoading(false);
+      }
+    },
+    [],
+  );
+
   const openFulfillmentDialog = (order: Orden) => {
     setFulfillmentOrder(order);
+    setFulfillmentDetailsError("");
     setTrackingNumber(order.shipping?.trackingNumber ?? "");
     setServiceName(order.shipping?.serviceName ?? "");
     setRealShippingCost(
@@ -351,6 +385,7 @@ export default function AdminOrdersPage() {
     setFulfillmentNotes("");
     setPickupCode("");
     setIsFulfillmentOpen(true);
+    void loadFulfillmentOrderDetails(order.id);
   };
 
   const runFulfillmentAction = async (
@@ -371,9 +406,15 @@ export default function AdminOrdersPage() {
         return second - first;
       });
       setOrders(refreshedList);
-      const updated = refreshedList.find((o) => o.id === fulfillmentOrder.id);
+      const updated = await ordersApi.getById(fulfillmentOrder.id);
       if (updated) {
         setFulfillmentOrder(updated);
+      } else {
+        const fallback = refreshedList.find((o) => o.id === fulfillmentOrder.id);
+        if (fallback) {
+          setFulfillmentOrder(fallback);
+          void loadFulfillmentOrderDetails(fallback.id);
+        }
       }
     } catch (error) {
       toast({
@@ -1003,6 +1044,8 @@ export default function AdminOrdersPage() {
           setIsFulfillmentOpen(open);
           if (!open) {
             setFulfillmentOrder(null);
+            setFulfillmentDetailsError("");
+            setIsFulfillmentDetailsLoading(false);
           }
         }}
       >
@@ -1077,39 +1120,33 @@ export default function AdminOrdersPage() {
                     ) : null}
 
                     {/* Productos */}
-                    {(order.items ?? []).length > 0 ? (
-                      <div className="rounded-md border p-4">
-                        <p className="mb-2 text-sm font-semibold">Productos</p>
-                        <div className="space-y-1 text-sm">
-                          {(order.items ?? []).map((item, index) => (
-                            <div
-                              key={`${item.productoId}-${item.tallaId ?? ""}-${index}`}
-                              className="flex justify-between gap-3"
-                            >
-                              <span className="min-w-0 truncate text-muted-foreground">
-                                {item.cantidad} ×{" "}
-                                {item.producto?.descripcion ||
-                                  item.producto?.clave ||
-                                  item.productoId}
-                                {item.tallaId ? ` · Talla ${item.tallaId}` : ""}
-                                {item.personalizacion ? (
-                                  <span className="block text-xs text-primary">
-                                    Personalizado: {item.personalizacion.nombre}{" "}
-                                    {item.personalizacion.numero}
-                                    {item.personalizationFee
-                                      ? ` (+${formatCurrency(item.personalizationFee)})`
-                                      : ""}
-                                  </span>
-                                ) : null}
-                              </span>
-                              <span className="font-medium">
-                                {formatCurrency(item.subtotal)}
-                              </span>
-                            </div>
-                          ))}
+                    <div className="rounded-md border p-4">
+                      <p className="mb-3 text-sm font-semibold">Productos</p>
+                      {isFulfillmentDetailsLoading ? (
+                        <OrderItemsListSkeleton />
+                      ) : fulfillmentDetailsError ? (
+                        <div className="space-y-3">
+                          <p className="text-sm text-destructive">
+                            {fulfillmentDetailsError}
+                          </p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              void loadFulfillmentOrderDetails(order.id)
+                            }
+                          >
+                            Reintentar
+                          </Button>
                         </div>
-                      </div>
-                    ) : null}
+                      ) : (
+                        <OrderItemsList
+                          items={order.items ?? []}
+                          showPersonalization
+                        />
+                      )}
+                    </div>
 
                     {/* Domicilio */}
                     {!isPickup ? (
