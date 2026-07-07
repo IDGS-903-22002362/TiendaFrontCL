@@ -18,6 +18,14 @@ import {
     SheetTitle,
     SheetHeader,
 } from "@/components/ui/sheet";
+import type { UserRole } from "@/lib/types";
+
+const STAFF_EMPLEADO_ROLES: UserRole[] = ["EMPLEADO", "CONCESION_VENDEDOR"];
+
+function getStaffRoleLabel(role: UserRole | ""): string {
+    if (role === "CONCESION_VENDEDOR") return "CONCESIÓN";
+    return "EMPLEADO";
+}
 
 const navLinks = [
     { href: "/empleado/puntos", label: "Puntos", icon: Coins },
@@ -33,6 +41,9 @@ export default function EmpleadoLayout({
     const pathname = usePathname();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+    const hasStaffAccess = STAFF_EMPLEADO_ROLES.includes(role as UserRole);
+    const roleLabel = getStaffRoleLabel(role);
+
     useEffect(() => {
         if (!isLoading) {
             if (!isAuthenticated) {
@@ -45,13 +56,13 @@ export default function EmpleadoLayout({
                 return;
             }
 
-            if (role !== "EMPLEADO") {
+            if (!hasStaffAccess) {
                 router.replace("/login");
             }
         }
-    }, [role, user, isAuthenticated, isLoading, router]);
+    }, [hasStaffAccess, role, user, isAuthenticated, isLoading, router]);
 
-    if (isLoading || role !== "EMPLEADO") {
+    if (isLoading || !hasStaffAccess) {
         return (
             <div className="flex min-h-screen items-center justify-center">
                 <p className="text-text-secondary">Verificando acceso...</p>
@@ -120,7 +131,7 @@ export default function EmpleadoLayout({
                     <span className="font-headline text-lg font-bold">
                         Panel Empleado Guarida
                     </span>
-                    <span className="text-xs uppercase text-text-muted">EMPLEADO</span>
+                    <span className="text-xs uppercase text-text-muted">{roleLabel}</span>
                 </div>
             </header>
 
@@ -144,7 +155,7 @@ export default function EmpleadoLayout({
                             </div>
                             <div className="flex flex-col">
                                 <span className="text-sm font-medium">Personal</span>
-                                <span className="text-xs uppercase text-text-muted">EMPLEADO</span>
+                                <span className="text-xs uppercase text-text-muted">{roleLabel}</span>
                             </div>
                         </div>
                         <Button

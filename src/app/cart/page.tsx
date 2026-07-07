@@ -5,9 +5,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { Trash2 } from "lucide-react";
 import { useCart } from "@/hooks/use-cart";
-import { useStorefront } from "@/hooks/use-storefront";
 import { getCartVariantKey } from "@/lib/api/cart";
 import { formatCurrency } from "@/lib/storefront";
+import {
+  getCartPersonalizationDisplay,
+  getCartPersonalizationTotal,
+} from "@/lib/cart-personalization";
+import { CartItemPersonalization } from "@/components/cart/cart-item-personalization";
 import {
   buildCartOfferPricingItems,
   calcularPreciosOfertasPublicas,
@@ -27,7 +31,6 @@ import { CartRecommendations } from "@/components/storefront/recommendations/car
 
 export default function CartPage() {
   const { state, totalItems, removeItem, setItemQuantity, isLoading } = useCart();
-  const { getPersonalization } = useStorefront();
 
   const [pricingOfertas, setPricingOfertas] = useState<
     Record<string, ProductOfferPricing>
@@ -76,6 +79,11 @@ export default function CartPage() {
     [state.items],
   );
 
+  const personalizationTotal = useMemo(
+    () => getCartPersonalizationTotal(state.items),
+    [state.items],
+  );
+
   if (isLoading) {
     return (
       <div className="container py-14 text-center text-muted-foreground">
@@ -119,7 +127,7 @@ export default function CartPage() {
         <div className="space-y-4">
           {state.items.map((item) => {
             const variantKey = getCartVariantKey(item);
-            const personalization = getPersonalization(variantKey);
+            const personalizationDisplay = getCartPersonalizationDisplay(item);
 
             const offerLine = getCartItemOfferLine(item, pricingOfertas);
             const {
@@ -181,23 +189,18 @@ export default function CartPage() {
                         variant="ghost"
                         size="icon"
                         className="h-10 w-10 rounded-full"
-                        onClick={() => removeItem(item.id, item.tallaId ?? item.size)}
+                        onClick={() => removeItem(item.id, item.tallaId ?? item.size, item.personalizacion)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
 
-                    {personalization ? (
-                      <div className="mt-4 rounded-[1.2rem] border border-border bg-muted/45 px-4 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary/74">
-                          Personalización
-                        </p>
-                        <p className="mt-1 text-sm text-foreground">
-                          {personalization.name} · {personalization.number}
-                        </p>
-                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                          {personalization.note}
-                        </p>
+                    {personalizationDisplay ? (
+                      <div className="mt-4">
+                        <CartItemPersonalization
+                          personalization={personalizationDisplay}
+                          quantity={item.quantity}
+                        />
                       </div>
                     ) : null}
 
@@ -205,7 +208,12 @@ export default function CartPage() {
                       <QuantitySelector
                         quantity={item.quantity}
                         onQuantityChange={(nextQuantity) =>
-                          setItemQuantity(item.id, item.tallaId ?? item.size, nextQuantity)
+                          setItemQuantity(
+                            item.id,
+                            item.tallaId ?? item.size,
+                            nextQuantity,
+                            item.personalizacion,
+                          )
                         }
                         maxQuantity={10}
                       />
@@ -250,6 +258,13 @@ export default function CartPage() {
                 <span>Subtotal</span>
                 <span>{formatCurrency(subtotalConOfertas)}</span>
               </div>
+
+              {personalizationTotal > 0 ? (
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span>Incluye personalización jerseys</span>
+                  <span>+{formatCurrency(personalizationTotal)}</span>
+                </div>
+              ) : null}
 
               <div className="flex items-center justify-between">
                 <span>Envio</span>

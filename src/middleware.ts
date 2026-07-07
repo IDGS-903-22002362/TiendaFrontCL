@@ -168,7 +168,7 @@ function getPerfilCompletoFromCookie(request: NextRequest): boolean | undefined 
 const STAFF_ROUTE_ROLES: Array<{ prefix: string; roles: UserRole[] }> = [
   { prefix: "/admin", roles: ["ADMIN", "EMPLEADO", "SUPER_ADMIN"] },
   { prefix: "/super-admin", roles: ["SUPER_ADMIN"] },
-  { prefix: "/empleado", roles: ["EMPLEADO"] },
+  { prefix: "/empleado", roles: ["EMPLEADO", "CONCESION_VENDEDOR"] },
   { prefix: "/empleado-club", roles: ["EMPLEADO_CLUB"] },
 ];
 
@@ -186,6 +186,7 @@ function getUserRoleFromCookie(request: NextRequest): UserRole | "" {
     role === "EMPLEADO" ||
     role === "CLIENTE" ||
     role === "EMPLEADO_CLUB" ||
+    role === "CONCESION_VENDEDOR" ||
     role === "SUPER_ADMIN"
   ) {
     return role;

@@ -12,7 +12,7 @@ export default async function ProductPage({
   const { id } = await params;
   const product = await fetchProductById(id);
 
-  if (!product) {
+  if (!product || product.activo === false) {
     notFound();
   }
 

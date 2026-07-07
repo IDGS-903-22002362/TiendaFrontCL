@@ -19,15 +19,18 @@ import {
 } from "@/lib/app-toast";
 import { getCartVariantKey } from "@/lib/api/cart";
 import {
+  formatCurrency,
   getEditorialProductCopy,
   getProductStockState,
   isPersonalizableProduct,
 } from "@/lib/storefront";
+import { PERSONALIZATION_FEE_MXN } from "@/lib/cart-personalization";
 import { isTryOnEligibleProduct } from "@/lib/ai/try-on-eligibility";
 import { cn } from "@/lib/utils";
 import { PersonalizationPanel } from "./personalization-panel";
 import { WishlistButton } from "@/components/storefront/shared/wishlist-button";
 import { AddToCartBar } from "./add-to-cart-bar";
+import type { ProductPersonalization } from "@/lib/storefront/types";
 
 export function ProductInfoPanel({
   product,
@@ -38,8 +41,7 @@ export function ProductInfoPanel({
 }) {
   const { addToCart } = useCart();
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
-  const { clearPersonalization, getPersonalization, setPersonalization } =
-    useStorefront();
+  const { clearPersonalization, setPersonalization } = useStorefront();
   const sizes = useMemo(
     () =>
       (product.sizes ?? []).filter(
@@ -55,6 +57,8 @@ export function ProductInfoPanel({
     1 | 2 | 3 | 4 | 5 | null
   >(null);
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+  const [activePersonalization, setActivePersonalization] =
+    useState<ProductPersonalization | null>(null);
 
   useEffect(() => {
     const firstAvailableSize =
@@ -82,9 +86,15 @@ export function ProductInfoPanel({
     tallaId: selectedSize,
     size: selectedSize,
   });
-  const personalization = getPersonalization(variantKey);
+
+  useEffect(() => {
+    setActivePersonalization(null);
+    clearPersonalization(variantKey);
+  }, [variantKey, clearPersonalization]);
+
   const handlePersonalizationChange = useCallback(
-    (value: import("@/lib/storefront/types").ProductPersonalization | null) => {
+    (value: ProductPersonalization | null) => {
+      setActivePersonalization(value);
       if (!value) {
         clearPersonalization(variantKey);
         return;
@@ -111,6 +121,12 @@ export function ProductInfoPanel({
     (!sizeRequired || Boolean(selectedSize)) && selectedStock > 0;
   const canPersonalize =
     isPersonalizableProduct(product) && Boolean(selectedSize);
+  const personalizationFee = PERSONALIZATION_FEE_MXN;
+  const baseUnitPrice = product.salePrice || product.price;
+  const hasActivePersonalization = Boolean(activePersonalization);
+  const unitPriceWithPersonalization =
+    baseUnitPrice + (hasActivePersonalization ? personalizationFee : 0);
+  const displayTotalPrice = unitPriceWithPersonalization * quantity;
   const canTryOn = isTryOnEligibleProduct({
     categoryId: product.categoryId,
     categoryName: product.category,
@@ -151,6 +167,15 @@ export function ProductInfoPanel({
       tallaId: selectedSize,
       size: selectedSize,
       quantity,
+      ...(activePersonalization
+        ? {
+            personalizacion: {
+              mode: activePersonalization.mode,
+              nombre: activePersonalization.name,
+              numero: activePersonalization.number,
+            },
+          }
+        : {}),
     });
   };
 
@@ -221,6 +246,31 @@ export function ProductInfoPanel({
 
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <PriceTag price={product.price} salePrice={product.salePrice} />
+            {canPersonalize ? (
+              <p className="w-full text-sm leading-6 text-muted-foreground">
+                {hasActivePersonalization ? (
+                  <>
+                    Incluye personalización{" "}
+                    <span className="font-semibold text-primary">
+                      +{formatCurrency(personalizationFee)}
+                    </span>
+                    {" · "}
+                    <span className="font-semibold text-foreground">
+                      {formatCurrency(unitPriceWithPersonalization)}
+                    </span>{" "}
+                    por pieza
+                  </>
+                ) : (
+                  <>
+                    Personalización opcional con cargo adicional de{" "}
+                    <span className="font-semibold text-primary">
+                      {formatCurrency(personalizationFee)}
+                    </span>{" "}
+                    por pieza.
+                  </>
+                )}
+              </p>
+            ) : null}
             <Badge
               variant={stockState.tone === "warning" ? "outline" : "default"}
             >
@@ -289,9 +339,10 @@ export function ProductInfoPanel({
 
             {canPersonalize ? (
               <PersonalizationPanel
-                value={personalization}
+                value={activePersonalization}
                 onChange={handlePersonalizationChange}
-                jerseyBackImage={product.images[product.images.length - 1]} // ← la última imagen como espalda
+                jerseyBackImage={product.images.at(-1) ?? product.images[0] ?? ""}
+                feePerUnit={personalizationFee}
               />
             ) : null}
 
@@ -418,12 +469,15 @@ export function ProductInfoPanel({
       </div>
 
       <AddToCartBar
-        price={(product.salePrice || product.price) * quantity}
+        price={displayTotalPrice}
         disabled={!canAddToCart}
         quantity={quantity}
         label={addLabel}
         onAdd={handleAddToCart}
         onTryOn={handleOpenTryOn}
+        personalizationFee={
+          hasActivePersonalization ? personalizationFee * quantity : 0
+        }
       />
     </>
   );

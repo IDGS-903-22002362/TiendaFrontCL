@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { useCart } from "@/hooks/use-cart";
-import { useStorefront } from "@/hooks/use-storefront";
 import {
   consultarDisponibilidadCodigosPromocionCarrito,
   getCartVariantKey,
@@ -30,6 +29,11 @@ import {
 } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/storefront";
+import {
+  getCartPersonalizationDisplay,
+  getCartPersonalizationTotal,
+} from "@/lib/cart-personalization";
+import { CartItemPersonalization } from "@/components/cart/cart-item-personalization";
 import {
   fetchCatalogPage,
   getOfertasPopularesCatalogQuery,
@@ -275,7 +279,11 @@ function getCodigoResultadoItems(
   );
 }
 
-export function CartDrawer() {
+export function CartDrawer({
+  onOpenChange,
+}: {
+  onOpenChange?: (open: boolean) => void;
+} = {}) {
   const router = useRouter();
   const {
     state,
@@ -285,8 +293,6 @@ export function CartDrawer() {
     isDrawerOpen,
     setIsDrawerOpen,
   } = useCart();
-  const { getPersonalization } = useStorefront();
-
   const [pricingOfertas, setPricingOfertas] = useState<
     Record<string, ProductOfferPricing>
   >({});
@@ -551,6 +557,11 @@ export function CartDrawer() {
 
   const hasUnpurchasableItems = useMemo(
     () => cartHasUnpurchasableItems(state.items),
+    [state.items],
+  );
+
+  const personalizationTotal = useMemo(
+    () => getCartPersonalizationTotal(state.items),
     [state.items],
   );
 
@@ -871,7 +882,13 @@ export function CartDrawer() {
   };
 
   return (
-    <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
+    <Sheet
+      open={isDrawerOpen}
+      onOpenChange={(open) => {
+        setIsDrawerOpen(open);
+        onOpenChange?.(open);
+      }}
+    >
       <SheetTrigger asChild>
         <Button
           variant="outline"
@@ -995,7 +1012,8 @@ export function CartDrawer() {
                     <div className="space-y-3 py-4">
                       {state.items.map((item, itemIndex) => {
                         const variantKey = getCartVariantKey(item);
-                        const personalization = getPersonalization(variantKey);
+                        const personalizationDisplay =
+                          getCartPersonalizationDisplay(item);
                         const offerLine = getCartItemOfferLine(item, pricingOfertas);
                         const {
                           tieneOferta,
@@ -1116,6 +1134,7 @@ export function CartDrawer() {
                                       removeItem(
                                         item.id,
                                         item.tallaId ?? item.size,
+                                        item.personalizacion,
                                       );
                                     }}
                                   >
@@ -1123,15 +1142,13 @@ export function CartDrawer() {
                                   </Button>
                                 </div>
 
-                                {personalization ? (
-                                  <div className="mt-3 rounded-[1rem] border border-black/12 bg-white px-3 py-2">
-                                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-primary/75">
-                                      Personalización
-                                    </p>
-                                    <p className="mt-1 text-sm text-foreground">
-                                      {personalization.name} ·{" "}
-                                      {personalization.number}
-                                    </p>
+                                {personalizationDisplay ? (
+                                  <div className="mt-3">
+                                    <CartItemPersonalization
+                                      personalization={personalizationDisplay}
+                                      quantity={item.quantity}
+                                      compact
+                                    />
                                   </div>
                                 ) : null}
 
@@ -1151,6 +1168,7 @@ export function CartDrawer() {
                                             item.id,
                                             item.tallaId ?? item.size,
                                             Math.max(1, item.quantity - 1),
+                                            item.personalizacion,
                                           );
                                         }}
                                       >
@@ -1169,6 +1187,7 @@ export function CartDrawer() {
                                             item.id,
                                             item.tallaId ?? item.size,
                                             item.quantity + 1,
+                                            item.personalizacion,
                                           );
                                         }}
                                       >
@@ -1222,6 +1241,15 @@ export function CartDrawer() {
                         {formatCurrency(subtotalConOfertas)}
                       </span>
                     </div>
+
+                    {personalizationTotal > 0 ? (
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span className="uppercase tracking-[0.16em]">
+                          Incluye personalización
+                        </span>
+                        <span>+{formatCurrency(personalizationTotal)}</span>
+                      </div>
+                    ) : null}
 
                     {descuentoCodigo > 0 ? (
                       <div className="flex items-center justify-between text-primary">

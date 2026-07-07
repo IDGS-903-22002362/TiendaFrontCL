@@ -13,6 +13,7 @@ type AddToCartBarProps = {
   label?: string;
   onAdd: () => void;
   onTryOn?: () => void;
+  personalizationFee?: number;
 };
 
 export function AddToCartBar({
@@ -22,6 +23,7 @@ export function AddToCartBar({
   label,
   onAdd,
   onTryOn,
+  personalizationFee = 0,
 }: AddToCartBarProps) {
   const barRef = useRef<HTMLDivElement | null>(null);
 
@@ -71,6 +73,11 @@ export function AddToCartBar({
           <p className="mt-2 font-headline text-[var(--font-size-price-card-mobile)] font-semibold uppercase leading-none tracking-[0.02em] text-foreground lg:text-[var(--font-size-price-card-desktop)]">
             {formatCurrency(price)}
           </p>
+          {personalizationFee > 0 ? (
+            <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">
+              Incluye +{formatCurrency(personalizationFee)} personalización
+            </p>
+          ) : null}
         </div>
         <p className="text-xs text-muted-foreground">
           {quantity} {quantity === 1 ? "pieza" : "piezas"}

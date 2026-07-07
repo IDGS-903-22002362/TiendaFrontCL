@@ -2,8 +2,13 @@
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ChevronRight, LogOut, Package2, UserRound } from "lucide-react";
+import { ChevronDown, ChevronRight, LogOut, Package2, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   Sheet,
   SheetContent,
@@ -11,6 +16,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import type { NavSection } from "@/lib/storefront/navigation";
 
 type NavLink = {
   href: string;
@@ -19,6 +25,7 @@ type NavLink = {
 
 type MobileNavDrawerProps = {
   trigger: ReactNode;
+  sections: NavSection[];
   links: NavLink[];
   isAuthenticated: boolean;
   role: string;
@@ -28,6 +35,7 @@ type MobileNavDrawerProps = {
 
 export function MobileNavDrawer({
   trigger,
+  sections,
   links,
   isAuthenticated,
   role,
@@ -35,6 +43,7 @@ export function MobileNavDrawer({
   onLogout,
 }: MobileNavDrawerProps) {
   const [open, setOpen] = useState(false);
+  const [expandedSectionId, setExpandedSectionId] = useState<string | null>(null);
 
   const closeDrawer = () => setOpen(false);
 
@@ -54,19 +63,67 @@ export function MobileNavDrawer({
           <p className="editorial-label text-primary/70">Tienda Oficial</p>
           <SheetTitle className="mt-2">La Guarida</SheetTitle>
         </SheetHeader>
-        <div className="flex h-full flex-col px-5 pb-6 pt-5">
-          <nav className="space-y-2">
-            {links.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={closeDrawer}
-                className="flex items-center justify-between border border-border/80 bg-card/76 px-4 py-3 min-h-[44px] text-sm font-medium text-foreground transition-[background-color,border-color,transform] hover:-translate-y-px hover:border-primary/18 hover:bg-card"
-              >
-                <span>{link.label}</span>
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              </Link>
-            ))}
+        <div className="flex h-full flex-col overflow-y-auto px-5 pb-6 pt-5">
+          <nav className="space-y-2" aria-label="Navegación móvil">
+            {sections.map((section) => {
+              const hasChildren = section.columns.some(
+                (column) => column.links.length > 0,
+              );
+
+              if (!hasChildren) {
+                return (
+                  <Link
+                    key={section.id}
+                    href={section.href}
+                    onClick={closeDrawer}
+                    className="flex min-h-11 items-center justify-between border border-border/80 bg-card/76 px-4 py-3 text-sm font-medium text-foreground transition-[background-color,border-color,transform] hover:-translate-y-px hover:border-primary/18 hover:bg-card"
+                  >
+                    <span>{section.label}</span>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  </Link>
+                );
+              }
+
+              return (
+                <Collapsible
+                  key={section.id}
+                  open={expandedSectionId === section.id}
+                  onOpenChange={(nextOpen) =>
+                    setExpandedSectionId(nextOpen ? section.id : null)
+                  }
+                >
+                  <CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between border border-border/80 bg-card/76 px-4 py-3 text-left text-sm font-medium text-foreground transition-[background-color,border-color] hover:border-primary/18 hover:bg-card">
+                    <span>{section.label}</span>
+                    <ChevronDown
+                      className={`h-4 w-4 text-muted-foreground transition-transform ${
+                        expandedSectionId === section.id ? "rotate-180" : ""
+                      }`}
+                    />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-1 px-1 pb-2 pt-1">
+                    {section.columns.flatMap((column) =>
+                      column.links.map((link) => (
+                        <Link
+                          key={`${section.id}-${link.href}`}
+                          href={link.href}
+                          onClick={closeDrawer}
+                          className="flex min-h-11 items-center rounded-md px-3 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                        >
+                          {link.label}
+                        </Link>
+                      )),
+                    )}
+                    <Link
+                      href={section.href}
+                      onClick={closeDrawer}
+                      className="flex min-h-11 items-center px-3 text-sm font-semibold text-primary"
+                    >
+                      Ver todo
+                    </Link>
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })}
           </nav>
 
           <div className="mt-8 editorial-panel p-4">
@@ -92,7 +149,7 @@ export function MobileNavDrawer({
                 <Link
                   href="/order-history"
                   onClick={closeDrawer}
-                  className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-card"
+                  className="flex min-h-11 items-center gap-3 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-card"
                 >
                   <Package2 className="h-4 w-4 text-primary" />
                   Mis pedidos

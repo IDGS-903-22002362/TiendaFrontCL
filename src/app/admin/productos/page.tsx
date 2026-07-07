@@ -97,6 +97,7 @@ function createDetailDraft(descripcion = "", id?: string): ProductDetailDraft {
 
 const EMPTY_FORM = {
   activo: true,
+  personalizable: false,
   descripcion: "",
   clave: "",
   precioPublico: "",
@@ -514,6 +515,10 @@ export default function AdminProductsPage() {
           imagenes: Array.isArray(detailData.imagenes) ? detailData.imagenes : (product.imagenPrincipal ? [product.imagenPrincipal] : []),
           detalles: detailItems.map((d: ProductDetailRecord) => createDetailDraft(d.descripcion, d.id)),
           activo: product.activo ?? true,
+          personalizable: Boolean(
+            (detailData as { personalizable?: boolean }).personalizable ??
+              product.personalizable,
+          ),
         });
         setPersistedDetails(detailItems);
         setSelectedProductId(product.id);
@@ -748,8 +753,10 @@ export default function AdminProductsPage() {
         inventarioPorTalla?: ProductSizeStock[];
         fedexShipping?: ProductFedexShipping;
         activo?: boolean;
+        personalizable?: boolean;
       };
       payload.activo = formData.activo;
+      payload.personalizable = formData.personalizable;
 
       const fedexShipping = buildFedexShippingPayload(formData.fedexShipping);
       if (fedexShipping) {
@@ -1435,6 +1442,23 @@ export default function AdminProductsPage() {
                 checked={formData.activo}
                 onCheckedChange={(checked) =>
                   setFormData((prev) => ({ ...prev, activo: checked }))
+                }
+                disabled={isLoadingDetail}
+              />
+            </div>
+
+            <div className="flex min-h-[44px] items-center justify-between gap-4 rounded-md border p-3">
+              <div>
+                <Label htmlFor="personalizable">Jersey personalizable</Label>
+                <p className="text-sm text-muted-foreground">
+                  Permite agregar nombre y número con cargo adicional de $300 MXN.
+                </p>
+              </div>
+              <Switch
+                id="personalizable"
+                checked={formData.personalizable}
+                onCheckedChange={(checked) =>
+                  setFormData((prev) => ({ ...prev, personalizable: checked }))
                 }
                 disabled={isLoadingDetail}
               />

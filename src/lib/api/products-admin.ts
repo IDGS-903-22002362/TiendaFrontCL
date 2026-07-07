@@ -5,8 +5,7 @@ import type {
   ProductFedexShipping,
   ProductSizeStock,
 } from "@/lib/types";
-import { resolveClientBearerToken } from "@/lib/cookies/constants";
-import { apiFetch } from "./client";
+import { apiFetch, ApiError } from "./client";
 
 export type ProductCreatePayload = {
   clave: string;
@@ -21,6 +20,7 @@ export type ProductCreatePayload = {
   inventarioPorTalla?: ProductSizeStock[];
   fedexShipping?: ProductFedexShipping;
   activo?: boolean;
+  personalizable?: boolean;
 };
 
 export type ProductUpdatePayload = Partial<ProductCreatePayload>;
@@ -193,12 +193,6 @@ export const productsAdminApi = {
   },
 
   async uploadImages(id: string, formData: FormData, token?: string) {
-    const headers = new Headers();
-    const bearerToken = resolveClientBearerToken(token);
-    if (bearerToken) {
-      headers.set("Authorization", `Bearer ${bearerToken}`);
-    }
-
     const files = Array.from(formData.values()).filter(
       (value): value is File => value instanceof File,
     );
@@ -211,15 +205,26 @@ export const productsAdminApi = {
       const data = new FormData();
       files.forEach((file) => data.append(fieldName, file));
 
-      const res = await fetch(`/api/productos/${id}/imagenes`, {
-        method: "POST",
-        headers,
-        body: data,
-        credentials: "include",
-      });
-
-      const payload = await res.json().catch(() => ({}));
-      return { res, payload };
+      try {
+        const payload = await apiFetch<{
+          success: true;
+          data: { urls: string[]; totalImagenes: number };
+        }>(
+          `/api/productos/${id}/imagenes`,
+          { method: "POST", body: data },
+          { local: true, token },
+        );
+        return { ok: true as const, payload };
+      } catch (error) {
+        if (error instanceof ApiError) {
+          return {
+            ok: false as const,
+            status: error.status,
+            message: error.message,
+          };
+        }
+        throw error;
+      }
     }
 
     const fieldCandidates = [
@@ -237,18 +242,12 @@ export const productsAdminApi = {
     for (const fieldName of fieldCandidates) {
       const attempt = await sendWithField(fieldName);
 
-      if (attempt.res.ok) {
-        return attempt.payload as {
-          success: true;
-          data: { urls: string[]; totalImagenes: number };
-        };
+      if (attempt.ok) {
+        return attempt.payload;
       }
 
-      lastStatus = attempt.res.status;
-      lastMessage =
-        typeof attempt.payload?.message === "string"
-          ? attempt.payload.message
-          : `Error HTTP ${attempt.res.status}`;
+      lastStatus = attempt.status;
+      lastMessage = attempt.message;
 
       // If backend failed for a reason different than missing files, stop retrying.
       if (!/no se enviaron archivos/i.test(lastMessage)) {

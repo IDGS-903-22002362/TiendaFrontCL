@@ -34,6 +34,9 @@ export default function RoleRedirectPage() {
             case "EMPLEADO":
                 router.replace("/empleado/puntos");
                 break;
+            case "CONCESION_VENDEDOR":
+                router.replace("/empleado/puntos");
+                break;
             case "EMPLEADO_CLUB":
                 router.replace("/empleado-club/noticias");
                 break;
