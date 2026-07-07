@@ -200,6 +200,15 @@ function redirectToLogin(request: NextRequest) {
   return NextResponse.redirect(url);
 }
 
+function isMobileAppRequest(request: NextRequest) {
+  const { searchParams } = request.nextUrl;
+  return (
+    searchParams.get("from") === "mobile-app" ||
+    searchParams.get("mobile") === "1" ||
+    searchParams.get("source") === "clubleon-app"
+  );
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -255,8 +264,12 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Evitar que login/register se muestren cuando ya hay sesión.
-  if (pathname === "/login" || pathname === "/register") {
+  // Evitar que login/register se muestren cuando ya hay sesión web.
+  // La app móvil carga /login en WebView y debe permanecer ahí para OTP/bridge.
+  if (
+    (pathname === "/login" || pathname === "/register") &&
+    !isMobileAppRequest(request)
+  ) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     url.search = "";

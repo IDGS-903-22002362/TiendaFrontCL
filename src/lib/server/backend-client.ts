@@ -7,23 +7,10 @@ import {
 } from "@/lib/server/csrf";
 import { getApiTokenFromRequest } from "@/lib/server/session";
 import { resolveAuthorizationHeader } from "@/lib/cookies/constants";
-
-const FALLBACK_API_BASE = "http://localhost:3000/api";
-
-function resolveBackendBase() {
-  return (
-    process.env.API_BASE_URL ||
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    FALLBACK_API_BASE
-  ).replace(/\/+$/, "");
-}
-
-function joinUrl(base: string, path: string) {
-  const sanitizedBase = base.replace(/\/+$/, "");
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-
-  return `${sanitizedBase}${normalizedPath}`;
-}
+import {
+  joinBackendApiUrl,
+  resolveBackendBaseUrl,
+} from "@/lib/backend-url";
 
 async function parseResponsePayload(response: Response) {
   const text = await response.text();
@@ -144,7 +131,7 @@ export async function proxyToBackend({
     headers.set("X-Firebase-AppCheck", appCheckToken);
   }
 
-  const url = `${joinUrl(resolveBackendBase(), backendPath)}${request.nextUrl.search}`;
+  const url = `${joinBackendApiUrl(resolveBackendBaseUrl(), backendPath)}${request.nextUrl.search}`;
   const hasBody = nextMethod !== "GET";
 
   // ✅ Para multipart/form-data, pasar el stream directamente sin leerlo

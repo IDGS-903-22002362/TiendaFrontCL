@@ -11,6 +11,11 @@ import React, {
 import type { CartItem } from "@/lib/types";
 import { showErrorToast } from "@/lib/app-toast";
 import {
+  hasCompletedCartMerge,
+  shouldSkipCartMerge,
+  writeCartMergeMarker,
+} from "@/lib/api/cart-merge";
+import {
   addCartItem,
   clearCart,
   fetchCart,
@@ -65,7 +70,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     description?: string;
   } | null>(null);
   
-  const { token, isAuthenticated } = useAuth();
+  const { token, isAuthenticated, isLoading: isAuthLoading, user } = useAuth();
   const authToken = resolveClientBearerToken(token);
 
   const reloadCart = useCallback(async () => {
@@ -113,16 +118,50 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [isAuthenticated, authToken]);
 
   useEffect(() => {
-    if (!isAuthenticated || !sessionId || mergedToken === token) {
+    if (
+      !isAuthenticated ||
+      isAuthLoading ||
+      !sessionId ||
+      mergedToken === token
+    ) {
+      return;
+    }
+
+    const userId = user?.uid ?? user?.id ?? "";
+    if (!userId) {
+      return;
+    }
+
+    if (hasCompletedCartMerge(sessionId, userId)) {
+      setMergedToken(token);
       return;
     }
 
     const mergeAndReload = async () => {
       try {
+        let guestCartItems: Awaited<ReturnType<typeof fetchCart>>["items"] = [];
+
+        try {
+          const guestCart = await fetchCart(sessionId, undefined);
+          guestCartItems = guestCart.items;
+        } catch (error) {
+          console.error("Failed to load guest cart before merge", error);
+          writeCartMergeMarker(sessionId, userId);
+          setMergedToken(token);
+          return;
+        }
+
+        if (shouldSkipCartMerge(guestCartItems)) {
+          writeCartMergeMarker(sessionId, userId);
+          setMergedToken(token);
+          return;
+        }
+
         await mergeCartSession(sessionId);
         const cart = await fetchCart(sessionId, authToken);
         setCartId((current) => cart.id ?? current);
         setItems(cart.items);
+        writeCartMergeMarker(sessionId, userId);
         setMergedToken(token);
       } catch (error) {
         console.error("Failed to merge guest cart", error);
@@ -134,7 +173,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     void mergeAndReload();
-  }, [isAuthenticated, mergedToken, sessionId, token, authToken]);
+  }, [
+    authToken,
+    isAuthenticated,
+    isAuthLoading,
+    mergedToken,
+    sessionId,
+    token,
+    user,
+  ]);
 
   const addToCart = async (
     item: Omit<CartItem, "quantity"> & { quantity?: number },

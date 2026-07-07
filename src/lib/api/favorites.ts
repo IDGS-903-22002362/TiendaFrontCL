@@ -1,4 +1,4 @@
-import type { FavoriteItem, Product } from "@/lib/types";
+import type { FavoriteItem, FavoriteProducto, Product } from "@/lib/types";
 import { apiFetch } from "./client";
 
 type FavoritesListResponse = {
@@ -31,15 +31,19 @@ type FavoriteMutationResponse = {
 };
 
 export function mapFavoriteProductToProductCard(
-  producto: FavoriteItem["producto"],
+  producto: FavoriteProducto,
 ): Product {
+  const price = Number(producto.precioPublico);
+  const images = producto.imagenes?.length ? producto.imagenes : [];
+  const name = producto.descripcion || producto.clave || "Producto";
+
   return {
     id: producto.id,
     clave: producto.clave,
-    name: producto.name,
-    description: producto.description ?? producto.name,
-    price: producto.price,
-    images: producto.images?.length ? producto.images : [],
+    name,
+    description: producto.descripcion || producto.clave || "Sin descripción disponible.",
+    price: Number.isFinite(price) ? price : 0,
+    images,
     category: "",
     tags: [],
     stock: 1,

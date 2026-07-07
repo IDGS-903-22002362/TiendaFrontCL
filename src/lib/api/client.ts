@@ -4,22 +4,12 @@ import {
   resolveClientBearerToken,
 } from "@/lib/cookies/constants";
 import { readCsrfTokenFromDocument } from "@/lib/cookies/csrf-client";
+import {
+  joinBackendApiUrl,
+  resolveBackendBaseUrl,
+} from "@/lib/backend-url";
 
 export { COOKIE_SESSION_TOKEN, resolveClientBearerToken };
-
-const FALLBACK_API_BASE = "http://localhost:3000/api";
-
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.API_BASE_URL ||
-  FALLBACK_API_BASE;
-
-function joinApiUrl(base: string, path: string) {
-  const sanitizedBase = base.replace(/\/+$/, "");
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-
-  return `${sanitizedBase}${normalizedPath}`;
-}
 
 type ApiErrorPayload = {
   ok?: boolean;
@@ -266,7 +256,9 @@ export async function apiFetch<T>(
 
   let response: Response;
   const useLocalProxy = shouldUseLocalProxy(path, options);
-  const endpoint = useLocalProxy ? path : joinApiUrl(API_BASE, path);
+  const endpoint = useLocalProxy
+    ? path
+    : joinBackendApiUrl(resolveBackendBaseUrl(), path);
   const method = (init.method ?? "GET").toUpperCase();
   attachCsrfHeader(headers, useLocalProxy, method);
 

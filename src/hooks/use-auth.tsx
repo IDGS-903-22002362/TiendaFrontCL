@@ -16,9 +16,11 @@ import {
   type AuthUsuario,
 } from "@/lib/api/auth";
 import { mergeRecommendationIdentity } from "@/lib/api/recommendations";
+import { clearCartMergeMarker } from "@/lib/api/cart-merge";
 import { getOrCreateSessionId } from "@/lib/api/cart";
 import { resetAuthRecoveryCache } from "@/lib/api/client";
 import { COOKIE_SESSION_TOKEN } from "@/lib/cookies/constants";
+import { notifyMobileAppAuth } from "@/lib/mobile-app-bridge";
 import {
   checkInUserStreak,
   completeUserProfile,
@@ -90,7 +92,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshSession]);
 
   const signInWithFirebase = useCallback(async (firebaseIdToken: string) => {
-    const response = await createLocalSessionFromFirebaseToken(firebaseIdToken);
+    const normalizedToken = firebaseIdToken.trim();
+    if (!normalizedToken) {
+      return;
+    }
+
+    // Evita POST duplicados cuando el WebView ya tiene sesión activa.
+    if (token && !isLoading) {
+      return;
+    }
+
+    const response = await createLocalSessionFromFirebaseToken(normalizedToken);
 
     setToken(response.data?.token || COOKIE_SESSION_TOKEN);
     setRole(response.data?.role ?? "");
@@ -102,16 +114,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       void mergeRecommendationIdentity(sessionToken, sessionId).catch(() => undefined);
     }
 
-    // Notificar a Flutter si estamos dentro de un WebView
-    if (typeof window !== "undefined" && window.ClubLeonBridge) {
-      window.ClubLeonBridge.postMessage(
-        JSON.stringify({
-          type: "CLUBLEON_LOGIN",
-          token: response.data?.token ?? "",
-        })
-      );
-    }
-  }, []);
+    // Notificar a la app móvil con token backend o Firebase ID token.
+    notifyMobileAppAuth({
+      token: response.data?.token,
+      firebaseIdToken: normalizedToken,
+      uid: response.data?.user?.uid,
+      user: response.data?.user ?? null,
+    });
+  }, [token, isLoading]);
 
   const clearSession = useCallback(async () => {
     // Ejecutar todos los callbacks registrados (ej: limpiar favoritos)
@@ -124,6 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     resetAuthRecoveryCache();
+    clearCartMergeMarker();
     await Promise.allSettled([clearLocalSession(), signOutFirebaseClient()]);
     setToken("");
     setRole("");

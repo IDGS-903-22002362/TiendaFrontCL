@@ -20,11 +20,13 @@ export function normalizeStorefrontText(value: string) {
 }
 
 export function formatCurrency(amount: number) {
+  const safeAmount = Number.isFinite(amount) ? amount : 0;
+
   return new Intl.NumberFormat("es-MX", {
     style: "currency",
     currency: "MXN",
     maximumFractionDigits: 2,
-  }).format(amount);
+  }).format(safeAmount);
 }
 
 export function getProductPrice(product: Product) {

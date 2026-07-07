@@ -24,6 +24,8 @@ import { Input } from "@/components/ui/input";
 import Antigravity from "@/components/Antigravity";
 import { apiFetch } from "@/lib/api/client";
 import { createLocalSessionFromBackendToken } from "@/lib/api/auth";
+import { notifyMobileAppAuth } from "@/lib/mobile-app-bridge";
+import { COOKIE_SESSION_TOKEN } from "@/lib/cookies/constants";
 import { UserRole } from "@/lib/types";
 import { useIsFromMobileApp } from "@/hooks/use-from-mobile-app";
 
@@ -53,7 +55,7 @@ interface VerifyAndLoginResponse {
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { signInWithFirebase, isAuthenticated, isLoading, role, user, refreshSession } = useAuth();
+  const { signInWithFirebase, isAuthenticated, isLoading, role, user, refreshSession, token } = useAuth();
   
 
   const [email, setEmail] = useState("");
@@ -116,10 +118,25 @@ function LoginPageContent() {
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
+      if (isFromMobileApp) {
+        return;
+      }
       router.replace(getTargetRedirect(role, user?.perfilCompleto));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, isLoading, role, user?.perfilCompleto, router]);
+  }, [isAuthenticated, isLoading, isFromMobileApp, role, user?.perfilCompleto, router]);
+
+  useEffect(() => {
+    if (!isFromMobileApp || isLoading || !isAuthenticated) {
+      return;
+    }
+
+    notifyMobileAppAuth({
+      token: token && token !== COOKIE_SESSION_TOKEN ? token : undefined,
+      uid: user?.uid ?? user?.id,
+      user,
+    });
+  }, [isFromMobileApp, isLoading, isAuthenticated, token, user]);
 
   useEffect(() => {
     const emailParam = searchParams.get("email");
@@ -409,6 +426,14 @@ function LoginPageContent() {
             rol: response.data.user.rol as UserRole, // Cast necesario si el backend devuelve el rol como string
           }
         );
+        notifyMobileAppAuth({
+          token: response.data.token,
+          uid: response.data.user.uid,
+          user: {
+            ...response.data.user,
+            rol: response.data.user.rol as UserRole,
+          },
+        });
         await refreshSession();
         showSuccessToast({ title: "¡Bienvenido!", description: "Sesión iniciada correctamente." });
       } else {
@@ -584,6 +609,39 @@ function LoginPageContent() {
       router.push("/");
     }
   };
+
+  if (isAuthenticated && isFromMobileApp) {
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center bg-white">
+        <div className="text-center">
+          <svg
+            className="mx-auto mb-3 h-12 w-12 animate-spin text-[#007A53]"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <circle
+              className="opacity-20"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-100"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
+          </svg>
+          <p className="text-sm font-semibold text-[#066246]">
+            Conectando con la app...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (isAuthenticated) {
     return null;

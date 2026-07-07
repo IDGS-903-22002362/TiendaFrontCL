@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { addFavorite, getFavorites, removeFavorite } from "@/lib/api/favorites";
+import { ApiError } from "@/lib/api/client";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import type { ProductPersonalization } from "@/lib/storefront/types";
 import { useAuth } from "./use-auth";
@@ -104,17 +105,22 @@ function writeLocalStorage(key: string, value: unknown) {
 export function StorefrontProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   
-  const [wishlistIds, setWishlistIds] = useState<string[]>([]);
+  const [wishlistIds, setWishlistIds] = useState<string[]>(() =>
+    readLocalStorage<string[]>(WISHLIST_STORAGE_KEY, []),
+  );
   const [isWishlistLoading, setIsWishlistLoading] = useState(false);
   const [personalizationByVariant, setPersonalizationByVariant] =
     useState<PersonalizationMap>(() =>
       readLocalStorage<PersonalizationMap>(PERSONALIZATION_STORAGE_KEY, {})
     );
 
+  const persistGuestWishlist = useCallback((ids: string[]) => {
+    writeLocalStorage(WISHLIST_STORAGE_KEY, ids);
+  }, []);
+
   // Función para limpiar favoritos (al cerrar sesión)
   const clearFavorites = useCallback(() => {
     setWishlistIds([]);
-    // Limpiar localStorage también
     writeLocalStorage(WISHLIST_STORAGE_KEY, []);
   }, []);
 
@@ -122,7 +128,6 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
   // Cargar favoritos cuando el usuario se autentica
   const loadFavorites = useCallback(async () => {
     if (!isAuthenticated) {
-      clearFavorites();
       return;
     }
 
@@ -140,25 +145,30 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
         // No guardamos en localStorage cuando está autenticado
         // Los datos viven en el backend
       } else {
-        setWishlistIds([]);
         showErrorToast({
-          
           title: "Error al cargar favoritos",
           description: "No se pudieron cargar tus favoritos",
         });
       }
     } catch (error) {
       console.error("Error loading favorites:", error);
-      setWishlistIds([]);
+      const cachedIds = readLocalStorage<string[]>(WISHLIST_STORAGE_KEY, []);
+      if (cachedIds.length > 0) {
+        setWishlistIds(cachedIds);
+      }
+
+      if (error instanceof ApiError && error.status === 0) {
+        return;
+      }
+
       showErrorToast({
-        
         title: "Error al cargar favoritos",
         description: getApiErrorMessage(error),
       });
     } finally {
       setIsWishlistLoading(false);
     }
-  }, [isAuthenticated, clearFavorites]);
+  }, [isAuthenticated]);
 
   // Efecto para manejar cambios en autenticación
   useEffect(() => {
@@ -169,11 +179,11 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
     if (isAuthenticated) {
       // Usuario autenticado: cargar favoritos del backend
       void loadFavorites();
-    } else {
-      // Usuario no autenticado: limpiar favoritos
-      clearFavorites();
+      return;
     }
-  }, [isAuthenticated, isAuthLoading, loadFavorites, clearFavorites]);
+
+    setWishlistIds(readLocalStorage<string[]>(WISHLIST_STORAGE_KEY, []));
+  }, [isAuthenticated, isAuthLoading, loadFavorites]);
 
   // Efecto para personalización (esto sí se guarda en localStorage)
   useEffect(() => {
@@ -195,14 +205,26 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
-      // Si no está autenticado, mostrar mensaje y no permitir
+      // Invitados usan favoritos locales en el dispositivo.
       if (!isAuthenticated) {
-        showErrorToast({
-          
-          title: "Inicia sesión",
-          description: "Necesitas iniciar sesión para guardar favoritos",
+        const currentlyWishlisted = wishlistIds.includes(productId);
+        const nextIds = currentlyWishlisted
+          ? wishlistIds.filter((id) => id !== productId)
+          : [...wishlistIds, productId];
+
+        setWishlistIds(nextIds);
+        persistGuestWishlist(nextIds);
+
+        showSuccessToast({
+          title: currentlyWishlisted
+            ? "Eliminado de favoritos"
+            : "Agregado a favoritos",
+          description: currentlyWishlisted
+            ? "El producto ha sido eliminado de tus favoritos locales"
+            : "El producto ha sido agregado a tus favoritos locales",
         });
-        return false;
+
+        return !currentlyWishlisted;
       }
 
       const currentlyWishlisted = wishlistIds.includes(productId);
@@ -231,6 +253,15 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
         });
         return true;
       } catch (error) {
+        const alreadyRemoved =
+          currentlyWishlisted &&
+          error instanceof ApiError &&
+          error.status === 404;
+
+        if (alreadyRemoved) {
+          return false;
+        }
+
         // Revertir optimistic update en caso de error
         setWishlistIds((currentIds) =>
           currentlyWishlisted
@@ -249,7 +280,7 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
         return currentlyWishlisted;
       }
     },
-    [isAuthenticated, wishlistIds],
+    [isAuthenticated, persistGuestWishlist, wishlistIds],
   );
 
   const setPersonalization = useCallback(
@@ -286,10 +317,7 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
   );
 
   const showFavoritesNav =
-    !isAuthLoading &&
-    isAuthenticated &&
-    !isWishlistLoading &&
-    wishlistIds.length > 0;
+    !isAuthLoading && !isWishlistLoading && wishlistIds.length > 0;
 
   const value = useMemo<StorefrontContextValue>(
     () => ({

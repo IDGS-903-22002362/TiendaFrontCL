@@ -12,22 +12,13 @@ import {
   setSessionCookies,
 } from "@/lib/server/session";
 import { isBearerJwt } from "@/lib/cookies/constants";
-
-const FALLBACK_API_BASE = "http://localhost:3000/api";
-
-function resolveBackendBase() {
-  return (
-    process.env.API_BASE_URL ||
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    FALLBACK_API_BASE
-  ).replace(/\/+$/, "");
-}
+import {
+  joinBackendApiUrl,
+  resolveBackendBaseUrl,
+} from "@/lib/backend-url";
 
 function joinBackendUrl(path: string) {
-  const base = resolveBackendBase();
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-
-  return `${base}${normalizedPath}`;
+  return joinBackendApiUrl(resolveBackendBaseUrl(), path);
 }
 
 type BackendAuthResponse = {
@@ -203,13 +194,18 @@ export async function POST(request: NextRequest) {
       .catch(() => ({}))) as BackendAuthResponse;
 
     if (!backendResponse.ok || !payload.token) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         {
           success: false,
           message: payload.message || "No se pudo iniciar sesión",
         },
         { status: backendResponse.status || 500 },
       );
+      const retryAfter = backendResponse.headers.get("Retry-After");
+      if (retryAfter) {
+        response.headers.set("Retry-After", retryAfter);
+      }
+      return response;
     }
 
     const response = NextResponse.json({

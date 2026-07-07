@@ -3,31 +3,45 @@
 
 import { useEffect, useState } from "react";
 
+function detectMobileAppFromLocation(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  if (sessionStorage.getItem("from_mobile_app") === "true") {
+    return true;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const fromParam = params.get("from");
+  const mobileParam = params.get("mobile");
+  const sourceParam = params.get("source");
+
+  return (
+    fromParam === "mobile-app" ||
+    mobileParam === "1" ||
+    sourceParam === "clubleon-app"
+  );
+}
+
 export function useIsFromMobileApp() {
-    const [isFromMobileApp, setIsFromMobileApp] = useState(false);
+  const [isFromMobileApp, setIsFromMobileApp] = useState(
+    detectMobileAppFromLocation,
+  );
 
-    useEffect(() => {
-        // Verificar si ya tenemos el flag guardado en sessionStorage
-        const stored = sessionStorage.getItem('from_mobile_app');
+  useEffect(() => {
+    if (!detectMobileAppFromLocation()) {
+      return;
+    }
 
-        if (stored === 'true') {
-            setIsFromMobileApp(true);
-            return;
-        }
+    sessionStorage.setItem("from_mobile_app", "true");
+    setIsFromMobileApp(true);
+  }, []);
 
-        // Si no, verificar en la URL solo en cliente.
-        const fromParam = new URLSearchParams(window.location.search).get('from');
-        if (fromParam === 'mobile-app') {
-            sessionStorage.setItem('from_mobile_app', 'true');
-            setIsFromMobileApp(true);
-        }
-    }, []);
+  const clearMobileAppFlag = () => {
+    sessionStorage.removeItem("from_mobile_app");
+    setIsFromMobileApp(false);
+  };
 
-    // Función para limpiar el flag (útil para logout)
-    const clearMobileAppFlag = () => {
-        sessionStorage.removeItem('from_mobile_app');
-        setIsFromMobileApp(false);
-    };
-
-    return { isFromMobileApp, clearMobileAppFlag };
+  return { isFromMobileApp, clearMobileAppFlag };
 }

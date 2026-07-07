@@ -70,11 +70,19 @@ export type ProductExtraDetail = {
   updatedAt?: string;
 };
 
+export type FavoriteProducto = {
+  id: string;
+  clave: string;
+  descripcion: string;
+  precioPublico: number;
+  imagenes: string[];
+};
+
 export type FavoriteItem = {
   id: string;
   usuarioId: string;
   createdAt: string;
-  producto: Product;
+  producto: FavoriteProducto;
 };
 
 export type Category = {

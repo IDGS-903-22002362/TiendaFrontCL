@@ -635,8 +635,13 @@ export function ProductFilters({
           return;
         }
 
-        setFavoriteProducts([]);
-        setFavoritesError("No se pudieron cargar tus favoritos. Intenta de nuevo.");
+        const fallbackProducts = items.filter((product) =>
+          wishlistIds.includes(product.id),
+        );
+        setFavoriteProducts(fallbackProducts);
+        if (fallbackProducts.length === 0) {
+          setFavoritesError("No se pudieron cargar tus favoritos. Intenta de nuevo.");
+        }
       })
       .finally(() => {
         if (!cancelled) {
