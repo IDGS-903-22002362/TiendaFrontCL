@@ -20,6 +20,13 @@ import type { Orden, Pago } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import {
+  formatOrderDisplayId,
+  getOrderContactLabel,
+  getOrderContactName,
+  isPickupOrder,
+  matchesOrderSearch,
+} from "@/lib/orders/display";
+import {
   getPaymentStateLabel,
   getPaymentStateVariant,
   getPreparationStatusLabel,
@@ -143,11 +150,6 @@ function getVisiblePages(currentPage: number, totalPages: number) {
 
   const start = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
   return Array.from({ length: 5 }, (_, index) => start + index);
-}
-
-function getShortOrderId(id: string) {
-  if (id.length <= 14) return id;
-  return `${id.slice(0, 8)}...${id.slice(-4)}`;
 }
 
 export default function AdminOrdersPage() {
@@ -495,9 +497,7 @@ export default function AdminOrdersPage() {
     if (methodFilter !== "TODOS" && (order.fulfillmentMethod ?? "DELIVERY") !== methodFilter) {
       return false;
     }
-    if (!searchTerm) return true;
-    return order.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
-           (order.usuarioId && order.usuarioId.toLowerCase().includes(searchTerm.toLowerCase()));
+    return matchesOrderSearch(order, searchTerm);
   });
 
   const totalPages = Math.max(
@@ -560,7 +560,7 @@ export default function AdminOrdersPage() {
            <div className="relative flex-1">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por ID de orden o usuario..."
+                placeholder="Buscar por número de orden, nombre o usuario..."
                 className="pl-8"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -636,7 +636,7 @@ export default function AdminOrdersPage() {
                        <div className="flex flex-col gap-2">
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-sm font-semibold" title={order.id}>
-                            {getShortOrderId(order.id)}
+                            {formatOrderDisplayId(order.id)}
                           </span>
                           <button
                             title="Copiar ID"
@@ -652,13 +652,10 @@ export default function AdminOrdersPage() {
                         </div>
                         <div className="flex flex-col gap-1 text-xs text-muted-foreground">
                           <span>{formatDate(order.createdAt)}</span>
-                          {order.usuarioId ? (
-                            <span className="max-w-[240px] truncate" title={order.usuarioId}>
-                              Cliente: {order.usuarioId}
-                            </span>
-                          ) : (
-                            <span className="italic">Cliente anónimo</span>
-                          )}
+                          <span className="max-w-[240px] truncate" title={getOrderContactName(order) ?? undefined}>
+                            {getOrderContactLabel(order)}:{" "}
+                            {getOrderContactName(order) ?? "Sin nombre registrado"}
+                          </span>
                         </div>
                        </div>
                     </TableCell>
@@ -856,10 +853,17 @@ export default function AdminOrdersPage() {
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Pago y reembolso</DialogTitle>
-            <DialogDescription>
-              {selectedOrder
-                ? `Orden ${selectedOrder.id}`
-                : "Consulta el pago asociado a la orden."}
+            <DialogDescription asChild>
+              {selectedOrder ? (
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  <p>Orden {formatOrderDisplayId(selectedOrder.id)}</p>
+                  <p className="truncate font-mono text-xs" title={selectedOrder.id}>
+                    {selectedOrder.id}
+                  </p>
+                </div>
+              ) : (
+                <span>Consulta el pago asociado a la orden.</span>
+              )}
             </DialogDescription>
           </DialogHeader>
 
@@ -1052,17 +1056,25 @@ export default function AdminOrdersPage() {
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Gestión de entrega</DialogTitle>
-            <DialogDescription>
-              {fulfillmentOrder
-                ? `Orden ${fulfillmentOrder.id}`
-                : "Administra el envío o la recolección del pedido."}
+            <DialogDescription asChild>
+              {fulfillmentOrder ? (
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  <p>Orden {formatOrderDisplayId(fulfillmentOrder.id)}</p>
+                  <p className="truncate font-mono text-xs" title={fulfillmentOrder.id}>
+                    {fulfillmentOrder.id}
+                  </p>
+                </div>
+              ) : (
+                <span>Administra el envío o la recolección del pedido.</span>
+              )}
             </DialogDescription>
           </DialogHeader>
 
           {fulfillmentOrder
             ? (() => {
                 const order = fulfillmentOrder;
-                const isPickup = order.fulfillmentMethod === "PICKUP";
+                const isPickup = isPickupOrder(order);
+                const contactName = getOrderContactName(order);
                 const paid = isOrderPaid(order);
                 const cancelled = order.estado === "CANCELADA";
                 const actionsDisabled =
@@ -1105,6 +1117,21 @@ export default function AdminOrdersPage() {
                           {formatCurrency(order.total)}
                         </p>
                       </div>
+                      {isPickup ? (
+                        <div className="sm:col-span-2">
+                          <p className="text-xs font-semibold uppercase text-muted-foreground">
+                            Persona que recoge
+                          </p>
+                          <p className="mt-1 font-medium">
+                            {contactName ?? "Sin nombre registrado"}
+                          </p>
+                          {order.pickupContact?.phone ? (
+                            <p className="mt-1 text-muted-foreground">
+                              {order.pickupContact.phone}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
 
                     {!paid ? (
@@ -1382,6 +1409,25 @@ export default function AdminOrdersPage() {
                     ) : (
                       /* Pickup */
                       <div className="space-y-4">
+                        <div className="rounded-md border p-4 text-sm">
+                          <p className="text-xs font-semibold uppercase text-muted-foreground">
+                            Persona que recoge
+                          </p>
+                          <p className="mt-1 font-medium">
+                            {contactName ?? "Sin nombre registrado"}
+                          </p>
+                          {order.pickupContact?.phone ? (
+                            <p className="mt-1 text-muted-foreground">
+                              Tel: {order.pickupContact.phone}
+                            </p>
+                          ) : null}
+                          {order.pickupContact?.email ? (
+                            <p className="text-muted-foreground">
+                              {order.pickupContact.email}
+                            </p>
+                          ) : null}
+                        </div>
+
                         {order.pickupLocation ? (
                           <div className="rounded-md border p-4 text-sm">
                             <p className="font-medium">

@@ -28,6 +28,11 @@ import {
   getShippingStatusLabel,
 } from "@/lib/orders/status";
 import { getPickupCodeFromOrder } from "@/lib/orders/pickup-code";
+import {
+  formatOrderDisplayId,
+  getOrderContactName,
+  isPickupOrder,
+} from "@/lib/orders/display";
 import type { Orden } from "@/lib/types";
 
 function formatDate(value?: string) {
@@ -111,7 +116,7 @@ export default function OrderDetailPage({
     );
   }
 
-  const isPickup = order.fulfillmentMethod === "PICKUP";
+  const isPickup = isPickupOrder(order);
   const pickupCode = isPickup ? getPickupCodeFromOrder(order) : null;
   const shipping = order.shipping;
   const trackingUrl = shipping?.trackingUrl;
@@ -134,8 +139,8 @@ export default function OrderDetailPage({
         <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-secondary">
           Pedido
         </p>
-        <h1 className="mt-2 break-all font-headline text-2xl font-bold md:text-3xl">
-          {order.id}
+        <h1 className="mt-2 font-headline text-2xl font-bold md:text-3xl" title={order.id}>
+          {formatOrderDisplayId(order.id)}
         </h1>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Badge variant={getOrderStatusVariant(order.estado)}>
@@ -158,6 +163,10 @@ export default function OrderDetailPage({
               <CardTitle>Resumen</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
+              <SummaryRow
+                label={isPickup ? "Persona que recoge" : "Nombre en el envío"}
+                value={getOrderContactName(order) ?? "No registrado"}
+              />
               <SummaryRow label="Fecha de compra" value={formatDate(order.createdAt)} />
               <SummaryRow
                 label="Método de entrega"

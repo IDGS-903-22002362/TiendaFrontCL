@@ -267,11 +267,15 @@ function mapOrden(input: unknown): Orden {
       item.pickupContact && typeof item.pickupContact === "object"
         ? {
             name:
-              toStringValue((item.pickupContact as UnknownRecord).name) ||
-              undefined,
+              toStringValue(
+                (item.pickupContact as UnknownRecord).name ??
+                  (item.pickupContact as UnknownRecord).nombre,
+              ) || undefined,
             phone:
-              toStringValue((item.pickupContact as UnknownRecord).phone) ||
-              undefined,
+              toStringValue(
+                (item.pickupContact as UnknownRecord).phone ??
+                  (item.pickupContact as UnknownRecord).telefono,
+              ) || undefined,
             email:
               toStringValue((item.pickupContact as UnknownRecord).email) ||
               undefined,
