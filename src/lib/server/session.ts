@@ -6,20 +6,28 @@ export const API_TOKEN_COOKIE = "tiendafront_api_token";
 export const USER_ROLE_COOKIE = "tiendafront_user_role";
 export const USER_DATA_COOKIE = "tiendafront_user_data";
 
-// Para cookies HttpOnly del servidor — lax está bien
+function usesSecureCookiePolicy(): boolean {
+  return (
+    process.env.NODE_ENV === "production" ||
+    process.env.VERCEL === "1" ||
+    process.env.FORCE_SECURE_COOKIES === "true"
+  );
+}
+
+// HttpOnly: lax en local HTTP para que el navegador envíe la cookie al proxy /api/*
 const SERVER_COOKIE_OPTIONS = {
   path: "/",
-  sameSite: "none" as const,
-  secure: true,
+  sameSite: (usesSecureCookiePolicy() ? "none" : "lax") as "none" | "lax",
+  secure: usesSecureCookiePolicy(),
   httpOnly: true,
   maxAge: 60 * 60 * 24 * 7,
 };
 
-// Para cookies legibles desde JS — none para compatibilidad con WebView
+// Legibles desde JS (rol, datos de usuario)
 const CLIENT_COOKIE_OPTIONS = {
   path: "/",
-  sameSite: "none" as const,
-  secure: true,
+  sameSite: (usesSecureCookiePolicy() ? "none" : "lax") as "none" | "lax",
+  secure: usesSecureCookiePolicy(),
   httpOnly: false,
   maxAge: 60 * 60 * 24 * 7,
 };

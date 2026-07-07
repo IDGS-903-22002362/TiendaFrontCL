@@ -69,6 +69,49 @@ function formatDate(value: string | Date | undefined): string {
     return d.toLocaleDateString("es-CL");
 }
 
+function toTimestampMs(value: string | Date | undefined): number {
+    if (!value) return 0;
+    const parsed = new Date(value).getTime();
+    return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function dedupeUsuariosByUid(usuarios: Usuario[]): Usuario[] {
+    const byUid = new Map<string, Usuario>();
+
+    for (const usuario of usuarios) {
+        const uid = usuario.uid?.trim();
+        if (!uid) continue;
+
+        const existing = byUid.get(uid);
+        if (!existing) {
+            byUid.set(uid, usuario);
+            continue;
+        }
+
+        const usuarioIsCanonical = usuario.id === uid;
+        const existingIsCanonical = existing.id === uid;
+        if (usuarioIsCanonical && !existingIsCanonical) {
+            byUid.set(uid, usuario);
+            continue;
+        }
+        if (!usuarioIsCanonical && existingIsCanonical) {
+            continue;
+        }
+
+        const usuarioUpdated = toTimestampMs(usuario.updatedAt ?? usuario.createdAt);
+        const existingUpdated = toTimestampMs(existing.updatedAt ?? existing.createdAt);
+        if (usuarioUpdated >= existingUpdated) {
+            byUid.set(uid, usuario);
+        }
+    }
+
+    return Array.from(byUid.values());
+}
+
+function getUsuarioRowKey(usuario: Usuario): string {
+    return usuario.id ?? usuario.uid;
+}
+
 export default function SuperAdminUsuariosPage() {
     const [usuarios, setUsuarios] = useState<Usuario[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
@@ -89,7 +132,7 @@ export default function SuperAdminUsuariosPage() {
         setIsLoading(true);
         try {
             const data = await usuariosApi.getAll();
-            setUsuarios(data);
+            setUsuarios(dedupeUsuariosByUid(data));
             setSelectedUsuarioId((current) =>
                 current && !data.some((u) => u.uid === current) ? "" : current,
             );
@@ -231,7 +274,11 @@ export default function SuperAdminUsuariosPage() {
 
             if (editingUsuarioId) {
                 const updated = await usuariosApi.update(editingUsuarioId, payload);
-                setUsuarios((prev) => prev.map((u) => (u.uid === updated.uid ? updated : u)));
+                setUsuarios((prev) =>
+                    dedupeUsuariosByUid(
+                        prev.map((u) => (u.uid === updated.uid ? updated : u)),
+                    ),
+                );
                 toast({
                     title: "Usuario actualizado",
                     description: `${form.email} ha sido actualizado correctamente`,
@@ -241,7 +288,7 @@ export default function SuperAdminUsuariosPage() {
                     ...payload,
                     password: form.password,
                 });
-                setUsuarios((prev) => [...prev, newUsuario]);
+                setUsuarios((prev) => dedupeUsuariosByUid([...prev, newUsuario]));
                 setTemporaryPassword(form.password);
                 toast({
                     title: "Usuario creado",
@@ -284,7 +331,11 @@ export default function SuperAdminUsuariosPage() {
         try {
             const updated = await usuariosApi.reactivate(uid); // Necesitamos agregar este método en la API
             console.log('Usuario reactivado (respuesta):', updated);
-            setUsuarios((prev) => prev.map((u) => (u.uid === updated.uid ? updated : u)));
+            setUsuarios((prev) =>
+                dedupeUsuariosByUid(
+                    prev.map((u) => (u.uid === updated.uid ? updated : u)),
+                ),
+            );
             toast({ title: "Usuario reactivado" });
         } catch (error) {
             toast({
@@ -443,7 +494,7 @@ export default function SuperAdminUsuariosPage() {
                                 </TableRow>
                             ) : (
                                 paginatedUsuarios.map((usuario) => (
-                                    <TableRow key={usuario.uid}>
+                                    <TableRow key={getUsuarioRowKey(usuario)}>
                                         <TableCell className="font-medium">{usuario.email}</TableCell>
                                         <TableCell>{usuario.nombre || "-"}</TableCell>
                                         <TableCell>

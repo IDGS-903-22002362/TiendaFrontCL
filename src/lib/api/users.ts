@@ -46,7 +46,7 @@ export async function getMyPoints() {
   try {
     const wallet = await getMyWallet();
     return {
-      points: wallet.availablePoints,
+      points: Number(wallet.availablePoints ?? 0),
       payload: wallet,
       level: wallet.level,
       nextExpirationAt: wallet.nextExpirationAt,

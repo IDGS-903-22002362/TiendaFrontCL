@@ -34,6 +34,31 @@ export type PaginatedTransactions = {
   hasMore: boolean;
 };
 
+type LegacyAssignment = {
+  id: string;
+  usuarioId: string;
+  puntos: number;
+  descripcion?: string;
+  origenId: string;
+  createdAt: string;
+};
+
+type LegacyAssignmentsResponse = {
+  success: boolean;
+  data: LegacyAssignment[];
+  pagination?: { nextCursor?: string | null; hasMore?: boolean };
+};
+
+type LegacyAssignBySaleResponse = {
+  success: boolean;
+  data: {
+    puntosAsignados: number;
+    puntosActuales: number;
+    origenId?: string;
+    descripcion?: string;
+  };
+};
+
 function idempotencyKey(prefix: string): string {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return `${prefix}:${crypto.randomUUID()}`;
@@ -41,12 +66,45 @@ function idempotencyKey(prefix: string): string {
   return `${prefix}:${Date.now()}`;
 }
 
+function mapLegacyAssignment(item: LegacyAssignment): LoyaltyTransaction {
+  return {
+    transactionId: item.id,
+    memberId: item.usuarioId,
+    type: "EARN",
+    status: "POSTED",
+    points: item.puntos,
+    balanceBefore: 0,
+    balanceAfter: 0,
+    description: item.descripcion,
+    channel: "STORE",
+    createdAt: item.createdAt,
+  };
+}
+
+function normalizePaginatedTransactions(data: {
+  items?: LoyaltyTransaction[];
+  pagination?: { nextCursor?: string | null; hasMore?: boolean };
+  nextCursor?: string | null;
+  hasMore?: boolean;
+}): PaginatedTransactions {
+  return {
+    items: data.items ?? [],
+    nextCursor: data.pagination?.nextCursor ?? data.nextCursor ?? null,
+    hasMore: data.pagination?.hasMore ?? data.hasMore ?? false,
+  };
+}
+
+type WalletResponse = {
+  wallet: LoyaltyWallet;
+};
+
 export async function getMyWallet(): Promise<LoyaltyWallet> {
-  return apiFetch<LoyaltyWallet>(
+  const data = await apiFetch<WalletResponse>(
     "/api/loyalty/wallets/me",
     { method: "GET" },
     { local: true },
   );
+  return data.wallet;
 }
 
 export async function getMyWalletTransactions(params?: {
@@ -57,11 +115,15 @@ export async function getMyWalletTransactions(params?: {
   if (params?.limit) search.set("limit", String(params.limit));
   if (params?.cursor) search.set("cursor", params.cursor);
   const qs = search.toString();
-  return apiFetch<PaginatedTransactions>(
+  const data = await apiFetch<{
+    items: LoyaltyTransaction[];
+    pagination?: { nextCursor?: string | null; hasMore?: boolean };
+  }>(
     `/api/loyalty/wallets/me/transactions${qs ? `?${qs}` : ""}`,
     { method: "GET" },
     { local: true },
   );
+  return normalizePaginatedTransactions(data);
 }
 
 export async function previewEarnPoints(amountCents: number): Promise<{
@@ -82,49 +144,67 @@ export async function earnFromStoreSale(input: {
   externalTransactionId: string;
   amountCents: number;
   description?: string;
-  token: string;
+  token?: string;
 }): Promise<LoyaltyTransaction> {
-  const response = await fetch("/api/loyalty/earn-transactions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${input.token}`,
-      "Idempotency-Key": input.externalTransactionId,
+  const response = await apiFetch<LegacyAssignBySaleResponse>(
+    `/api/usuarios/${input.memberId}/puntos/asignar-por-venta`,
+    {
+      method: "POST",
+      headers: {
+        "Idempotency-Key": input.externalTransactionId,
+      },
+      body: JSON.stringify({
+        dinero: input.amountCents / 100,
+        descripcion:
+          input.description?.trim() ||
+          `Venta ${input.externalTransactionId}`,
+      }),
     },
-    body: JSON.stringify({
-      memberId: input.memberId,
-      externalTransactionId: input.externalTransactionId,
-      amountCents: input.amountCents,
-      currency: "MXN",
-      channel: "STORE",
-      description: input.description,
-    }),
-  });
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.detail || err.title || "Error al acumular puntos");
-  }
-  return response.json();
+    { local: true, token: input.token },
+  );
+
+  return {
+    transactionId: input.externalTransactionId,
+    memberId: input.memberId,
+    type: "EARN",
+    status: "POSTED",
+    points: response.data.puntosAsignados,
+    amountCents: input.amountCents,
+    currency: "MXN",
+    externalTransactionId: input.externalTransactionId,
+    balanceBefore: Math.max(
+      0,
+      response.data.puntosActuales - response.data.puntosAsignados,
+    ),
+    balanceAfter: response.data.puntosActuales,
+    description: response.data.descripcion ?? input.description,
+    channel: "STORE",
+    createdAt: new Date().toISOString(),
+  };
 }
 
 export async function getAdminTransactions(params: {
   limit?: number;
   cursor?: string;
-  token: string;
+  token?: string;
+  actorId?: string;
 }): Promise<PaginatedTransactions> {
   const search = new URLSearchParams();
   search.set("limit", String(params.limit ?? 20));
   if (params.cursor) search.set("cursor", params.cursor);
-  const response = await fetch(
-    `/api/loyalty/admin/transactions?${search.toString()}`,
-    {
-      headers: { Authorization: `Bearer ${params.token}` },
-    },
+  if (params.actorId) search.set("empleadoId", params.actorId);
+
+  const response = await apiFetch<LegacyAssignmentsResponse>(
+    `/api/usuarios/puntos/asignaciones?${search.toString()}`,
+    { method: "GET" },
+    { local: true, token: params.token },
   );
-  if (!response.ok) {
-    throw new Error("Error al cargar historial");
-  }
-  return response.json();
+
+  return {
+    items: (response.data ?? []).map(mapLegacyAssignment),
+    nextCursor: response.pagination?.nextCursor ?? null,
+    hasMore: response.pagination?.hasMore ?? false,
+  };
 }
 
 export { idempotencyKey };

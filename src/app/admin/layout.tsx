@@ -28,40 +28,44 @@ import {
   SheetHeader,
 } from "@/components/ui/sheet";
 import { AdminNotificationsPanel } from "@/components/admin/admin-notifications-panel";
+import {
+  getEmpleadoDefaultAdminPath,
+  isEmpleadoAdminPath,
+} from "@/lib/admin-access";
 import { cn } from "@/lib/utils";
 
 const navGroups = [
   {
     title: "Operación",
     links: [
-      { href: "/admin", label: "Dashboard", icon: LayoutDashboard, adminOnly: false, empleadoOnly: false },
-      { href: "/admin/ordenes", label: "Órdenes", icon: ShoppingCart, adminOnly: false, empleadoOnly: false },
-      { href: "/admin/inventario", label: "Inventario", icon: Archive, adminOnly: false, empleadoOnly: false },
+      { href: "/admin", label: "Dashboard", icon: LayoutDashboard, adminOnly: true },
+      { href: "/admin/ordenes", label: "Órdenes", icon: ShoppingCart, adminOnly: false },
+      { href: "/admin/inventario", label: "Inventario", icon: Archive, adminOnly: false },
+      { href: "/admin/puntos", label: "Puntos", icon: Coins, adminOnly: false },
     ],
   },
   {
     title: "Catálogo",
     links: [
-      { href: "/admin/productos", label: "Productos", icon: Package, adminOnly: false, empleadoOnly: false },
-      { href: "/admin/categorias", label: "Categorías", icon: Tags, adminOnly: false, empleadoOnly: false },
-      { href: "/admin/lineas", label: "Líneas", icon: Tags, adminOnly: false, empleadoOnly: false },
-      { href: "/admin/tallas", label: "Tallas", icon: Ruler, adminOnly: false, empleadoOnly: false },
-      { href: "/admin/proveedores", label: "Proveedores", icon: Truck, adminOnly: false, empleadoOnly: false },
+      { href: "/admin/productos", label: "Productos", icon: Package, adminOnly: true },
+      { href: "/admin/categorias", label: "Categorías", icon: Tags, adminOnly: true },
+      { href: "/admin/lineas", label: "Líneas", icon: Tags, adminOnly: true },
+      { href: "/admin/tallas", label: "Tallas", icon: Ruler, adminOnly: true },
+      { href: "/admin/proveedores", label: "Proveedores", icon: Truck, adminOnly: true },
     ],
   },
   {
     title: "Marketing",
     links: [
-      { href: "/admin/banners", label: "Vallas Publicitarias", icon: ImageIcon, adminOnly: false, empleadoOnly: false },
-      { href: "/admin/ofertas", label: "Ofertas", icon: BadgePercent, adminOnly: false, empleadoOnly: false },
-      { href: "/admin/recomendaciones", label: "Recomendaciones", icon: Sparkles, adminOnly: false, empleadoOnly: false },
-      { href: "/admin/puntos", label: "Puntos", icon: Coins, adminOnly: false, empleadoOnly: true },
+      { href: "/admin/banners", label: "Vallas Publicitarias", icon: ImageIcon, adminOnly: true },
+      { href: "/admin/ofertas", label: "Ofertas", icon: BadgePercent, adminOnly: true },
+      { href: "/admin/recomendaciones", label: "Recomendaciones", icon: Sparkles, adminOnly: true },
     ],
   },
   {
     title: "Integraciones",
     links: [
-      { href: "/admin/fedex", label: "FedEx", icon: Truck, adminOnly: false, empleadoOnly: false },
+      { href: "/admin/fedex", label: "FedEx", icon: Truck, adminOnly: true },
     ],
   },
 ];
@@ -95,6 +99,11 @@ export default function AdminLayout({
 
       if (role !== "ADMIN" && role !== "EMPLEADO" && role !== "SUPER_ADMIN") {
         router.replace("/");
+        return;
+      }
+
+      if (role === "EMPLEADO" && pathname && !isEmpleadoAdminPath(pathname)) {
+        router.replace(getEmpleadoDefaultAdminPath());
       }
     }
   }, [
@@ -103,6 +112,7 @@ export default function AdminLayout({
     role,
     user,
     router,
+    pathname,
   ]);
 
   if (isLoading || !canRenderCurrentRoute) {
@@ -122,12 +132,13 @@ export default function AdminLayout({
     <div className="flex flex-col gap-6">
       {navGroups.map((group) => {
         const visibleLinks = group.links.filter((link) => {
-          const isAdminRole = role === "ADMIN" || role === "SUPER_ADMIN";
+          const isFullAdmin = role === "ADMIN" || role === "SUPER_ADMIN";
 
-          return (
-            (!link.adminOnly || isAdminRole) &&
-            (!link.empleadoOnly || role === "EMPLEADO")
-          );
+          if (role === "EMPLEADO") {
+            return isEmpleadoAdminPath(link.href);
+          }
+
+          return !link.adminOnly || isFullAdmin;
         });
 
         if (visibleLinks.length === 0) return null;
