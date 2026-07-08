@@ -19,8 +19,12 @@ type MobileAppAuthPayload = {
 
 let lastNotifiedAuthFingerprint = "";
 
-function isMobileAuthBridgeEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_CL_ENABLE_MOBILE_AUTH_BRIDGE === "true";
+function getMobileAuthBridge() {
+  if (typeof window === "undefined" || !isEmbeddedMobileApp()) {
+    return null;
+  }
+
+  return window.ClubLeonBridge?.postMessage ? window.ClubLeonBridge : null;
 }
 
 export function resetMobileAppAuthNotification() {
@@ -28,15 +32,12 @@ export function resetMobileAppAuthNotification() {
 }
 
 export function notifyMobileAppLogout(): boolean {
-  if (!isMobileAuthBridgeEnabled()) {
+  const bridge = getMobileAuthBridge();
+  if (!bridge) {
     return false;
   }
 
-  if (typeof window === "undefined" || !window.ClubLeonBridge?.postMessage) {
-    return false;
-  }
-
-  window.ClubLeonBridge.postMessage(
+  bridge.postMessage(
     JSON.stringify({
       type: "CLUBLEON_LOGOUT",
     }),
@@ -47,11 +48,8 @@ export function notifyMobileAppLogout(): boolean {
 }
 
 export function notifyMobileAppAuth(payload: MobileAppAuthPayload): boolean {
-  if (!isMobileAuthBridgeEnabled()) {
-    return false;
-  }
-
-  if (typeof window === "undefined" || !window.ClubLeonBridge?.postMessage) {
+  const bridge = getMobileAuthBridge();
+  if (!bridge) {
     return false;
   }
 
@@ -77,7 +75,7 @@ export function notifyMobileAppAuth(payload: MobileAppAuthPayload): boolean {
     return true;
   }
 
-  window.ClubLeonBridge.postMessage(
+  bridge.postMessage(
     JSON.stringify({
       type: "CLUBLEON_AUTH_SUCCESS",
       token: resolvedToken ?? "",
