@@ -13,7 +13,7 @@
     "typecheck": "npm run typegen && tsc --noEmit",
     "deploy:frontend": "firebase deploy --only apphosting:ecomerce-next-front --project e-comerce-leon",
     "test:e2e:cookies": "playwright test e2e/cookie-consent.spec.ts",
-    "test:unit": "node --import tsx --test src/lib/api/cart-merge.test.ts src/lib/api/favorites.test.ts src/lib/backend-url.test.ts src/lib/privacy/resolve-client-privacy-context.test.ts src/lib/cookies/script-loader.privacy.test.ts"
+    "test:unit": "node --import tsx --test src/lib/api/cart-merge.test.ts src/lib/api/favorites.test.ts src/lib/backend-url.test.ts src/lib/privacy/resolve-client-privacy-context.test.ts src/lib/cookies/script-loader.privacy.test.ts src/lib/auth/apple-review-credentials.test.ts"
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.28.0",

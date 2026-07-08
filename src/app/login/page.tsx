@@ -28,6 +28,7 @@ import { notifyMobileAppAuth } from "@/lib/mobile-app-bridge";
 import { COOKIE_SESSION_TOKEN } from "@/lib/cookies/constants";
 import { UserRole } from "@/lib/types";
 import { useIsFromMobileApp } from "@/hooks/use-from-mobile-app";
+import { isAppleReviewTestEmail } from "@/lib/auth/apple-review-credentials";
 
 // Definir tipos para las respuestas de la API
 interface RequestVerificationResponse {
@@ -83,7 +84,7 @@ function LoginPageContent() {
   const { isFromMobileApp } = useIsFromMobileApp();
 
   const firebaseReady = isFirebaseConfigured();
-
+  const isAppleReviewEmail = isAppleReviewTestEmail(email);
 
   const esOtpValido = verificationCode.length === 6;
 
@@ -146,7 +147,10 @@ function LoginPageContent() {
       setEmail(emailParam.trim());
     }
 
-    if (searchParams.get("mode") === "password") {
+    if (
+      searchParams.get("mode") === "password" ||
+      isAppleReviewTestEmail(emailParam ?? "")
+    ) {
       setShowPasswordLogin(true);
     }
   }, [searchParams]);
@@ -305,6 +309,11 @@ function LoginPageContent() {
         title: "Datos incompletos",
         description: "Por favor, ingresa tu correo electrónico.",
       });
+      return;
+    }
+
+    if (isAppleReviewTestEmail(email)) {
+      setShowPasswordLogin(true);
       return;
     }
 
@@ -505,6 +514,15 @@ function LoginPageContent() {
       setIsSubmitting(false);
     }
   }
+
+  const onContinueOrLogin = () => {
+    if (isAppleReviewTestEmail(email)) {
+      void onEmailPasswordLogin();
+      return;
+    }
+
+    void onRequestVerificationCode();
+  };
 
   const onGoogleLogin = async () => {
     setIsSubmitting(true);
@@ -770,17 +788,56 @@ function LoginPageContent() {
                       aria-label="Correo electrónico"
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
-                      disabled={isRequestingCode}
+                      disabled={isRequestingCode || isSubmitting}
                       className="h-11 rounded-2xl border border-gray-200 bg-white pl-12 pr-4 text-gray-900 placeholder-gray-500 transition-all focus:border-[#007A53] focus:ring-2 focus:ring-[#007A53]/15 sm:h-12 md:h-14"
                     />
                   </div>
 
+                  {isAppleReviewEmail ? (
+                    <div className="relative w-full min-w-0">
+                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                        <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        autoComplete="current-password"
+                        placeholder="Contraseña"
+                        aria-label="Contraseña"
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        disabled={isSubmitting}
+                        className="h-[clamp(2.75rem,6vh,3.5rem)] min-h-[44px] w-full min-w-0 rounded-2xl border border-gray-200 bg-white pl-12 pr-14 text-base text-gray-900 placeholder-gray-500 transition-all focus:border-[#007A53] focus:ring-2 focus:ring-[#007A53]/15"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-gray-600"
+                        disabled={isSubmitting}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-5 w-5" />
+                        ) : (
+                          <Eye className="h-5 w-5" />
+                        )}
+                      </button>
+                    </div>
+                  ) : null}
+
                   <Button
                     className="h-11 w-full rounded-2xl bg-[#007A53] text-sm font-bold text-white shadow-lg shadow-[#007A53]/30 transition-all hover:bg-[#006248] disabled:opacity-70 sm:h-12 sm:text-base md:h-14 md:text-lg"
-                    onClick={onRequestVerificationCode}
-                    disabled={isRequestingCode}
+                    onClick={onContinueOrLogin}
+                    disabled={isRequestingCode || isSubmitting}
                   >
-                    {isRequestingCode ? "Enviando..." : "Continuar"}
+                    {isAppleReviewEmail
+                      ? isSubmitting
+                        ? "Iniciando sesión..."
+                        : "Iniciar Sesión"
+                      : isRequestingCode
+                        ? "Enviando..."
+                        : "Continuar"}
                   </Button>
 
                   <div className="text-center">

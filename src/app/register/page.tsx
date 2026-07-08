@@ -10,6 +10,7 @@ import { showErrorToast, showInfoToast, showSuccessToast } from "@/lib/app-toast
 import { AppNotificationBanner } from "@/components/ui/app-notification";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Checkbox } from "@/components/ui/checkbox";
 import Antigravity from "@/components/Antigravity";
 import { apiFetch } from "@/lib/api/client";
@@ -646,13 +647,15 @@ export default function RegisterPage() {
                                 className="h-10 rounded-2xl border border-gray-200 bg-white px-3 text-sm text-gray-900 placeholder-gray-500 transition-all focus:border-[#007A53] focus:ring-2 focus:ring-[#007A53]/15 sm:h-11"
                             />
 
-                            <Input
-                                name="fechaNacimiento"
-                                type="date"
+                            <DatePickerField
                                 value={form.fechaNacimiento}
-                                onChange={handleChange}
+                                onChange={(fechaNacimiento) =>
+                                    setForm((prev) => ({ ...prev, fechaNacimiento }))
+                                }
+                                max={new Date().toISOString().slice(0, 10)}
+                                placeholder="Fecha de nacimiento (opcional)"
                                 aria-label="Fecha de nacimiento (opcional)"
-                                className="h-10 rounded-2xl border border-gray-200 bg-white px-3 text-sm text-gray-900 transition-all focus:border-[#007A53] focus:ring-2 focus:ring-[#007A53]/15 sm:h-11"
+                                className="h-10 rounded-2xl border border-gray-200 bg-white px-3 text-sm text-gray-900 shadow-none transition-all hover:bg-white focus-visible:border-[#007A53] focus-visible:ring-2 focus-visible:ring-[#007A53]/15 sm:h-11"
                             />
 
                             <select

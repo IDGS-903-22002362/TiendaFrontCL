@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { getMyPoints, getMyProfile, saveEditableProfile, usuariosApi } from "@/lib/api/users";
 import { useToast } from "@/hooks/use-toast";
 import { ProfileRecommendations } from "@/components/storefront/recommendations/profile-recommendations";
+import { DatePickerField } from "@/components/ui/date-picker-field";
 
 export default function ProfilePage() {
   const { user, role, isAuthenticated, isLoading, refreshSession } = useAuth();
@@ -418,11 +419,14 @@ export default function ProfilePage() {
 
                 <div className="space-y-1">
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Fecha de nacimiento (opcional)</p>
-                  <input
-                    type="date"
+                  <DatePickerField
                     value={profileForm.fechaNacimiento}
-                    onChange={(event) => setProfileForm((prev) => ({ ...prev, fechaNacimiento: event.target.value }))}
-                    className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
+                    onChange={(fechaNacimiento) =>
+                      setProfileForm((prev) => ({ ...prev, fechaNacimiento }))
+                    }
+                    max={new Date().toISOString().slice(0, 10)}
+                    placeholder="Selecciona una fecha"
+                    className="h-10 rounded-lg border border-input bg-background px-3 text-sm shadow-none hover:bg-background"
                   />
                 </div>
 

@@ -5,6 +5,18 @@ import {
   getEmpleadoDefaultAdminPath,
   isEmpleadoAdminPath,
 } from "@/lib/admin-access";
+import {
+  CL_APP_CONTEXT_COOKIE,
+  CL_APP_CONTEXT_MAX_AGE_SECONDS,
+  isAppClientOrigin,
+} from "@/lib/privacy/constants";
+import {
+  isEmbeddedAppRequest,
+  resolveClientPrivacyContextFromRequest,
+  shouldStripAppPrivacyQueryParams,
+  stripAppPrivacyQueryParams,
+} from "@/lib/privacy/resolve-client-privacy-context";
+import type { ClientOrigin } from "@/lib/privacy/types";
 
 const API_TOKEN_COOKIE = "tiendafront_api_token";
 const USER_ROLE_COOKIE = "tiendafront_user_role";

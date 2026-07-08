@@ -17,6 +17,7 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Breadcrumbs } from "@/components/storefront/shared/breadcrumbs";
 
 export default function CompleteProfilePage() {
@@ -287,14 +288,16 @@ export default function CompleteProfilePage() {
                                     <label htmlFor="fechaNacimiento" className="text-sm font-medium text-foreground">
                                         Fecha de nacimiento (opcional)
                                     </label>
-                                    <Input
+                                    <DatePickerField
                                         id="fechaNacimiento"
-                                        name="fechaNacimiento"
-                                        type="date"
                                         value={form.fechaNacimiento}
-                                        onChange={handleChange}
-                                        className="h-11 rounded-lg"
+                                        onChange={(fechaNacimiento) =>
+                                            setForm((prev) => ({ ...prev, fechaNacimiento }))
+                                        }
+                                        max={new Date().toISOString().slice(0, 10)}
+                                        placeholder="Selecciona tu fecha de nacimiento"
                                         disabled={isSubmitting}
+                                        className="h-11 rounded-lg"
                                     />
                                 </div>
 
