@@ -230,6 +230,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.__tiendaAuth = {
         signInWithFirebase,
         refreshSession,
+        clearSession,
         getAuthStatus: () => ({
           isAuthenticated: Boolean(token) && !isLoading,
           token,
@@ -237,7 +238,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }),
       };
     }
-  }, [signInWithFirebase, refreshSession, token, user, isLoading]);
+  }, [signInWithFirebase, refreshSession, clearSession, token, user, isLoading]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

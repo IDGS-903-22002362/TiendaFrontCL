@@ -5,6 +5,7 @@ interface ClubLeonBridge {
 interface TiendaAuthBridge {
   signInWithFirebase: (idToken: string) => Promise<void>;
   refreshSession: () => Promise<void>;
+  clearSession: () => Promise<void>;
   getAuthStatus: () => {
     isAuthenticated: boolean;
     token: string | null;

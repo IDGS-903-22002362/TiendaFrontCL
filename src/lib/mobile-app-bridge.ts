@@ -14,6 +14,21 @@ export function resetMobileAppAuthNotification() {
   lastNotifiedAuthFingerprint = "";
 }
 
+export function notifyMobileAppLogout(): boolean {
+  if (typeof window === "undefined" || !window.ClubLeonBridge?.postMessage) {
+    return false;
+  }
+
+  window.ClubLeonBridge.postMessage(
+    JSON.stringify({
+      type: "CLUBLEON_LOGOUT",
+    }),
+  );
+
+  resetMobileAppAuthNotification();
+  return true;
+}
+
 export function notifyMobileAppAuth(payload: MobileAppAuthPayload): boolean {
   if (typeof window === "undefined" || !window.ClubLeonBridge?.postMessage) {
     return false;
