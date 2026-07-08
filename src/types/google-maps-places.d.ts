@@ -2,6 +2,12 @@ interface ClubLeonBridge {
   postMessage: (message: string) => void;
 }
 
+interface ClubLeonWebkitBridge {
+  messageHandlers?: {
+    ClubLeonBridge?: ClubLeonBridge;
+  };
+}
+
 interface TiendaAuthBridge {
   signInWithFirebase: (
     idToken: string,
@@ -19,6 +25,8 @@ interface TiendaAuthBridge {
 declare global {
   interface Window {
     ClubLeonBridge?: ClubLeonBridge;
+    ReactNativeWebView?: ClubLeonBridge;
+    webkit?: ClubLeonWebkitBridge;
     __tiendaAuth?: TiendaAuthBridge;
   }
 

@@ -21,6 +21,7 @@ export function StorefrontShellClient({ children }: StorefrontShellClientProps) 
   const pathname = usePathname();
   const router = useRouter();
   const { isAuthenticated, user, isLoading } = useAuth();
+  const { isFromMobileApp } = useIsFromMobileApp();
 
   useEffect(() => {
     if (
@@ -28,12 +29,13 @@ export function StorefrontShellClient({ children }: StorefrontShellClientProps) 
       isAuthenticated &&
       user &&
       !user.perfilCompleto &&
+      !isFromMobileApp &&
       pathname !== "/complete-profile" &&
       pathname !== "/register"
     ) {
       router.push("/complete-profile");
     }
-  }, [isAuthenticated, user, isLoading, pathname, router]);
+  }, [isAuthenticated, user, isLoading, isFromMobileApp, pathname, router]);
 
   const isAdminRoute = pathname.startsWith("/admin");
   const isEmployeeRoute =
@@ -51,7 +53,6 @@ export function StorefrontShellClient({ children }: StorefrontShellClientProps) 
     pathname === "/order-history" ||
     pathname === "/profile" ||
     pathname === "/ai";
-  const { isFromMobileApp } = useIsFromMobileApp();
   const reserveStoreBottomNavSpace = showBottomNav && !isFromMobileApp;
 
   useEffect(() => {

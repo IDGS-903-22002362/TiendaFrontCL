@@ -14,6 +14,7 @@ import {
   joinBackendApiUrl,
   resolveBackendBaseUrl,
 } from "@/lib/backend-url";
+import { CLIENT_ORIGIN_HEADER } from "@/lib/privacy/constants";
 
 async function parseResponsePayload(response: Response) {
   const text = await response.text();
@@ -118,6 +119,7 @@ export async function proxyToBackend({
   const requestId = request.headers.get("x-request-id");
   const accept = request.headers.get("accept");
   const appCheckToken = request.headers.get("x-firebase-appcheck");
+  const clientOrigin = request.headers.get(CLIENT_ORIGIN_HEADER);
 
   if (authorization) {
     headers.set("Authorization", authorization);
@@ -139,6 +141,9 @@ export async function proxyToBackend({
   }
   if (appCheckToken) {
     headers.set("X-Firebase-AppCheck", appCheckToken);
+  }
+  if (clientOrigin) {
+    headers.set(CLIENT_ORIGIN_HEADER, clientOrigin);
   }
 
   const url = `${joinBackendApiUrl(resolveBackendBaseUrl(), backendPath)}${request.nextUrl.search}`;

@@ -240,6 +240,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
+    if (isLoading || !token || !user) {
+      return;
+    }
+
+    notifyMobileAppAuth({
+      token: token !== COOKIE_SESSION_TOKEN ? token : undefined,
+      uid: user.uid ?? user.id,
+      user,
+    });
+  }, [isLoading, token, user]);
+
+  useEffect(() => {
     if (typeof window !== "undefined") {
       window.__tiendaAuth = {
         signInWithFirebase,

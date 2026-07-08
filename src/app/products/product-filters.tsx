@@ -316,6 +316,8 @@ export function ProductFilters({
 
     return applyCatalogOfferPricingToProducts(mapped, initialOfferPricing);
   }, [initialOfferPricing, initialPage.items, initialProductsProp]);
+  const shouldRecoverInitialEmptyCatalog =
+    initialPage.items.length === 0 && initialProducts.length === 0;
 
   const [offerPricing, setOfferPricing] =
     useState<Record<string, ProductOfferPricing>>(initialOfferPricing);
@@ -343,7 +345,7 @@ export function ProductFilters({
     initialPage.nextCursor,
   );
   const [hasMore, setHasMore] = useState(initialPage.hasMore);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(shouldRecoverInitialEmptyCatalog);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -391,6 +393,7 @@ export function ProductFilters({
   const [favoritesReloadKey, setFavoritesReloadKey] = useState(0);
 
   const initialRender = useRef(true);
+  const initialEmptyCatalogRecovery = useRef(false);
 
   const isOfferView = onlyOffers || isOfertasCatalogSort(sort);
 
@@ -574,6 +577,17 @@ export function ProductFilters({
     );
   }, [totalOfferDiscountPages]);
 
+  useEffect(() => {
+    if (
+      !shouldRecoverInitialEmptyCatalog ||
+      initialEmptyCatalogRecovery.current
+    ) {
+      return;
+    }
+
+    initialEmptyCatalogRecovery.current = true;
+    void loadPage(null);
+  }, [loadPage, shouldRecoverInitialEmptyCatalog]);
 
   const handleOfferDiscountClick = (percent: number) => {
     const nextPercent = selectedOfferPercent === percent ? null : percent;

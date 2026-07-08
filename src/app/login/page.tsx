@@ -142,6 +142,7 @@ function LoginPageContent() {
     }
 
     let cancelled = false;
+    let fallbackTimer: number | undefined;
 
     const notifyApp = async () => {
       let firebaseIdToken: string | null = null;
@@ -165,18 +166,23 @@ function LoginPageContent() {
       if (notified) {
         hasNotifiedMobileAppRef.current = true;
       }
+
+      if (!notified && !cancelled) {
+        fallbackTimer = window.setTimeout(() => {
+          if (!hasNotifiedMobileAppRef.current) {
+            router.replace(getTargetRedirect(role, user?.perfilCompleto));
+          }
+        }, 2500);
+      }
     };
 
     void notifyApp();
 
-    // Safety net if the native bridge handler does not navigate away.
-    const fallbackTimer = window.setTimeout(() => {
-      router.replace(getTargetRedirect(role, user?.perfilCompleto));
-    }, 2500);
-
     return () => {
       cancelled = true;
-      window.clearTimeout(fallbackTimer);
+      if (fallbackTimer !== undefined) {
+        window.clearTimeout(fallbackTimer);
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFromMobileApp, isLoading, isAuthenticated, token, user]);

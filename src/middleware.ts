@@ -130,7 +130,7 @@ function forbiddenPage() {
       body {
         margin: 0;
         min-height: 100%;
-        background: #000;
+        background: #0d253d;
       }
 
       body {
@@ -270,6 +270,7 @@ function isMobileAppRequest(request: NextRequest) {
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const isMobileApp = isMobileAppRequest(request);
 
   if (isExcludedPath(pathname)) {
     return NextResponse.next();
@@ -325,7 +326,12 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  if (perfilCompleto === false && pathname !== "/complete-profile" && pathname !== "/register") {
+  if (
+    perfilCompleto === false &&
+    pathname !== "/complete-profile" &&
+    pathname !== "/register" &&
+    !isMobileApp
+  ) {
     const url = request.nextUrl.clone();
     url.pathname = "/complete-profile";
     url.search = "";
@@ -343,7 +349,7 @@ export function middleware(request: NextRequest) {
   // La app móvil carga /login en WebView y debe permanecer ahí para OTP/bridge.
   if (
     (pathname === "/login" || pathname === "/register") &&
-    !isMobileAppRequest(request)
+    !isMobileApp
   ) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
