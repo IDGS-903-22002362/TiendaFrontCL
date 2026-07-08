@@ -52,6 +52,7 @@ export function StorefrontShellClient({ children }: StorefrontShellClientProps) 
     pathname === "/profile" ||
     pathname === "/ai";
   const { isFromMobileApp } = useIsFromMobileApp();
+  const reserveStoreBottomNavSpace = showBottomNav;
 
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -59,11 +60,13 @@ export function StorefrontShellClient({ children }: StorefrontShellClientProps) 
     }
 
     document.body.dataset.storefront = isPublicStorefront ? "true" : "false";
+    document.body.dataset.embeddedApp = isFromMobileApp ? "true" : "false";
 
     return () => {
       document.body.dataset.storefront = "false";
+      document.body.dataset.embeddedApp = "false";
     };
-  }, [isPublicStorefront]);
+  }, [isFromMobileApp, isPublicStorefront]);
 
   if (!isPublicStorefront) {
     return (
@@ -81,22 +84,27 @@ export function StorefrontShellClient({ children }: StorefrontShellClientProps) 
     <div className="relative flex min-h-screen flex-col overflow-x-clip">
       <main
         className={cn(
-          "relative flex-grow pt-[var(--storefront-header-reserved-height,var(--storefront-header-mobile-height))] lg:pt-[var(--storefront-header-reserved-height,var(--storefront-header-desktop-height))]",
-          showBottomNav
-            ? "pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+1rem)] md:pb-12"
+          isFromMobileApp
+            ? "relative flex-grow pt-[var(--storefront-header-reserved-height,var(--storefront-header-mobile-height))]"
+            : "relative flex-grow pt-[var(--storefront-header-reserved-height,var(--storefront-header-mobile-height))] lg:pt-[var(--storefront-header-reserved-height,var(--storefront-header-desktop-height))]",
+          reserveStoreBottomNavSpace
+            ? isFromMobileApp
+              ? "pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+0.5rem)]"
+              : "pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+1rem)] md:pb-12"
             : "",
           isProductDetailRoute(pathname) &&
             "pb-[calc(var(--product-mobile-cta-height)+8rem)] ",
           isCheckoutRoute &&
             "pb-[calc(var(--checkout-mobile-cta-height)+1.5rem)] ",
           pathname === "/ai" &&
+            !isFromMobileApp &&
             "pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+1.25rem)] ",
         )}
       >
         {children}
       </main>
       {!isCheckoutRoute && !isFromMobileApp ? <Footer /> : null}
-      {showBottomNav && !isFromMobileApp ? (
+      {showBottomNav ? (
         <Suspense fallback={null}>
           <MobileBottomNav />
         </Suspense>

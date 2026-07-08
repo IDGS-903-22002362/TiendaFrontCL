@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { bannersAdminApi } from "@/lib/api/banners";
 import { Banner, BannerContentConfig } from "@/lib/ai/types";
+import { useIsFromMobileApp } from "@/hooks/use-from-mobile-app";
 import type { Product } from "@/lib/types";
 
 /**
@@ -302,6 +303,10 @@ const ctaLink =
 
 export function HeroEditorial() {
   const heroId = useId();
+  const { isFromMobileApp } = useIsFromMobileApp();
+  const heroMinHeightClass = isFromMobileApp
+    ? "min-h-[min(58dvh,460px)]"
+    : "min-h-[520px] sm:min-h-[600px] lg:min-h-[720px]";
   const [slides, setSlides] = useState<HeroSlide[]>([]);
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
@@ -450,7 +455,12 @@ export function HeroEditorial() {
     return (
       <section className="w-full -mt-px">
         <div className="relative isolate overflow-hidden border border-white/10 bg-[#050505]">
-          <div className="relative min-h-[520px] sm:min-h-[600px] lg:min-h-[720px] bg-black/40 animate-pulse" />
+          <div
+            className={cn(
+              "relative bg-black/40 animate-pulse",
+              heroMinHeightClass,
+            )}
+          />
         </div>
       </section>
     );
@@ -468,7 +478,7 @@ export function HeroEditorial() {
         aria-roledescription="carousel"
         aria-label="La Guarida"
       >
-        <div className="relative min-h-[520px] sm:min-h-[600px] lg:min-h-[720px]">
+        <div className={cn("relative", heroMinHeightClass)}>
           {slides.map((slide, index) => {
             const isActive = index === activeSlideIndex;
             const slideId = `${heroId}-slide-${index}`;

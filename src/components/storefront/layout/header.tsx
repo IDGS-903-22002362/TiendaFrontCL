@@ -225,7 +225,7 @@ export function StorefrontHeader({
       shellElement.removeEventListener("transitionend", publishHeight);
       window.removeEventListener("resize", publishHeight);
     };
-  }, [isCompact, isVisible, pathname, isMegaMenuOpen]);
+  }, [isCompact, isFromMobileApp, isVisible, isMegaMenuOpen, pathname]);
 
   const overlayTop =
     navSurfaceRef.current?.getBoundingClientRect().bottom ??
@@ -240,8 +240,6 @@ export function StorefrontHeader({
   ) {
     return null;
   }
-
-  if (isFromMobileApp) return null;
 
   if (pathname === "/login" || pathname === "/register") {
     return null;
@@ -259,6 +257,7 @@ export function StorefrontHeader({
         ref={shellRef}
         className={cn(
           "fixed inset-x-0 top-0 z-50 transition-transform duration-300 ease-out",
+          isFromMobileApp && "pt-[env(safe-area-inset-top)]",
           isVisible ? "translate-y-0" : "-translate-y-full",
         )}
       >
