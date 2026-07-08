@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Heart, Menu, ShoppingBag, UserRound } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useCart } from "@/hooks/use-cart";
@@ -43,6 +43,7 @@ export function StorefrontHeader({
   navModel = FALLBACK_NAV_MODEL,
 }: StorefrontHeaderProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const currentPath = useMemo(() => {
     const query = searchParams.toString();
@@ -72,11 +73,16 @@ export function StorefrontHeader({
 
   const { isFromMobileApp } = useIsFromMobileApp();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (isFromMobileApp) {
       notifyMobileAppLogout();
     }
-    void clearSession();
+
+    await clearSession();
+
+    if (isFromMobileApp) {
+      router.replace("/");
+    }
   };
 
   const activeSection = useMemo(

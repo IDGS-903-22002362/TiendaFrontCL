@@ -30,6 +30,7 @@ import {
   type UserStreak,
 } from "@/lib/api/users";
 import { signOutFirebaseClient } from "@/lib/firebase/auth";
+import { isEmbeddedMobileApp } from "@/lib/mobile-app-bridge";
 
 type AuthContextType = {
   token: string;
@@ -38,7 +39,10 @@ type AuthContextType = {
   streak: UserStreak | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  signInWithFirebase: (firebaseIdToken: string) => Promise<void>;
+  signInWithFirebase: (
+    firebaseIdToken: string,
+    options?: { force?: boolean },
+  ) => Promise<void>;
   clearSession: () => Promise<void>;
   refreshSession: () => Promise<void>;
   completeProfile: (payload: CompleteProfilePayload) => Promise<void>;
@@ -91,14 +95,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void refreshSession();
   }, [refreshSession]);
 
-  const signInWithFirebase = useCallback(async (firebaseIdToken: string) => {
+  const signInWithFirebase = useCallback(async (
+    firebaseIdToken: string,
+    options?: { force?: boolean },
+  ) => {
     const normalizedToken = firebaseIdToken.trim();
     if (!normalizedToken) {
       return;
     }
 
     // Evita POST duplicados cuando el WebView ya tiene sesión activa.
-    if (token && !isLoading) {
+    if (!options?.force && token && !isLoading) {
       return;
     }
 
@@ -137,7 +144,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     resetAuthRecoveryCache();
     clearCartMergeMarker();
     resetMobileAppAuthNotification();
-    await Promise.allSettled([clearLocalSession(), signOutFirebaseClient()]);
+
+    const sessionClearTasks: Promise<unknown>[] = [clearLocalSession()];
+    // Firebase signOut can navigate the embedded WebView to auth iframe URLs.
+    if (!isEmbeddedMobileApp()) {
+      sessionClearTasks.push(signOutFirebaseClient());
+    }
+
+    await Promise.allSettled(sessionClearTasks);
     setToken("");
     setRole("");
     setUser(null);

@@ -1,5 +1,14 @@
 import type { AuthUsuario } from "@/lib/api/auth";
 import { COOKIE_SESSION_TOKEN } from "@/lib/cookies/constants";
+import { resolveClientPrivacyContextFromBrowser } from "@/lib/privacy/client-privacy-browser";
+
+export function isEmbeddedMobileApp(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return resolveClientPrivacyContextFromBrowser().isEmbeddedApp;
+}
 
 type MobileAppAuthPayload = {
   token?: string | null;

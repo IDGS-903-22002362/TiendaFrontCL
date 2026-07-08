@@ -3,7 +3,10 @@ interface ClubLeonBridge {
 }
 
 interface TiendaAuthBridge {
-  signInWithFirebase: (idToken: string) => Promise<void>;
+  signInWithFirebase: (
+    idToken: string,
+    options?: { force?: boolean },
+  ) => Promise<void>;
   refreshSession: () => Promise<void>;
   clearSession: () => Promise<void>;
   getAuthStatus: () => {
