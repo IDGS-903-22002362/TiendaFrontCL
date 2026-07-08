@@ -71,17 +71,38 @@ export default function ProfilePage() {
           return;
         }
 
-        if (pointsResult.status === "fulfilled") {
-          setPoints(pointsResult.value.points);
-          if (pointsResult.value.level) {
+        const backendUser =
+          profileResult.status === "fulfilled" ? profileResult.value : null;
+        const walletPoints =
+          pointsResult.status === "fulfilled"
+            ? Number(pointsResult.value.points ?? 0)
+            : null;
+        const legacyPoints =
+          typeof backendUser?.puntosActuales === "number"
+            ? backendUser.puntosActuales
+            : null;
+
+        if (walletPoints !== null && walletPoints > 0) {
+          setPoints(walletPoints);
+          if (pointsResult.status === "fulfilled" && pointsResult.value.level) {
             setProfileLevel(pointsResult.value.level);
           }
+        } else if (legacyPoints !== null) {
+          setPoints(legacyPoints);
+        } else if (walletPoints !== null) {
+          setPoints(walletPoints);
         } else {
           setPoints(null);
+          if (pointsResult.status === "rejected" && !backendUser) {
+            toast({
+              title: "No se pudieron cargar tus puntos",
+              description: "Intenta recargar la página en unos segundos.",
+              variant: "destructive",
+            });
+          }
         }
 
-        if (profileResult.status === "fulfilled" && profileResult.value) {
-          const backendUser = profileResult.value;
+        if (backendUser) {
           setProfileName(backendUser.nombre ?? "");
           setProfileLevel(backendUser.nivel ?? "");
         }
@@ -97,7 +118,7 @@ export default function ProfilePage() {
     return () => {
       isMounted = false;
     };
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, toast]);
 
   useEffect(() => {
     if (!isAuthenticated || !user) {

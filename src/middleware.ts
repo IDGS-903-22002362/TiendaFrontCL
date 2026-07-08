@@ -2,17 +2,9 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import type { UserRole } from "@/lib/types";
 import {
-  CL_APP_CONTEXT_COOKIE,
-  CL_APP_CONTEXT_MAX_AGE_SECONDS,
-  isAppClientOrigin,
-} from "@/lib/privacy/constants";
-import {
-  isEmbeddedAppRequest,
-  resolveClientPrivacyContextFromRequest,
-  shouldStripAppPrivacyQueryParams,
-  stripAppPrivacyQueryParams,
-} from "@/lib/privacy/resolve-client-privacy-context";
-import type { ClientOrigin } from "@/lib/privacy/types";
+  getEmpleadoDefaultAdminPath,
+  isEmpleadoAdminPath,
+} from "@/lib/admin-access";
 
 const API_TOKEN_COOKIE = "tiendafront_api_token";
 const USER_ROLE_COOKIE = "tiendafront_user_role";
@@ -305,6 +297,17 @@ export function middleware(request: NextRequest) {
     if (!role || !staffRoles.includes(role)) {
       const url = request.nextUrl.clone();
       url.pathname = "/";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+
+    if (
+      role === "EMPLEADO" &&
+      (pathname === "/admin" || pathname.startsWith("/admin/")) &&
+      !isEmpleadoAdminPath(pathname)
+    ) {
+      const url = request.nextUrl.clone();
+      url.pathname = getEmpleadoDefaultAdminPath();
       url.search = "";
       return NextResponse.redirect(url);
     }

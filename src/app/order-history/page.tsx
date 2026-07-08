@@ -32,6 +32,10 @@ import { getApiErrorMessage } from "@/lib/api/errors";
 import type { Orden } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
+  formatOrderDisplayId,
+  getOrderContactName,
+} from "@/lib/orders/display";
+import {
   getOrderStatusLabel,
   getOrderStatusVariant,
   getPaymentStateLabel,
@@ -160,7 +164,9 @@ export default function OrderHistoryPage() {
                 Aún no tienes pedidos.
               </div>
             ) : (
-              paginatedOrders.map((order) => (
+              paginatedOrders.map((order) => {
+                const contactName = getOrderContactName(order);
+                return (
                 <article
                   key={order.id}
                   className="rounded-[22px] border border-border bg-muted/30 p-4"
@@ -170,7 +176,14 @@ export default function OrderHistoryPage() {
                       <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-text-muted">
                         Pedido
                       </p>
-                      <p className="mt-1 truncate font-medium">{order.id}</p>
+                      <p className="mt-1 truncate font-medium" title={order.id}>
+                        {formatOrderDisplayId(order.id)}
+                      </p>
+                      {contactName ? (
+                        <p className="mt-1 truncate text-xs text-text-secondary">
+                          {contactName}
+                        </p>
+                      ) : null}
                     </div>
                     <Badge variant={getOrderStatusVariant(order.estado)}>
                       {getOrderStatusLabel(order.estado)}
@@ -208,7 +221,8 @@ export default function OrderHistoryPage() {
                     <Link href={`/order-history/${order.id}`}>Ver detalle</Link>
                   </Button>
                 </article>
-              ))
+                );
+              })
             )}
           </div>
 
@@ -237,7 +251,9 @@ export default function OrderHistoryPage() {
                 ) : (
                   paginatedOrders.map((order) => (
                     <TableRow key={order.id}>
-                      <TableCell className="font-medium">{order.id}</TableCell>
+                      <TableCell className="font-medium" title={order.id}>
+                        {formatOrderDisplayId(order.id)}
+                      </TableCell>
                       <TableCell>{formatDate(order.createdAt)}</TableCell>
                       <TableCell>
                         <Badge

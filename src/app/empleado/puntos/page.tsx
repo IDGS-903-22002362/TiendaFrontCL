@@ -15,6 +15,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useAuth } from "@/hooks/use-auth";
 import { getApiErrorMessage } from "@/lib/api/errors";
+import { apiFetch } from "@/lib/api/client";
 import { puedeAsignarPuntos } from "@/lib/types";
 import {
   earnFromStoreSale,
@@ -85,12 +86,16 @@ function jwtStringField(payload: Record<string, unknown> | null, key: string): s
 
 export default function AdminAssignPoints() {
     const { toast } = useToast();
-    const { token, isAuthenticated, isLoading: authLoading, role } = useAuth();
+    const { token, isAuthenticated, isLoading: authLoading, role, user, refreshSession } = useAuth();
 
-    // Datos del admin/empleado obtenidos del token (más confiable que user)
     const tokenPayload = token ? decodeJwt(token) : null;
-    const adminUid = jwtStringField(tokenPayload, "uid") ?? jwtStringField(tokenPayload, "sub");
+    const adminUid =
+        user?.uid ??
+        jwtStringField(tokenPayload, "uid") ??
+        jwtStringField(tokenPayload, "sub");
     const adminName =
+        user?.nombre ??
+        user?.email ??
         jwtStringField(tokenPayload, "nombre") ??
         jwtStringField(tokenPayload, "email") ??
         "Usuario autenticado";
@@ -130,29 +135,22 @@ export default function AdminAssignPoints() {
 
     // Obtener datos del usuario por UID usando fetch directo con token
     const fetchUserByUid = async (uid: string) => {
-        if (!uid || uid.length < 5) return null;
+        if (!uid || uid.length < 5 || !isAuthenticated) return null;
         setIsFetchingUser(true);
         try {
-            const response = await fetch(`/api/usuarios/${uid}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-            });
-
-            const json = await response.json();
-
-            if (!response.ok) {
-                throw new Error(json.message || 'Error al obtener el usuario');
-            }
+            const json = await apiFetch<{ success: boolean; data?: UserData; message?: string }>(
+                `/api/usuarios/${uid}`,
+                { method: "GET" },
+                { local: true, token },
+            );
 
             if (json.success && json.data) {
                 setUserData(json.data);
                 setIsPriceEnabled(true);
                 return json.data;
-            } else {
-                throw new Error("Usuario no encontrado");
             }
+
+            throw new Error("Usuario no encontrado");
         } catch (error) {
             console.error("Error fetching user:", error);
             toast({
@@ -171,15 +169,15 @@ export default function AdminAssignPoints() {
     };
 
     const refreshAllHistoryData = async () => {
-        if (!token) return;
+        if (!isAuthenticated) return;
         setAllAssignments([]);
-        await loadAllHistoryData();      // Recargar desde el servidor
+        await loadAllHistoryData();
     };
 
     // Asignar puntos
     const assignPoints = async () => {
-        if (!adminUid) {
-            toast({ title: "Error", description: "El usuario administrador no está autenticado", variant: "destructive" });
+        if (!isAuthenticated || !adminUid) {
+            toast({ title: "Error", description: "Sesión no válida. Vuelve a iniciar sesión.", variant: "destructive" });
             return;
         }
         if (!scannedUid) {
@@ -199,7 +197,7 @@ export default function AdminAssignPoints() {
             toast({ title: "Error", description: "Ingresa el folio o ID de venta", variant: "destructive" });
             return;
         }
-        if (!token) {
+        if (!isAuthenticated) {
             toast({ title: "Error", description: "Sesión no válida", variant: "destructive" });
             return;
         }
@@ -246,8 +244,8 @@ export default function AdminAssignPoints() {
     };
 
     const loadGlobalHistory = async (reset = false) => {
-        if (!token) {
-            console.warn("No hay token disponible para cargar historial");
+        if (!isAuthenticated) {
+            console.warn("No hay sesión disponible para cargar historial");
             return;
         }
 
@@ -257,6 +255,7 @@ export default function AdminAssignPoints() {
                 limit: 20,
                 cursor: reset ? undefined : historyCursor ?? undefined,
                 token,
+                actorId: role === "EMPLEADO" ? adminUid ?? undefined : undefined,
             });
 
             const mapped: MovimientoAsignacion[] = result.items.map((item) => ({
@@ -298,11 +297,15 @@ export default function AdminAssignPoints() {
     };
 
     const loadAllHistoryData = async () => {
-        if (!token) return;
+        if (!isAuthenticated) return;
 
         setIsLoadingAllHistory(true);
         try {
-            const result = await getAdminTransactions({ limit: 100, token });
+            const result = await getAdminTransactions({
+                limit: 100,
+                token,
+                actorId: role === "EMPLEADO" ? adminUid ?? undefined : undefined,
+            });
             setAllAssignments(
                 result.items.map((item) => ({
                     id: item.transactionId,
@@ -385,11 +388,24 @@ export default function AdminAssignPoints() {
     }, [isHistoryDialogOpen, isAuthenticated]);
 
     useEffect(() => {
-        if (showFullHistoryTable && allAssignments.length === 0 && !isLoadingAllHistory && isAuthenticated) {
+        if (!authLoading && isAuthenticated) {
+            void refreshSession();
+        }
+    }, [authLoading, isAuthenticated, refreshSession]);
+
+    useEffect(() => {
+        if (
+            showFullHistoryTable &&
+            allAssignments.length === 0 &&
+            !isLoadingAllHistory &&
+            isAuthenticated &&
+            !authLoading &&
+            adminUid
+        ) {
             loadAllHistoryData();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [showFullHistoryTable, isAuthenticated]);
+    }, [showFullHistoryTable, isAuthenticated, authLoading, adminUid]);
 
     // ============================================
     // RENDER (Validación de permisos)

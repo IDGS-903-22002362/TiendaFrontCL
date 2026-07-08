@@ -6,7 +6,10 @@ import {
   validateCsrfRequest,
 } from "@/lib/server/csrf";
 import { getApiTokenFromRequest } from "@/lib/server/session";
-import { resolveAuthorizationHeader } from "@/lib/cookies/constants";
+import {
+  COOKIE_SESSION_TOKEN,
+  resolveAuthorizationHeader,
+} from "@/lib/cookies/constants";
 import {
   joinBackendApiUrl,
   resolveBackendBaseUrl,
@@ -89,10 +92,17 @@ export async function proxyToBackend({
   }
 
   const tokenFromCookie = getApiTokenFromRequest(request);
-  const authorization = resolveAuthorizationHeader(
+  let authorization = resolveAuthorizationHeader(
     request.headers.get("authorization"),
     tokenFromCookie,
   );
+
+  if (!authorization) {
+    const rawCookieToken = tokenFromCookie?.trim();
+    if (rawCookieToken && rawCookieToken !== COOKIE_SESSION_TOKEN) {
+      authorization = `Bearer ${rawCookieToken}`;
+    }
+  }
 
   if (requireAuth && !authorization) {
     return NextResponse.json(

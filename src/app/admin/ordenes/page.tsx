@@ -20,6 +20,13 @@ import type { Orden, Pago } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import {
+  formatOrderDisplayId,
+  getOrderContactLabel,
+  getOrderContactName,
+  isPickupOrder,
+  matchesOrderSearch,
+} from "@/lib/orders/display";
+import {
   getPaymentStateLabel,
   getPaymentStateVariant,
   getPreparationStatusLabel,
@@ -61,6 +68,10 @@ import {
   AdminPageShell,
   AdminPanelCard,
 } from "@/components/admin/admin-ui";
+import {
+  OrderItemsList,
+  OrderItemsListSkeleton,
+} from "@/components/orders/order-items-list";
 import {
   Select,
   SelectContent,
@@ -141,11 +152,6 @@ function getVisiblePages(currentPage: number, totalPages: number) {
   return Array.from({ length: 5 }, (_, index) => start + index);
 }
 
-function getShortOrderId(id: string) {
-  if (id.length <= 14) return id;
-  return `${id.slice(0, 8)}...${id.slice(-4)}`;
-}
-
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Orden[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -166,6 +172,9 @@ export default function AdminOrdersPage() {
   // Dialogo de gestion de entrega (envio manual / pickup)
   const [isFulfillmentOpen, setIsFulfillmentOpen] = useState(false);
   const [fulfillmentOrder, setFulfillmentOrder] = useState<Orden | null>(null);
+  const [isFulfillmentDetailsLoading, setIsFulfillmentDetailsLoading] =
+    useState(false);
+  const [fulfillmentDetailsError, setFulfillmentDetailsError] = useState("");
   const [isFulfillmentSubmitting, setIsFulfillmentSubmitting] = useState(false);
   const [trackingNumber, setTrackingNumber] = useState("");
   const [serviceName, setServiceName] = useState("");
@@ -339,8 +348,35 @@ export default function AdminOrdersPage() {
     }
   };
 
+  const loadFulfillmentOrderDetails = useCallback(
+    async (orderId: string) => {
+      setIsFulfillmentDetailsLoading(true);
+      setFulfillmentDetailsError("");
+
+      try {
+        const detailedOrder = await ordersApi.getById(orderId);
+        if (!detailedOrder) {
+          setFulfillmentDetailsError("No se pudo cargar el detalle de la orden.");
+          return;
+        }
+
+        setFulfillmentOrder((current) =>
+          current?.id === orderId
+            ? { ...current, ...detailedOrder, items: detailedOrder.items }
+            : current,
+        );
+      } catch (error) {
+        setFulfillmentDetailsError(getApiErrorMessage(error));
+      } finally {
+        setIsFulfillmentDetailsLoading(false);
+      }
+    },
+    [],
+  );
+
   const openFulfillmentDialog = (order: Orden) => {
     setFulfillmentOrder(order);
+    setFulfillmentDetailsError("");
     setTrackingNumber(order.shipping?.trackingNumber ?? "");
     setServiceName(order.shipping?.serviceName ?? "");
     setRealShippingCost(
@@ -351,6 +387,7 @@ export default function AdminOrdersPage() {
     setFulfillmentNotes("");
     setPickupCode("");
     setIsFulfillmentOpen(true);
+    void loadFulfillmentOrderDetails(order.id);
   };
 
   const runFulfillmentAction = async (
@@ -371,9 +408,15 @@ export default function AdminOrdersPage() {
         return second - first;
       });
       setOrders(refreshedList);
-      const updated = refreshedList.find((o) => o.id === fulfillmentOrder.id);
+      const updated = await ordersApi.getById(fulfillmentOrder.id);
       if (updated) {
         setFulfillmentOrder(updated);
+      } else {
+        const fallback = refreshedList.find((o) => o.id === fulfillmentOrder.id);
+        if (fallback) {
+          setFulfillmentOrder(fallback);
+          void loadFulfillmentOrderDetails(fallback.id);
+        }
       }
     } catch (error) {
       toast({
@@ -454,9 +497,7 @@ export default function AdminOrdersPage() {
     if (methodFilter !== "TODOS" && (order.fulfillmentMethod ?? "DELIVERY") !== methodFilter) {
       return false;
     }
-    if (!searchTerm) return true;
-    return order.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
-           (order.usuarioId && order.usuarioId.toLowerCase().includes(searchTerm.toLowerCase()));
+    return matchesOrderSearch(order, searchTerm);
   });
 
   const totalPages = Math.max(
@@ -519,7 +560,7 @@ export default function AdminOrdersPage() {
            <div className="relative flex-1">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por ID de orden o usuario..."
+                placeholder="Buscar por número de orden, nombre o usuario..."
                 className="pl-8"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -595,7 +636,7 @@ export default function AdminOrdersPage() {
                        <div className="flex flex-col gap-2">
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-sm font-semibold" title={order.id}>
-                            {getShortOrderId(order.id)}
+                            {formatOrderDisplayId(order.id)}
                           </span>
                           <button
                             title="Copiar ID"
@@ -611,13 +652,10 @@ export default function AdminOrdersPage() {
                         </div>
                         <div className="flex flex-col gap-1 text-xs text-muted-foreground">
                           <span>{formatDate(order.createdAt)}</span>
-                          {order.usuarioId ? (
-                            <span className="max-w-[240px] truncate" title={order.usuarioId}>
-                              Cliente: {order.usuarioId}
-                            </span>
-                          ) : (
-                            <span className="italic">Cliente anónimo</span>
-                          )}
+                          <span className="max-w-[240px] truncate" title={getOrderContactName(order) ?? undefined}>
+                            {getOrderContactLabel(order)}:{" "}
+                            {getOrderContactName(order) ?? "Sin nombre registrado"}
+                          </span>
                         </div>
                        </div>
                     </TableCell>
@@ -815,10 +853,17 @@ export default function AdminOrdersPage() {
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Pago y reembolso</DialogTitle>
-            <DialogDescription>
-              {selectedOrder
-                ? `Orden ${selectedOrder.id}`
-                : "Consulta el pago asociado a la orden."}
+            <DialogDescription asChild>
+              {selectedOrder ? (
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  <p>Orden {formatOrderDisplayId(selectedOrder.id)}</p>
+                  <p className="truncate font-mono text-xs" title={selectedOrder.id}>
+                    {selectedOrder.id}
+                  </p>
+                </div>
+              ) : (
+                <span>Consulta el pago asociado a la orden.</span>
+              )}
             </DialogDescription>
           </DialogHeader>
 
@@ -1003,23 +1048,33 @@ export default function AdminOrdersPage() {
           setIsFulfillmentOpen(open);
           if (!open) {
             setFulfillmentOrder(null);
+            setFulfillmentDetailsError("");
+            setIsFulfillmentDetailsLoading(false);
           }
         }}
       >
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Gestión de entrega</DialogTitle>
-            <DialogDescription>
-              {fulfillmentOrder
-                ? `Orden ${fulfillmentOrder.id}`
-                : "Administra el envío o la recolección del pedido."}
+            <DialogDescription asChild>
+              {fulfillmentOrder ? (
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  <p>Orden {formatOrderDisplayId(fulfillmentOrder.id)}</p>
+                  <p className="truncate font-mono text-xs" title={fulfillmentOrder.id}>
+                    {fulfillmentOrder.id}
+                  </p>
+                </div>
+              ) : (
+                <span>Administra el envío o la recolección del pedido.</span>
+              )}
             </DialogDescription>
           </DialogHeader>
 
           {fulfillmentOrder
             ? (() => {
                 const order = fulfillmentOrder;
-                const isPickup = order.fulfillmentMethod === "PICKUP";
+                const isPickup = isPickupOrder(order);
+                const contactName = getOrderContactName(order);
                 const paid = isOrderPaid(order);
                 const cancelled = order.estado === "CANCELADA";
                 const actionsDisabled =
@@ -1062,6 +1117,21 @@ export default function AdminOrdersPage() {
                           {formatCurrency(order.total)}
                         </p>
                       </div>
+                      {isPickup ? (
+                        <div className="sm:col-span-2">
+                          <p className="text-xs font-semibold uppercase text-muted-foreground">
+                            Persona que recoge
+                          </p>
+                          <p className="mt-1 font-medium">
+                            {contactName ?? "Sin nombre registrado"}
+                          </p>
+                          {order.pickupContact?.phone ? (
+                            <p className="mt-1 text-muted-foreground">
+                              {order.pickupContact.phone}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
 
                     {!paid ? (
@@ -1077,39 +1147,33 @@ export default function AdminOrdersPage() {
                     ) : null}
 
                     {/* Productos */}
-                    {(order.items ?? []).length > 0 ? (
-                      <div className="rounded-md border p-4">
-                        <p className="mb-2 text-sm font-semibold">Productos</p>
-                        <div className="space-y-1 text-sm">
-                          {(order.items ?? []).map((item, index) => (
-                            <div
-                              key={`${item.productoId}-${item.tallaId ?? ""}-${index}`}
-                              className="flex justify-between gap-3"
-                            >
-                              <span className="min-w-0 truncate text-muted-foreground">
-                                {item.cantidad} ×{" "}
-                                {item.producto?.descripcion ||
-                                  item.producto?.clave ||
-                                  item.productoId}
-                                {item.tallaId ? ` · Talla ${item.tallaId}` : ""}
-                                {item.personalizacion ? (
-                                  <span className="block text-xs text-primary">
-                                    Personalizado: {item.personalizacion.nombre}{" "}
-                                    {item.personalizacion.numero}
-                                    {item.personalizationFee
-                                      ? ` (+${formatCurrency(item.personalizationFee)})`
-                                      : ""}
-                                  </span>
-                                ) : null}
-                              </span>
-                              <span className="font-medium">
-                                {formatCurrency(item.subtotal)}
-                              </span>
-                            </div>
-                          ))}
+                    <div className="rounded-md border p-4">
+                      <p className="mb-3 text-sm font-semibold">Productos</p>
+                      {isFulfillmentDetailsLoading ? (
+                        <OrderItemsListSkeleton />
+                      ) : fulfillmentDetailsError ? (
+                        <div className="space-y-3">
+                          <p className="text-sm text-destructive">
+                            {fulfillmentDetailsError}
+                          </p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              void loadFulfillmentOrderDetails(order.id)
+                            }
+                          >
+                            Reintentar
+                          </Button>
                         </div>
-                      </div>
-                    ) : null}
+                      ) : (
+                        <OrderItemsList
+                          items={order.items ?? []}
+                          showPersonalization
+                        />
+                      )}
+                    </div>
 
                     {/* Domicilio */}
                     {!isPickup ? (
@@ -1345,6 +1409,25 @@ export default function AdminOrdersPage() {
                     ) : (
                       /* Pickup */
                       <div className="space-y-4">
+                        <div className="rounded-md border p-4 text-sm">
+                          <p className="text-xs font-semibold uppercase text-muted-foreground">
+                            Persona que recoge
+                          </p>
+                          <p className="mt-1 font-medium">
+                            {contactName ?? "Sin nombre registrado"}
+                          </p>
+                          {order.pickupContact?.phone ? (
+                            <p className="mt-1 text-muted-foreground">
+                              Tel: {order.pickupContact.phone}
+                            </p>
+                          ) : null}
+                          {order.pickupContact?.email ? (
+                            <p className="text-muted-foreground">
+                              {order.pickupContact.email}
+                            </p>
+                          ) : null}
+                        </div>
+
                         {order.pickupLocation ? (
                           <div className="rounded-md border p-4 text-sm">
                             <p className="font-medium">
