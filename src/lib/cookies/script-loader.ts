@@ -129,8 +129,18 @@ function loadTikTok(pixelId: string): void {
 
 export function loadConsentedScripts(
   record: CookieConsentRecord | null,
+  options?: { trackingDisabled?: boolean },
 ): void {
   if (typeof window === "undefined") {
+    return;
+  }
+
+  /**
+   * App Store privacy requirement:
+   * Advertising and cross-site tracking must remain disabled when the
+   * storefront is embedded in the iOS or Android application.
+   */
+  if (options?.trackingDisabled) {
     return;
   }
 

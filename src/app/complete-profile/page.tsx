@@ -285,7 +285,7 @@ export default function CompleteProfilePage() {
                                 {/* Fecha de Nacimiento */}
                                 <div className="space-y-2">
                                     <label htmlFor="fechaNacimiento" className="text-sm font-medium text-foreground">
-                                        Fecha de nacimiento
+                                        Fecha de nacimiento (opcional)
                                     </label>
                                     <Input
                                         id="fechaNacimiento"
@@ -301,7 +301,7 @@ export default function CompleteProfilePage() {
                                 {/* Género */}
                                 <div className="space-y-2">
                                     <label htmlFor="genero" className="text-sm font-medium text-foreground">
-                                        Género
+                                        Género (opcional)
                                     </label>
                                     <select
                                         id="genero"

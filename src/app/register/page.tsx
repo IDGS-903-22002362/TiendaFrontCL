@@ -207,10 +207,13 @@ export default function RegisterPage() {
     };
 
     const onRequestRegistrationCode = async () => {
-        if (!VALID_GENEROS.includes(form.genero as (typeof VALID_GENEROS)[number])) {
+        if (
+            form.genero &&
+            !VALID_GENEROS.includes(form.genero as (typeof VALID_GENEROS)[number])
+        ) {
             showErrorToast({
                 
-                title: "Genero requerido",
+                title: "Genero invalido",
                 description: "Selecciona una opcion de genero valida.",
             });
             return false;
@@ -383,10 +386,13 @@ export default function RegisterPage() {
             return;
         }
 
-        if (!VALID_GENEROS.includes(form.genero as (typeof VALID_GENEROS)[number])) {
+        if (
+            form.genero &&
+            !VALID_GENEROS.includes(form.genero as (typeof VALID_GENEROS)[number])
+        ) {
             showErrorToast({
                 
-                title: "Genero requerido",
+                title: "Genero invalido",
                 description: "Selecciona una opcion de genero valida.",
             });
             return;
@@ -645,7 +651,7 @@ export default function RegisterPage() {
                                 type="date"
                                 value={form.fechaNacimiento}
                                 onChange={handleChange}
-                                required
+                                aria-label="Fecha de nacimiento (opcional)"
                                 className="h-10 rounded-2xl border border-gray-200 bg-white px-3 text-sm text-gray-900 transition-all focus:border-[#007A53] focus:ring-2 focus:ring-[#007A53]/15 sm:h-11"
                             />
 
@@ -653,11 +659,11 @@ export default function RegisterPage() {
                                 name="genero"
                                 value={form.genero}
                                 onChange={handleChange}
-                                required
+                                aria-label="Genero (opcional)"
                                 className="h-10 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm text-gray-900 transition-all focus:border-[#007A53] focus:ring-2 focus:ring-[#007A53]/15 sm:h-11"
                             >
-                                <option value="" disabled hidden>
-                                    Genero
+                                <option value="">
+                                    Genero (opcional)
                                 </option>
                                 <option value="M">Masculino</option>
                                 <option value="F">Femenino</option>

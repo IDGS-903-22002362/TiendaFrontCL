@@ -12,6 +12,7 @@ import { CookieConsentHost } from "@/components/cookies/cookie-consent-host";
 import { Suspense } from "react";
 import { CookieSettingsOpener } from "@/components/cookies/cookie-settings-opener";
 import { PendingCheckoutReconciler } from "@/components/checkout/pending-checkout-reconciler";
+import { PrivacyProviders } from "@/components/privacy/privacy-providers";
 
 const bodyFont = Ubuntu({
   subsets: ["latin"],
@@ -46,22 +47,24 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className={`${bodyFont.variable} ${headlineFont.variable} font-body antialiased`}>
-        <CookieConsentProvider>
-          <AuthProvider>
-            <PendingCheckoutReconciler />
-            <StorefrontProvider>
-              <CartProvider>
-                <StorefrontShell>{children}</StorefrontShell>
-                <CartAddedNotificationHost />
-                <CookieConsentHost />
-                <Suspense fallback={null}>
-                  <CookieSettingsOpener />
-                </Suspense>
-                <Toaster />
-              </CartProvider>
-            </StorefrontProvider>
-          </AuthProvider>
-        </CookieConsentProvider>
+        <PrivacyProviders>
+          <CookieConsentProvider>
+            <AuthProvider>
+              <PendingCheckoutReconciler />
+              <StorefrontProvider>
+                <CartProvider>
+                  <StorefrontShell>{children}</StorefrontShell>
+                  <CartAddedNotificationHost />
+                  <CookieConsentHost />
+                  <Suspense fallback={null}>
+                    <CookieSettingsOpener />
+                  </Suspense>
+                  <Toaster />
+                </CartProvider>
+              </StorefrontProvider>
+            </AuthProvider>
+          </CookieConsentProvider>
+        </PrivacyProviders>
       </body>
     </html>
   );

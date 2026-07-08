@@ -32,6 +32,8 @@ import {
   loadConsentedScripts,
   resetLoadedScriptsState,
 } from "@/lib/cookies/script-loader";
+import { useClientPrivacy } from "@/hooks/use-client-privacy";
+import { cleanupTrackingStorage } from "@/lib/privacy/cleanup-tracking-storage";
 
 type CookieConsentContextValue = {
   consent: CookieConsentRecord | null;
@@ -50,41 +52,67 @@ const CookieConsentContext = createContext<CookieConsentContextValue | undefined
   undefined,
 );
 
-function applyConsent(record: CookieConsentRecord) {
+function applyConsent(
+  record: CookieConsentRecord,
+  options?: { trackingDisabled?: boolean },
+) {
   writeConsentToDocument(record);
   resetLoadedScriptsState();
   markScriptsUnloaded();
-  loadConsentedScripts(record);
+  loadConsentedScripts(record, options);
   cleanupNonEssentialStorage(record.categories);
+
+  if (options?.trackingDisabled) {
+    cleanupTrackingStorage();
+  }
 }
 
 export function CookieConsentProvider({ children }: { children: ReactNode }) {
+  const { trackingDisabled } = useClientPrivacy();
   const [consent, setConsent] = useState<CookieConsentRecord | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
+    if (trackingDisabled) {
+      const necessaryOnly = rejectNonEssentialConsent();
+      setConsent(necessaryOnly);
+      setHydrated(true);
+      applyConsent(necessaryOnly, { trackingDisabled: true });
+
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("from_mobile_app", "true");
+      }
+      return;
+    }
+
     const stored = readConsentFromDocument();
     setConsent(stored);
     setHydrated(true);
 
     if (stored && isValidConsent(stored)) {
-      loadConsentedScripts(stored);
+      loadConsentedScripts(stored, { trackingDisabled: false });
     }
-  }, []);
+  }, [trackingDisabled]);
 
-  const hasDecided = hydrated && isValidConsent(consent);
-  const showBanner = hydrated && !hasDecided;
+  const hasDecided = trackingDisabled || (hydrated && isValidConsent(consent));
+  const showBanner = !trackingDisabled && hydrated && !hasDecided;
 
-  const persist = useCallback((record: CookieConsentRecord) => {
-    setConsent(record);
-    applyConsent(record);
-    setShowSettings(false);
-  }, []);
+  const persist = useCallback(
+    (record: CookieConsentRecord) => {
+      setConsent(record);
+      applyConsent(record, { trackingDisabled });
+      setShowSettings(false);
+    },
+    [trackingDisabled],
+  );
 
   const acceptAll = useCallback(() => {
+    if (trackingDisabled) {
+      return;
+    }
     persist(acceptAllConsent());
-  }, [persist]);
+  }, [persist, trackingDisabled]);
 
   const rejectNonEssential = useCallback(() => {
     persist(rejectNonEssentialConsent());
@@ -92,6 +120,10 @@ export function CookieConsentProvider({ children }: { children: ReactNode }) {
 
   const savePreferences = useCallback(
     (categories: Partial<ConsentCategories>) => {
+      if (trackingDisabled) {
+        return;
+      }
+
       persist(
         buildConsentRecord({
           ...DEFAULT_CONSENT,
@@ -100,7 +132,7 @@ export function CookieConsentProvider({ children }: { children: ReactNode }) {
         }),
       );
     },
-    [persist],
+    [persist, trackingDisabled],
   );
 
   const hasCategory = useCallback(
@@ -108,12 +140,17 @@ export function CookieConsentProvider({ children }: { children: ReactNode }) {
       if (category === "necessary") {
         return true;
       }
+
+      if (trackingDisabled) {
+        return false;
+      }
+
       if (!consent || !isValidConsent(consent)) {
         return false;
       }
       return Boolean(consent.categories[category]);
     },
-    [consent],
+    [consent, trackingDisabled],
   );
 
   const value = useMemo<CookieConsentContextValue>(
@@ -122,7 +159,11 @@ export function CookieConsentProvider({ children }: { children: ReactNode }) {
       hasDecided,
       showBanner,
       showSettings,
-      openSettings: () => setShowSettings(true),
+      openSettings: () => {
+        if (!trackingDisabled) {
+          setShowSettings(true);
+        }
+      },
       closeSettings: () => setShowSettings(false),
       acceptAll,
       rejectNonEssential,
@@ -138,6 +179,7 @@ export function CookieConsentProvider({ children }: { children: ReactNode }) {
       rejectNonEssential,
       savePreferences,
       hasCategory,
+      trackingDisabled,
     ],
   );
 

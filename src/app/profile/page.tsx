@@ -179,21 +179,12 @@ export default function ProfilePage() {
 
     const shouldSendExtended = Boolean(date) || Boolean(gender);
 
-    if (shouldSendExtended && (!date || !gender)) {
-      toast({
-        variant: "destructive",
-        title: "Datos incompletos",
-        description: "Para actualizar fecha o genero debes enviar telefono, fecha y genero.",
-      });
-      return;
-    }
-
     setIsSavingProfile(true);
     try {
       await saveEditableProfile({
         telefono: phone,
-        fechaNacimiento: shouldSendExtended ? date : undefined,
-        genero: shouldSendExtended ? gender : undefined,
+        fechaNacimiento: shouldSendExtended ? date || undefined : undefined,
+        genero: shouldSendExtended ? gender || undefined : undefined,
       });
 
       await refreshSession();
@@ -405,7 +396,7 @@ export default function ProfilePage() {
                 </div>
 
                 <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Fecha de nacimiento</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Fecha de nacimiento (opcional)</p>
                   <input
                     type="date"
                     value={profileForm.fechaNacimiento}
@@ -415,7 +406,7 @@ export default function ProfilePage() {
                 </div>
 
                 <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Genero</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Genero (opcional)</p>
                   <select
                     value={profileForm.genero}
                     onChange={(event) => setProfileForm((prev) => ({ ...prev, genero: event.target.value }))}

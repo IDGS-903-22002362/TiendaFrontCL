@@ -1,6 +1,18 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import type { UserRole } from "@/lib/types";
+import {
+  CL_APP_CONTEXT_COOKIE,
+  CL_APP_CONTEXT_MAX_AGE_SECONDS,
+  isAppClientOrigin,
+} from "@/lib/privacy/constants";
+import {
+  isEmbeddedAppRequest,
+  resolveClientPrivacyContextFromRequest,
+  shouldStripAppPrivacyQueryParams,
+  stripAppPrivacyQueryParams,
+} from "@/lib/privacy/resolve-client-privacy-context";
+import type { ClientOrigin } from "@/lib/privacy/types";
 
 const API_TOKEN_COOKIE = "tiendafront_api_token";
 const USER_ROLE_COOKIE = "tiendafront_user_role";
@@ -201,13 +213,55 @@ function redirectToLogin(request: NextRequest) {
   return NextResponse.redirect(url);
 }
 
+function setAppContextCookie(response: NextResponse, origin: ClientOrigin) {
+  if (!isAppClientOrigin(origin)) {
+    return;
+  }
+
+  response.cookies.set(CL_APP_CONTEXT_COOKIE, origin, {
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: CL_APP_CONTEXT_MAX_AGE_SECONDS,
+  });
+}
+
+function attachAppContextCookie(
+  request: NextRequest,
+  response: NextResponse,
+): NextResponse {
+  const context = resolveClientPrivacyContextFromRequest(request);
+  if (!context.isEmbeddedApp) {
+    return response;
+  }
+
+  const existing = request.cookies.get(CL_APP_CONTEXT_COOKIE)?.value;
+  if (existing === context.origin) {
+    return response;
+  }
+
+  setAppContextCookie(response, context.origin);
+  return response;
+}
+
+function applyAppPrivacyRedirect(request: NextRequest): NextResponse | null {
+  if (!shouldStripAppPrivacyQueryParams(request.nextUrl.searchParams)) {
+    return null;
+  }
+
+  const context = resolveClientPrivacyContextFromRequest(request);
+  const url = stripAppPrivacyQueryParams(request.nextUrl);
+  const response = NextResponse.redirect(url);
+
+  if (context.isEmbeddedApp) {
+    setAppContextCookie(response, context.origin);
+  }
+
+  return response;
+}
+
 function isMobileAppRequest(request: NextRequest) {
-  const { searchParams } = request.nextUrl;
-  return (
-    searchParams.get("from") === "mobile-app" ||
-    searchParams.get("mobile") === "1" ||
-    searchParams.get("source") === "clubleon-app"
-  );
+  return isEmbeddedAppRequest(request);
 }
 
 export function middleware(request: NextRequest) {
@@ -215,6 +269,11 @@ export function middleware(request: NextRequest) {
 
   if (isExcludedPath(pathname)) {
     return NextResponse.next();
+  }
+
+  const privacyRedirect = applyAppPrivacyRedirect(request);
+  if (privacyRedirect) {
+    return privacyRedirect;
   }
 
   if (!isAllowedIp(request)) {
@@ -237,7 +296,7 @@ export function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    return NextResponse.next();
+    return attachAppContextCookie(request, NextResponse.next());
   }
 
   const staffRoles = getRequiredStaffRoles(pathname);
@@ -277,7 +336,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  return NextResponse.next();
+  return attachAppContextCookie(request, NextResponse.next());
 }
 
 export const config = {

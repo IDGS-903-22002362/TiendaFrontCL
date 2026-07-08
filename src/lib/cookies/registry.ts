@@ -72,6 +72,16 @@ export const COOKIE_REGISTRY: RegistryEntry[] = [
     jsAccessible: true,
   },
   {
+    name: "cl_app_context",
+    kind: "cookie",
+    category: "necessary",
+    purpose: "Contexto de privacidad para WebView iOS/Android (sin datos personales).",
+    duration: "12 meses",
+    owner: "first-party",
+    personalData: false,
+    jsAccessible: true,
+  },
+  {
     name: "tiendafront_session_id",
     kind: "localStorage",
     category: "necessary",

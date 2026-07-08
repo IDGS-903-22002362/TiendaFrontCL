@@ -8,6 +8,8 @@ import {
   joinBackendApiUrl,
   resolveBackendBaseUrl,
 } from "@/lib/backend-url";
+import { CLIENT_ORIGIN_HEADER } from "@/lib/privacy/constants";
+import { getClientOriginForRequests } from "@/lib/privacy/client-origin-store";
 
 export { COOKIE_SESSION_TOKEN, resolveClientBearerToken };
 
@@ -240,6 +242,10 @@ export async function apiFetch<T>(
 
   if (options?.idempotencyKey) {
     headers.set("Idempotency-Key", options.idempotencyKey);
+  }
+
+  if (typeof window !== "undefined") {
+    headers.set(CLIENT_ORIGIN_HEADER, getClientOriginForRequests());
   }
 
   if (typeof window !== "undefined") {
