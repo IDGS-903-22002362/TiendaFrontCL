@@ -52,7 +52,7 @@ export function StorefrontShellClient({ children }: StorefrontShellClientProps) 
     pathname === "/profile" ||
     pathname === "/ai";
   const { isFromMobileApp } = useIsFromMobileApp();
-  const reserveStoreBottomNavSpace = showBottomNav;
+  const reserveStoreBottomNavSpace = showBottomNav && !isFromMobileApp;
 
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -88,10 +88,10 @@ export function StorefrontShellClient({ children }: StorefrontShellClientProps) 
             ? "relative flex-grow pt-[var(--storefront-header-reserved-height,var(--storefront-header-mobile-height))]"
             : "relative flex-grow pt-[var(--storefront-header-reserved-height,var(--storefront-header-mobile-height))] lg:pt-[var(--storefront-header-reserved-height,var(--storefront-header-desktop-height))]",
           reserveStoreBottomNavSpace
-            ? isFromMobileApp
-              ? "pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+0.5rem)]"
-              : "pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+1rem)] md:pb-12"
-            : "",
+            ? "pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+1rem)] md:pb-12"
+            : isFromMobileApp
+              ? "pb-3"
+              : "",
           isProductDetailRoute(pathname) &&
             "pb-[calc(var(--product-mobile-cta-height)+8rem)] ",
           isCheckoutRoute &&
@@ -104,7 +104,7 @@ export function StorefrontShellClient({ children }: StorefrontShellClientProps) 
         {children}
       </main>
       {!isCheckoutRoute && !isFromMobileApp ? <Footer /> : null}
-      {showBottomNav ? (
+      {showBottomNav && !isFromMobileApp ? (
         <Suspense fallback={null}>
           <MobileBottomNav />
         </Suspense>

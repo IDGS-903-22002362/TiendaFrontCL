@@ -62,7 +62,7 @@ test.describe("Modo privacidad app embebida", () => {
   }) => {
     await page.goto("/?app_source=ios_app&tracking=disabled");
 
-    await expect(page.getByTestId("app-privacy-notice")).toBeVisible({
+    await expect(page.getByTestId("app-privacy-notice")).toBeAttached({
       timeout: 15_000,
     });
     await expect(page.getByTestId("cookie-banner")).toHaveCount(0);

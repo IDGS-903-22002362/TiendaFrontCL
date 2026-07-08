@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import {
+  getCurrentFirebaseIdToken,
   getFirebaseIdTokenWithApplePopup,
   getFirebaseIdTokenWithEmailPassword,
   getFirebaseIdTokenWithGooglePopup,
@@ -134,11 +135,39 @@ function LoginPageContent() {
       return;
     }
 
-    notifyMobileAppAuth({
-      token: token && token !== COOKIE_SESSION_TOKEN ? token : undefined,
-      uid: user?.uid ?? user?.id,
-      user,
-    });
+    let cancelled = false;
+
+    const notifyApp = async () => {
+      let firebaseIdToken: string | null = null;
+      try {
+        firebaseIdToken = await getCurrentFirebaseIdToken();
+      } catch {
+        firebaseIdToken = null;
+      }
+
+      if (cancelled) {
+        return;
+      }
+
+      notifyMobileAppAuth({
+        token: token && token !== COOKIE_SESSION_TOKEN ? token : undefined,
+        firebaseIdToken: firebaseIdToken ?? undefined,
+        uid: user?.uid ?? user?.id,
+        user,
+      });
+    };
+
+    void notifyApp();
+
+    const fallbackTimer = window.setTimeout(() => {
+      router.replace(getTargetRedirect(role, user?.perfilCompleto));
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(fallbackTimer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFromMobileApp, isLoading, isAuthenticated, token, user]);
 
   useEffect(() => {

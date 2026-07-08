@@ -40,6 +40,16 @@ export async function signOutFirebaseClient() {
   await signOut(auth);
 }
 
+export async function getCurrentFirebaseIdToken() {
+  const auth = getFirebaseAuth();
+  const user = auth.currentUser;
+  if (!user) {
+    return null;
+  }
+
+  return user.getIdToken();
+}
+
 export const registerWithEmailPassword = async (
   email: string,
   password: string

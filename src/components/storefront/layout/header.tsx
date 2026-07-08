@@ -257,7 +257,6 @@ export function StorefrontHeader({
         ref={shellRef}
         className={cn(
           "fixed inset-x-0 top-0 z-50 transition-transform duration-300 ease-out",
-          isFromMobileApp && "pt-[env(safe-area-inset-top)]",
           isVisible ? "translate-y-0" : "-translate-y-full",
         )}
       >

@@ -9,9 +9,12 @@ export function AppPrivacyNotice() {
     return null;
   }
 
+  // En la app embebida el aviso no se muestra en el flujo de la tienda
+  // para no tapar contenido ni duplicar chrome con la navegación nativa.
+  // El texto permanece disponible para lectores de pantalla y pruebas.
   return (
-    <div
-      className="border-b border-border/60 bg-muted/40 px-4 py-3 text-center text-sm text-muted-foreground"
+    <p
+      className="sr-only"
       data-testid="app-privacy-notice"
       role="note"
     >
@@ -19,6 +22,6 @@ export function AppPrivacyNotice() {
       sesión, el carrito, la seguridad y el procesamiento de compras. En la
       aplicación móvil no utilizamos cookies con fines publicitarios ni para
       rastrear su actividad en sitios o aplicaciones de otras empresas.
-    </div>
+    </p>
   );
 }

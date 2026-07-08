@@ -20,21 +20,22 @@ export function notifyMobileAppAuth(payload: MobileAppAuthPayload) {
       ? backendToken
       : firebaseIdToken;
 
-  if (!resolvedToken) {
-    return;
-  }
-
   const uid =
     payload.uid?.trim() ||
     payload.user?.uid?.trim() ||
     payload.user?.id?.trim() ||
     "";
 
+  if (!resolvedToken && !uid) {
+    return;
+  }
+
   window.ClubLeonBridge.postMessage(
     JSON.stringify({
       type: "CLUBLEON_AUTH_SUCCESS",
-      token: resolvedToken,
+      token: resolvedToken ?? "",
       uid,
+      webAuthenticated: true,
     }),
   );
 }
