@@ -25,10 +25,11 @@ import { Input } from "@/components/ui/input";
 import Antigravity from "@/components/Antigravity";
 import { apiFetch } from "@/lib/api/client";
 import { createLocalSessionFromBackendToken } from "@/lib/api/auth";
-import { notifyMobileAppAuth } from "@/lib/mobile-app-bridge";
+import { notifyMobileAppAuth, requestNativeAppleSignIn, requestNativeGoogleSignIn } from "@/lib/mobile-app-bridge";
 import { COOKIE_SESSION_TOKEN } from "@/lib/cookies/constants";
 import { UserRole } from "@/lib/types";
 import { useIsFromMobileApp } from "@/hooks/use-from-mobile-app";
+import { isEmbeddedMobileApp } from "@/lib/mobile-app-bridge";
 import { isAppleReviewTestEmail } from "@/lib/auth/apple-review-credentials";
 
 // Definir tipos para las respuestas de la API
@@ -130,6 +131,16 @@ function LoginPageContent() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, isLoading, isFromMobileApp, role, user?.perfilCompleto, router]);
+
+  useEffect(() => {
+    if (!isFromMobileApp) {
+      return;
+    }
+
+    if (!isLoading && isAuthenticated) {
+      setIsSubmitting(false);
+    }
+  }, [isFromMobileApp, isLoading, isAuthenticated]);
 
   useEffect(() => {
     if (!isFromMobileApp || isLoading || !isAuthenticated) {
@@ -576,19 +587,32 @@ function LoginPageContent() {
     setErrorMessage("");
 
     try {
+      if (isEmbeddedMobileApp()) {
+        const started = requestNativeGoogleSignIn();
+        if (!started) {
+          throw new Error(
+            "No pudimos abrir el inicio de sesión nativo con Google.",
+          );
+        }
+        return;
+      }
+
       const firebaseIdToken = await getFirebaseIdTokenWithGooglePopup();
       await signInWithFirebase(firebaseIdToken);
       showSuccessToast({ title: "¡Bienvenido!", description: "Sesión iniciada con Google." });
     } catch (error) {
       const errorMsg = getApiErrorMessage(error);
       setErrorMessage(errorMsg);
+      setIsSubmitting(false);
       showErrorToast({
         
         title: "Error",
         description: errorMsg,
       });
     } finally {
-      setIsSubmitting(false);
+      if (!isEmbeddedMobileApp()) {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -596,19 +620,32 @@ function LoginPageContent() {
     setIsSubmitting(true);
     setErrorMessage("");
     try {
+      if (isEmbeddedMobileApp()) {
+        const started = requestNativeAppleSignIn();
+        if (!started) {
+          throw new Error(
+            "No pudimos abrir el inicio de sesión nativo con Apple.",
+          );
+        }
+        return;
+      }
+
       const firebaseIdToken = await getFirebaseIdTokenWithApplePopup();
       await signInWithFirebase(firebaseIdToken);
       showSuccessToast({ title: "¡Bienvenido!", description: "Sesión iniciada con Apple." });
     } catch (error) {
       const errorMsg = getApiErrorMessage(error);
       setErrorMessage(errorMsg);
+      setIsSubmitting(false);
       showErrorToast({
         
         title: "Error",
         description: errorMsg,
       });
     } finally {
-      setIsSubmitting(false);
+      if (!isEmbeddedMobileApp()) {
+        setIsSubmitting(false);
+      }
     }
   };
 

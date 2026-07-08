@@ -98,6 +98,18 @@ export function notifyMobileAppLogout(): boolean {
   return true;
 }
 
+export function requestNativeGoogleSignIn(): boolean {
+  return postMobileAppMessage({
+    type: "CLUBLEON_NATIVE_GOOGLE",
+  });
+}
+
+export function requestNativeAppleSignIn(): boolean {
+  return postMobileAppMessage({
+    type: "CLUBLEON_NATIVE_APPLE",
+  });
+}
+
 export function notifyMobileAppAuth(payload: MobileAppAuthPayload): boolean {
   const backendToken = payload.token?.trim();
   const firebaseIdToken = payload.firebaseIdToken?.trim();

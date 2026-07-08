@@ -20,7 +20,7 @@ import { clearCartMergeMarker } from "@/lib/api/cart-merge";
 import { getOrCreateSessionId } from "@/lib/api/cart";
 import { resetAuthRecoveryCache } from "@/lib/api/client";
 import { COOKIE_SESSION_TOKEN } from "@/lib/cookies/constants";
-import { notifyMobileAppAuth, resetMobileAppAuthNotification } from "@/lib/mobile-app-bridge";
+import { notifyMobileAppAuth, notifyMobileAppLogout, resetMobileAppAuthNotification } from "@/lib/mobile-app-bridge";
 import {
   checkInUserStreak,
   completeUserProfile,
@@ -132,6 +132,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [token, isLoading]);
 
   const clearSession = useCallback(async () => {
+    notifyMobileAppLogout();
+
     // Ejecutar todos los callbacks registrados (ej: limpiar favoritos)
     clearSessionCallbacks.forEach(callback => {
       try {
