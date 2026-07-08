@@ -14,7 +14,7 @@ interface TiendaAuthBridge {
     options?: { force?: boolean },
   ) => Promise<void>;
   refreshSession: () => Promise<void>;
-  clearSession: () => Promise<void>;
+  clearSession: (options?: { notifyNative?: boolean }) => Promise<void>;
   getAuthStatus: () => {
     isAuthenticated: boolean;
     token: string | null;
