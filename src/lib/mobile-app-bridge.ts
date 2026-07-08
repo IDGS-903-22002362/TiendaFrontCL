@@ -19,11 +19,19 @@ type MobileAppAuthPayload = {
 
 let lastNotifiedAuthFingerprint = "";
 
+function isMobileAuthBridgeEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_CL_ENABLE_MOBILE_AUTH_BRIDGE === "true";
+}
+
 export function resetMobileAppAuthNotification() {
   lastNotifiedAuthFingerprint = "";
 }
 
 export function notifyMobileAppLogout(): boolean {
+  if (!isMobileAuthBridgeEnabled()) {
+    return false;
+  }
+
   if (typeof window === "undefined" || !window.ClubLeonBridge?.postMessage) {
     return false;
   }
@@ -39,6 +47,10 @@ export function notifyMobileAppLogout(): boolean {
 }
 
 export function notifyMobileAppAuth(payload: MobileAppAuthPayload): boolean {
+  if (!isMobileAuthBridgeEnabled()) {
+    return false;
+  }
+
   if (typeof window === "undefined" || !window.ClubLeonBridge?.postMessage) {
     return false;
   }
