@@ -20,7 +20,7 @@ import { clearCartMergeMarker } from "@/lib/api/cart-merge";
 import { getOrCreateSessionId } from "@/lib/api/cart";
 import { resetAuthRecoveryCache } from "@/lib/api/client";
 import { COOKIE_SESSION_TOKEN } from "@/lib/cookies/constants";
-import { notifyMobileAppAuth } from "@/lib/mobile-app-bridge";
+import { notifyMobileAppAuth, resetMobileAppAuthNotification } from "@/lib/mobile-app-bridge";
 import {
   checkInUserStreak,
   completeUserProfile,
@@ -107,6 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(response.data?.token || COOKIE_SESSION_TOKEN);
     setRole(response.data?.role ?? "");
     setUser(response.data?.user ?? null);
+    setIsLoading(false);
 
     const sessionToken = response.data?.token || COOKIE_SESSION_TOKEN;
     const sessionId = getOrCreateSessionId();
@@ -135,6 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     resetAuthRecoveryCache();
     clearCartMergeMarker();
+    resetMobileAppAuthNotification();
     await Promise.allSettled([clearLocalSession(), signOutFirebaseClient()]);
     setToken("");
     setRole("");
@@ -226,15 +228,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof window !== "undefined") {
       window.__tiendaAuth = {
-        signInWithFirebase: signInWithFirebase,
+        signInWithFirebase,
+        refreshSession,
         getAuthStatus: () => ({
           isAuthenticated: Boolean(token) && !isLoading,
           token,
-          user
-        })
+          user,
+        }),
       };
     }
-  }, [signInWithFirebase, token, user, isLoading]);
+  }, [signInWithFirebase, refreshSession, token, user, isLoading]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

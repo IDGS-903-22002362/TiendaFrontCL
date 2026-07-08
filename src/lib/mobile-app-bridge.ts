@@ -8,9 +8,15 @@ type MobileAppAuthPayload = {
   user?: Partial<AuthUsuario> | null;
 };
 
-export function notifyMobileAppAuth(payload: MobileAppAuthPayload) {
+let lastNotifiedAuthFingerprint = "";
+
+export function resetMobileAppAuthNotification() {
+  lastNotifiedAuthFingerprint = "";
+}
+
+export function notifyMobileAppAuth(payload: MobileAppAuthPayload): boolean {
   if (typeof window === "undefined" || !window.ClubLeonBridge?.postMessage) {
-    return;
+    return false;
   }
 
   const backendToken = payload.token?.trim();
@@ -27,7 +33,12 @@ export function notifyMobileAppAuth(payload: MobileAppAuthPayload) {
     "";
 
   if (!resolvedToken && !uid) {
-    return;
+    return false;
+  }
+
+  const fingerprint = `${resolvedToken ?? ""}|${uid}`;
+  if (fingerprint === lastNotifiedAuthFingerprint) {
+    return true;
   }
 
   window.ClubLeonBridge.postMessage(
@@ -38,4 +49,7 @@ export function notifyMobileAppAuth(payload: MobileAppAuthPayload) {
       webAuthenticated: true,
     }),
   );
+
+  lastNotifiedAuthFingerprint = fingerprint;
+  return true;
 }

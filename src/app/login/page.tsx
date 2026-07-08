@@ -82,6 +82,7 @@ function LoginPageContent() {
   const [recoveryEmail, setRecoveryEmail] = useState("");
   const [recoveryEmailSent, setRecoveryEmailSent] = useState(false);
   const otpInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const hasNotifiedMobileAppRef = useRef(false);
   const { isFromMobileApp } = useIsFromMobileApp();
 
   const firebaseReady = isFirebaseConfigured();
@@ -132,6 +133,11 @@ function LoginPageContent() {
 
   useEffect(() => {
     if (!isFromMobileApp || isLoading || !isAuthenticated) {
+      hasNotifiedMobileAppRef.current = false;
+      return;
+    }
+
+    if (hasNotifiedMobileAppRef.current) {
       return;
     }
 
@@ -145,23 +151,28 @@ function LoginPageContent() {
         firebaseIdToken = null;
       }
 
-      if (cancelled) {
+      if (cancelled || hasNotifiedMobileAppRef.current) {
         return;
       }
 
-      notifyMobileAppAuth({
+      const notified = notifyMobileAppAuth({
         token: token && token !== COOKIE_SESSION_TOKEN ? token : undefined,
         firebaseIdToken: firebaseIdToken ?? undefined,
         uid: user?.uid ?? user?.id,
         user,
       });
+
+      if (notified) {
+        hasNotifiedMobileAppRef.current = true;
+      }
     };
 
     void notifyApp();
 
+    // Safety net if the native bridge handler does not navigate away.
     const fallbackTimer = window.setTimeout(() => {
       router.replace(getTargetRedirect(role, user?.perfilCompleto));
-    }, 5000);
+    }, 2500);
 
     return () => {
       cancelled = true;
@@ -474,6 +485,7 @@ function LoginPageContent() {
             rol: response.data.user.rol as UserRole,
           },
         });
+        hasNotifiedMobileAppRef.current = true;
         await refreshSession();
         showSuccessToast({ title: "¡Bienvenido!", description: "Sesión iniciada correctamente." });
       } else {
