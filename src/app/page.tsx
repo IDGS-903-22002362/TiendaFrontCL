@@ -12,6 +12,7 @@ import {
 import type { Product } from "@/lib/types";
 import {
   getHeroProduct,
+  getHomeFeaturedCollectionProduct,
   getHomeLineaCards,
   isPersonalizableProduct,
 } from "@/lib/storefront";
@@ -69,6 +70,8 @@ export default async function Home() {
   const destacadosProducts = dedupeProducts(featuredFromAnalytics);
   const homeLineaCards = getHomeLineaCards(lineas, products);
 
+  // Colección destacada: producto fijado por clave (Jersey Leon Visita). Fallback a lógica dinámica.
+  const pinnedCollectionProduct = getHomeFeaturedCollectionProduct(products);
   const customizableProduct =
     destacadosProducts.find(isPersonalizableProduct) ||
     products.find(isPersonalizableProduct);
@@ -77,13 +80,15 @@ export default async function Home() {
     heroProduct;
 
   const collectionProduct =
+    pinnedCollectionProduct ??
     dedupeProducts([
       customizableProduct && customizableProduct.id !== heroProduct.id
         ? customizableProduct
         : null,
       editorialProduct,
       heroProduct,
-    ])[0] ?? heroProduct;
+    ])[0] ??
+    heroProduct;
 
   // Same destacados ranking as /products?sort=destacados; hero/collection are editorial slots.
   const featuredRailProducts = buildHomeDestacadosRailProducts(
@@ -92,7 +97,10 @@ export default async function Home() {
     HOME_DESTACADOS_RAIL_LIMIT,
   );
 
-  const collectionIsPersonalizable = isPersonalizableProduct(collectionProduct);
+  // Con producto fijado, no tratar jerseys como personalizables por heurística de nombre.
+  const collectionIsPersonalizable = pinnedCollectionProduct
+    ? pinnedCollectionProduct.personalizable === true
+    : isPersonalizableProduct(collectionProduct);
   const collectionTitle = collectionIsPersonalizable
     ? "Personaliza la prenda oficial"
     : "Colección oficial";

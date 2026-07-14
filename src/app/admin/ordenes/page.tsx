@@ -168,6 +168,9 @@ export default function AdminOrdersPage() {
   const [refundFormError, setRefundFormError] = useState("");
   const [methodFilter, setMethodFilter] = useState<string>("TODOS");
   const [currentPage, setCurrentPage] = useState(1);
+  const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
+  const [cancelConfirmText, setCancelConfirmText] = useState("");
+  const [isCancellingOrder, setIsCancellingOrder] = useState(false);
 
   // Dialogo de gestion de entrega (envio manual / pickup)
   const [isFulfillmentOpen, setIsFulfillmentOpen] = useState(false);
@@ -230,20 +233,39 @@ export default function AdminOrdersPage() {
     }
   };
 
-  const handleCancelOrder = async (orderId: string) => {
-    if (!window.confirm("¿Seguro que deseas cancelar esta orden permanentemente?")) return;
+  const openCancelOrderDialog = (orderId: string) => {
+    setCancelOrderId(orderId);
+    setCancelConfirmText("");
+  };
+
+  const closeCancelOrderDialog = () => {
+    if (isCancellingOrder) return;
+    setCancelOrderId(null);
+    setCancelConfirmText("");
+  };
+
+  const canConfirmCancel =
+    cancelConfirmText.trim().toLowerCase() === "cancelar";
+
+  const handleConfirmCancelOrder = async () => {
+    if (!cancelOrderId || !canConfirmCancel) return;
+    setIsCancellingOrder(true);
     try {
-      await ordersApi.cancel(orderId);
+      await ordersApi.cancel(cancelOrderId);
       toast({ title: "Orden cancelada exitosamente" });
+      setCancelOrderId(null);
+      setCancelConfirmText("");
       void loadOrders(estadoFilter);
     } catch (error) {
-       toast({
+      toast({
         variant: "destructive",
         title: "Error al cancelar orden",
         description: getApiErrorMessage(error),
       });
+    } finally {
+      setIsCancellingOrder(false);
     }
-  }
+  };
 
   const resetRefundForm = () => {
     setRefundAmount("");
@@ -757,7 +779,7 @@ export default function AdminOrdersPage() {
                             variant="destructive" 
                             size="sm" 
                             className="h-8 w-full text-xs"
-                            onClick={() => void handleCancelOrder(order.id)}
+                            onClick={() => openCancelOrderDialog(order.id)}
                           >
                             Cancelar orden
                           </Button>
@@ -838,6 +860,52 @@ export default function AdminOrdersPage() {
           </div>
         ) : null}
       </AdminPanelCard>
+
+      <Dialog
+        open={Boolean(cancelOrderId)}
+        onOpenChange={(open) => {
+          if (!open) closeCancelOrderDialog();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancelar orden</DialogTitle>
+            <DialogDescription>
+              Esta acción cancela la orden de forma permanente. Para confirmar,
+              escribe <span className="font-semibold text-foreground">cancelar</span>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="cancel-confirm-text">Palabra de confirmación</Label>
+            <Input
+              id="cancel-confirm-text"
+              value={cancelConfirmText}
+              onChange={(event) => setCancelConfirmText(event.target.value)}
+              placeholder='Escribe "cancelar"'
+              autoComplete="off"
+              disabled={isCancellingOrder}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={closeCancelOrderDialog}
+              disabled={isCancellingOrder}
+            >
+              Volver
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void handleConfirmCancelOrder()}
+              disabled={!canConfirmCancel || isCancellingOrder}
+            >
+              {isCancellingOrder ? "Cancelando..." : "Confirmar cancelación"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={isPaymentDialogOpen}

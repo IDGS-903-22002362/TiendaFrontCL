@@ -395,6 +395,32 @@ export function getHeroProduct(products: Product[]) {
   );
 }
 
+/** Clave fija del producto en la sección "Colección destacada" de la home. */
+export const HOME_FEATURED_COLLECTION_CLAVE = "CHA 428";
+
+function normalizeProductClave(clave: string) {
+  return normalizeStorefrontText(clave).replace(/\s+/g, "");
+}
+
+export function findProductByClave(products: Product[], clave: string) {
+  const target = normalizeProductClave(clave);
+  if (!target) {
+    return undefined;
+  }
+
+  return products.find((product) => {
+    if (!product.clave || !isProductVisible(product)) {
+      return false;
+    }
+    return normalizeProductClave(product.clave) === target;
+  });
+}
+
+/** Producto fijado en EditorialSplit (reemplaza selección dinámica tipo tarjetero). */
+export function getHomeFeaturedCollectionProduct(products: Product[]) {
+  return findProductByClave(products, HOME_FEATURED_COLLECTION_CLAVE);
+}
+
 export function getLineNameById(lineas: Linea[], lineId?: string) {
   if (!lineId) {
     return "";
