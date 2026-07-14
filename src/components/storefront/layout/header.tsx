@@ -26,7 +26,6 @@ import { MegaMenuOverlay } from "./mega-menu-overlay";
 import { CartDrawer } from "@/components/cart/cart-drawer";
 import { cn } from "@/lib/utils";
 import { useIsFromMobileApp } from "@/hooks/use-from-mobile-app";
-import { notifyMobileAppLogout } from "@/lib/mobile-app-bridge";
 import {
   buildNavModel,
   type StorefrontNavModel,
@@ -74,10 +73,6 @@ export function StorefrontHeader({
   const { isFromMobileApp } = useIsFromMobileApp();
 
   const handleLogout = async () => {
-    if (isFromMobileApp) {
-      notifyMobileAppLogout();
-    }
-
     await clearSession();
 
     if (isFromMobileApp) {

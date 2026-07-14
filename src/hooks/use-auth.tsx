@@ -20,7 +20,7 @@ import { clearCartMergeMarker } from "@/lib/api/cart-merge";
 import { getOrCreateSessionId } from "@/lib/api/cart";
 import { resetAuthRecoveryCache } from "@/lib/api/client";
 import { COOKIE_SESSION_TOKEN } from "@/lib/cookies/constants";
-import { notifyMobileAppAuth, resetMobileAppAuthNotification } from "@/lib/mobile-app-bridge";
+import { notifyMobileAppAuth, notifyMobileAppLogout, resetMobileAppAuthNotification } from "@/lib/mobile-app-bridge";
 import {
   checkInUserStreak,
   completeUserProfile,
@@ -43,7 +43,7 @@ type AuthContextType = {
     firebaseIdToken: string,
     options?: { force?: boolean },
   ) => Promise<void>;
-  clearSession: () => Promise<void>;
+  clearSession: (options?: { notifyNative?: boolean }) => Promise<void>;
   refreshSession: () => Promise<void>;
   completeProfile: (payload: CompleteProfilePayload) => Promise<void>;
   updateProfilePhone: (telefono: string) => Promise<void>;
@@ -131,7 +131,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, [token, isLoading]);
 
-  const clearSession = useCallback(async () => {
+  const clearSession = useCallback(async (options?: { notifyNative?: boolean }) => {
+    const shouldNotifyNative = options?.notifyNative !== false;
+    if (shouldNotifyNative) {
+      notifyMobileAppLogout();
+    }
+
     // Ejecutar todos los callbacks registrados (ej: limpiar favoritos)
     clearSessionCallbacks.forEach(callback => {
       try {
@@ -256,7 +261,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.__tiendaAuth = {
         signInWithFirebase,
         refreshSession,
-        clearSession,
+        // Native WebView clear scripts must not re-notify the app.
+        clearSession: () => clearSession({ notifyNative: false }),
         getAuthStatus: () => ({
           isAuthenticated: Boolean(token) && !isLoading,
           token,
