@@ -7,7 +7,6 @@ import {
   getAiSessionDetail,
   isAiStreamingConfigError,
   isFirestoreIndexError,
-  sendAiMessageJson,
   sendAiMessageSse,
 } from "@/lib/api/ai";
 import type {
@@ -262,7 +261,6 @@ export function useAiConversation(options: UseAiConversationOptions = {}) {
 
       let finalText = "";
       let hasFinalPayload = false;
-      let streamError: Error | null = null;
       const activeSession = session;
 
       try {
@@ -283,31 +281,9 @@ export function useAiConversation(options: UseAiConversationOptions = {}) {
                 message: nextStreamError.message,
                 code: nextStreamError.code,
               });
-              streamError = nextStreamError;
             },
           },
         );
-
-        if (!hasFinalPayload) {
-          try {
-            const jsonResult = await sendAiMessageJson({
-              sessionId,
-              message: trimmed,
-            });
-            logConversationDebug("sendMessage-json-fallback", {
-              sessionId,
-              hasStreamError: Boolean(streamError),
-              textLength: jsonResult.text.length,
-            });
-            finalText = jsonResult.text;
-            hasFinalPayload = true;
-          } catch (fallbackError) {
-            if (streamError) {
-              throw streamError;
-            }
-            throw fallbackError;
-          }
-        }
 
         logConversationDebug("sendMessage-after-stream", {
           sessionId,

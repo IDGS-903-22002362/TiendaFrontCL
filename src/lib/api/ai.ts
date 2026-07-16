@@ -1,4 +1,9 @@
-import { ApiError, apiFetch, unwrapData } from "@/lib/api/client";
+import {
+  ApiError,
+  apiFetch,
+  prepareApiRequest,
+  unwrapData,
+} from "@/lib/api/client";
 import type {
   AiAdminMetrics,
   AiAttachment,
@@ -504,11 +509,11 @@ export async function sendAiMessageSse(
   handlers: AiSseHandlers,
   signal?: AbortSignal,
 ) {
-  const response = await fetch("/api/ai/chat/messages?stream=true", {
+  const path = "/api/ai/chat/messages?stream=true";
+  const init: RequestInit = {
     method: "POST",
     headers: {
       Accept: "text/event-stream",
-      "Content-Type": "application/json",
       "x-request-id": createRequestId(),
     },
     body: JSON.stringify({
@@ -518,7 +523,13 @@ export async function sendAiMessageSse(
     credentials: "include",
     cache: "no-store",
     signal,
-  });
+  };
+  const { endpoint, headers } = await prepareApiRequest(
+    path,
+    init,
+    getLocalOptions(),
+  );
+  const response = await fetch(endpoint, { ...init, headers });
 
   if (!response.ok) {
     const payload = (await parseTextPayload(response)) as UnknownRecord;
@@ -569,6 +580,7 @@ export async function sendAiMessageSse(
   const decoder = new TextDecoder();
   let buffer = "";
   let doneReceived = false;
+  let finalReceived = false;
 
   const processChunk = (chunk: string) => {
     const { event, dataLine } = parseSseChunk(chunk);
@@ -600,14 +612,14 @@ export async function sendAiMessageSse(
     }
 
     if (event === "final" || event === "message" || event === "result") {
+      finalReceived = true;
       handlers.onFinal?.(mapChatResult(finalPayload));
       return;
     }
 
     if (event === "error") {
       logAiDebug("sse-error-payload", payload);
-      handlers.onError?.(createAiStreamError(payload, "El stream AI fallo"));
-      return;
+      throw createAiStreamError(payload, "El stream AI fallo");
     }
 
     if (event === "done") {
@@ -623,11 +635,12 @@ export async function sendAiMessageSse(
         try {
           processChunk(remainingChunk);
         } catch (error) {
-          handlers.onError?.(
+          const streamError =
             error instanceof Error
               ? error
-              : new Error("No se pudo interpretar la respuesta AI"),
-          );
+              : new Error("No se pudo interpretar la respuesta AI");
+          handlers.onError?.(streamError);
+          throw streamError;
         }
       }
       break;
@@ -645,16 +658,30 @@ export async function sendAiMessageSse(
       try {
         processChunk(chunk);
         if (doneReceived) {
+          if (!finalReceived) {
+            throw new Error(
+              "El stream AI termino antes de entregar una respuesta final. Revisa la conversacion antes de reintentar.",
+            );
+          }
           return;
         }
       } catch (error) {
-        handlers.onError?.(
+        const streamError =
           error instanceof Error
             ? error
-            : new Error("No se pudo interpretar la respuesta AI"),
-        );
+            : new Error("No se pudo interpretar la respuesta AI");
+        handlers.onError?.(streamError);
+        throw streamError;
       }
     }
+  }
+
+  if (!finalReceived) {
+    const streamError = new Error(
+      "El stream AI termino antes de entregar una respuesta final. Revisa la conversacion antes de reintentar.",
+    );
+    handlers.onError?.(streamError);
+    throw streamError;
   }
 }
 
@@ -666,27 +693,17 @@ export async function uploadAiUserImage(file: File, sessionId?: string) {
     formData.append("sessionId", sessionId);
   }
 
-  const response = await fetch("/api/ai/files/upload", {
-    method: "POST",
-    headers: {
-      "x-request-id": createRequestId(),
+  const payload = await apiFetch<ApiEnvelope<unknown>>(
+    "/api/ai/files/upload",
+    {
+      method: "POST",
+      headers: { "x-request-id": createRequestId() },
+      body: formData,
     },
-    body: formData,
-    credentials: "include",
-    cache: "no-store",
-  });
+    getLocalOptions(),
+  );
 
-  const payload = (await parseTextPayload(response)) as UnknownRecord;
-
-  if (!response.ok || !("data" in payload)) {
-    throw new ApiError(
-      response.status,
-      getResponseMessage(payload, "No se pudo subir la imagen"),
-      payload,
-    );
-  }
-
-  return mapTryOnAsset(payload.data);
+  return mapTryOnAsset(unwrapData(payload));
 }
 
 export async function deleteAiUserImage(assetId: string) {
