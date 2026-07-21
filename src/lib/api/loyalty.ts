@@ -1,4 +1,8 @@
 import { apiFetch } from "./client";
+import {
+  buildStaffSaleRequest,
+} from "@/lib/loyalty/sale-folio";
+import { buildStaffHistorySearchParams } from "@/lib/loyalty/staff-history";
 
 export type LoyaltyWallet = {
   memberId: string;
@@ -34,19 +38,26 @@ export type PaginatedTransactions = {
   hasMore: boolean;
 };
 
-type LegacyAssignment = {
-  id: string;
-  usuarioId: string;
-  puntos: number;
-  descripcion?: string;
-  origenId: string;
+export type StaffAssignmentHistoryRow = {
+  transactionId: string;
+  memberId: string;
+  customerFullName: string | null;
+  customerExists: boolean;
+  saleId: string | null;
+  amountMxn: number | null;
+  points: number;
   createdAt: string;
 };
 
 type LegacyAssignmentsResponse = {
   success: boolean;
-  data: LegacyAssignment[];
-  pagination?: { nextCursor?: string | null; hasMore?: boolean };
+  data: StaffAssignmentHistoryRow[];
+  pagination?: {
+    nextCursor?: string | null;
+    hasMore?: boolean;
+    searchWindowLimited?: boolean;
+    scannedCount?: number;
+  };
 };
 
 type LegacyAssignBySaleResponse = {
@@ -56,6 +67,8 @@ type LegacyAssignBySaleResponse = {
     puntosActuales: number;
     origenId?: string;
     descripcion?: string;
+    folioVenta?: string;
+    externalTransactionId?: string;
   };
 };
 
@@ -64,21 +77,6 @@ function idempotencyKey(prefix: string): string {
     return `${prefix}:${crypto.randomUUID()}`;
   }
   return `${prefix}:${Date.now()}`;
-}
-
-function mapLegacyAssignment(item: LegacyAssignment): LoyaltyTransaction {
-  return {
-    transactionId: item.id,
-    memberId: item.usuarioId,
-    type: "EARN",
-    status: "POSTED",
-    points: item.puntos,
-    balanceBefore: 0,
-    balanceAfter: 0,
-    description: item.descripcion,
-    channel: "STORE",
-    createdAt: item.createdAt,
-  };
 }
 
 function normalizePaginatedTransactions(data: {
@@ -159,37 +157,34 @@ export async function previewEarnPoints(amountCents: number): Promise<{
 
 export async function earnFromStoreSale(input: {
   memberId: string;
-  externalTransactionId: string;
+  saleFolio: string;
   amountCents: number;
   description?: string;
   token?: string;
 }): Promise<LoyaltyTransaction> {
+  const request = buildStaffSaleRequest(input);
   const response = await apiFetch<LegacyAssignBySaleResponse>(
     `/api/usuarios/${input.memberId}/puntos/asignar-por-venta`,
     {
       method: "POST",
       headers: {
-        "Idempotency-Key": input.externalTransactionId,
+        "Idempotency-Key": request.idempotencyKey,
       },
-      body: JSON.stringify({
-        dinero: input.amountCents / 100,
-        descripcion:
-          input.description?.trim() ||
-          `Venta ${input.externalTransactionId}`,
-      }),
+      body: JSON.stringify(request.body),
     },
     { local: true, token: input.token },
   );
 
   return {
-    transactionId: input.externalTransactionId,
+    transactionId: request.idempotencyKey,
     memberId: input.memberId,
     type: "EARN",
     status: "POSTED",
     points: response.data.puntosAsignados,
     amountCents: input.amountCents,
     currency: "MXN",
-    externalTransactionId: input.externalTransactionId,
+    externalTransactionId:
+      response.data.externalTransactionId ?? request.body.folioVenta,
     balanceBefore: Math.max(
       0,
       response.data.puntosActuales - response.data.puntosAsignados,
@@ -204,13 +199,16 @@ export async function earnFromStoreSale(input: {
 export async function getAdminTransactions(params: {
   limit?: number;
   cursor?: string;
+  search?: string;
   token?: string;
   actorId?: string;
-}): Promise<PaginatedTransactions> {
-  const search = new URLSearchParams();
-  search.set("limit", String(params.limit ?? 20));
-  if (params.cursor) search.set("cursor", params.cursor);
-  if (params.actorId) search.set("empleadoId", params.actorId);
+}): Promise<{
+  items: StaffAssignmentHistoryRow[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  searchWindowLimited: boolean;
+}> {
+  const search = buildStaffHistorySearchParams(params);
 
   const response = await apiFetch<LegacyAssignmentsResponse>(
     `/api/usuarios/puntos/asignaciones?${search.toString()}`,
@@ -219,9 +217,10 @@ export async function getAdminTransactions(params: {
   );
 
   return {
-    items: (response.data ?? []).map(mapLegacyAssignment),
+    items: response.data ?? [],
     nextCursor: response.pagination?.nextCursor ?? null,
     hasMore: response.pagination?.hasMore ?? false,
+    searchWindowLimited: response.pagination?.searchWindowLimited ?? false,
   };
 }
 

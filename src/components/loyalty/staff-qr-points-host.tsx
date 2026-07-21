@@ -28,15 +28,13 @@ import {
   isEditableScannerTarget,
   KeyboardWedgeBuffer,
 } from "@/lib/loyalty/qr-scanner";
+import {
+  getSaleFolioError,
+  normalizeSaleFolio,
+  SALE_FOLIO_MAX_LENGTH,
+} from "@/lib/loyalty/sale-folio";
 
 type AwardResult = { points: number; balanceAfter: number };
-
-function createScanId(memberId: string): string {
-  const nonce = typeof crypto !== "undefined" && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return `staff-qr:${memberId}:${nonce}`;
-}
 
 export function StaffQrPointsHost() {
   const { isAuthenticated, isLoading: authLoading, role, token } = useAuth();
@@ -44,7 +42,8 @@ export function StaffQrPointsHost() {
   const scanner = useRef(new KeyboardWedgeBuffer());
   const lastScan = useRef<{ memberId: string; at: number } | null>(null);
   const [member, setMember] = useState<QrMemberSummary | null>(null);
-  const [scanId, setScanId] = useState("");
+  const [saleFolio, setSaleFolio] = useState("");
+  const [folioTouched, setFolioTouched] = useState(false);
   const [amount, setAmount] = useState("");
   const [previewPoints, setPreviewPoints] = useState(0);
   const [isResolving, setIsResolving] = useState(false);
@@ -57,6 +56,9 @@ export function StaffQrPointsHost() {
     () => (Number.isFinite(amountMxn) ? mxnToAmountCents(amountMxn) : 0),
     [amountMxn],
   );
+  const saleFolioError = member
+    ? getSaleFolioError(saleFolio, member.memberId)
+    : null;
 
   useEffect(() => {
     if (!authorized || !member || result || amountCents <= 0) {
@@ -119,7 +121,8 @@ export function StaffQrPointsHost() {
       void getQrMemberSummary(memberId, token)
         .then((summary) => {
           setMember(summary);
-          setScanId(createScanId(summary.memberId));
+          setSaleFolio("");
+          setFolioTouched(false);
           setAmount("");
           setPreviewPoints(0);
           setResult(null);
@@ -143,6 +146,8 @@ export function StaffQrPointsHost() {
   const close = () => {
     if (isAssigning) return;
     setMember(null);
+    setSaleFolio("");
+    setFolioTouched(false);
     setAmount("");
     setPreviewPoints(0);
     setResult(null);
@@ -150,16 +155,20 @@ export function StaffQrPointsHost() {
   };
 
   const assign = async () => {
-    if (!member || !scanId || amountCents <= 0 || previewPoints <= 0) return;
+    setFolioTouched(true);
+    if (!member || saleFolioError || amountCents <= 0 || previewPoints <= 0) return;
     setIsAssigning(true);
     try {
+      const normalizedSaleFolio = normalizeSaleFolio(saleFolio);
       const transaction = await earnFromStoreSale({
         memberId: member.memberId,
-        externalTransactionId: scanId,
+        saleFolio: normalizedSaleFolio,
         amountCents,
         description: `Venta en tienda por $${amountMxn.toFixed(2)} MXN`,
         token,
       });
+      setSaleFolio("");
+      setFolioTouched(false);
       setResult({ points: transaction.points, balanceAfter: transaction.balanceAfter });
     } catch (error) {
       toast({
@@ -220,26 +229,53 @@ export function StaffQrPointsHost() {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  <Label htmlFor="staff-sale-amount">Gasto del cliente (MXN)</Label>
-                  <Input
-                    id="staff-sale-amount"
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    inputMode="decimal"
-                    value={amount}
-                    onChange={(event) => setAmount(event.target.value)}
-                    placeholder="$0.00"
-                    autoFocus
-                  />
-                  <p className="min-h-5 text-sm text-[#557066]" aria-live="polite">
-                    {isPreviewing
-                      ? "Calculando con la regla vigente…"
-                      : amountCents > 0
-                        ? `Se asignarán ${previewPoints} puntos.`
-                        : "Ingresa el total pagado en pesos mexicanos."}
-                  </p>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="staff-sale-folio">ID o folio de la venta</Label>
+                    <Input
+                      id="staff-sale-folio"
+                      type="text"
+                      value={saleFolio}
+                      maxLength={SALE_FOLIO_MAX_LENGTH}
+                      onBlur={() => setFolioTouched(true)}
+                      onChange={(event) => setSaleFolio(event.target.value)}
+                      placeholder="Ej. TICKET-10482"
+                      autoComplete="off"
+                      aria-invalid={folioTouched && Boolean(saleFolioError)}
+                      aria-describedby="staff-sale-folio-help"
+                      required
+                      autoFocus
+                    />
+                    <p
+                      id="staff-sale-folio-help"
+                      className={`min-h-5 text-sm ${folioTouched && saleFolioError ? "text-destructive" : "text-[#557066]"}`}
+                      aria-live="polite"
+                    >
+                      {(folioTouched || !saleFolio) && saleFolioError
+                        ? saleFolioError
+                        : "Este dato identifica la venta; no escribas el ID del cliente."}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="staff-sale-amount">Gasto del cliente (MXN)</Label>
+                    <Input
+                      id="staff-sale-amount"
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      inputMode="decimal"
+                      value={amount}
+                      onChange={(event) => setAmount(event.target.value)}
+                      placeholder="$0.00"
+                    />
+                    <p className="min-h-5 text-sm text-[#557066]" aria-live="polite">
+                      {isPreviewing
+                        ? "Calculando con la regla vigente…"
+                        : amountCents > 0
+                          ? `Se asignarán ${previewPoints} puntos.`
+                          : "Ingresa el total pagado en pesos mexicanos."}
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
@@ -256,7 +292,12 @@ export function StaffQrPointsHost() {
                 <Button
                   className="bg-[#087443] hover:bg-[#066338]"
                   onClick={() => void assign()}
-                  disabled={isAssigning || isPreviewing || previewPoints <= 0}
+                  disabled={
+                    isAssigning ||
+                    isPreviewing ||
+                    previewPoints <= 0 ||
+                    Boolean(saleFolioError)
+                  }
                 >
                   {isAssigning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   Asignar {previewPoints > 0 ? `${previewPoints} puntos` : "puntos"}
