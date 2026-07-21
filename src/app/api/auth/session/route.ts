@@ -31,6 +31,7 @@ type BackendAuthResponse = {
     email?: string;
     nombre?: string;
     perfilCompleto?: boolean;
+    roles?: UserRole[];
   };
   message?: string;
 };
@@ -82,6 +83,7 @@ export async function GET(request: NextRequest) {
           nombre: payload.usuario?.nombre,
           perfilCompleto: payload.usuario?.perfilCompleto,
           rol: payload.usuario?.rol,
+          roles: payload.usuario?.roles,
         },
       },
     });
@@ -149,6 +151,7 @@ export async function POST(request: NextRequest) {
             nombre: usuario.nombre,
             perfilCompleto: usuario.perfilCompleto,
             rol: usuario.rol,
+            roles: usuario.roles,
           },
         },
       });
@@ -220,6 +223,7 @@ export async function POST(request: NextRequest) {
           nombre: payload.usuario?.nombre,
           perfilCompleto: payload.usuario?.perfilCompleto,
           rol: payload.usuario?.rol,
+          roles: payload.usuario?.roles,
         },
       },
     });

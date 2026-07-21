@@ -13,6 +13,7 @@ import { Suspense } from "react";
 import { CookieSettingsOpener } from "@/components/cookies/cookie-settings-opener";
 import { PendingCheckoutReconciler } from "@/components/checkout/pending-checkout-reconciler";
 import { PrivacyProviders } from "@/components/privacy/privacy-providers";
+import { StaffQrPointsHost } from "@/components/loyalty/staff-qr-points-host";
 
 const bodyFont = Ubuntu({
   subsets: ["latin"],
@@ -50,6 +51,7 @@ export default function RootLayout({
         <PrivacyProviders>
           <CookieConsentProvider>
             <AuthProvider>
+              <StaffQrPointsHost />
               <PendingCheckoutReconciler />
               <StorefrontProvider>
                 <CartProvider>

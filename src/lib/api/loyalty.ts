@@ -98,6 +98,24 @@ type WalletResponse = {
   wallet: LoyaltyWallet;
 };
 
+export type QrMemberSummary = {
+  memberId: string;
+  fullName: string;
+  currentPoints: number;
+};
+
+export async function getQrMemberSummary(
+  memberId: string,
+  token?: string,
+): Promise<QrMemberSummary> {
+  const response = await apiFetch<{ member: QrMemberSummary }>(
+    `/api/loyalty/staff/qr-members/${encodeURIComponent(memberId)}`,
+    { method: "GET" },
+    { local: true, token },
+  );
+  return response.member;
+}
+
 export async function getMyWallet(): Promise<LoyaltyWallet> {
   const data = await apiFetch<WalletResponse>(
     "/api/loyalty/wallets/me",

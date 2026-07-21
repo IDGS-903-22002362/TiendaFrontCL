@@ -55,6 +55,9 @@ export function getUserRoleFromRequest(request: NextRequest): UserRole | "" {
     role === "EMPLEADO" ||
     role === "CLIENTE" ||
     role === "EMPLEADO_CLUB" ||
+    role === "TRABAJADOR_CLUBLEON" ||
+    role === "CONCESION_SUPERADMIN" ||
+    role === "CONCESION_ADMIN" ||
     role === "CONCESION_VENDEDOR" ||
     role === "SUPER_ADMIN"
   ) {
@@ -88,6 +91,7 @@ export function setSessionCookies(
       nombre: payload.user.nombre,
       perfilCompleto: payload.user.perfilCompleto,
       rol: payload.user.rol,
+      roles: payload.user.roles,
     };
     response.cookies.set(
       USER_DATA_COOKIE,

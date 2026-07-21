@@ -12,6 +12,7 @@ export type AuthUsuario = {
   genero?: string | null;
   perfilCompleto?: boolean;
   rol: UserRole;
+  roles?: UserRole[];
   activo?: boolean;
 };
 

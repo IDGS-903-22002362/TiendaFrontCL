@@ -318,7 +318,16 @@ export type ConfirmRecepcionPayload = {
   idempotencyKey?: string;
 };
 
-export type UserRole = "ADMIN" | "EMPLEADO" | "CLIENTE" | "EMPLEADO_CLUB" | "CONCESION_VENDEDOR" | "SUPER_ADMIN";
+export type UserRole =
+  | "ADMIN"
+  | "EMPLEADO"
+  | "CLIENTE"
+  | "EMPLEADO_CLUB"
+  | "TRABAJADOR_CLUBLEON"
+  | "CONCESION_SUPERADMIN"
+  | "CONCESION_ADMIN"
+  | "CONCESION_VENDEDOR"
+  | "SUPER_ADMIN";
 
 export const ROLES_ASIGNACION_PUNTOS: UserRole[] = [
   "ADMIN",

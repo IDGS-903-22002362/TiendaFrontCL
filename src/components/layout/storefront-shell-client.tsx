@@ -8,6 +8,7 @@ import { Footer } from "@/components/layout/footer";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { cn } from "@/lib/utils";
 import { useIsFromMobileApp } from "@/hooks/use-from-mobile-app";
+import { isInternalAccount } from "@/lib/staff-access";
 
 type StorefrontShellClientProps = {
   children: ReactNode;
@@ -20,7 +21,7 @@ function isProductDetailRoute(pathname: string) {
 export function StorefrontShellClient({ children }: StorefrontShellClientProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { isAuthenticated, user, isLoading } = useAuth();
+  const { isAuthenticated, user, isLoading, role } = useAuth();
   const { isFromMobileApp } = useIsFromMobileApp();
 
   useEffect(() => {
@@ -41,11 +42,19 @@ export function StorefrontShellClient({ children }: StorefrontShellClientProps) 
   const isEmployeeRoute =
     pathname.startsWith("/empleado-club") || pathname.startsWith("/empleado");
   const isSuperAdminRoute = pathname.startsWith("/super-admin");
+  const isStaffLandingRoute = pathname.startsWith("/staff");
   const isCheckoutRoute = pathname.startsWith("/checkout");
   const isLoginRoute = pathname === "/login";
   const isAuthFullscreenRoute = isLoginRoute || pathname === "/register";
   const isPublicStorefront =
-    !isAdminRoute && !isEmployeeRoute && !isSuperAdminRoute;
+    !isAdminRoute && !isEmployeeRoute && !isSuperAdminRoute && !isStaffLandingRoute;
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && isInternalAccount(role, user?.roles) && isPublicStorefront) {
+      router.replace("/staff");
+    }
+  }, [isAuthenticated, isLoading, isPublicStorefront, role, router, user?.roles]);
+
   const showBottomNav =
     pathname === "/" ||
     pathname === "/products" ||
@@ -68,6 +77,10 @@ export function StorefrontShellClient({ children }: StorefrontShellClientProps) 
       document.body.dataset.embeddedApp = "false";
     };
   }, [isFromMobileApp, isPublicStorefront]);
+
+  if (!isLoading && isAuthenticated && isInternalAccount(role, user?.roles) && isPublicStorefront) {
+    return null;
+  }
 
   if (!isPublicStorefront) {
     return (

@@ -17,6 +17,7 @@ import {
   stripAppPrivacyQueryParams,
 } from "@/lib/privacy/resolve-client-privacy-context";
 import type { ClientOrigin } from "@/lib/privacy/types";
+import { INTERNAL_ROLES, isInternalAccount, isStaffAreaPath } from "@/lib/staff-access";
 
 const API_TOKEN_COOKIE = "tiendafront_api_token";
 const USER_ROLE_COOKIE = "tiendafront_user_role";
@@ -181,7 +182,22 @@ function getPerfilCompletoFromCookie(request: NextRequest): boolean | undefined 
   return undefined;
 }
 
+function getRolesFromUserCookie(request: NextRequest): UserRole[] {
+  const rawUserData = request.cookies.get(USER_DATA_COOKIE)?.value;
+  if (!rawUserData) return [];
+  try {
+    const parsed = JSON.parse(decodeURIComponent(rawUserData)) as { roles?: unknown };
+    if (!Array.isArray(parsed.roles)) return [];
+    return parsed.roles.filter((role): role is UserRole =>
+      role === "CLIENTE" || INTERNAL_ROLES.includes(role as UserRole),
+    );
+  } catch {
+    return [];
+  }
+}
+
 const STAFF_ROUTE_ROLES: Array<{ prefix: string; roles: UserRole[] }> = [
+  { prefix: "/staff", roles: [...INTERNAL_ROLES] },
   { prefix: "/admin", roles: ["ADMIN", "EMPLEADO", "SUPER_ADMIN"] },
   { prefix: "/super-admin", roles: ["SUPER_ADMIN"] },
   { prefix: "/empleado", roles: ["EMPLEADO", "CONCESION_VENDEDOR"] },
@@ -202,6 +218,9 @@ function getUserRoleFromCookie(request: NextRequest): UserRole | "" {
     role === "EMPLEADO" ||
     role === "CLIENTE" ||
     role === "EMPLEADO_CLUB" ||
+    role === "TRABAJADOR_CLUBLEON" ||
+    role === "CONCESION_SUPERADMIN" ||
+    role === "CONCESION_ADMIN" ||
     role === "CONCESION_VENDEDOR" ||
     role === "SUPER_ADMIN"
   ) {
@@ -302,6 +321,17 @@ export function middleware(request: NextRequest) {
     }
 
     return attachAppContextCookie(request, NextResponse.next());
+  }
+
+  const authenticatedRole = getUserRoleFromCookie(request);
+  if (
+    isInternalAccount(authenticatedRole, getRolesFromUserCookie(request)) &&
+    !isStaffAreaPath(pathname)
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/staff";
+    url.search = "";
+    return NextResponse.redirect(url);
   }
 
   const staffRoles = getRequiredStaffRoles(pathname);
