@@ -12,6 +12,7 @@ const ROUTES: readonly RouteRule[] = [
   { pattern: ["chat", "messages"], methods: ["POST"] },
   { pattern: ["files", "upload"], methods: ["POST"] },
   { pattern: ["files", DYNAMIC_ID], methods: ["DELETE"] },
+  { pattern: ["tryon", "eligibility"], methods: ["POST"] },
   { pattern: ["tryon", "jobs"], methods: ["GET", "POST"] },
   { pattern: ["tryon", "jobs", DYNAMIC_ID], methods: ["GET"] },
   { pattern: ["tryon", "jobs", DYNAMIC_ID, "image"], methods: ["GET"] },

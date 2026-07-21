@@ -7,16 +7,18 @@ import { Loader2, Sparkles, Trash2, UploadCloud } from "lucide-react";
 import {
   createTryOnJob,
   deleteAiUserImage,
+  getTryOnEligibility,
   getTryOnImageProxyUrl,
   pollTryOnUntilFinished,
   uploadAiUserImage,
 } from "@/lib/api/ai";
 import type { AiMessage, TryOnJob } from "@/lib/ai/types";
-import {
-  getTryOnIneligibilityMessage,
-  isTryOnEligibleProduct,
-} from "@/lib/ai/try-on-eligibility";
+import { getTryOnEligibilityMessage } from "@/lib/ai/try-on-eligibility";
 import type { Product } from "@/lib/types";
+import {
+  useTryOnEligibility,
+  type TryOnEligibilityState,
+} from "@/hooks/use-try-on-eligibility";
 import { useToast } from "@/hooks/use-toast";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import { AiMessageThread } from "@/components/ai/ai-message-thread";
@@ -32,6 +34,7 @@ type AiTryOnPanelProps = {
   defaultProduct?: Product;
   products?: Product[];
   allowProductSelection?: boolean;
+  eligibilityState?: TryOnEligibilityState;
   onJobCreated?: (job: TryOnJob) => void | Promise<void>;
   onJobCompleted?: (job: TryOnJob) => void | Promise<void>;
   onResultReady?: (payload: {
@@ -78,6 +81,7 @@ export function AiTryOnPanel({
   defaultProduct,
   products = [],
   allowProductSelection = false,
+  eligibilityState,
   onJobCreated,
   onJobCompleted,
   onResultReady,
@@ -131,15 +135,18 @@ export function AiTryOnPanel({
     products.find((product) => product.id === selectedProductId) ??
     defaultProduct ??
     null;
-  const isSelectedProductEligible = selectedProduct
-    ? isTryOnEligibleProduct({
-        categoryId: selectedProduct.categoryId,
-        categoryName: selectedProduct.category,
-        lineId: selectedProduct.lineId,
-        lineName: selectedProduct.lineName,
-        description: selectedProduct.description,
-      })
-    : false;
+  const useProvidedEligibility = Boolean(
+    eligibilityState && defaultProduct?.id === selectedProductId,
+  );
+  const fetchedEligibility = useTryOnEligibility(
+    selectedProductId || undefined,
+    !useProvidedEligibility,
+  );
+  const activeEligibility = useProvidedEligibility
+    ? eligibilityState!
+    : fetchedEligibility;
+  const isSelectedProductEligible =
+    activeEligibility.eligibility?.eligible === true;
 
   async function handleClearPhoto() {
     if (isRunning) {
@@ -147,13 +154,25 @@ export function AiTryOnPanel({
     }
 
     if (uploadedAssetId) {
-      await deleteAiUserImage(uploadedAssetId).catch(() => undefined);
+      try {
+        await deleteAiUserImage(uploadedAssetId);
+      } catch {
+        toast({ variant: "destructive", title: "No se pudo eliminar la foto", description: "Intenta de nuevo; conservamos la referencia para poder borrarla." });
+        return false;
+      }
     }
 
     setSelectedFile(null);
     setUploadedAssetId(null);
     setResultImageUrl("");
     setProcessingStage("");
+    return true;
+  }
+
+  async function handleSelectFile(file: File | null) {
+    if (uploadedAssetId && !(await handleClearPhoto())) return;
+    setResultImageUrl("");
+    setSelectedFile(file);
   }
 
   async function handleRunTryOn() {
@@ -179,17 +198,30 @@ export function AiTryOnPanel({
       return;
     }
 
+    if (activeEligibility.isLoading) {
+      toast({
+        title: "Verificando producto",
+        description: "Espera un momento mientras validamos su disponibilidad.",
+      });
+      return;
+    }
+
+    if (activeEligibility.hasError || !activeEligibility.eligibility) {
+      toast({
+        variant: "destructive",
+        title: "No se pudo verificar el producto",
+        description: "Intenta de nuevo antes de generar la vista previa.",
+      });
+      return;
+    }
+
     if (!isSelectedProductEligible) {
       toast({
         variant: "destructive",
         title: "Producto no compatible",
-        description: getTryOnIneligibilityMessage({
-          categoryId: selectedProduct.categoryId,
-          categoryName: selectedProduct.category,
-          lineId: selectedProduct.lineId,
-          lineName: selectedProduct.lineName,
-          description: selectedProduct.description,
-        }),
+        description: getTryOnEligibilityMessage(
+          activeEligibility.eligibility,
+        ),
       });
       return;
     }
@@ -230,10 +262,22 @@ export function AiTryOnPanel({
       }),
     ]);
 
+    let cleanupAssetId: string | null = null;
     try {
       const asset = await uploadAiUserImage(selectedFile, activeSessionId);
       setUploadedAssetId(asset.id);
+      cleanupAssetId = asset.id;
+      const assetEligibility = await getTryOnEligibility({
+        productId: selectedProduct.id,
+        userImageAssetId: asset.id,
+        sessionId: activeSessionId,
+      });
+      if (!assetEligibility.eligible) {
+        throw new Error(getTryOnEligibilityMessage(assetEligibility));
+      }
+
       setProcessingStage("Creando vista previa...");
+      cleanupAssetId = null;
       const idempotencyKey = `tryon_${activeSessionId}_${selectedProduct.id}_${asset.id}`;
       const createdJob = await createTryOnJob({
         sessionId: activeSessionId,
@@ -241,7 +285,6 @@ export function AiTryOnPanel({
         userImageAssetId: asset.id,
         consentAccepted: true,
         idempotencyKey,
-        ...(selectedProduct.clave ? { sku: selectedProduct.clave } : {}),
       });
 
       await onJobCreated?.(createdJob);
@@ -286,6 +329,14 @@ export function AiTryOnPanel({
         throw new Error(completedJob.errorMessage || "Error al generar");
       }
     } catch (caughtError) {
+      if (cleanupAssetId) {
+        try {
+          await deleteAiUserImage(cleanupAssetId);
+          setUploadedAssetId(null);
+        } catch {
+          toast({ variant: "destructive", title: "Foto pendiente de eliminar", description: "Usa Eliminar foto para reintentar sin perder la referencia." });
+        }
+      }
       const message = getApiErrorMessage(caughtError);
       setThreadMessages((currentMessages) => [
         ...currentMessages,
@@ -446,11 +497,7 @@ export function AiTryOnPanel({
               id="ai-tryon-file"
               type="file"
               accept="image/jpeg,image/png,image/webp"
-              onChange={(e) => {
-                setUploadedAssetId(null);
-                setResultImageUrl("");
-                setSelectedFile(e.target.files?.[0] ?? null);
-              }}
+              onChange={(e) => void handleSelectFile(e.target.files?.[0] ?? null)}
               disabled={isRunning}
               className="sr-only"
             />
@@ -495,11 +542,12 @@ export function AiTryOnPanel({
             className="h-11 w-full rounded-xl text-xs font-bold shadow-lg transition-transform active:scale-95"
             disabled={
               isRunning ||
+              activeEligibility.isLoading ||
               !selectedFile ||
               !consentAccepted ||
               !isSelectedProductEligible
             }
-            onClick={() => void handleRunTryOn()}
+            onClick={() => activeEligibility.hasError ? activeEligibility.refetch?.() : void handleRunTryOn()}
             aria-busy={isRunning}
           >
             {isRunning ? (
@@ -507,6 +555,15 @@ export function AiTryOnPanel({
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 {processingStage || "Procesando..."}
               </>
+            ) : activeEligibility.isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Verificando producto...
+              </>
+            ) : activeEligibility.hasError ? (
+              "Reintentar verificacion"
+            ) : !isSelectedProductEligible && activeEligibility.eligibility ? (
+              "Producto no compatible"
             ) : (
               "Ver cómo me queda"
             )}

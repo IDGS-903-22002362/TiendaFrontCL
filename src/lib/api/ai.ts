@@ -17,8 +17,10 @@ import type {
   AiToolCall,
   CreateAiSessionInput,
   CreateTryOnJobInput,
+  GetTryOnEligibilityInput,
   SendAiMessageInput,
   TryOnAsset,
+  TryOnEligibility,
   TryOnJob,
 } from "@/lib/ai/types";
 import type { UserRole } from "@/lib/types";
@@ -257,6 +259,53 @@ function mapTryOnAsset(input: unknown): TryOnAsset {
     createdAt: normalizeTimestamp(record.createdAt),
     updatedAt: normalizeTimestamp(record.updatedAt),
   };
+}
+
+const TRY_ON_ELIGIBILITY_REASONS = new Set<
+  NonNullable<TryOnEligibility["reason"]>
+>([
+  "TRYON_DISABLED",
+  "PRODUCT_UNAVAILABLE",
+  "PRODUCT_OUT_OF_STOCK",
+  "PRODUCT_IMAGE_UNAVAILABLE",
+  "PRODUCT_UNSUPPORTED",
+  "PRODUCT_UNCLASSIFIED",
+  "USER_IMAGE_UNAVAILABLE",
+]);
+const SAFE_TRY_ON_UNAVAILABLE: TryOnEligibility = {
+  eligible: false,
+  mode: "unsupported",
+  reason: "PRODUCT_UNAVAILABLE",
+  requirements: [],
+  disclaimer: "",
+};
+
+function mapTryOnEligibility(input: unknown): TryOnEligibility {
+  const record = toRecord(input);
+  const exactSuccess =
+    record.eligible === true &&
+    record.mode === "body_tryon" &&
+    record.reason === null &&
+    Array.isArray(record.requirements) &&
+    record.requirements.length === 0 &&
+    record.disclaimer === "";
+  if (exactSuccess) {
+    return {
+      eligible: true,
+      mode: "body_tryon",
+      reason: null,
+      requirements: [],
+      disclaimer: "",
+    };
+  }
+
+  const rawReason = toStringValue(record.reason);
+  const reason = TRY_ON_ELIGIBILITY_REASONS.has(
+    rawReason as NonNullable<TryOnEligibility["reason"]>,
+  )
+    ? (rawReason as NonNullable<TryOnEligibility["reason"]>)
+    : SAFE_TRY_ON_UNAVAILABLE.reason;
+  return { ...SAFE_TRY_ON_UNAVAILABLE, reason };
 }
 
 function mapTryOnJob(input: unknown): TryOnJob {
@@ -712,6 +761,25 @@ export async function deleteAiUserImage(assetId: string) {
     { method: "DELETE" },
     getLocalOptions(),
   );
+}
+
+export async function getTryOnEligibility(input: GetTryOnEligibilityInput) {
+  const payload = await apiFetch<ApiEnvelope<unknown>>(
+    "/api/ai/tryon/eligibility",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        productId: input.productId,
+        ...(input.userImageAssetId
+          ? { userImageAssetId: input.userImageAssetId }
+          : {}),
+        ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+      }),
+    },
+    getLocalOptions(),
+  );
+
+  return mapTryOnEligibility(unwrapData(payload));
 }
 
 export async function createTryOnJob(input: CreateTryOnJobInput) {

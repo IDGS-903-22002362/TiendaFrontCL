@@ -20,6 +20,7 @@ import {
 import { getApiErrorMessage } from "@/lib/api/errors";
 import { getProductStockState } from "@/lib/storefront";
 import { useAuth } from "@/hooks/use-auth";
+import { useTryOnEligibility } from "@/hooks/use-try-on-eligibility";
 import { useToast } from "@/hooks/use-toast";
 import { ProductGallery } from "@/components/storefront/product/product-gallery";
 import { ProductInfoPanel } from "@/components/storefront/product/product-info-panel";
@@ -44,6 +45,10 @@ export function ProductDetailsClient({
   const { toast } = useToast();
   const [currentProduct, setCurrentProduct] = useState(product);
   const [extraDetails, setExtraDetails] = useState<ProductExtraDetail[]>([]);
+  const tryOnEligibility = useTryOnEligibility(
+    currentProduct.id,
+    isAuthenticated && !isAuthLoading,
+  );
 
   const refreshProductDetail = useCallback(async () => {
     const nextProduct = await fetchProductDetail(
@@ -220,10 +225,14 @@ export function ProductDetailsClient({
           <ProductInfoPanel
             product={currentProduct}
             onRefreshDetail={refreshProductDetail}
+            tryOnEligibility={tryOnEligibility}
           />
         </StickySidebar>
       </div>
-      <ProductQnA product={currentProduct} />
+      <ProductQnA
+        product={currentProduct}
+        tryOnEligibility={tryOnEligibility}
+      />
     </>
   );
 }

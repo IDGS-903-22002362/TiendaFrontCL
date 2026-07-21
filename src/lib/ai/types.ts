@@ -5,6 +5,24 @@ export type AiMessageRole = "user" | "assistant" | "system" | "tool";
 export type AiToolCallStatus = "success" | "error" | "denied";
 export type TryOnJobStatus = "queued" | "processing" | "completed" | "failed";
 export type TryOnAssetKind = "user_upload" | "product_image" | "output_image";
+export type TryOnEligibilityMode = "body_tryon" | "unsupported";
+export type TryOnEligibilityReason =
+  | "TRYON_DISABLED"
+  | "PRODUCT_UNAVAILABLE"
+  | "PRODUCT_OUT_OF_STOCK"
+  | "PRODUCT_IMAGE_UNAVAILABLE"
+  | "PRODUCT_UNSUPPORTED"
+  | "PRODUCT_UNCLASSIFIED"
+  | "USER_IMAGE_UNAVAILABLE";
+export type TryOnEligibilityRequirement = "user_image" | "consent";
+
+export type TryOnEligibility = {
+  eligible: boolean;
+  mode: TryOnEligibilityMode;
+  reason: TryOnEligibilityReason | null;
+  requirements: TryOnEligibilityRequirement[];
+  disclaimer: string;
+};
 
 export type AiAttachment = {
   assetId: string;
@@ -157,6 +175,18 @@ export type CreateTryOnJobInput = {
   sku?: string;
   idempotencyKey?: string;
 };
+
+export type GetTryOnEligibilityInput =
+  | {
+      productId: string;
+      userImageAssetId?: undefined;
+      sessionId?: undefined;
+    }
+  | {
+      productId: string;
+      userImageAssetId: string;
+      sessionId: string;
+    };
 
 export type AiSseStatusEvent = {
   status: string;
