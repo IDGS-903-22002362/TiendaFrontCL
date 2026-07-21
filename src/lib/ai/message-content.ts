@@ -5,19 +5,10 @@ const PRODUCT_CONTEXT_END = "[[/PRODUCT_CONTEXT]]";
 
 type ProductContextPayload = {
   type: "active_product_context";
-  instruction: string;
-  product: {
+  productId?: string;
+  pageContext?: "product_detail";
+  product?: {
     productId: string;
-    name: string;
-    category: string;
-    description: string;
-    price: number;
-    salePrice?: number;
-    sizes?: string[];
-    colors?: string[];
-    stock: number;
-    lineName?: string;
-    sku?: string;
   };
 };
 
@@ -30,36 +21,6 @@ function getProductContextPattern() {
     `${escapeRegExp(PRODUCT_CONTEXT_START)}([\\s\\S]*?)${escapeRegExp(PRODUCT_CONTEXT_END)}`,
     "g",
   );
-}
-
-function normalizeStringList(values?: string[]) {
-  return values?.map((value) => value.trim()).filter(Boolean) ?? [];
-}
-
-function buildProductContextPayload(product: Product): ProductContextPayload {
-  const sizes = normalizeStringList(product.sizes);
-  const colors = normalizeStringList(product.colors);
-
-  return {
-    type: "active_product_context",
-    instruction:
-      "The user is currently viewing this product page. Unless the user explicitly mentions a different product, assume follow-up questions refer to this product.",
-    product: {
-      productId: product.id,
-      name: product.name,
-      category: product.category,
-      description: product.description,
-      price: product.price,
-      ...(product.salePrice !== undefined
-        ? { salePrice: product.salePrice }
-        : {}),
-      ...(sizes.length > 0 ? { sizes } : {}),
-      ...(colors.length > 0 ? { colors } : {}),
-      stock: product.stockTotal ?? product.stock,
-      ...(product.lineName ? { lineName: product.lineName } : {}),
-      ...(product.clave ? { sku: product.clave } : {}),
-    },
-  };
 }
 
 function extractProductContextPayloads(content: string) {
@@ -76,10 +37,12 @@ function extractProductContextPayloads(content: string) {
     }
 
     try {
-      const parsedPayload = JSON.parse(serializedPayload) as ProductContextPayload;
+      const parsedPayload = JSON.parse(
+        serializedPayload,
+      ) as ProductContextPayload;
       if (
         parsedPayload?.type === "active_product_context" &&
-        parsedPayload.product?.productId
+        (parsedPayload.productId || parsedPayload.product?.productId)
       ) {
         payloads.push(parsedPayload);
       }
@@ -91,8 +54,18 @@ function extractProductContextPayloads(content: string) {
   return payloads;
 }
 
-export function buildProductContextMessage(product: Product, message: string) {
-  const serializedPayload = JSON.stringify(buildProductContextPayload(product));
+export function buildProductContextMessage(
+  product: Pick<Product, "id">,
+  message: string,
+): string {
+  // The backend currently accepts clientContext but does not apply it to chat
+  // planning. Keep this compatibility marker identifier-only so the backend
+  // (and its tools) must rehydrate all commercial product data.
+  const serializedPayload = JSON.stringify({
+    type: "active_product_context",
+    productId: product.id,
+    pageContext: "product_detail",
+  });
   const trimmedMessage = message.trim();
 
   if (!trimmedMessage) {
@@ -118,6 +91,7 @@ export function messageContainsProductContext(
   productId: string,
 ) {
   return extractProductContextPayloads(content).some(
-    (payload) => payload.product.productId === productId,
+    (payload) =>
+      (payload.productId ?? payload.product?.productId) === productId,
   );
 }

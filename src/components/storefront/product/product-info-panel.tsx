@@ -25,7 +25,7 @@ import {
   isPersonalizableProduct,
 } from "@/lib/storefront";
 import { PERSONALIZATION_FEE_MXN } from "@/lib/cart-personalization";
-import { isTryOnEligibleProduct } from "@/lib/ai/try-on-eligibility";
+import type { TryOnEligibilityState } from "@/hooks/use-try-on-eligibility";
 import { cn } from "@/lib/utils";
 import { PersonalizationPanel } from "./personalization-panel";
 import { WishlistButton } from "@/components/storefront/shared/wishlist-button";
@@ -35,9 +35,11 @@ import type { ProductPersonalization } from "@/lib/storefront/types";
 export function ProductInfoPanel({
   product,
   onRefreshDetail,
+  tryOnEligibility,
 }: {
   product: Product;
   onRefreshDetail?: () => Promise<void>;
+  tryOnEligibility: TryOnEligibilityState;
 }) {
   const { addToCart } = useCart();
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
@@ -127,13 +129,9 @@ export function ProductInfoPanel({
   const unitPriceWithPersonalization =
     baseUnitPrice + (hasActivePersonalization ? personalizationFee : 0);
   const displayTotalPrice = unitPriceWithPersonalization * quantity;
-  const canTryOn = isTryOnEligibleProduct({
-    categoryId: product.categoryId,
-    categoryName: product.category,
-    lineId: product.lineId,
-    lineName: product.lineName,
-    description: product.description,
-  });
+  const canTryOn = tryOnEligibility.eligibility?.eligible === true;
+  const showTryOnControl =
+    canTryOn || tryOnEligibility.isLoading || tryOnEligibility.hasError;
   const addLabel =
     selectedStock <= 0
       ? "Agotado"
@@ -365,15 +363,20 @@ export function ProductInfoPanel({
                 >
                   {addLabel}
                 </Button>
-                {canTryOn ? (
+                {showTryOnControl ? (
                   <Button
                     variant="outline"
                     className="hidden h-[52px] lg:h-[56px] min-w-[44px] min-h-[44px] rounded-[1rem] border-primary/30 text-primary hover:bg-primary/10 lg:inline-flex"
                     type="button"
-                    onClick={handleOpenTryOn}
+                    onClick={tryOnEligibility.hasError ? tryOnEligibility.refetch : handleOpenTryOn}
+                    disabled={tryOnEligibility.isLoading || (!canTryOn && !tryOnEligibility.hasError)}
                   >
                     <Sparkles className="mr-2 h-4 w-4" />
-                    Pruebatelo
+                    {tryOnEligibility.isLoading
+                      ? "Verificando..."
+                      : tryOnEligibility.hasError
+                        ? "Reintentar"
+                        : "Pruebatelo"}
                   </Button>
                 ) : null}
               </div>
@@ -474,7 +477,7 @@ export function ProductInfoPanel({
         quantity={quantity}
         label={addLabel}
         onAdd={handleAddToCart}
-        onTryOn={handleOpenTryOn}
+        onTryOn={canTryOn ? handleOpenTryOn : undefined}
         personalizationFee={
           hasActivePersonalization ? personalizationFee * quantity : 0
         }

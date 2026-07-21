@@ -1,4 +1,9 @@
-import { ApiError, apiFetch, unwrapData } from "@/lib/api/client";
+import {
+  ApiError,
+  apiFetch,
+  prepareApiRequest,
+  unwrapData,
+} from "@/lib/api/client";
 import type {
   AiAdminMetrics,
   AiAttachment,
@@ -12,8 +17,10 @@ import type {
   AiToolCall,
   CreateAiSessionInput,
   CreateTryOnJobInput,
+  GetTryOnEligibilityInput,
   SendAiMessageInput,
   TryOnAsset,
+  TryOnEligibility,
   TryOnJob,
 } from "@/lib/ai/types";
 import type { UserRole } from "@/lib/types";
@@ -252,6 +259,53 @@ function mapTryOnAsset(input: unknown): TryOnAsset {
     createdAt: normalizeTimestamp(record.createdAt),
     updatedAt: normalizeTimestamp(record.updatedAt),
   };
+}
+
+const TRY_ON_ELIGIBILITY_REASONS = new Set<
+  NonNullable<TryOnEligibility["reason"]>
+>([
+  "TRYON_DISABLED",
+  "PRODUCT_UNAVAILABLE",
+  "PRODUCT_OUT_OF_STOCK",
+  "PRODUCT_IMAGE_UNAVAILABLE",
+  "PRODUCT_UNSUPPORTED",
+  "PRODUCT_UNCLASSIFIED",
+  "USER_IMAGE_UNAVAILABLE",
+]);
+const SAFE_TRY_ON_UNAVAILABLE: TryOnEligibility = {
+  eligible: false,
+  mode: "unsupported",
+  reason: "PRODUCT_UNAVAILABLE",
+  requirements: [],
+  disclaimer: "",
+};
+
+function mapTryOnEligibility(input: unknown): TryOnEligibility {
+  const record = toRecord(input);
+  const exactSuccess =
+    record.eligible === true &&
+    record.mode === "body_tryon" &&
+    record.reason === null &&
+    Array.isArray(record.requirements) &&
+    record.requirements.length === 0 &&
+    record.disclaimer === "";
+  if (exactSuccess) {
+    return {
+      eligible: true,
+      mode: "body_tryon",
+      reason: null,
+      requirements: [],
+      disclaimer: "",
+    };
+  }
+
+  const rawReason = toStringValue(record.reason);
+  const reason = TRY_ON_ELIGIBILITY_REASONS.has(
+    rawReason as NonNullable<TryOnEligibility["reason"]>,
+  )
+    ? (rawReason as NonNullable<TryOnEligibility["reason"]>)
+    : SAFE_TRY_ON_UNAVAILABLE.reason;
+  return { ...SAFE_TRY_ON_UNAVAILABLE, reason };
 }
 
 function mapTryOnJob(input: unknown): TryOnJob {
@@ -504,11 +558,11 @@ export async function sendAiMessageSse(
   handlers: AiSseHandlers,
   signal?: AbortSignal,
 ) {
-  const response = await fetch("/api/ai/chat/messages?stream=true", {
+  const path = "/api/ai/chat/messages?stream=true";
+  const init: RequestInit = {
     method: "POST",
     headers: {
       Accept: "text/event-stream",
-      "Content-Type": "application/json",
       "x-request-id": createRequestId(),
     },
     body: JSON.stringify({
@@ -518,7 +572,13 @@ export async function sendAiMessageSse(
     credentials: "include",
     cache: "no-store",
     signal,
-  });
+  };
+  const { endpoint, headers } = await prepareApiRequest(
+    path,
+    init,
+    getLocalOptions(),
+  );
+  const response = await fetch(endpoint, { ...init, headers });
 
   if (!response.ok) {
     const payload = (await parseTextPayload(response)) as UnknownRecord;
@@ -569,6 +629,7 @@ export async function sendAiMessageSse(
   const decoder = new TextDecoder();
   let buffer = "";
   let doneReceived = false;
+  let finalReceived = false;
 
   const processChunk = (chunk: string) => {
     const { event, dataLine } = parseSseChunk(chunk);
@@ -600,14 +661,14 @@ export async function sendAiMessageSse(
     }
 
     if (event === "final" || event === "message" || event === "result") {
+      finalReceived = true;
       handlers.onFinal?.(mapChatResult(finalPayload));
       return;
     }
 
     if (event === "error") {
       logAiDebug("sse-error-payload", payload);
-      handlers.onError?.(createAiStreamError(payload, "El stream AI fallo"));
-      return;
+      throw createAiStreamError(payload, "El stream AI fallo");
     }
 
     if (event === "done") {
@@ -623,11 +684,12 @@ export async function sendAiMessageSse(
         try {
           processChunk(remainingChunk);
         } catch (error) {
-          handlers.onError?.(
+          const streamError =
             error instanceof Error
               ? error
-              : new Error("No se pudo interpretar la respuesta AI"),
-          );
+              : new Error("No se pudo interpretar la respuesta AI");
+          handlers.onError?.(streamError);
+          throw streamError;
         }
       }
       break;
@@ -645,16 +707,30 @@ export async function sendAiMessageSse(
       try {
         processChunk(chunk);
         if (doneReceived) {
+          if (!finalReceived) {
+            throw new Error(
+              "El stream AI termino antes de entregar una respuesta final. Revisa la conversacion antes de reintentar.",
+            );
+          }
           return;
         }
       } catch (error) {
-        handlers.onError?.(
+        const streamError =
           error instanceof Error
             ? error
-            : new Error("No se pudo interpretar la respuesta AI"),
-        );
+            : new Error("No se pudo interpretar la respuesta AI");
+        handlers.onError?.(streamError);
+        throw streamError;
       }
     }
+  }
+
+  if (!finalReceived) {
+    const streamError = new Error(
+      "El stream AI termino antes de entregar una respuesta final. Revisa la conversacion antes de reintentar.",
+    );
+    handlers.onError?.(streamError);
+    throw streamError;
   }
 }
 
@@ -666,27 +742,17 @@ export async function uploadAiUserImage(file: File, sessionId?: string) {
     formData.append("sessionId", sessionId);
   }
 
-  const response = await fetch("/api/ai/files/upload", {
-    method: "POST",
-    headers: {
-      "x-request-id": createRequestId(),
+  const payload = await apiFetch<ApiEnvelope<unknown>>(
+    "/api/ai/files/upload",
+    {
+      method: "POST",
+      headers: { "x-request-id": createRequestId() },
+      body: formData,
     },
-    body: formData,
-    credentials: "include",
-    cache: "no-store",
-  });
+    getLocalOptions(),
+  );
 
-  const payload = (await parseTextPayload(response)) as UnknownRecord;
-
-  if (!response.ok || !("data" in payload)) {
-    throw new ApiError(
-      response.status,
-      getResponseMessage(payload, "No se pudo subir la imagen"),
-      payload,
-    );
-  }
-
-  return mapTryOnAsset(payload.data);
+  return mapTryOnAsset(unwrapData(payload));
 }
 
 export async function deleteAiUserImage(assetId: string) {
@@ -695,6 +761,25 @@ export async function deleteAiUserImage(assetId: string) {
     { method: "DELETE" },
     getLocalOptions(),
   );
+}
+
+export async function getTryOnEligibility(input: GetTryOnEligibilityInput) {
+  const payload = await apiFetch<ApiEnvelope<unknown>>(
+    "/api/ai/tryon/eligibility",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        productId: input.productId,
+        ...(input.userImageAssetId
+          ? { userImageAssetId: input.userImageAssetId }
+          : {}),
+        ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+      }),
+    },
+    getLocalOptions(),
+  );
+
+  return mapTryOnEligibility(unwrapData(payload));
 }
 
 export async function createTryOnJob(input: CreateTryOnJobInput) {

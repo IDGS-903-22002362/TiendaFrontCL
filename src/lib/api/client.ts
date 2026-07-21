@@ -42,7 +42,7 @@ export class ApiError extends Error {
   }
 }
 
-type ApiFetchOptions = {
+export type ApiFetchOptions = {
   token?: string;
   sessionId?: string;
   idempotencyKey?: string;
@@ -214,15 +214,13 @@ function shouldUseLocalProxy(path: string, options?: ApiFetchOptions): boolean {
   );
 }
 
-export async function apiFetch<T>(
+export async function prepareApiRequest(
   path: string,
   init: RequestInit = {},
   options?: ApiFetchOptions,
-): Promise<T> {
+) {
   const headers = new Headers(init.headers ?? {});
 
-  // Si el body es FormData, NO establecer Content-Type (el navegador lo maneja)
-  // Si el body es otro tipo y no hay Content-Type, establecer application/json
   if (
     !headers.has("Content-Type") &&
     init.body !== undefined &&
@@ -232,41 +230,44 @@ export async function apiFetch<T>(
   }
 
   const bearerToken = resolveClientBearerToken(options?.token);
-  if (bearerToken) {
-    headers.set("Authorization", `Bearer ${bearerToken}`);
-  }
-
-  if (options?.sessionId) {
-    headers.set("x-session-id", options.sessionId);
-  }
-
+  if (bearerToken) headers.set("Authorization", `Bearer ${bearerToken}`);
+  if (options?.sessionId) headers.set("x-session-id", options.sessionId);
   if (options?.idempotencyKey) {
     headers.set("Idempotency-Key", options.idempotencyKey);
   }
 
   if (typeof window !== "undefined") {
     headers.set(CLIENT_ORIGIN_HEADER, getClientOriginForRequests());
-  }
-
-  if (typeof window !== "undefined") {
     try {
       const { getAppCheckToken } = await import("@/lib/firebase/client");
       const appCheckToken = await getAppCheckToken();
-      if (appCheckToken) {
-        headers.set("X-Firebase-AppCheck", appCheckToken);
-      }
+      if (appCheckToken) headers.set("X-Firebase-AppCheck", appCheckToken);
     } catch {
-      // App Check es opcional hasta activar APP_CHECK_ENFORCED en backend.
+      // App Check remains optional until backend enforcement is enabled.
     }
   }
 
-  let response: Response;
   const useLocalProxy = shouldUseLocalProxy(path, options);
   const endpoint = useLocalProxy
     ? path
     : joinBackendApiUrl(resolveBackendBaseUrl(), path);
   const method = (init.method ?? "GET").toUpperCase();
   attachCsrfHeader(headers, useLocalProxy, method);
+
+  return { endpoint, headers, method, useLocalProxy };
+}
+
+export async function apiFetch<T>(
+  path: string,
+  init: RequestInit = {},
+  options?: ApiFetchOptions,
+): Promise<T> {
+  let response: Response;
+  const { endpoint, headers, useLocalProxy } = await prepareApiRequest(
+    path,
+    init,
+    options,
+  );
 
   try {
     response = await fetch(endpoint, {

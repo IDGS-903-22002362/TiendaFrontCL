@@ -33,13 +33,17 @@ import {
   buildProductContextMessage,
   messageContainsProductContext,
 } from "@/lib/ai/message-content";
-import {
-  isTryOnEligibleProduct,
-} from "@/lib/ai/try-on-eligibility";
 import { cn } from "@/lib/utils";
 import type { AiMessage } from "@/lib/ai/types";
+import type { TryOnEligibilityState } from "@/hooks/use-try-on-eligibility";
 
-export function ProductQnA({ product }: { product: Product }) {
+export function ProductQnA({
+  product,
+  tryOnEligibility,
+}: {
+  product: Product;
+  tryOnEligibility: TryOnEligibilityState;
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("chat");
   const [mobileChatSide, setMobileChatSide] = useState<"left" | "right">(
@@ -63,13 +67,7 @@ export function ProductQnA({ product }: { product: Product }) {
   const sessionHasActiveProductContext = conversation.messages.some((message) =>
     messageContainsProductContext(message.content, product.id),
   );
-  const isTryOnEligible = isTryOnEligibleProduct({
-    categoryId: product.categoryId,
-    categoryName: product.category,
-    lineId: product.lineId,
-    lineName: product.lineName,
-    description: product.description,
-  });
+  const isTryOnEligible = tryOnEligibility.eligibility?.eligible === true;
   const assistantTabs = isTryOnEligible
     ? [
         { value: "chat", label: "Consulta" },
@@ -303,6 +301,7 @@ export function ProductQnA({ product }: { product: Product }) {
                       sessionId={conversation.currentSessionId || undefined}
                       ensureSession={conversation.ensureSession}
                       defaultProduct={product}
+                      eligibilityState={tryOnEligibility}
                       onResultReady={({ message }) => {
                         setTryOnMessages((currentMessages) => {
                           const exists = currentMessages.some(

@@ -1,5 +1,6 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { proxyToBackend } from "@/lib/server/backend-client";
+import { evaluateAiRoute } from "@/lib/server/ai-route-policy";
 
 function getSuffix(path?: string[]) {
   if (!path || path.length === 0) {
@@ -10,6 +11,17 @@ function getSuffix(path?: string[]) {
 }
 
 function forward(request: NextRequest, path?: string[]) {
+  const policy = evaluateAiRoute(request.method, path);
+  if (policy.status !== 200) {
+    return NextResponse.json(
+      { success: false, message: "Ruta AI no permitida" },
+      {
+        status: policy.status,
+        headers: policy.status === 405 ? { Allow: policy.allow } : undefined,
+      },
+    );
+  }
+
   const suffix = getSuffix(path);
   const isMessageStream =
     request.method === "POST" &&
@@ -47,3 +59,8 @@ export function DELETE(
 ) {
   return context.params.then((params) => forward(request, params.path));
 }
+
+export const HEAD = GET;
+export const PUT = POST;
+export const PATCH = POST;
+export const OPTIONS = GET;
