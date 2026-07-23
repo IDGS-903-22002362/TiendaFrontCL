@@ -13,7 +13,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import {
-  getTryOnImageProxyUrl,
+  getTryOnDownloadLink,
   listAiSessions,
   listTryOnJobs,
 } from "@/lib/api/ai";
@@ -172,7 +172,10 @@ export function AiWorkspace() {
 
   async function handleDownload(jobId: string) {
     try {
-      window.open(getTryOnImageProxyUrl(jobId), "_blank", "noopener,noreferrer");
+      // window.open no puede enviar el header App Check; se pide un link
+      // firmado (la petición del link sí lleva App Check y sesión).
+      const { url } = await getTryOnDownloadLink(jobId);
+      window.open(url, "_blank", "noopener,noreferrer");
     } catch (caughtError) {
       toast({
         variant: "destructive",

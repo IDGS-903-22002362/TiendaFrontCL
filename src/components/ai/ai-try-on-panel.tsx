@@ -7,6 +7,7 @@ import { Loader2, Sparkles, Trash2, UploadCloud } from "lucide-react";
 import {
   createTryOnJob,
   deleteAiUserImage,
+  fetchTryOnImageObjectUrl,
   getTryOnEligibility,
   getTryOnImageProxyUrl,
   pollTryOnUntilFinished,
@@ -304,7 +305,11 @@ export function AiTryOnPanel({
           );
         }
 
-        const url = getTryOnImageProxyUrl(completedJob.id);
+        // El proxy exige App Check; un <img> no puede enviar ese header,
+        // así que se descarga con fetch y se muestra como object URL.
+        const url = await fetchTryOnImageObjectUrl(completedJob.id).catch(
+          () => getTryOnImageProxyUrl(completedJob.id),
+        );
         setResultImageUrl(url);
         setProcessingStage("");
 

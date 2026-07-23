@@ -857,6 +857,35 @@ export function getTryOnImageProxyUrl(jobId: string): string {
   return `/api/ai/tryon/jobs/${encodeURIComponent(jobId)}/image`;
 }
 
+/**
+ * Descarga la imagen del try-on con fetch (adjunta sesión y token App Check,
+ * que un <img> no puede enviar) y la expone como object URL local.
+ */
+export async function fetchTryOnImageObjectUrl(jobId: string): Promise<string> {
+  const path = getTryOnImageProxyUrl(jobId);
+  const init: RequestInit = {
+    method: "GET",
+    credentials: "include",
+    cache: "no-store",
+  };
+  const { endpoint, headers } = await prepareApiRequest(
+    path,
+    init,
+    getLocalOptions(),
+  );
+  const response = await fetch(endpoint, { ...init, headers });
+
+  if (!response.ok) {
+    throw new ApiError(
+      response.status,
+      "No se pudo cargar la imagen del try-on",
+    );
+  }
+
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
+}
+
 export async function getTryOnDownloadLink(jobId: string) {
   const payload = await apiFetch<
     ApiEnvelope<{ jobId?: string; url?: string; expiresInSec?: number }>
