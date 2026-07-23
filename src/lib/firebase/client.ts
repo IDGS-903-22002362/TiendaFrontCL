@@ -4,7 +4,7 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import {
   initializeAppCheck,
-  ReCaptchaV3Provider,
+  ReCaptchaEnterpriseProvider,
   getToken,
   type AppCheck,
 } from "firebase/app-check";
@@ -106,8 +106,10 @@ function initializeAppCheckIfConfigured(app: ReturnType<typeof getFirebaseApp>) 
     return;
   }
 
+  // La llave de App Check está registrada como reCAPTCHA Enterprise en
+  // app-oficial-leon; el provider debe coincidir o el exchange devuelve 400.
   appCheckInstance = initializeAppCheck(app, {
-    provider: new ReCaptchaV3Provider(siteKey),
+    provider: new ReCaptchaEnterpriseProvider(siteKey),
     isTokenAutoRefreshEnabled: true,
   });
 }
