@@ -14,6 +14,11 @@ import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Checkbox } from "@/components/ui/checkbox";
 import Antigravity from "@/components/Antigravity";
 import { apiFetch } from "@/lib/api/client";
+import {
+    OTP_TOTAL_ATTEMPTS,
+    getRemainingOtpAttempts,
+    requiresNewOtpCode,
+} from "@/lib/auth/otp-verification";
 
 interface RequestVerificationResponse {
     success: boolean;
@@ -43,11 +48,11 @@ export default function RegisterPage() {
     const [pendingEmail, setPendingEmail] = useState("");
     const [isRequestingCode, setIsRequestingCode] = useState(false);
     const [resendTimer, setResendTimer] = useState(0);
-    const [attempts, setAttempts] = useState(3);
+    const [attempts, setAttempts] = useState(OTP_TOTAL_ATTEMPTS);
     const [errorMessage, setErrorMessage] = useState("");
     const [isVerificationComplete, setIsVerificationComplete] = useState(false);
     const otpInputRefs = useRef<Array<HTMLInputElement | null>>([]);
-    const hasAutoSubmitted = useRef(false);
+    const lastSubmittedCodeRef = useRef("");
 
     const [form, setForm] = useState({
         nombre: "",
@@ -88,9 +93,8 @@ export default function RegisterPage() {
             showVerification &&
             verificationCode.length === 6 &&
             !isSubmitting &&
-            !hasAutoSubmitted.current
+            lastSubmittedCodeRef.current !== verificationCode
         ) {
-            hasAutoSubmitted.current = true;
             void onVerifyCode();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -98,7 +102,7 @@ export default function RegisterPage() {
 
     useEffect(() => {
         if (verificationCode.length < 6) {
-            hasAutoSubmitted.current = false;
+            lastSubmittedCodeRef.current = "";
         }
     }, [verificationCode]);
 
@@ -226,35 +230,26 @@ export default function RegisterPage() {
         setErrorMessage("");
 
         try {
-            const response = await apiFetch<RequestVerificationResponse>(
+            await apiFetch<RequestVerificationResponse>(
                 "/api/auth/request-registration-code",
                 {
                     method: "POST",
                     body: JSON.stringify(buildRegistrationPayload()),
                 },
-                { local: true },
+                { local: true, skipAuthRecovery: true },
             );
 
-            if (response.success) {
-                setPendingEmail(form.email.trim());
-                setShowVerification(true);
-                setAttempts(3);
-                setResendTimer(60);
-                showInfoToast({
-                    title: "Código enviado",
-                    description: `Hemos enviado un código de verificación a ${form.email.trim()}`,
-                });
-                return true;
-            }
-
-            const message = response.message || "Error al enviar el código";
-            setErrorMessage(message);
-            showErrorToast({
-                
-                title: "Error",
-                description: message,
+            setPendingEmail(form.email.trim());
+            setShowVerification(true);
+            setVerificationCode("");
+            lastSubmittedCodeRef.current = "";
+            setAttempts(OTP_TOTAL_ATTEMPTS);
+            setResendTimer(60);
+            showInfoToast({
+                title: "Código enviado",
+                description: `Hemos enviado un código de verificación a ${form.email.trim()}`,
             });
-            return false;
+            return true;
         } catch (error) {
             const errorMsg = getApiErrorMessage(error);
             setErrorMessage(errorMsg);
@@ -275,8 +270,20 @@ export default function RegisterPage() {
         await onRequestRegistrationCode();
     };
 
+    /** Regresa al formulario cuando el registro pendiente ya no puede verificarse. */
+    const resetVerificationFlow = () => {
+        setShowVerification(false);
+        setVerificationCode("");
+        setPendingEmail("");
+        setAttempts(OTP_TOTAL_ATTEMPTS);
+        setResendTimer(0);
+        lastSubmittedCodeRef.current = "";
+    };
+
     const onVerifyCode = async () => {
-        if (!verificationCode.trim() || verificationCode.length !== 6) {
+        const code = verificationCode.trim();
+
+        if (code.length !== 6) {
             showErrorToast({
                 
                 title: "Código inválido",
@@ -289,6 +296,7 @@ export default function RegisterPage() {
             return;
         }
 
+        lastSubmittedCodeRef.current = code;
         setIsSubmitting(true);
         setIsVerificationComplete(false);
         setErrorMessage("");
@@ -296,63 +304,51 @@ export default function RegisterPage() {
         let keepLoading = false;
 
         try {
-            const response = await apiFetch<VerifyRegistrationResponse>(
+            await apiFetch<VerifyRegistrationResponse>(
                 "/api/auth/verify-registration",
                 {
                     method: "POST",
                     body: JSON.stringify({
                         email: pendingEmail,
-                        verificationCode: verificationCode.trim(),
+                        verificationCode: code,
                     }),
                 },
-                { local: true },
+                { local: true, skipAuthRecovery: true },
             );
 
-            if (response.success) {
-                keepLoading = true;
-                setIsVerificationComplete(true);
-                await clearSession();
-                showSuccessToast({
-                    title: "Correo verificado",
-                    description: "Tu cuenta está lista. Inicia sesión con tu correo.",
-                });
-                router.replace(
-                    `/login?email=${encodeURIComponent(pendingEmail)}`,
-                );
-                return;
+            keepLoading = true;
+            setIsVerificationComplete(true);
+            await clearSession();
+            showSuccessToast({
+                title: "Correo verificado",
+                description: "Tu cuenta está lista. Inicia sesión con tu correo.",
+            });
+            router.replace(`/login?email=${encodeURIComponent(pendingEmail)}`);
+        } catch (error) {
+            const errorMsg = getApiErrorMessage(error);
+            const remainingAttempts = getRemainingOtpAttempts(error);
+
+            // Vaciar el codigo evita que el auto-envio se vuelva a disparar en bucle.
+            setVerificationCode("");
+            setErrorMessage(errorMsg);
+
+            if (remainingAttempts !== undefined) {
+                setAttempts(Math.max(remainingAttempts, 0));
             }
 
-            hasAutoSubmitted.current = false;
-            setAttempts(response.remainingAttempts || attempts - 1);
-            setErrorMessage(response.message || "Código incorrecto");
-
-            if (response.remainingAttempts === 0) {
-                setShowVerification(false);
-                setVerificationCode("");
-                setPendingEmail("");
+            if (requiresNewOtpCode(error)) {
+                resetVerificationFlow();
                 showErrorToast({
-                    
                     title: "Demasiados intentos",
-                    description: "Por favor, solicita un nuevo código",
+                    description: "Solicita un nuevo código para continuar.",
                 });
             } else {
                 showErrorToast({
                     
-                    title: "Código incorrecto",
-                    description:
-                        response.message ||
-                        `Te quedan ${response.remainingAttempts || attempts - 1} intentos`,
+                    title: "Error al verificar",
+                    description: errorMsg,
                 });
             }
-        } catch (error) {
-            hasAutoSubmitted.current = false;
-            const errorMsg = getApiErrorMessage(error);
-            setErrorMessage(errorMsg);
-            showErrorToast({
-                
-                title: "Error al verificar",
-                description: errorMsg,
-            });
         } finally {
             if (!keepLoading) {
                 setIsSubmitting(false);
@@ -549,7 +545,7 @@ export default function RegisterPage() {
                                 </div>
                             </div>
 
-                            {attempts < 3 && attempts > 0 ? (
+                            {attempts < OTP_TOTAL_ATTEMPTS && attempts > 0 ? (
                                 <p className="text-center text-xs font-medium text-orange-600">
                                     Te quedan {attempts} intento{attempts !== 1 ? "s" : ""}
                                 </p>

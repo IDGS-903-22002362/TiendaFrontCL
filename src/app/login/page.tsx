@@ -24,6 +24,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Antigravity from "@/components/Antigravity";
 import { apiFetch } from "@/lib/api/client";
+import {
+  OTP_TOTAL_ATTEMPTS,
+  getRemainingOtpAttempts,
+  requiresNewOtpCode,
+} from "@/lib/auth/otp-verification";
 import { createLocalSessionFromBackendToken } from "@/lib/api/auth";
 import { notifyMobileAppAuth, requestNativeAppleSignIn, requestNativeGoogleSignIn } from "@/lib/mobile-app-bridge";
 import { COOKIE_SESSION_TOKEN } from "@/lib/cookies/constants";
@@ -73,7 +78,7 @@ function LoginPageContent() {
   const [pendingEmail, setPendingEmail] = useState("");
   const [isRequestingCode, setIsRequestingCode] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
-  const [attempts, setAttempts] = useState(3);
+  const [attempts, setAttempts] = useState(OTP_TOTAL_ATTEMPTS);
 
   // Estado para mostrar formulario de correo y contraseña
   const [showPasswordLogin, setShowPasswordLogin] = useState(false);
@@ -224,7 +229,7 @@ function LoginPageContent() {
       setPendingEmail("");
       setPassword("");
       setErrorMessage("");
-      setAttempts(3);
+      setAttempts(OTP_TOTAL_ATTEMPTS);
       setResendTimer(0);
     }
   }, [isAuthenticated, isLoading, searchParams]);
@@ -252,31 +257,25 @@ function LoginPageContent() {
     }
   }, [showVerification, isSubmitting]);
 
-  const hasAutoSubmitted = useRef(false);
+  const lastSubmittedCodeRef = useRef("");
 
   useEffect(() => {
     if (
       showVerification &&
       verificationCode.length === 6 &&
       !isSubmitting &&
-      !hasAutoSubmitted.current
+      lastSubmittedCodeRef.current !== verificationCode
     ) {
-      hasAutoSubmitted.current = true;
       void onVerifyAndLogin();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verificationCode, showVerification, isSubmitting]);
 
   useEffect(() => {
     if (verificationCode.length < 6) {
-      hasAutoSubmitted.current = false;
+      lastSubmittedCodeRef.current = "";
     }
   }, [verificationCode]);
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      hasAutoSubmitted.current = false;
-    }
-  }, [isAuthenticated, isLoading]);
 
   const updateOtpDigit = (index: number, nextDigit: string) => {
     const safeDigit = nextDigit.replace(/\D/g, "").slice(-1);
@@ -378,32 +377,25 @@ function LoginPageContent() {
     setErrorMessage("");
 
     try {
-      const response = await apiFetch<RequestVerificationResponse>(
+      await apiFetch<RequestVerificationResponse>(
         "/api/auth/request-verification-code",
         {
           method: "POST",
           body: JSON.stringify({ email: email.trim() }),
         },
-        { local: true },
+        { local: true, skipAuthRecovery: true },
       );
 
-      if (response.success) {
-        setPendingEmail(email.trim());
-        setShowVerification(true);
-        setAttempts(3);
-        setResendTimer(60);
-        showInfoToast({
-          title: "Código enviado",
-          description: `Hemos enviado un código de verificación a ${email.trim()}`,
-        });
-      } else {
-        setErrorMessage(response.message || "Error al enviar el código");
-        showErrorToast({
-          
-          title: "Error",
-          description: response.message || "Error al enviar el código de verificación",
-        });
-      }
+      setPendingEmail(email.trim());
+      setShowVerification(true);
+      setVerificationCode("");
+      lastSubmittedCodeRef.current = "";
+      setAttempts(OTP_TOTAL_ATTEMPTS);
+      setResendTimer(60);
+      showInfoToast({
+        title: "Código enviado",
+        description: `Hemos enviado un código de verificación a ${email.trim()}`,
+      });
     } catch (error) {
       const errorMsg = getApiErrorMessage(error);
       setErrorMessage(errorMsg);
@@ -425,29 +417,23 @@ function LoginPageContent() {
     setErrorMessage("");
 
     try {
-      const response = await apiFetch<RequestVerificationResponse>(
+      await apiFetch<RequestVerificationResponse>(
         "/api/auth/request-verification-code",
         {
           method: "POST",
           body: JSON.stringify({ email: pendingEmail }),
         },
-        { local: true },
+        { local: true, skipAuthRecovery: true },
       );
 
-      if (response.success) {
-        setResendTimer(60);
-        setAttempts(3);
-        showInfoToast({
-          title: "Código reenviado",
-          description: "Revisa tu correo electrónico",
-        });
-      } else {
-        showErrorToast({
-          
-          title: "Error",
-          description: response.message || "Error al reenviar el código",
-        });
-      }
+      setResendTimer(60);
+      setVerificationCode("");
+      lastSubmittedCodeRef.current = "";
+      setAttempts(OTP_TOTAL_ATTEMPTS);
+      showInfoToast({
+        title: "Código reenviado",
+        description: "Revisa tu correo electrónico",
+      });
     } catch (error) {
       showErrorToast({
         
@@ -461,7 +447,9 @@ function LoginPageContent() {
 
   // Verificar código e iniciar sesión
   const onVerifyAndLogin = async () => {
-    if (!verificationCode.trim() || verificationCode.length !== 6) {
+    const code = verificationCode.trim();
+
+    if (code.length !== 6) {
       showErrorToast({
         
         title: "Código inválido",
@@ -470,6 +458,11 @@ function LoginPageContent() {
       return;
     }
 
+    if (isSubmitting) {
+      return;
+    }
+
+    lastSubmittedCodeRef.current = code;
     setIsSubmitting(true);
     setErrorMessage("");
 
@@ -480,60 +473,60 @@ function LoginPageContent() {
           method: "POST",
           body: JSON.stringify({
             email: pendingEmail,
-            verificationCode: verificationCode.trim(),
+            verificationCode: code,
           }),
         },
-        { local: true },
+        { local: true, skipAuthRecovery: true },
       );
 
-      if (response.success && response.data?.token) {
-        await createLocalSessionFromBackendToken(
-          response.data.token,
-          {
-            ...response.data.user,
-            rol: response.data.user.rol as UserRole, // Cast necesario si el backend devuelve el rol como string
-          }
-        );
-        notifyMobileAppAuth({
-          token: response.data.token,
-          uid: response.data.user.uid,
-          user: {
-            ...response.data.user,
-            rol: response.data.user.rol as UserRole,
-          },
-        });
-        hasNotifiedMobileAppRef.current = true;
-        await refreshSession();
-        showSuccessToast({ title: "¡Bienvenido!", description: "Sesión iniciada correctamente." });
-      } else {
-        setAttempts(response.remainingAttempts || attempts - 1);
-        setErrorMessage(response.message || "Código incorrecto");
-
-        if (response.remainingAttempts === 0) {
-          setShowVerification(false);
-          setVerificationCode("");
-          setPendingEmail("");
-          showErrorToast({
-            
-            title: "Demasiados intentos",
-            description: "Por favor, solicita un nuevo código",
-          });
-        } else {
-          showErrorToast({
-            
-            title: "Código incorrecto",
-            description: response.message || `Te quedan ${response.remainingAttempts || attempts - 1} intentos`,
-          });
-        }
+      if (!response.data?.token) {
+        throw new Error("No se pudo iniciar sesión. Solicita un nuevo código.");
       }
+
+      await createLocalSessionFromBackendToken(
+        response.data.token,
+        {
+          ...response.data.user,
+          rol: response.data.user.rol as UserRole, // Cast necesario si el backend devuelve el rol como string
+        }
+      );
+      notifyMobileAppAuth({
+        token: response.data.token,
+        uid: response.data.user.uid,
+        user: {
+          ...response.data.user,
+          rol: response.data.user.rol as UserRole,
+        },
+      });
+      hasNotifiedMobileAppRef.current = true;
+      await refreshSession();
+      showSuccessToast({ title: "¡Bienvenido!", description: "Sesión iniciada correctamente." });
     } catch (error) {
       const errorMsg = getApiErrorMessage(error);
-      setErrorMessage(errorMsg);
-      showErrorToast({
-        
-        title: "Error al verificar",
-        description: errorMsg,
-      });
+      const remainingAttempts = getRemainingOtpAttempts(error);
+
+      // Vaciar el codigo evita que el auto-envio se vuelva a disparar en bucle.
+      setVerificationCode("");
+
+      if (remainingAttempts !== undefined) {
+        setAttempts(Math.max(remainingAttempts, 0));
+      }
+
+      if (requiresNewOtpCode(error)) {
+        resetToMainLogin();
+        setErrorMessage(errorMsg);
+        showErrorToast({
+          title: "Demasiados intentos",
+          description: "Solicita un nuevo código para continuar.",
+        });
+      } else {
+        setErrorMessage(errorMsg);
+        showErrorToast({
+          
+          title: "Error al verificar",
+          description: errorMsg,
+        });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -689,10 +682,10 @@ function LoginPageContent() {
     setVerificationCode("");
     setPendingEmail("");
     setErrorMessage("");
-    setAttempts(3);
+    setAttempts(OTP_TOTAL_ATTEMPTS);
     setResendTimer(0);
     setEmail("");
-    hasAutoSubmitted.current = false;
+    lastSubmittedCodeRef.current = "";
   };
 
   const handleGoBack = () => {
@@ -977,7 +970,7 @@ function LoginPageContent() {
                     </div>
                   </div>
 
-                  {attempts < 3 && attempts > 0 && (
+                  {attempts < OTP_TOTAL_ATTEMPTS && attempts > 0 && (
                     <p className="text-center text-xs font-medium text-orange-600">
                       Te quedan {attempts} intento{attempts !== 1 ? "s" : ""}
                     </p>
