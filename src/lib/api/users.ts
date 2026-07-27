@@ -16,7 +16,7 @@ export type CompleteProfilePayload = {
 };
 
 export type UpdateProfilePayload = {
-  telefono: string;
+  telefono?: string;
 };
 
 export type EditableProfileData = {
@@ -124,7 +124,7 @@ export async function getMyProfile(uid?: string) {
 }
 
 export async function saveEditableProfile(payload: {
-  telefono: string;
+  telefono?: string;
   fechaNacimiento?: string;
   genero?: string;
 }) {

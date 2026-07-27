@@ -197,11 +197,13 @@ export default function RegisterPage() {
             ? form.fechaNacimiento.substring(0, 10)
             : undefined;
 
+        const telefono = form.telefono.trim();
+
         return {
             nombre: form.nombre.trim(),
             email: form.email.trim(),
             password: form.password,
-            telefono: form.telefono.trim(),
+            telefono: telefono || undefined,
             fechaNacimiento: fechaNormalizada,
             genero: generoNormalizado,
         };
@@ -374,6 +376,15 @@ export default function RegisterPage() {
                 
                 title: "Contrasenas no coinciden",
                 description: "Por favor, asegurate de que las contrasenas coincidan.",
+            });
+            return;
+        }
+
+        const telefono = form.telefono.trim();
+        if (telefono && telefono.length !== 10) {
+            showErrorToast({
+                title: "Telefono invalido",
+                description: "Si agregas telefono, debe tener exactamente 10 digitos.",
             });
             return;
         }
@@ -633,13 +644,13 @@ export default function RegisterPage() {
 
                             <Input
                                 name="telefono"
-                                placeholder="Telefono"
+                                placeholder="Telefono (opcional)"
+                                aria-label="Telefono (opcional)"
                                 value={form.telefono}
                                 onChange={(e) => {
                                     e.target.value = e.target.value.replace(/[^0-9]/g, "");
                                     handleChange(e);
                                 }}
-                                required
                                 type="text"
                                 inputMode="numeric"
                                 maxLength={10}

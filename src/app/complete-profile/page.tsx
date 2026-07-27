@@ -84,12 +84,21 @@ export default function CompleteProfilePage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Validar que al menos el teléfono se complete
-        if (!form.telefono.trim()) {
+        if (!form.nombre.trim()) {
             toast({
                 variant: "destructive",
                 title: "Datos incompletos",
-                description: "Por favor, ingresa tu teléfono.",
+                description: "Por favor, ingresa tu nombre.",
+            });
+            return;
+        }
+
+        const telefono = form.telefono.trim();
+        if (telefono && telefono.length !== 10) {
+            toast({
+                variant: "destructive",
+                title: "Teléfono inválido",
+                description: "Si agregas teléfono, debe tener exactamente 10 dígitos.",
             });
             return;
         }
@@ -98,8 +107,8 @@ export default function CompleteProfilePage() {
         try {
             // Enviar datos al backend
             await updateProfile({
-                nombre: form.nombre.trim() || undefined,
-                telefono: form.telefono.trim(),
+                nombre: form.nombre.trim(),
+                telefono: telefono || undefined,
                 fechaNacimiento: form.fechaNacimiento ? normalizeFechaNacimiento(form.fechaNacimiento) : undefined,
                 genero: normalizeGenero(form.genero) || undefined,
             });
@@ -203,7 +212,7 @@ export default function CompleteProfilePage() {
                                 <div className="flex items-start gap-3">
                                     <Phone className="h-4 w-4 text-primary mt-1 flex-shrink-0" />
                                     <div>
-                                        <p className="text-xs font-medium text-primary">Teléfono</p>
+                                        <p className="text-xs font-medium text-primary">Teléfono (opcional)</p>
                                         <p className="text-xs text-muted-foreground">
                                             Para notificaciones de pedidos
                                         </p>
@@ -212,7 +221,7 @@ export default function CompleteProfilePage() {
                                 <div className="flex items-start gap-3">
                                     <Calendar className="h-4 w-4 text-primary mt-1 flex-shrink-0" />
                                     <div>
-                                        <p className="text-xs font-medium text-primary">Fecha de nacimiento</p>
+                                        <p className="text-xs font-medium text-primary">Fecha de nacimiento (opcional)</p>
                                         <p className="text-xs text-muted-foreground">
                                             Para ofertas personalizadas
                                         </p>
@@ -230,7 +239,7 @@ export default function CompleteProfilePage() {
                                 Información personal
                             </CardTitle>
                             <CardDescription>
-                                Completa los campos para personalizar tu experiencia
+                                Teléfono, fecha de nacimiento y género son opcionales
                             </CardDescription>
                         </CardHeader>
                         <form onSubmit={handleSubmit}>
@@ -257,7 +266,7 @@ export default function CompleteProfilePage() {
                                 {/* Teléfono */}
                                 <div className="space-y-2">
                                     <label htmlFor="telefono" className="text-sm font-medium text-foreground">
-                                        Teléfono *
+                                        Teléfono (opcional)
                                     </label>
                                     <Input
                                         id="telefono"
@@ -270,7 +279,6 @@ export default function CompleteProfilePage() {
                                             e.target.value = e.target.value.replace(/[^0-9]/g, '');
                                             handleChange(e);
                                         }}
-                                        required
                                         className="h-11 rounded-lg"
                                         inputMode="numeric"
                                         disabled={isSubmitting}
@@ -279,7 +287,7 @@ export default function CompleteProfilePage() {
                                         pattern="[0-9]{10}"
                                     />
                                     <p className="text-xs text-muted-foreground">
-                                        Incluye código de país
+                                        10 dígitos, sin código de país
                                     </p>
                                 </div>
 

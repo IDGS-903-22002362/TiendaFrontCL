@@ -176,11 +176,11 @@ export default function ProfilePage() {
     const date = profileForm.fechaNacimiento.trim();
     const gender = profileForm.genero.trim();
 
-    if (phone.length !== 10) {
+    if (phone && phone.length !== 10) {
       toast({
         variant: "destructive",
         title: "Telefono invalido",
-        description: "El telefono debe tener exactamente 10 digitos.",
+        description: "Si agregas telefono, debe tener exactamente 10 digitos.",
       });
       return;
     }
@@ -204,7 +204,7 @@ export default function ProfilePage() {
     setIsSavingProfile(true);
     try {
       await saveEditableProfile({
-        telefono: phone,
+        telefono: phone || undefined,
         fechaNacimiento: shouldSendExtended ? date || undefined : undefined,
         genero: shouldSendExtended ? gender || undefined : undefined,
       });
@@ -404,7 +404,7 @@ export default function ProfilePage() {
                 </div>
 
                 <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Telefono</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Telefono (opcional)</p>
                   <input
                     value={profileForm.telefono}
                     onChange={(event) => {
