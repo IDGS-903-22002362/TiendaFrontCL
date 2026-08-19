@@ -16,7 +16,7 @@ export type CompleteProfilePayload = {
 };
 
 export type UpdateProfilePayload = {
-  telefono?: string;
+  genero?: string;
 };
 
 export type EditableProfileData = {
@@ -28,6 +28,8 @@ export type EditableProfileData = {
   fechaNacimiento?: string;
   genero?: string;
   nivel?: string;
+  provider?: string;
+  bonoPerfilCompletadoAt?: string;
 };
 
 export type UserStreak = {
@@ -57,7 +59,12 @@ export async function getMyPoints() {
 }
 
 export async function completeUserProfile(payload: CompleteProfilePayload) {
-  return apiFetch<ApiSuccess<{ uid: string; perfilCompleto: boolean; nombre?: string; telefono?: string; fechaNacimiento?: string; genero?: string; edad?: number }>>(
+  return apiFetch<
+    ApiSuccess<{ uid: string; perfilCompleto: boolean; nombre?: string; telefono?: string; fechaNacimiento?: string; genero?: string; edad?: number }> & {
+      bonoOtorgado?: boolean;
+      puntosBonificados?: number;
+    }
+  >(
     "/api/usuarios/completar-perfil",
     {
       method: "PUT",
@@ -67,8 +74,32 @@ export async function completeUserProfile(payload: CompleteProfilePayload) {
   );
 }
 
+export async function completeUserProfileDatos(payload: CompleteProfilePayload) {
+  return apiFetch<
+    ApiSuccess<{
+      uid: string;
+      nombre?: string;
+      telefono?: string;
+      fechaNacimiento?: string;
+      genero?: string;
+      bonoPerfilCompletadoAt?: string;
+      puntosActuales?: number;
+    }> & {
+      bonoOtorgado?: boolean;
+      puntosBonificados?: number;
+    }
+  >(
+    "/api/usuarios/completar-datos-perfil",
+    {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    },
+    { local: true },
+  );
+}
+
 export async function updateUserProfile(payload: UpdateProfilePayload) {
-  return apiFetch<ApiSuccess<{ uid: string; telefono: string }>>(
+  return apiFetch<ApiSuccess<{ uid: string; genero?: string }>>(
     "/api/usuarios/actualizar-perfil",
     {
       method: "PUT",
@@ -100,6 +131,13 @@ function normalizeEditableProfileData(payload: unknown): EditableProfileData {
         : undefined,
     genero: typeof source.genero === "string" ? source.genero : undefined,
     nivel: typeof source.nivel === "string" ? source.nivel : undefined,
+    provider: typeof source.provider === "string" ? source.provider : undefined,
+    bonoPerfilCompletadoAt:
+      typeof source.bonoPerfilCompletadoAt === "string"
+        ? source.bonoPerfilCompletadoAt
+        : source.bonoPerfilCompletadoAt
+          ? "claimed"
+          : undefined,
   };
 }
 
@@ -124,22 +162,9 @@ export async function getMyProfile(uid?: string) {
 }
 
 export async function saveEditableProfile(payload: {
-  telefono?: string;
-  fechaNacimiento?: string;
   genero?: string;
 }) {
-  const hasExtendedFields =
-    Boolean(payload.fechaNacimiento) || Boolean(payload.genero);
-
-  if (hasExtendedFields) {
-    return completeUserProfile({
-      telefono: payload.telefono,
-      fechaNacimiento: payload.fechaNacimiento,
-      genero: payload.genero,
-    });
-  }
-
-  return updateUserProfile({ telefono: payload.telefono });
+  return updateUserProfile({ genero: payload.genero });
 }
 
 export async function getUserStreak() {

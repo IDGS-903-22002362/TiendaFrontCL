@@ -11,6 +11,7 @@ export type AuthUsuario = {
   fechaNacimiento?: string | null;
   genero?: string | null;
   perfilCompleto?: boolean;
+  bonoPerfilCompletadoAt?: string | null;
   rol: UserRole;
   roles?: UserRole[];
   activo?: boolean;

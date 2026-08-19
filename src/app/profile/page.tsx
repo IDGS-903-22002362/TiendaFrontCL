@@ -7,10 +7,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
-import { getMyPoints, getMyProfile, saveEditableProfile, usuariosApi } from "@/lib/api/users";
+import { completeUserProfileDatos, getMyPoints, getMyProfile, saveEditableProfile, usuariosApi } from "@/lib/api/users";
 import { useToast } from "@/hooks/use-toast";
 import { ProfileRecommendations } from "@/components/storefront/recommendations/profile-recommendations";
 import { DatePickerField } from "@/components/ui/date-picker-field";
+import { canClaimProfileBonus } from "@/lib/profile-bonus";
+import { getApiErrorMessage } from "@/lib/api/errors";
 
 export default function ProfilePage() {
   const { user, role, isAuthenticated, isLoading, refreshSession } = useAuth();
@@ -21,10 +23,21 @@ export default function ProfilePage() {
   const [isLoadingPoints, setIsLoadingPoints] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [showBonusForm, setShowBonusForm] = useState(false);
+  const [isClaimingBonus, setIsClaimingBonus] = useState(false);
+  const [profileMeta, setProfileMeta] = useState<{
+    provider?: string;
+    bonoPerfilCompletadoAt?: string;
+  }>({});
   const [activeSection, setActiveSection] = useState<"personal" | "compras" | "recomendaciones">("personal");
   const [profileForm, setProfileForm] = useState({
     nombre: "",
     email: "",
+    telefono: "",
+    fechaNacimiento: "",
+    genero: "",
+  });
+  const [bonusForm, setBonusForm] = useState({
     telefono: "",
     fechaNacimiento: "",
     genero: "",
@@ -83,8 +96,8 @@ export default function ProfilePage() {
             ? backendUser.puntosActuales
             : null;
 
-        if (walletPoints !== null && walletPoints > 0) {
-          setPoints(walletPoints);
+        if (walletPoints !== null && legacyPoints !== null) {
+          setPoints(Math.max(walletPoints, legacyPoints));
           if (pointsResult.status === "fulfilled" && pointsResult.value.level) {
             setProfileLevel(pointsResult.value.level);
           }
@@ -92,6 +105,9 @@ export default function ProfilePage() {
           setPoints(legacyPoints);
         } else if (walletPoints !== null) {
           setPoints(walletPoints);
+          if (pointsResult.status === "fulfilled" && pointsResult.value.level) {
+            setProfileLevel(pointsResult.value.level);
+          }
         } else {
           setPoints(null);
           if (pointsResult.status === "rejected" && !backendUser) {
@@ -143,6 +159,19 @@ export default function ProfilePage() {
           fechaNacimiento: (profileData.fechaNacimiento ?? "").slice(0, 10),
           genero: profileData.genero ?? "",
         });
+        setProfileMeta({
+          provider:
+            profileData.provider ??
+            (typeof (user as { provider?: unknown } | null)?.provider === "string"
+              ? (user as { provider?: string }).provider
+              : undefined),
+          bonoPerfilCompletadoAt: profileData.bonoPerfilCompletadoAt,
+        });
+        setBonusForm({
+          telefono: profileData.telefono ?? "",
+          fechaNacimiento: (profileData.fechaNacimiento ?? "").slice(0, 10),
+          genero: profileData.genero ?? "",
+        });
 
         if (profileData.nombre) {
           setProfileName(profileData.nombre);
@@ -172,49 +201,27 @@ export default function ProfilePage() {
   }, [isAuthenticated, user]);
 
   const onSaveProfile = async () => {
-    const phone = profileForm.telefono.replace(/\D/g, "");
-    const date = profileForm.fechaNacimiento.trim();
     const gender = profileForm.genero.trim();
 
-    if (phone && phone.length !== 10) {
+    if (!gender) {
       toast({
         variant: "destructive",
-        title: "Telefono invalido",
-        description: "Si agregas telefono, debe tener exactamente 10 digitos.",
+        title: "Género requerido",
+        description: "Selecciona un género para guardar tu perfil.",
       });
       return;
     }
-
-    const today = new Date();
-    const todayKey = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()))
-      .toISOString()
-      .slice(0, 10);
-
-    if (date && date > todayKey) {
-      toast({
-        variant: "destructive",
-        title: "Fecha invalida",
-        description: "La fecha de nacimiento no puede ser futura.",
-      });
-      return;
-    }
-
-    const shouldSendExtended = Boolean(date) || Boolean(gender);
 
     setIsSavingProfile(true);
     try {
       await saveEditableProfile({
-        telefono: phone || undefined,
-        fechaNacimiento: shouldSendExtended ? date || undefined : undefined,
-        genero: shouldSendExtended ? gender || undefined : undefined,
+        genero: gender,
       });
 
       await refreshSession();
 
       setProfileForm((prev) => ({
         ...prev,
-        telefono: phone,
-        fechaNacimiento: date,
         genero: gender,
       }));
 
@@ -228,6 +235,95 @@ export default function ProfilePage() {
       });
     } finally {
       setIsSavingProfile(false);
+    }
+  };
+
+  const claimEligibility = canClaimProfileBonus({
+    provider:
+      profileMeta.provider ??
+      (typeof (user as { provider?: unknown } | null)?.provider === "string"
+        ? (user as { provider?: string }).provider
+        : undefined),
+    bonoPerfilCompletadoAt: profileMeta.bonoPerfilCompletadoAt,
+    telefono: profileForm.telefono,
+    fechaNacimiento: profileForm.fechaNacimiento,
+    genero: profileForm.genero,
+  });
+
+  const onClaimProfileBonus = async () => {
+    const phone = bonusForm.telefono.replace(/\D/g, "");
+    const date = bonusForm.fechaNacimiento.trim();
+    const gender = bonusForm.genero.trim();
+
+    if (phone.length !== 10) {
+      toast({
+        variant: "destructive",
+        title: "Teléfono requerido",
+        description: "El teléfono debe tener exactamente 10 dígitos.",
+      });
+      return;
+    }
+
+    if (!date) {
+      toast({
+        variant: "destructive",
+        title: "Fecha requerida",
+        description: "Selecciona tu fecha de nacimiento.",
+      });
+      return;
+    }
+
+    if (!gender) {
+      toast({
+        variant: "destructive",
+        title: "Género requerido",
+        description: "Selecciona tu género.",
+      });
+      return;
+    }
+
+    setIsClaimingBonus(true);
+    try {
+      const response = await completeUserProfileDatos({
+        telefono: phone,
+        fechaNacimiento: date,
+        genero: gender,
+      });
+
+      await refreshSession();
+
+      setProfileForm((prev) => ({
+        ...prev,
+        telefono: phone,
+        fechaNacimiento: date,
+        genero: gender,
+      }));
+      setProfileMeta((prev) => ({
+        ...prev,
+        bonoPerfilCompletadoAt:
+          response.data?.bonoPerfilCompletadoAt ?? "claimed",
+      }));
+      setShowBonusForm(false);
+
+      const awarded = response.puntosBonificados ?? 15;
+      if (typeof response.data?.puntosActuales === "number") {
+        setPoints(response.data.puntosActuales);
+      } else {
+        setPoints((prev) => (prev ?? 0) + awarded);
+      }
+
+      toast({
+        title: "¡Bono reclamado!",
+        description: `Sumaste ${awarded} puntos por completar tu perfil.`,
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "No se pudo reclamar el bono",
+        description: getApiErrorMessage(error),
+      });
+    } finally {
+      setIsClaimingBonus(false);
     }
   };
 
@@ -287,6 +383,112 @@ export default function ProfilePage() {
 
         </CardContent>
       </Card>
+
+      {claimEligibility ? (
+        <Card className="mb-4 border-primary/40 bg-gradient-to-r from-primary to-primary/80 text-primary-foreground shadow-lg md:mb-6">
+          <CardContent className="space-y-4 p-4 md:p-6">
+            <div>
+              <p className="text-lg font-black md:text-xl">
+                Obtén 15 puntos al completar tu perfil
+              </p>
+              <p className="mt-1 text-sm text-primary-foreground/85">
+                Agrega teléfono, fecha de nacimiento y género para reclamar tu bono.
+              </p>
+            </div>
+
+            {!showBonusForm ? (
+              <Button
+                type="button"
+                onClick={() => {
+                  setBonusForm({
+                    telefono: profileForm.telefono,
+                    fechaNacimiento: profileForm.fechaNacimiento,
+                    genero: profileForm.genero,
+                  });
+                  setShowBonusForm(true);
+                }}
+                className="bg-[#F3C24B] font-bold text-[#0B0B0B] hover:bg-[#F3C24B]/90"
+              >
+                Completar perfil
+              </Button>
+            ) : (
+              <div className="space-y-3 rounded-xl border border-white/20 bg-white/10 p-3">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-foreground/80">
+                    Teléfono *
+                  </p>
+                  <input
+                    value={bonusForm.telefono}
+                    onChange={(event) => {
+                      const value = event.target.value.replace(/[^0-9]/g, "").slice(0, 10);
+                      setBonusForm((prev) => ({ ...prev, telefono: value }));
+                    }}
+                    inputMode="numeric"
+                    maxLength={10}
+                    className="h-10 w-full rounded-lg border border-white/30 bg-white px-3 text-sm text-foreground"
+                    disabled={isClaimingBonus}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-foreground/80">
+                    Fecha de nacimiento *
+                  </p>
+                  <DatePickerField
+                    value={bonusForm.fechaNacimiento}
+                    onChange={(fechaNacimiento) =>
+                      setBonusForm((prev) => ({ ...prev, fechaNacimiento }))
+                    }
+                    max={new Date().toISOString().slice(0, 10)}
+                    placeholder="Selecciona una fecha"
+                    disabled={isClaimingBonus}
+                    className="h-10 rounded-lg border border-white/30 bg-white px-3 text-sm text-foreground shadow-none hover:bg-white"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-foreground/80">
+                    Género *
+                  </p>
+                  <select
+                    value={bonusForm.genero}
+                    onChange={(event) =>
+                      setBonusForm((prev) => ({ ...prev, genero: event.target.value }))
+                    }
+                    className="h-10 w-full rounded-lg border border-white/30 bg-white px-3 text-sm text-foreground"
+                    disabled={isClaimingBonus}
+                  >
+                    <option value="">Selecciona tu género</option>
+                    <option value="masculino">Masculino</option>
+                    <option value="femenino">Femenino</option>
+                    <option value="otro">Otro</option>
+                  </select>
+                </div>
+
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button
+                    type="button"
+                    onClick={() => void onClaimProfileBonus()}
+                    disabled={isClaimingBonus}
+                    className="bg-[#F3C24B] font-bold text-[#0B0B0B] hover:bg-[#F3C24B]/90"
+                  >
+                    {isClaimingBonus ? "Guardando..." : "Completar y obtener 15 pts"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isClaimingBonus}
+                    onClick={() => setShowBonusForm(false)}
+                    className="border-white/40 bg-transparent text-primary-foreground hover:bg-white/10"
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="mb-4 inline-flex rounded-xl border border-border bg-background p-1 md:mb-6">
         <button
@@ -404,34 +606,29 @@ export default function ProfilePage() {
                 </div>
 
                 <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Telefono (opcional)</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Telefono</p>
                   <input
                     value={profileForm.telefono}
-                    onChange={(event) => {
-                      const value = event.target.value.replace(/[^0-9]/g, "").slice(0, 10);
-                      setProfileForm((prev) => ({ ...prev, telefono: value }));
-                    }}
-                    inputMode="numeric"
-                    maxLength={10}
-                    className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
+                    readOnly
+                    disabled
+                    className="h-10 w-full rounded-lg border border-border bg-muted px-3 text-sm text-muted-foreground"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Fecha de nacimiento (opcional)</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Fecha de nacimiento</p>
                   <DatePickerField
                     value={profileForm.fechaNacimiento}
-                    onChange={(fechaNacimiento) =>
-                      setProfileForm((prev) => ({ ...prev, fechaNacimiento }))
-                    }
+                    onChange={() => undefined}
+                    disabled
                     max={new Date().toISOString().slice(0, 10)}
-                    placeholder="Selecciona una fecha"
-                    className="h-10 rounded-lg border border-input bg-background px-3 text-sm shadow-none hover:bg-background"
+                    placeholder="Sin fecha"
+                    className="h-10 rounded-lg border border-border bg-muted px-3 text-sm text-muted-foreground shadow-none"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Genero (opcional)</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Genero</p>
                   <select
                     value={profileForm.genero}
                     onChange={(event) => setProfileForm((prev) => ({ ...prev, genero: event.target.value }))}

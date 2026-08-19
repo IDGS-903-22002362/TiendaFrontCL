@@ -354,6 +354,7 @@ export type Usuario = {
   nivel?: string;
   fechaNacimiento?: string;
   perfilCompleto?: boolean;
+  bonoPerfilCompletadoAt?: string;
   edad?: number;
   genero?: string;
   activo?: boolean;

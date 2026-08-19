@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle, Calendar, Phone, User } from "lucide-react";
+import { ArrowLeft, CheckCircle, Calendar, Phone, Sparkles, User } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { completeUserProfile } from "@/lib/api/users";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -94,31 +93,55 @@ export default function CompleteProfilePage() {
         }
 
         const telefono = form.telefono.trim();
-        if (telefono && telefono.length !== 10) {
+        if (telefono.length !== 10) {
             toast({
                 variant: "destructive",
-                title: "Teléfono inválido",
-                description: "Si agregas teléfono, debe tener exactamente 10 dígitos.",
+                title: "Teléfono requerido",
+                description: "El teléfono debe tener exactamente 10 dígitos.",
+            });
+            return;
+        }
+
+        if (!form.fechaNacimiento.trim()) {
+            toast({
+                variant: "destructive",
+                title: "Fecha requerida",
+                description: "Selecciona tu fecha de nacimiento.",
+            });
+            return;
+        }
+
+        if (!form.genero.trim()) {
+            toast({
+                variant: "destructive",
+                title: "Género requerido",
+                description: "Selecciona tu género.",
             });
             return;
         }
 
         setIsSubmitting(true);
         try {
-            // Enviar datos al backend
-            await updateProfile({
+            const result = await updateProfile({
                 nombre: form.nombre.trim(),
-                telefono: telefono || undefined,
-                fechaNacimiento: form.fechaNacimiento ? normalizeFechaNacimiento(form.fechaNacimiento) : undefined,
-                genero: normalizeGenero(form.genero) || undefined,
+                telefono,
+                fechaNacimiento: normalizeFechaNacimiento(form.fechaNacimiento),
+                genero: normalizeGenero(form.genero),
             });
 
-            toast({
-                title: "¡Perfil completado!",
-                description: "Tus datos han sido guardados correctamente.",
-            });
+            if (result?.bonoOtorgado) {
+                const awarded = result.puntosBonificados ?? 15;
+                toast({
+                    title: "¡Perfil completado!",
+                    description: `Sumaste ${awarded} puntos por completar tu perfil.`,
+                });
+            } else {
+                toast({
+                    title: "¡Perfil completado!",
+                    description: "Tus datos han sido guardados correctamente.",
+                });
+            }
 
-            // Redirigir al home
             setTimeout(() => {
                 router.push("/");
             }, 1500);
@@ -131,11 +154,6 @@ export default function CompleteProfilePage() {
         } finally {
             setIsSubmitting(false);
         }
-    };
-
-    const handleSkip = () => {
-        // Permitir saltar por ahora, pero el usuario puede completar después
-        router.push("/");
     };
 
     if (isLoading) {
@@ -203,6 +221,18 @@ export default function CompleteProfilePage() {
                                 <p className="text-sm font-medium">{user?.email}</p>
                             </div>
 
+                            <div className="flex items-start gap-3 rounded-lg border border-primary/40 bg-primary/10 p-4">
+                                <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                                <div>
+                                    <p className="text-sm font-semibold text-foreground">
+                                        Suma 15 puntos al completar tu perfil
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                        Los puntos se acreditan al guardar tus datos.
+                                    </p>
+                                </div>
+                            </div>
+
                             <p className="text-sm leading-relaxed text-muted-foreground">
                                 Para aprovechar al máximo los beneficios de Club León, completa tu perfil con
                                 información adicional. Esto nos ayuda a personalizar tu experiencia.
@@ -212,7 +242,7 @@ export default function CompleteProfilePage() {
                                 <div className="flex items-start gap-3">
                                     <Phone className="h-4 w-4 text-primary mt-1 flex-shrink-0" />
                                     <div>
-                                        <p className="text-xs font-medium text-primary">Teléfono (opcional)</p>
+                                        <p className="text-xs font-medium text-primary">Teléfono</p>
                                         <p className="text-xs text-muted-foreground">
                                             Para notificaciones de pedidos
                                         </p>
@@ -221,7 +251,7 @@ export default function CompleteProfilePage() {
                                 <div className="flex items-start gap-3">
                                     <Calendar className="h-4 w-4 text-primary mt-1 flex-shrink-0" />
                                     <div>
-                                        <p className="text-xs font-medium text-primary">Fecha de nacimiento (opcional)</p>
+                                        <p className="text-xs font-medium text-primary">Fecha de nacimiento</p>
                                         <p className="text-xs text-muted-foreground">
                                             Para ofertas personalizadas
                                         </p>
@@ -239,7 +269,7 @@ export default function CompleteProfilePage() {
                                 Información personal
                             </CardTitle>
                             <CardDescription>
-                                Teléfono, fecha de nacimiento y género son opcionales
+                                Teléfono, fecha de nacimiento y género son obligatorios
                             </CardDescription>
                         </CardHeader>
                         <form onSubmit={handleSubmit}>
@@ -266,7 +296,7 @@ export default function CompleteProfilePage() {
                                 {/* Teléfono */}
                                 <div className="space-y-2">
                                     <label htmlFor="telefono" className="text-sm font-medium text-foreground">
-                                        Teléfono (opcional)
+                                        Teléfono *
                                     </label>
                                     <Input
                                         id="telefono"
@@ -285,6 +315,7 @@ export default function CompleteProfilePage() {
                                         autoComplete="tel"
                                         maxLength={10}
                                         pattern="[0-9]{10}"
+                                        required
                                     />
                                     <p className="text-xs text-muted-foreground">
                                         10 dígitos, sin código de país
@@ -294,7 +325,7 @@ export default function CompleteProfilePage() {
                                 {/* Fecha de Nacimiento */}
                                 <div className="space-y-2">
                                     <label htmlFor="fechaNacimiento" className="text-sm font-medium text-foreground">
-                                        Fecha de nacimiento (opcional)
+                                        Fecha de nacimiento *
                                     </label>
                                     <DatePickerField
                                         id="fechaNacimiento"
@@ -312,7 +343,7 @@ export default function CompleteProfilePage() {
                                 {/* Género */}
                                 <div className="space-y-2">
                                     <label htmlFor="genero" className="text-sm font-medium text-foreground">
-                                        Género (opcional)
+                                        Género *
                                     </label>
                                     <select
                                         id="genero"
@@ -321,6 +352,7 @@ export default function CompleteProfilePage() {
                                         onChange={handleChange}
                                         className="flex h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
                                         disabled={isSubmitting}
+                                        required
                                     >
                                         <option value="">Selecciona tu género</option>
                                         <option value="masculino">Masculino</option>
@@ -342,7 +374,7 @@ export default function CompleteProfilePage() {
                                     className="h-11 rounded-lg bg-primary font-semibold hover:bg-primary/90"
                                     disabled={isSubmitting}
                                 >
-                                    {isSubmitting ? "Guardando..." : "Guardar y continuar"}
+                                    {isSubmitting ? "Guardando..." : "Guardar y obtener 15 pts"}
                                 </Button>
 
                             </div>

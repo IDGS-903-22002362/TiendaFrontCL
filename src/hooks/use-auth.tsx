@@ -45,7 +45,9 @@ type AuthContextType = {
   ) => Promise<void>;
   clearSession: (options?: { notifyNative?: boolean }) => Promise<void>;
   refreshSession: () => Promise<void>;
-  completeProfile: (payload: CompleteProfilePayload) => Promise<void>;
+  completeProfile: (
+    payload: CompleteProfilePayload,
+  ) => Promise<{ bonoOtorgado?: boolean; puntosBonificados?: number }>;
   updateProfilePhone: (telefono: string) => Promise<void>;
   refreshStreak: () => Promise<void>;
   checkInStreak: () => Promise<void>;
@@ -183,6 +185,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }));
 
       await refreshSession();
+
+      return {
+        bonoOtorgado: response.bonoOtorgado,
+        puntosBonificados: response.puntosBonificados,
+      };
     },
     [refreshSession],
   );
