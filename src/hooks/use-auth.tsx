@@ -25,7 +25,6 @@ import {
   checkInUserStreak,
   completeUserProfile,
   getUserStreak,
-  updateUserProfile,
   type CompleteProfilePayload,
   type UserStreak,
 } from "@/lib/api/users";
@@ -48,7 +47,6 @@ type AuthContextType = {
   completeProfile: (
     payload: CompleteProfilePayload,
   ) => Promise<{ bonoOtorgado?: boolean; puntosBonificados?: number }>;
-  updateProfilePhone: (telefono: string) => Promise<void>;
   refreshStreak: () => Promise<void>;
   checkInStreak: () => Promise<void>;
   // Añadimos esta función para registrar callbacks de limpieza
@@ -194,15 +192,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [refreshSession],
   );
 
-  const updateProfilePhone = useCallback(async (telefono: string) => {
-    const response = await updateUserProfile({ telefono });
-    setUser((currentUser) => ({
-      ...(currentUser ?? {}),
-      uid: response.data.uid,
-      telefono: response.data.telefono,
-    }));
-  }, []);
-
   const refreshStreak = useCallback(async () => {
     const response = await getUserStreak();
     setStreak(response.data);
@@ -229,7 +218,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearSession,
       refreshSession,
       completeProfile,
-      updateProfilePhone,
       refreshStreak,
       checkInStreak,
       onSessionClear,
@@ -244,7 +232,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearSession,
       refreshSession,
       completeProfile,
-      updateProfilePhone,
       refreshStreak,
       checkInStreak,
       onSessionClear,
