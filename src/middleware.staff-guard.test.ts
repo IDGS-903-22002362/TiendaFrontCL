@@ -30,3 +30,16 @@ test("middleware keeps CLIENTE on the public store and allows staff workspace", 
   assert.equal(middleware(request("/products", "CLIENTE")).headers.get("x-middleware-next"), "1");
   assert.equal(middleware(request("/admin", "ADMIN")).headers.get("x-middleware-next"), "1");
 });
+
+test("middleware allows EMPLEADO into POS and redirects unsupported admin areas to POS", () => {
+  assert.equal(
+    middleware(request("/admin/pos", "EMPLEADO")).headers.get("x-middleware-next"),
+    "1",
+  );
+  assert.equal(
+    middleware(request("/admin/cortes", "EMPLEADO")).headers.get("x-middleware-next"),
+    "1",
+  );
+  const response = middleware(request("/admin/productos", "EMPLEADO"));
+  assert.equal(new URL(response.headers.get("location")!).pathname, "/admin/pos");
+});

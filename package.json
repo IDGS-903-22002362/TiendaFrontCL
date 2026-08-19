@@ -13,7 +13,8 @@
     "typecheck": "npm run typegen && tsc --noEmit",
     "deploy:frontend": "firebase deploy --only apphosting:ecomerce-next-front --project e-comerce-leon",
     "test:e2e:cookies": "playwright test e2e/cookie-consent.spec.ts",
-    "test:unit": "node --import tsx --test src/lib/api/cart-merge.test.ts src/lib/api/favorites.test.ts src/lib/api/ai.transport.test.ts src/lib/ai/message-content.test.ts src/lib/server/ai-route-policy.test.ts src/lib/server/loyalty-proxy-path.test.ts src/lib/server/loyalty-route-auth.test.ts src/lib/backend-url.test.ts src/lib/privacy/resolve-client-privacy-context.test.ts src/lib/cookies/script-loader.privacy.test.ts src/lib/auth/apple-review-credentials.test.ts src/lib/mobile-app-bridge.test.ts src/lib/loyalty/qr-scanner.test.ts src/lib/loyalty/sale-folio.test.ts src/lib/loyalty/staff-history.test.ts src/lib/staff-access.test.ts src/middleware.staff-guard.test.ts"
+    "test:unit": "node --import tsx --test src/lib/api/cart-merge.test.ts src/lib/api/favorites.test.ts src/lib/api/ai.transport.test.ts src/lib/ai/message-content.test.ts src/lib/server/ai-route-policy.test.ts src/lib/server/loyalty-proxy-path.test.ts src/lib/server/loyalty-route-auth.test.ts src/lib/backend-url.test.ts src/lib/privacy/resolve-client-privacy-context.test.ts src/lib/cookies/script-loader.privacy.test.ts src/lib/auth/apple-review-credentials.test.ts src/lib/mobile-app-bridge.test.ts src/lib/loyalty/qr-scanner.test.ts src/lib/loyalty/sale-folio.test.ts src/lib/loyalty/staff-history.test.ts src/lib/pos/client.test.ts src/lib/pos/barcode.test.ts src/lib/staff-access.test.ts src/middleware.staff-guard.test.ts",
+    "test:e2e:pos": "playwright test e2e/pos-terminal.spec.ts"
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.28.0",

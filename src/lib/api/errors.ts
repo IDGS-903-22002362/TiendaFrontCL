@@ -115,6 +115,12 @@ function getFirebaseAuthMessage(
 }
 
 function getApiPayloadMessage(error: ApiError): string | null {
+  if (
+    typeof error.payload?.detail === "string" &&
+    error.payload.detail.trim()
+  ) {
+    return error.payload.detail;
+  }
   const errors = error.payload?.errors;
 
   if (Array.isArray(errors) && errors.length > 0) {

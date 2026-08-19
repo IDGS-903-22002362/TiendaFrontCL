@@ -9,7 +9,7 @@ import { puedeAsignarPuntos, type UserRole } from "@/lib/types";
 function workspaceFor(role: UserRole | ""): { href: string; label: string } | null {
   if (role === "SUPER_ADMIN") return { href: "/super-admin/usuarios", label: "Abrir Super Admin" };
   if (role === "ADMIN") return { href: "/admin", label: "Abrir administración" };
-  if (role === "EMPLEADO") return { href: "/admin/ordenes", label: "Abrir operación de tienda" };
+  if (role === "EMPLEADO") return { href: "/admin/pos", label: "Abrir punto de venta" };
   if (role === "CONCESION_VENDEDOR") return { href: "/empleado/puntos", label: "Abrir espacio de empleado" };
   if (role === "EMPLEADO_CLUB") return { href: "/empleado-club/beneficios", label: "Abrir espacio Club León" };
   return null;

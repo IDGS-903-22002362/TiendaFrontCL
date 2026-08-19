@@ -18,6 +18,9 @@ type ApiErrorPayload = {
   success?: false;
   code?: string;
   message?: string;
+  detail?: string;
+  title?: string;
+  status?: number;
   error?: string | { code?: string; message?: string };
   errors?: Array<{ campo?: string; mensaje?: string; codigo?: string }>;
   [key: string]: unknown;
@@ -108,6 +111,9 @@ function getPayloadErrorObject(payload?: ApiErrorPayload) {
 }
 
 function getPayloadMessage(payload?: ApiErrorPayload, fallback = "") {
+  if (typeof payload?.detail === "string" && payload.detail) {
+    return payload.detail;
+  }
   if (typeof payload?.message === "string" && payload.message) {
     return payload.message;
   }

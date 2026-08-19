@@ -1,4 +1,6 @@
 export const EMPLEADO_ADMIN_PREFIXES = [
+  "/admin/pos",
+  "/admin/cortes",
   "/admin/ordenes",
   "/admin/inventario",
   "/admin/puntos",
@@ -7,7 +9,7 @@ export const EMPLEADO_ADMIN_PREFIXES = [
 export type EmpleadoAdminPath = (typeof EMPLEADO_ADMIN_PREFIXES)[number];
 
 export function getEmpleadoDefaultAdminPath(): EmpleadoAdminPath {
-  return "/admin/ordenes";
+  return "/admin/pos";
 }
 
 export function isEmpleadoAdminPath(pathname: string): boolean {

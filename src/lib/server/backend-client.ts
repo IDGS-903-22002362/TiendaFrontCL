@@ -40,6 +40,7 @@ function copyPassthroughHeaders(
     "content-disposition",
     "retry-after",
     "x-request-id",
+    "idempotency-replayed",
     "vary",
   ];
 
@@ -65,7 +66,7 @@ type ProxyOptions = {
   request: NextRequest;
   backendPath: string;
   requireAuth?: boolean;
-  method?: "GET" | "POST" | "PUT" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   rawResponse?: boolean;
   streamMultipart?: boolean;
   /** Omitir validación CSRF (p. ej. login inicial). */
@@ -119,6 +120,7 @@ export async function proxyToBackend({
   const requestId = request.headers.get("x-request-id");
   const accept = request.headers.get("accept");
   const appCheckToken = request.headers.get("x-firebase-appcheck");
+  const posDeviceId = request.headers.get("x-pos-device-id");
   const clientOrigin = request.headers.get(CLIENT_ORIGIN_HEADER);
 
   if (authorization) {
@@ -141,6 +143,9 @@ export async function proxyToBackend({
   }
   if (appCheckToken) {
     headers.set("X-Firebase-AppCheck", appCheckToken);
+  }
+  if (posDeviceId) {
+    headers.set("X-Pos-Device-Id", posDeviceId);
   }
   if (clientOrigin) {
     headers.set(CLIENT_ORIGIN_HEADER, clientOrigin);

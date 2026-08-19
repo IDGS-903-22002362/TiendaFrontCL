@@ -840,3 +840,22 @@ body[data-storefront="true"] {
 [data-admin="true"] .admin-panel-card .table-row:hover {
   background: rgb(246 249 252 / 0.9);
 }
+
+@media print {
+  [data-admin="true"] > header,
+  [data-admin="true"] > aside,
+  [data-admin="true"] .admin-main-surface > :not([role="dialog"]) {
+    display: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-admin="true"] *,
+  [data-admin="true"] *::before,
+  [data-admin="true"] *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

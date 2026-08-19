@@ -18,6 +18,8 @@ import {
   BadgePercent,
   Sparkles,
   ImageIcon,
+  MonitorSmartphone,
+  ClipboardList,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,6 +41,8 @@ const navGroups = [
     title: "Operación",
     links: [
       { href: "/admin", label: "Dashboard", icon: LayoutDashboard, adminOnly: true },
+      { href: "/admin/pos", label: "Punto de venta", icon: MonitorSmartphone, adminOnly: false },
+      { href: "/admin/cortes", label: "Cortes", icon: ClipboardList, adminOnly: true },
       { href: "/admin/ordenes", label: "Órdenes", icon: ShoppingCart, adminOnly: false },
       { href: "/admin/inventario", label: "Inventario", icon: Archive, adminOnly: false },
       { href: "/admin/puntos", label: "Puntos", icon: Coins, adminOnly: false },
