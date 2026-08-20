@@ -194,14 +194,20 @@ function buildRedireccion(form: FormState): BeneficioRedireccion | undefined {
 }
 
 const ALLOWED_REDIRECT_MODULOS = BENEFICIO_DESTINOS.filter(
-    (destino) => destino !== "none",
+    (destino): destino is Exclude<BeneficioDestinoModulo, "none"> =>
+        destino !== "none",
 );
 
 function normalizeRedirectModulo(
     modulo: BeneficioDestinoModulo | string | undefined,
 ): BeneficioDestinoModulo {
-    if (modulo && ALLOWED_REDIRECT_MODULOS.includes(modulo as BeneficioDestinoModulo)) {
-        return modulo as BeneficioDestinoModulo;
+    if (
+        modulo &&
+        ALLOWED_REDIRECT_MODULOS.includes(
+            modulo as Exclude<BeneficioDestinoModulo, "none">,
+        )
+    ) {
+        return modulo as Exclude<BeneficioDestinoModulo, "none">;
     }
 
     return "none";

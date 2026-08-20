@@ -51,8 +51,9 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: process.cwd(),
   experimental: {
     // Videos de beneficios hasta 50 MB pasan por /api/* → backend; sin esto Next trunca el body.
-    proxyClientMaxBodySize: "55mb",
     middlewareClientMaxBodySize: "55mb",
+    // Soportado en runtime desde 15.5.x; los tipos de 15.5.9 aún no lo incluyen.
+    ...({ proxyClientMaxBodySize: "55mb" } as Record<string, string>),
   },
   typescript: {
     ignoreBuildErrors: false,
