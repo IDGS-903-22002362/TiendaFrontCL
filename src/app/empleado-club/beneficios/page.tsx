@@ -4,7 +4,7 @@ import Image from "next/image";
 import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Ban, Gift, Plus, RefreshCw, RotateCcw, X } from "lucide-react";
+import { Ban, Film, Gift, ImageIcon, Link2, Plus, RefreshCw, RotateCcw, Trash2, X } from "lucide-react";
 import { EntityPicker, type EntityOption } from "@/components/admin/entity-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,23 +42,61 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import {
+    ALLOWED_BENEFICIO_IMAGE_TYPES,
+    ALLOWED_BENEFICIO_VIDEO_TYPES,
+    BENEFICIO_DESTINO_LABELS,
+    BENEFICIO_DESTINOS,
+    BENEFICIO_MEDIA_SIZE_RECOMMENDATIONS,
+    MAX_BENEFICIO_IMAGE_SIZE_BYTES,
+    MAX_BENEFICIO_IMAGENES,
+    MAX_BENEFICIO_PUNTOS_RECOMPENSA,
+    MAX_BENEFICIO_VIDEO_SIZE_BYTES,
     beneficiosApi,
+    resolveBeneficioImagenes,
     type Beneficio,
+    type BeneficioDestinoModulo,
+    type BeneficioMediaTipo,
+    type BeneficioRedireccion,
     type CrearBeneficioDTO,
     type ActualizarBeneficioDTO,
 } from "@/lib/api/beneficios";
+import {
+    Carousel,
+    CarouselContent,
+    CarouselItem,
+    CarouselNext,
+    CarouselPrevious,
+} from "@/components/ui/carousel";
 import { useToast } from "@/hooks/use-toast";
 
-const EMPTY_FORM = {
+type FormState = {
+    titulo: string;
+    descripcion: string;
+    estatus: boolean;
+    puntosRecompensaInput: string;
+    mediaTipo: "none" | BeneficioMediaTipo;
+    existingImagenes: string[];
+    existingVideo?: string;
+    redirectEnabled: boolean;
+    redirectModulo: BeneficioDestinoModulo;
+};
+
+const EMPTY_FORM: FormState = {
     titulo: "",
     descripcion: "",
     estatus: true,
+    puntosRecompensaInput: "0",
+    mediaTipo: "imagen",
+    existingImagenes: [],
+    redirectEnabled: false,
+    redirectModulo: "none",
 };
 
-type PendingImageUpload = {
+type PendingMediaUpload = {
     id: string;
     file: File;
-    previewUrl: string;
+    previewUrl?: string;
+    name: string;
 };
 
 type DateValue =
@@ -119,6 +157,117 @@ function formatDate(value: DateValue): string {
     return format(parsed, "dd MMM yyyy", { locale: es });
 }
 
+function resolveMediaLabel(beneficio: Beneficio): string {
+    if (beneficio.mediaTipo === "video" || beneficio.video) {
+        return "Video";
+    }
+
+    const imagenes = resolveBeneficioImagenes(beneficio);
+    if (imagenes.length > 1) {
+        return `${imagenes.length} imágenes`;
+    }
+
+    if (beneficio.mediaTipo === "imagen" || imagenes.length === 1) {
+        return "Imagen";
+    }
+
+    return "Sin media";
+}
+
+function resolveRedirectLabel(beneficio: Beneficio): string {
+    const modulo = beneficio.redireccion?.modulo ?? "none";
+    if (modulo === "none") {
+        return "—";
+    }
+
+    return BENEFICIO_DESTINO_LABELS[modulo] ?? modulo;
+}
+
+function buildRedireccion(form: FormState): BeneficioRedireccion | undefined {
+    if (!form.redirectEnabled || form.redirectModulo === "none") {
+        return { modulo: "none" };
+    }
+
+    return {
+        modulo: form.redirectModulo,
+    };
+}
+
+const ALLOWED_REDIRECT_MODULOS = BENEFICIO_DESTINOS.filter(
+    (destino) => destino !== "none",
+);
+
+function normalizeRedirectModulo(
+    modulo: BeneficioDestinoModulo | string | undefined,
+): BeneficioDestinoModulo {
+    if (modulo && ALLOWED_REDIRECT_MODULOS.includes(modulo as BeneficioDestinoModulo)) {
+        return modulo as BeneficioDestinoModulo;
+    }
+
+    return "none";
+}
+
+function formFromBeneficio(beneficio: Beneficio): FormState {
+    const imagenes = resolveBeneficioImagenes(beneficio);
+    const mediaTipo =
+        beneficio.mediaTipo ??
+        (beneficio.video ? "video" : imagenes.length > 0 ? "imagen" : "none");
+
+    const redirectModulo = normalizeRedirectModulo(beneficio.redireccion?.modulo);
+
+    return {
+        titulo: beneficio.titulo,
+        descripcion: beneficio.descripcion,
+        estatus: beneficio.estatus,
+        puntosRecompensaInput: formatPuntosRecompensaInput(beneficio.puntosRecompensa),
+        mediaTipo,
+        existingImagenes: imagenes,
+        existingVideo: beneficio.video,
+        redirectEnabled: redirectModulo !== "none",
+        redirectModulo,
+    };
+}
+
+function validateRedirectForm(_form: FormState): string | null {
+    return null;
+}
+
+function formatPuntosRecompensaInput(value: number | undefined): string {
+    const normalized = Math.max(
+        0,
+        Math.min(MAX_BENEFICIO_PUNTOS_RECOMPENSA, Math.floor(value ?? 0)),
+    );
+    return String(normalized);
+}
+
+function parsePuntosRecompensaInput(value: string): number {
+    const trimmed = value.trim();
+    if (!trimmed) {
+        return 0;
+    }
+
+    const parsed = Number.parseInt(trimmed, 10);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+        return 0;
+    }
+
+    return Math.min(MAX_BENEFICIO_PUNTOS_RECOMPENSA, parsed);
+}
+
+function sanitizePuntosRecompensaInput(value: string): string {
+    const digitsOnly = value.replace(/\D/g, "");
+    if (!digitsOnly) {
+        return "";
+    }
+
+    const parsed = Number.parseInt(digitsOnly, 10);
+    if (!Number.isFinite(parsed)) {
+        return "";
+    }
+
+    return String(Math.min(MAX_BENEFICIO_PUNTOS_RECOMPENSA, parsed));
+}
+
 export default function EmpleadoClubBeneficiosPage() {
     const [beneficios, setBeneficios] = useState<Beneficio[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
@@ -127,11 +276,12 @@ export default function EmpleadoClubBeneficiosPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [isRemovingMedia, setIsRemovingMedia] = useState(false);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingBeneficioId, setEditingBeneficioId] = useState<string | null>(null);
     const [isLoadingDetail, setIsLoadingDetail] = useState(false);
-    const [formData, setFormData] = useState(EMPTY_FORM);
-    const [pendingImageUpload, setPendingImageUpload] = useState<PendingImageUpload | null>(null);
+    const [formData, setFormData] = useState<FormState>(EMPTY_FORM);
+    const [pendingMediaUploads, setPendingMediaUploads] = useState<PendingMediaUpload[]>([]);
     const { toast } = useToast();
 
     const itemsPerPage = 10;
@@ -168,11 +318,31 @@ export default function EmpleadoClubBeneficiosPage() {
 
     useEffect(() => {
         return () => {
-            if (pendingImageUpload) {
-                URL.revokeObjectURL(pendingImageUpload.previewUrl);
-            }
+            pendingMediaUploads.forEach((upload) => {
+                if (upload.previewUrl) {
+                    URL.revokeObjectURL(upload.previewUrl);
+                }
+            });
         };
-    }, [pendingImageUpload]);
+    }, [pendingMediaUploads]);
+
+    const imagePreviewSlides = useMemo(() => {
+        const existingSlides = formData.existingImagenes.map((url) => ({
+            id: url,
+            src: url,
+            kind: "existing" as const,
+        }));
+
+        const pendingSlides = pendingMediaUploads
+            .filter((upload) => upload.previewUrl)
+            .map((upload) => ({
+                id: upload.id,
+                src: upload.previewUrl!,
+                kind: "pending" as const,
+            }));
+
+        return [...existingSlides, ...pendingSlides];
+    }, [formData.existingImagenes, pendingMediaUploads]);
 
     const beneficioOptions: EntityOption[] = useMemo(
         () =>
@@ -221,20 +391,94 @@ export default function EmpleadoClubBeneficiosPage() {
         return filteredBeneficios.slice(start, start + itemsPerPage);
     }, [currentPage, filteredBeneficios]);
 
-    const clearPendingImage = () => {
-        setPendingImageUpload((current) => {
-            if (current) {
-                URL.revokeObjectURL(current.previewUrl);
+    const clearPendingMedia = () => {
+        setPendingMediaUploads((current) => {
+            current.forEach((upload) => {
+                if (upload.previewUrl) {
+                    URL.revokeObjectURL(upload.previewUrl);
+                }
+            });
+            return [];
+        });
+    };
+
+    const removePendingMedia = (uploadId: string) => {
+        setPendingMediaUploads((current) => {
+            const target = current.find((upload) => upload.id === uploadId);
+            if (target?.previewUrl) {
+                URL.revokeObjectURL(target.previewUrl);
             }
 
-            return null;
+            return current.filter((upload) => upload.id !== uploadId);
         });
+    };
+
+    const handleRemoveExistingImage = async (url: string) => {
+        if (!editingBeneficioId) {
+            return;
+        }
+
+        setIsRemovingMedia(true);
+
+        try {
+            const updated = await beneficiosApi.removeImage(editingBeneficioId, url);
+            setFormData((current) => ({
+                ...current,
+                mediaTipo: resolveBeneficioImagenes(updated).length > 0 ? "imagen" : "none",
+                existingImagenes: resolveBeneficioImagenes(updated),
+            }));
+            await loadBeneficios();
+            toast({
+                title: "Imagen eliminada",
+                description: "La imagen se eliminó del beneficio.",
+            });
+        } catch (error) {
+            toast({
+                variant: "destructive",
+                title: "Error al eliminar",
+                description: getApiErrorMessage(error),
+            });
+        } finally {
+            setIsRemovingMedia(false);
+        }
+    };
+
+    const handleRemoveExistingVideo = async () => {
+        if (!editingBeneficioId) {
+            return;
+        }
+
+        setIsRemovingMedia(true);
+
+        try {
+            await beneficiosApi.removeMedia(editingBeneficioId);
+            setFormData((current) => ({
+                ...current,
+                mediaTipo: "none",
+                existingImagenes: [],
+                existingVideo: undefined,
+            }));
+            clearPendingMedia();
+            await loadBeneficios();
+            toast({
+                title: "Video eliminado",
+                description: "El video se eliminó del beneficio.",
+            });
+        } catch (error) {
+            toast({
+                variant: "destructive",
+                title: "Error al eliminar",
+                description: getApiErrorMessage(error),
+            });
+        } finally {
+            setIsRemovingMedia(false);
+        }
     };
 
     const resetForm = () => {
         setEditingBeneficioId(null);
         setFormData(EMPTY_FORM);
-        clearPendingImage();
+        clearPendingMedia();
     };
 
     const closeDialog = () => {
@@ -248,46 +492,112 @@ export default function EmpleadoClubBeneficiosPage() {
         setIsDialogOpen(true);
     };
 
-    const handleImageSelect = (event: ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-
-        if (!file) {
+    const handleMediaSelect = (event: ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(event.target.files ?? []);
+        if (files.length === 0) {
             return;
         }
 
-        if (!file.type.startsWith("image/")) {
-            toast({
-                variant: "destructive",
-                title: "Archivo inválido",
-                description: "Solo se permiten imágenes.",
-            });
-            event.target.value = "";
-            return;
-        }
+        const mediaTipo = formData.mediaTipo;
 
-        if (file.size > 5 * 1024 * 1024) {
-            toast({
-                variant: "destructive",
-                title: "Imagen demasiado grande",
-                description: "La imagen no puede exceder 5 MB.",
-            });
-            event.target.value = "";
-            return;
-        }
+        if (mediaTipo === "imagen") {
+            const currentTotal =
+                formData.existingImagenes.length + pendingMediaUploads.length;
+            const remainingSlots = MAX_BENEFICIO_IMAGENES - currentTotal;
 
-        const nextUpload = {
-            id: `${file.name}-${file.size}-${Date.now()}`,
-            file,
-            previewUrl: URL.createObjectURL(file),
-        };
-
-        setPendingImageUpload((current) => {
-            if (current) {
-                URL.revokeObjectURL(current.previewUrl);
+            if (remainingSlots <= 0) {
+                toast({
+                    variant: "destructive",
+                    title: "Límite alcanzado",
+                    description: `Solo puedes tener hasta ${MAX_BENEFICIO_IMAGENES} imágenes por beneficio.`,
+                });
+                event.target.value = "";
+                return;
             }
 
-            return nextUpload;
-        });
+            const acceptedFiles = files.slice(0, remainingSlots);
+            const nextUploads: PendingMediaUpload[] = [];
+
+            for (const file of acceptedFiles) {
+                if (
+                    !ALLOWED_BENEFICIO_IMAGE_TYPES.includes(
+                        file.type as (typeof ALLOWED_BENEFICIO_IMAGE_TYPES)[number],
+                    )
+                ) {
+                    toast({
+                        variant: "destructive",
+                        title: "Archivo inválido",
+                        description: `${file.name}: solo JPG, PNG, WEBP o GIF.`,
+                    });
+                    continue;
+                }
+
+                if (file.size > MAX_BENEFICIO_IMAGE_SIZE_BYTES) {
+                    toast({
+                        variant: "destructive",
+                        title: "Imagen demasiado grande",
+                        description: `${file.name} no puede exceder 5 MB.`,
+                    });
+                    continue;
+                }
+
+                nextUploads.push({
+                    id: `${file.name}-${file.size}-${Date.now()}-${Math.random()}`,
+                    file,
+                    name: file.name,
+                    previewUrl: URL.createObjectURL(file),
+                });
+            }
+
+            if (nextUploads.length > 0) {
+                setPendingMediaUploads((current) => [...current, ...nextUploads]);
+            }
+
+            if (files.length > remainingSlots) {
+                toast({
+                    variant: "destructive",
+                    title: "Algunas imágenes no se agregaron",
+                    description: `Solo se aceptaron ${remainingSlots} imagen(es) adicionales.`,
+                });
+            }
+
+            event.target.value = "";
+            return;
+        }
+
+        if (mediaTipo === "video") {
+            const file = files[0];
+
+            if (!ALLOWED_BENEFICIO_VIDEO_TYPES.includes(file.type as typeof ALLOWED_BENEFICIO_VIDEO_TYPES[number])) {
+                toast({
+                    variant: "destructive",
+                    title: "Archivo inválido",
+                    description: "Solo se permiten videos MP4, WEBM o MOV.",
+                });
+                event.target.value = "";
+                return;
+            }
+
+            if (file.size > MAX_BENEFICIO_VIDEO_SIZE_BYTES) {
+                toast({
+                    variant: "destructive",
+                    title: "Video demasiado grande",
+                    description: "El video no puede exceder 50 MB.",
+                });
+                event.target.value = "";
+                return;
+            }
+
+            clearPendingMedia();
+            setPendingMediaUploads([
+                {
+                    id: `${file.name}-${file.size}-${Date.now()}`,
+                    file,
+                    name: file.name,
+                },
+            ]);
+        }
+
         event.target.value = "";
     };
 
@@ -295,14 +605,11 @@ export default function EmpleadoClubBeneficiosPage() {
         setEditingBeneficioId(beneficio.id);
         setIsDialogOpen(true);
         setIsLoadingDetail(true);
+        clearPendingMedia();
 
         try {
             const detail = await beneficiosApi.getById(beneficio.id);
-            setFormData({
-                titulo: detail.titulo,
-                descripcion: detail.descripcion,
-                estatus: detail.estatus,
-            });
+            setFormData(formFromBeneficio(detail));
         } catch (error) {
             toast({
                 variant: "destructive",
@@ -314,6 +621,17 @@ export default function EmpleadoClubBeneficiosPage() {
         } finally {
             setIsLoadingDetail(false);
         }
+    };
+
+    const buildPayloadBase = (titulo: string, descripcion: string) => {
+        const redireccion = buildRedireccion(formData);
+
+        return {
+            titulo,
+            descripcion,
+            redireccion,
+            puntosRecompensa: parsePuntosRecompensaInput(formData.puntosRecompensaInput),
+        } satisfies CrearBeneficioDTO | ActualizarBeneficioDTO;
     };
 
     const handleSave = async () => {
@@ -329,32 +647,92 @@ export default function EmpleadoClubBeneficiosPage() {
             return;
         }
 
+        const redirectError = validateRedirectForm(formData);
+        if (redirectError) {
+            toast({
+                variant: "destructive",
+                title: "Redirección incompleta",
+                description: redirectError,
+            });
+            return;
+        }
+
+        const hasPendingMedia = pendingMediaUploads.length > 0;
+        const hasExistingImages = formData.existingImagenes.length > 0;
+
+        if (
+            !editingBeneficioId &&
+            formData.mediaTipo !== "none" &&
+            !hasPendingMedia
+        ) {
+            toast({
+                variant: "destructive",
+                title: "Archivo requerido",
+                description: "Sube al menos una imagen o un video para continuar.",
+            });
+            return;
+        }
+
+        if (
+            editingBeneficioId &&
+            formData.mediaTipo === "imagen" &&
+            !hasPendingMedia &&
+            !hasExistingImages
+        ) {
+            toast({
+                variant: "destructive",
+                title: "Imagen requerida",
+                description: "Agrega al menos una imagen o cambia el tipo de media.",
+            });
+            return;
+        }
+
         setIsSaving(true);
 
         try {
             if (editingBeneficioId) {
-                const payload: ActualizarBeneficioDTO = {
-                    titulo,
-                    descripcion,
-                };
+                const payload = buildPayloadBase(titulo, descripcion) as ActualizarBeneficioDTO;
 
                 await beneficiosApi.update(editingBeneficioId, payload);
+
+                if (hasPendingMedia && formData.mediaTipo === "imagen") {
+                    const uploadResult = await beneficiosApi.appendImages(
+                        editingBeneficioId,
+                        pendingMediaUploads.map((upload) => upload.file),
+                    );
+                    const uploadedCount = uploadResult.beneficio.imagenes?.length ?? 0;
+                    if (uploadedCount === 0) {
+                        throw new Error(
+                            "La imagen no se guardó en el servidor. Intenta subirla de nuevo.",
+                        );
+                    }
+                } else if (hasPendingMedia && formData.mediaTipo === "video") {
+                    await beneficiosApi.uploadVideo(
+                        editingBeneficioId,
+                        pendingMediaUploads[0].file,
+                    );
+                }
+
                 toast({
                     title: "Beneficio actualizado",
                     description: `"${titulo}" ha sido actualizado.`,
                 });
             } else {
-                const payload: CrearBeneficioDTO = {
-                    titulo,
-                    descripcion,
+                const payload = {
+                    ...buildPayloadBase(titulo, descripcion),
                     estatus: formData.estatus,
-                };
+                } as CrearBeneficioDTO;
 
-                if (pendingImageUpload?.file) {
-                    await beneficiosApi.createWithImage(payload, pendingImageUpload.file);
+                if (hasPendingMedia && formData.mediaTipo !== "none") {
+                    await beneficiosApi.createWithMedia(
+                        payload,
+                        pendingMediaUploads.map((upload) => upload.file),
+                        formData.mediaTipo,
+                    );
                 } else {
                     await beneficiosApi.create(payload);
                 }
+
                 toast({
                     title: "Beneficio creado",
                     description: `"${titulo}" ha sido creado.`,
@@ -415,6 +793,40 @@ export default function EmpleadoClubBeneficiosPage() {
         }
     };
 
+    const handlePermanentDelete = async (beneficio: Beneficio) => {
+        const confirmed = confirm(
+            `¿Eliminar permanentemente "${beneficio.titulo}"?\n\nSe borrarán las fotos, videos y toda la información del beneficio. Esta acción no se puede deshacer.`,
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            await beneficiosApi.permanentlyDelete(beneficio.id);
+
+            if (selectedBeneficioId === beneficio.id) {
+                setSelectedBeneficioId("");
+            }
+
+            if (editingBeneficioId === beneficio.id) {
+                closeDialog();
+            }
+
+            toast({
+                title: "Beneficio eliminado",
+                description: "Se eliminó permanentemente de la base de datos.",
+            });
+            await loadBeneficios();
+        } catch (error) {
+            toast({
+                variant: "destructive",
+                title: "Error al eliminar",
+                description: getApiErrorMessage(error),
+            });
+        }
+    };
+
     const handleEditSelected = async () => {
         if (!selectedBeneficioId) {
             return;
@@ -446,7 +858,7 @@ export default function EmpleadoClubBeneficiosPage() {
                         <div>
                             <h1 className="font-headline text-3xl font-bold">Gestión de Beneficios</h1>
                             <p className="text-sm text-muted-foreground">
-                                Administra las publicaciones informativas de beneficios.
+                                Administra beneficios con imagen o video y redirecciones a módulos de la app.
                             </p>
                         </div>
                     </div>
@@ -526,49 +938,69 @@ export default function EmpleadoClubBeneficiosPage() {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Imagen</TableHead>
+                                <TableHead>Media</TableHead>
                                 <TableHead>Título</TableHead>
                                 <TableHead>Descripción</TableHead>
+                                <TableHead>Redirección</TableHead>
+                                <TableHead>Puntos</TableHead>
                                 <TableHead>Estado</TableHead>
                                 <TableHead>Creado</TableHead>
-                                <TableHead>Actualizado</TableHead>
                                 <TableHead className="text-right">Acciones</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {isLoading ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                                    <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                                         Cargando beneficios...
                                     </TableCell>
                                 </TableRow>
                             ) : paginatedBeneficios.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                                    <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                                         No hay beneficios que coincidan con los filtros.
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                paginatedBeneficios.map((beneficio) => (
+                                paginatedBeneficios.map((beneficio) => {
+                                    const imagenes = resolveBeneficioImagenes(beneficio);
+                                    const previewImage = imagenes[0];
+
+                                    return (
                                     <TableRow key={beneficio.id}>
                                         <TableCell>
-                                            {beneficio.imagen ? (
+                                            {previewImage ? (
                                                 <Image
-                                                    src={beneficio.imagen}
+                                                    src={previewImage}
                                                     alt={`Imagen de ${beneficio.titulo}`}
                                                     width={64}
                                                     height={48}
                                                     className="h-12 w-16 rounded-md object-cover"
                                                 />
+                                            ) : beneficio.video ? (
+                                                <div className="flex h-12 w-16 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                                                    <Film className="h-5 w-5" />
+                                                </div>
                                             ) : (
                                                 <div className="flex h-12 w-16 items-center justify-center rounded-md bg-muted text-xs text-muted-foreground">
-                                                    Sin imagen
+                                                    Sin media
                                                 </div>
                                             )}
+                                            <p className="mt-1 text-[10px] text-muted-foreground">
+                                                {resolveMediaLabel(beneficio)}
+                                            </p>
                                         </TableCell>
                                         <TableCell className="font-medium">{beneficio.titulo}</TableCell>
-                                        <TableCell className="max-w-[440px] whitespace-normal text-sm text-muted-foreground">
+                                        <TableCell className="max-w-[320px] whitespace-normal text-sm text-muted-foreground">
                                             {beneficio.descripcion}
+                                        </TableCell>
+                                        <TableCell className="max-w-[180px] text-sm text-muted-foreground">
+                                            {resolveRedirectLabel(beneficio)}
+                                        </TableCell>
+                                        <TableCell className="text-sm text-muted-foreground">
+                                            {(beneficio.puntosRecompensa ?? 0) > 0
+                                                ? `${beneficio.puntosRecompensa} pts`
+                                                : "—"}
                                         </TableCell>
                                         <TableCell>
                                             {beneficio.estatus ? (
@@ -581,9 +1013,6 @@ export default function EmpleadoClubBeneficiosPage() {
                                         </TableCell>
                                         <TableCell className="text-sm text-muted-foreground">
                                             {formatDate(beneficio.createdAt)}
-                                        </TableCell>
-                                        <TableCell className="text-sm text-muted-foreground">
-                                            {formatDate(beneficio.updatedAt)}
                                         </TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex items-center justify-end gap-2">
@@ -606,20 +1035,32 @@ export default function EmpleadoClubBeneficiosPage() {
                                                         <Ban className="h-4 w-4" />
                                                     </Button>
                                                 ) : (
-                                                    <Button
-                                                        variant="outline"
-                                                        size="icon"
-                                                        className="h-8 w-8 border-green-200 text-green-600 hover:bg-green-50 hover:text-green-700"
-                                                        onClick={() => void handleReactivate(beneficio)}
-                                                        title="Habilitar beneficio"
-                                                    >
-                                                        <RotateCcw className="h-4 w-4" />
-                                                    </Button>
+                                                    <>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="icon"
+                                                            className="h-8 w-8 border-green-200 text-green-600 hover:bg-green-50 hover:text-green-700"
+                                                            onClick={() => void handleReactivate(beneficio)}
+                                                            title="Habilitar beneficio"
+                                                        >
+                                                            <RotateCcw className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                                            onClick={() => void handlePermanentDelete(beneficio)}
+                                                            title="Eliminar permanentemente"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </>
                                                 )}
                                             </div>
                                         </TableCell>
                                     </TableRow>
-                                ))
+                                    );
+                                })
                             )}
                         </TableBody>
                     </Table>
@@ -678,14 +1119,17 @@ export default function EmpleadoClubBeneficiosPage() {
                 )}
             </div>
 
-            <Dialog open={isDialogOpen} onOpenChange={(open) => {
-                if (!open) {
-                    closeDialog();
-                    return;
-                }
+            <Dialog
+                open={isDialogOpen}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        closeDialog();
+                        return;
+                    }
 
-                setIsDialogOpen(true);
-            }}>
+                    setIsDialogOpen(true);
+                }}
+            >
                 <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>
@@ -729,46 +1173,296 @@ export default function EmpleadoClubBeneficiosPage() {
                             />
                         </div>
 
-                        {!editingBeneficioId && (
-                            <div className="space-y-2 border-t pt-4">
-                                <Label htmlFor="imagen">Imagen</Label>
-                                <Input
-                                    id="imagen"
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handleImageSelect}
-                                    disabled={isLoadingDetail || isSaving}
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                    Opcional. Sube una imagen para mostrar este beneficio. Máximo 5 MB.
-                                </p>
+                        <div className="space-y-2">
+                            <Label htmlFor="puntosRecompensa">Puntos al reclamar</Label>
+                            <Input
+                                id="puntosRecompensa"
+                                type="text"
+                                inputMode="numeric"
+                                autoComplete="off"
+                                placeholder="0"
+                                value={formData.puntosRecompensaInput}
+                                onChange={(event) =>
+                                    setFormData((current) => ({
+                                        ...current,
+                                        puntosRecompensaInput: sanitizePuntosRecompensaInput(
+                                            event.target.value,
+                                        ),
+                                    }))
+                                }
+                                onBlur={() =>
+                                    setFormData((current) => ({
+                                        ...current,
+                                        puntosRecompensaInput:
+                                            current.puntosRecompensaInput.trim() === ""
+                                                ? "0"
+                                                : formatPuntosRecompensaInput(
+                                                      parsePuntosRecompensaInput(
+                                                          current.puntosRecompensaInput,
+                                                      ),
+                                                  ),
+                                    }))
+                                }
+                                disabled={isLoadingDetail || isSaving}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Cada usuario puede reclamar estos puntos una sola vez. Usa 0 si el beneficio no otorga puntos.
+                            </p>
+                        </div>
 
-                                {pendingImageUpload && (
-                                    <div className="relative max-w-xs overflow-hidden rounded-md border">
-                                        <Image
-                                            src={pendingImageUpload.previewUrl}
-                                            alt="Vista previa de la imagen del beneficio"
-                                            width={320}
-                                            height={144}
-                                            unoptimized
-                                            className="h-36 w-full object-cover"
-                                        />
-                                        <Button
-                                            type="button"
-                                            size="icon"
-                                            variant="destructive"
-                                            className="absolute right-2 top-2 h-7 w-7"
-                                            onClick={clearPendingImage}
-                                            disabled={isSaving}
-                                            aria-label="Quitar imagen seleccionada"
+                        <div className="space-y-3 border-t pt-4">
+                            <div className="flex items-center gap-2">
+                                <ImageIcon className="h-4 w-4 text-primary" />
+                                <Label>Contenido visual</Label>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="mediaTipo">Tipo de media</Label>
+                                <Select
+                                    value={formData.mediaTipo}
+                                    onValueChange={(value: FormState["mediaTipo"]) => {
+                                        clearPendingMedia();
+                                        setFormData((current) => ({
+                                            ...current,
+                                            mediaTipo: value,
+                                        }));
+                                    }}
+                                    disabled={isLoadingDetail || isSaving}
+                                >
+                                    <SelectTrigger id="mediaTipo">
+                                        <SelectValue placeholder="Selecciona tipo" />
+                                    </SelectTrigger>
+                                    <SelectContent className="min-w-[var(--radix-select-trigger-width)]">
+                                        <SelectItem value="none">Sin media</SelectItem>
+                                        <SelectItem
+                                            value="imagen"
+                                            hint={BENEFICIO_MEDIA_SIZE_RECOMMENDATIONS.imagen.hint}
                                         >
-                                            <X className="h-4 w-4" />
-                                        </Button>
-                                    </div>
+                                            Imagen
+                                        </SelectItem>
+                                        <SelectItem
+                                            value="video"
+                                            hint={BENEFICIO_MEDIA_SIZE_RECOMMENDATIONS.video.hint}
+                                        >
+                                            Video
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                {(formData.mediaTipo === "imagen" ||
+                                    formData.mediaTipo === "video") && (
+                                    <p className="text-xs leading-relaxed text-muted-foreground">
+                                        <span className="font-medium text-foreground/80">
+                                            Recomendación:
+                                        </span>{" "}
+                                        {
+                                            BENEFICIO_MEDIA_SIZE_RECOMMENDATIONS[
+                                                formData.mediaTipo
+                                            ].summary
+                                        }
+                                    </p>
                                 )}
                             </div>
-                        )}
 
+                            {formData.mediaTipo !== "none" && (
+                                <>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="mediaFile">
+                                            {formData.mediaTipo === "imagen"
+                                                ? "Subir imágenes"
+                                                : "Subir video"}
+                                        </Label>
+                                        <Input
+                                            id="mediaFile"
+                                            type="file"
+                                            multiple={formData.mediaTipo === "imagen"}
+                                            accept={
+                                                formData.mediaTipo === "imagen"
+                                                    ? "image/*"
+                                                    : "video/mp4,video/webm,video/quicktime"
+                                            }
+                                            onChange={handleMediaSelect}
+                                            disabled={isLoadingDetail || isSaving || isRemovingMedia}
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            {formData.mediaTipo === "imagen"
+                                                ? `Puedes subir hasta ${MAX_BENEFICIO_IMAGENES} imágenes (5 MB c/u). Formatos: JPG, PNG, WEBP o GIF.`
+                                                : "Máximo 50 MB. Formatos: MP4, WEBM o MOV."}
+                                        </p>
+                                    </div>
+
+                                    {formData.mediaTipo === "imagen" && imagePreviewSlides.length > 0 && (
+                                        <div className="space-y-2">
+                                            <div className="relative mx-auto max-w-md px-10">
+                                                {imagePreviewSlides.length === 1 ? (
+                                                    <div className="relative overflow-hidden rounded-md border bg-muted/20">
+                                                        <Image
+                                                            src={imagePreviewSlides[0].src}
+                                                            alt="Vista previa"
+                                                            width={480}
+                                                            height={320}
+                                                            unoptimized
+                                                            className="h-52 w-full object-contain"
+                                                        />
+                                                        <Button
+                                                            type="button"
+                                                            size="icon"
+                                                            variant="destructive"
+                                                            className="absolute right-2 top-2 h-7 w-7"
+                                                            onClick={() => {
+                                                                const slide = imagePreviewSlides[0];
+                                                                if (slide.kind === "pending") {
+                                                                    removePendingMedia(slide.id);
+                                                                    return;
+                                                                }
+                                                                void handleRemoveExistingImage(slide.id);
+                                                            }}
+                                                            disabled={isSaving || isRemovingMedia || isLoadingDetail}
+                                                            aria-label="Eliminar imagen"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                ) : (
+                                                    <Carousel className="w-full">
+                                                        <CarouselContent>
+                                                            {imagePreviewSlides.map((slide) => (
+                                                                <CarouselItem key={slide.id}>
+                                                                    <div className="relative overflow-hidden rounded-md border bg-muted/20">
+                                                                        <Image
+                                                                            src={slide.src}
+                                                                            alt="Vista previa"
+                                                                            width={480}
+                                                                            height={320}
+                                                                            unoptimized
+                                                                            className="h-52 w-full object-contain"
+                                                                        />
+                                                                        <Button
+                                                                            type="button"
+                                                                            size="icon"
+                                                                            variant="destructive"
+                                                                            className="absolute right-2 top-2 h-7 w-7"
+                                                                            onClick={() => {
+                                                                                if (slide.kind === "pending") {
+                                                                                    removePendingMedia(slide.id);
+                                                                                    return;
+                                                                                }
+                                                                                void handleRemoveExistingImage(slide.id);
+                                                                            }}
+                                                                            disabled={isSaving || isRemovingMedia || isLoadingDetail}
+                                                                            aria-label="Eliminar imagen"
+                                                                        >
+                                                                            <Trash2 className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </div>
+                                                                </CarouselItem>
+                                                            ))}
+                                                        </CarouselContent>
+                                                        <CarouselPrevious className="-left-2" />
+                                                        <CarouselNext className="-right-2" />
+                                                    </Carousel>
+                                                )}
+                                            </div>
+                                            <p className="text-center text-xs text-muted-foreground">
+                                                {imagePreviewSlides.length} imagen
+                                                {imagePreviewSlides.length === 1 ? "" : "es"} en carrusel.
+                                                {" "}La primera imagen se usa como miniatura.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {pendingMediaUploads.length > 0 && formData.mediaTipo === "video" && (
+                                        <p className="text-sm text-muted-foreground">
+                                            Video seleccionado: {pendingMediaUploads[0].name}
+                                        </p>
+                                    )}
+
+                                    {editingBeneficioId &&
+                                        pendingMediaUploads.length === 0 &&
+                                        formData.mediaTipo === "video" &&
+                                        formData.existingVideo && (
+                                            <div className="relative rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
+                                                <div className="flex items-center gap-2 pr-10">
+                                                    <Film className="h-4 w-4 shrink-0" />
+                                                    <span>Video cargado. Sube uno nuevo para reemplazarlo.</span>
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    size="icon"
+                                                    variant="destructive"
+                                                    className="absolute right-2 top-2 h-7 w-7"
+                                                    onClick={() => void handleRemoveExistingVideo()}
+                                                    disabled={isSaving || isRemovingMedia || isLoadingDetail}
+                                                    aria-label="Eliminar video"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        )}
+                                </>
+                            )}
+                        </div>
+
+                        <div className="space-y-3 border-t pt-4">
+                            <div className="flex items-center gap-2">
+                                <Link2 className="h-4 w-4 text-primary" />
+                                <Label>Redirección al tocar media</Label>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <input
+                                    id="redirectEnabled"
+                                    type="checkbox"
+                                    checked={formData.redirectEnabled}
+                                    onChange={(event) =>
+                                        setFormData((current) => ({
+                                            ...current,
+                                            redirectEnabled: event.target.checked,
+                                            redirectModulo: event.target.checked
+                                                ? current.redirectModulo === "none"
+                                                    ? "home"
+                                                    : current.redirectModulo
+                                                : "none",
+                                        }))
+                                    }
+                                    disabled={isLoadingDetail || isSaving}
+                                    className="h-4 w-4 rounded border"
+                                />
+                                <Label htmlFor="redirectEnabled" className="font-normal">
+                                    Activar redirección cuando el usuario toque la imagen o video
+                                </Label>
+                            </div>
+
+                            {formData.redirectEnabled && (
+                                <>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="redirectModulo">Destino</Label>
+                                        <Select
+                                            value={formData.redirectModulo}
+                                            onValueChange={(value: BeneficioDestinoModulo) =>
+                                                setFormData((current) => ({
+                                                    ...current,
+                                                    redirectModulo: value,
+                                                }))
+                                            }
+                                            disabled={isLoadingDetail || isSaving}
+                                        >
+                                            <SelectTrigger id="redirectModulo">
+                                                <SelectValue placeholder="Selecciona destino" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {BENEFICIO_DESTINOS.filter((destino) => destino !== "none").map(
+                                                    (destino) => (
+                                                        <SelectItem key={destino} value={destino}>
+                                                            {BENEFICIO_DESTINO_LABELS[destino]}
+                                                        </SelectItem>
+                                                    ),
+                                                )}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     </div>
 
                     <div className="flex justify-end gap-3 border-t pt-4">

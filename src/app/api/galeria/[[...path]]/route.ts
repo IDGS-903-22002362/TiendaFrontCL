@@ -46,7 +46,6 @@ async function forward(request: NextRequest, path?: string[]) {
         request,
         backendPath: `/api/galeria${suffix}`,
         requireAuth,
-        streamMultipart: true,
     });
 }
 

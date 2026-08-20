@@ -49,6 +49,11 @@ const checkoutCsp = [
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: process.cwd(),
+  experimental: {
+    // Videos de beneficios hasta 50 MB pasan por /api/* → backend; sin esto Next trunca el body.
+    proxyClientMaxBodySize: "55mb",
+    middlewareClientMaxBodySize: "55mb",
+  },
   typescript: {
     ignoreBuildErrors: false,
   },
