@@ -18,6 +18,7 @@ import {
   BadgePercent,
   Sparkles,
   ImageIcon,
+  BrainCircuit,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,6 +40,12 @@ const navGroups = [
     title: "Operación",
     links: [
       { href: "/admin", label: "Dashboard", icon: LayoutDashboard, adminOnly: true },
+      {
+        href: "/admin/asistente",
+        label: "Asistente Administrativo",
+        icon: BrainCircuit,
+        adminOnly: true,
+      },
       { href: "/admin/ordenes", label: "Órdenes", icon: ShoppingCart, adminOnly: false },
       { href: "/admin/inventario", label: "Inventario", icon: Archive, adminOnly: false },
       { href: "/admin/puntos", label: "Puntos", icon: Coins, adminOnly: false },

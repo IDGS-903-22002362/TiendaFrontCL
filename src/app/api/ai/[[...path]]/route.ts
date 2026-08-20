@@ -25,7 +25,7 @@ function forward(request: NextRequest, path?: string[]) {
   const suffix = getSuffix(path);
   const isMessageStream =
     request.method === "POST" &&
-    suffix === "/chat/messages" &&
+    (suffix === "/chat/messages" || suffix === "/admin/assistant/messages") &&
     (request.nextUrl.searchParams.get("stream") === "true" ||
       request.headers.get("accept")?.includes("text/event-stream"));
   const isTryOnImageStream =

@@ -9,6 +9,7 @@ import {
   getRecientesCatalogQuery,
 } from "@/lib/api/storefront";
 import type { CatalogProductCard } from "@/lib/types";
+import { trackSearch } from "@/lib/analytics/store-events";
 import { formatCurrency } from "@/lib/storefront";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -367,6 +368,7 @@ export function SearchDrawer({ isDesktop, onOpenChange }: SearchDrawerProps) {
       return;
     }
 
+    trackSearch(nextQuery);
     router.push(`/products?q=${encodeURIComponent(nextQuery)}`);
     handleOpenChange(false);
   };

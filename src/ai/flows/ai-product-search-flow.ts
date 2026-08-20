@@ -7,7 +7,7 @@
  * - AiProductSearchOutput - The return type for the aiProductSearch function.
  */
 
-import {ai} from '@/ai/genkit';
+import {ai, GEMINI_MODELS, GEMINI_THINKING_LEVELS} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const AiProductSearchInputSchema = z.object({
@@ -65,6 +65,12 @@ export async function aiProductSearch(
 
 const productSearchPrompt = ai.definePrompt({
   name: 'productSearchPrompt',
+  model: GEMINI_MODELS.fast,
+  config: {
+    thinkingConfig: {
+      thinkingLevel: GEMINI_THINKING_LEVELS.fast,
+    },
+  },
   input: {schema: AiProductSearchInputSchema},
   output: {schema: AiProductSearchOutputSchema},
   prompt: `Eres un asistente inteligente para el buscador de la Tienda Oficial del Club León La Guarida del León.

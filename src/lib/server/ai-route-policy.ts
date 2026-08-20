@@ -19,6 +19,12 @@ const ROUTES: readonly RouteRule[] = [
   { pattern: ["tryon", "jobs", DYNAMIC_ID, "download"], methods: ["GET"] },
   { pattern: ["admin", "metrics"], methods: ["GET"] },
   { pattern: ["admin", "jobs"], methods: ["GET"] },
+  { pattern: ["admin", "assistant", "sessions"], methods: ["GET", "POST"] },
+  {
+    pattern: ["admin", "assistant", "sessions", DYNAMIC_ID],
+    methods: ["GET"],
+  },
+  { pattern: ["admin", "assistant", "messages"], methods: ["POST"] },
 ];
 
 function matches(pattern: readonly string[], path: readonly string[]) {

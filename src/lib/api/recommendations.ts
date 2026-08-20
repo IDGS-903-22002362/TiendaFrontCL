@@ -31,6 +31,7 @@ export type HomeRecommendationsResponse = {
 };
 
 export type RecommendationEventType =
+  | "vista_pagina"
   | "vista_producto"
   | "clic_producto"
   | "clic_recomendacion"
@@ -38,7 +39,24 @@ export type RecommendationEventType =
   | "agregar_carrito"
   | "inicio_checkout"
   | "compra"
+  | "busqueda"
   | "favorito";
+
+/**
+ * Metadata de telemetria aceptada por el backend. Es una lista blanca: cualquier
+ * otra clave se descarta al validar, para que no viaje informacion personal.
+ */
+export type RecommendationEventMetadata = {
+  path?: string;
+  source?: string;
+  medium?: string;
+  campaign?: string;
+  referrerHost?: string;
+  term?: string;
+  resultCount?: number;
+  quantity?: number;
+  orderId?: string;
+};
 
 function getClientOptions(token?: string) {
   return {
@@ -120,6 +138,7 @@ export async function trackRecommendationEvent(input: {
   estrategia?: RecommendationStrategy;
   superficie?: "home" | "producto" | "carrito" | "cuenta" | "checkout";
   seccionId?: string;
+  metadata?: RecommendationEventMetadata;
   token?: string;
 }) {
   await apiFetch(
@@ -133,6 +152,7 @@ export async function trackRecommendationEvent(input: {
         estrategia: input.estrategia,
         superficie: input.superficie,
         seccionId: input.seccionId,
+        metadata: input.metadata,
       }),
     },
     getClientOptions(input.token),

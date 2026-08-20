@@ -31,6 +31,7 @@ import {
   getApiErrorMessage,
   getCartQuantityUpdateErrorMessage,
 } from "@/lib/api/errors";
+import { trackAddToCart } from "@/lib/analytics/store-events";
 
 type CartContextType = {
   state: { id?: string; items: CartItem[] };
@@ -211,6 +212,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
 
       setCartId((current) => cart.id ?? current);
       setItems(cart.items);
+      trackAddToCart(item.id, item.quantity ?? 1);
       setIsDrawerOpen(true);
       setAddedToCartNotification({
         title: "¡Agregado al carrito!",

@@ -20,9 +20,30 @@ test("AI route policy allows only the consumed route catalog", () => {
     ["GET", ["tryon", "jobs", "job-1", "download"]],
     ["GET", ["admin", "metrics"]],
     ["GET", ["admin", "jobs"]],
+    ["GET", ["admin", "assistant", "sessions"]],
+    ["POST", ["admin", "assistant", "sessions"]],
+    ["GET", ["admin", "assistant", "sessions", "session_1"]],
+    ["POST", ["admin", "assistant", "messages"]],
   ];
   for (const [method, path] of allowed) {
     assert.equal(evaluateAiRoute(method, path).status, 200);
+  }
+});
+
+test("Admin assistant routes reject unsafe ids and wrong methods", () => {
+  assert.deepEqual(evaluateAiRoute("DELETE", ["admin", "assistant", "sessions"]), {
+    status: 405,
+    allow: "GET, POST",
+  });
+  assert.deepEqual(evaluateAiRoute("GET", ["admin", "assistant", "messages"]), {
+    status: 405,
+    allow: "POST",
+  });
+  for (const id of ["..", "a/b", "%2e%2e"]) {
+    assert.equal(
+      evaluateAiRoute("GET", ["admin", "assistant", "sessions", id]).status,
+      404,
+    );
   }
 });
 

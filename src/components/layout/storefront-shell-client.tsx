@@ -9,6 +9,7 @@ import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { cn } from "@/lib/utils";
 import { useIsFromMobileApp } from "@/hooks/use-from-mobile-app";
 import { isInternalAccount } from "@/lib/staff-access";
+import { trackStorePageView } from "@/lib/analytics/store-events";
 
 type StorefrontShellClientProps = {
   children: ReactNode;
@@ -16,6 +17,18 @@ type StorefrontShellClientProps = {
 
 function isProductDetailRoute(pathname: string) {
   return pathname.startsWith("/products/") && pathname !== "/products";
+}
+
+/** Superficie de la tienda para la telemetria de visitas. */
+function resolveTrackingSurface(pathname: string) {
+  if (pathname === "/") return "home" as const;
+  if (pathname.startsWith("/products")) return "producto" as const;
+  if (pathname.startsWith("/cart")) return "carrito" as const;
+  if (pathname.startsWith("/checkout")) return "checkout" as const;
+  if (pathname.startsWith("/profile") || pathname.startsWith("/order-history")) {
+    return "cuenta" as const;
+  }
+  return undefined;
 }
 
 export function StorefrontShellClient({ children }: StorefrontShellClientProps) {
@@ -54,6 +67,18 @@ export function StorefrontShellClient({ children }: StorefrontShellClientProps) 
       router.replace("/staff");
     }
   }, [isAuthenticated, isLoading, isPublicStorefront, role, router, user?.roles]);
+
+  const isStaffVisitor =
+    isAuthenticated && isInternalAccount(role, user?.roles);
+
+  useEffect(() => {
+    // Las visitas del personal interno no representan trafico de clientes.
+    if (!isPublicStorefront || isLoading || isStaffVisitor) {
+      return;
+    }
+
+    trackStorePageView(pathname, resolveTrackingSurface(pathname));
+  }, [isLoading, isPublicStorefront, isStaffVisitor, pathname]);
 
   const showBottomNav =
     pathname === "/" ||

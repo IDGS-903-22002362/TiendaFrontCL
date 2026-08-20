@@ -25,6 +25,7 @@ import {
 } from "@/lib/api/checkout-attempt";
 import { clearCheckoutDraft } from "@/lib/checkout-draft";
 import { getPickupCodeFromOrder } from "@/lib/orders/pickup-code";
+import { trackPurchase } from "@/lib/analytics/store-events";
 import { useCart } from "@/hooks/use-cart";
 import type { Orden } from "@/lib/types";
 
@@ -311,6 +312,19 @@ export function ConfirmationClient() {
     clearPendingCheckoutAttemptId();
     void clearAllItems();
   }, [verificationState, clearAllItems]);
+
+  useEffect(() => {
+    // El backend deduplica por orden, asi que una recarga de esta pantalla no
+    // vuelve a contar la compra en las metricas.
+    if (verificationState !== "paid" || !resolvedOrderId) {
+      return;
+    }
+
+    trackPurchase(
+      resolvedOrderId,
+      (order?.items ?? []).map((item) => item.productoId).filter(Boolean),
+    );
+  }, [verificationState, resolvedOrderId, order?.items]);
 
   const isPickup = order?.fulfillmentMethod === "PICKUP";
   const pickupCode =

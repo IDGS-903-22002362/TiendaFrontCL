@@ -7,7 +7,7 @@
  * - ProductInformationBotOutput - The return type for the getProductInformation function.
  */
 
-import {ai} from '@/ai/genkit';
+import {ai, GEMINI_MODELS, GEMINI_THINKING_LEVELS} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const ProductInformationBotInputSchema = z.object({
@@ -51,6 +51,12 @@ export async function getProductInformation(
 
 const productInformationPrompt = ai.definePrompt({
   name: 'productInformationPrompt',
+  model: GEMINI_MODELS.main,
+  config: {
+    thinkingConfig: {
+      thinkingLevel: GEMINI_THINKING_LEVELS.main,
+    },
+  },
   input: {schema: ProductInformationBotInputSchema},
   output: {schema: ProductInformationBotOutputSchema},
   prompt: `Eres un asistente útil y experto en productos de la Tienda Oficial del Club León La Guarida del León. Tu objetivo es responder las preguntas del usuario de manera concisa y precisa basándote estrictamente en la información del producto proporcionada.

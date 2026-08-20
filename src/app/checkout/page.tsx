@@ -67,6 +67,7 @@ import {
 } from "@/lib/api/pickup";
 import { type FedExDireccionEnvio } from "@/lib/api/fedex";
 import { getApiErrorMessage } from "@/lib/api/errors";
+import { trackCheckoutStarted } from "@/lib/analytics/store-events";
 import {
   buildCartOfferPricingItems,
   calcularPreciosOfertasPublicas,
@@ -2179,6 +2180,7 @@ export default function CheckoutPage() {
   const [showPaymentCanceled, setShowPaymentCanceled] = useState(false);
   const [paymentCanceledLanding] = useState(readPaymentCanceledFromUrl);
   const paymentDraftRestoredRef = useRef(false);
+  const checkoutStartedRef = useRef(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [fulfillmentMethod, setFulfillmentMethod] =
     useState<FulfillmentMethod>("DELIVERY");
@@ -2263,6 +2265,16 @@ export default function CheckoutPage() {
     }
     window.sessionStorage.removeItem(CHECKOUT_PAYMENT_REDIRECTING_KEY);
   }, []);
+
+  useEffect(() => {
+    // Un solo evento de inicio de checkout por visita, ya con carrito cargado.
+    if (checkoutStartedRef.current || isLoading || state.items.length === 0) {
+      return;
+    }
+
+    checkoutStartedRef.current = true;
+    trackCheckoutStarted(state.items.map((item) => item.id));
+  }, [isLoading, state.items]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
