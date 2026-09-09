@@ -7,6 +7,7 @@ import Link from "next/link";
 import {
     Gift,
     GalleryThumbnails,
+    Handshake,
     Newspaper,
     LogOut,
     Menu,
@@ -25,6 +26,7 @@ const navLinks = [
     { href: "/empleado-club/noticias", label: "Noticias", icon: Newspaper },
     { href: "/empleado-club/beneficios", label: "Beneficios", icon: Gift },
     { href: "/empleado-club/galerias", label: "Galerías", icon: GalleryThumbnails },
+    { href: "/empleado-club/patrocinadores", label: "Patrocinadores", icon: Handshake },
 ];
 
 export default function EmpleadoClubLayout({
@@ -129,8 +131,8 @@ export default function EmpleadoClubLayout({
             </header>
 
             {/* Desktop sidebar */}
-            <aside className="hidden border-r border-border bg-sidebar md:block md:w-64 lg:w-72">
-                <div className="flex h-full max-h-screen flex-col gap-2">
+            <aside className="hidden shrink-0 border-r border-border bg-sidebar md:sticky md:top-0 md:block md:h-screen md:w-64 lg:w-72">
+                <div className="flex h-full flex-col gap-2">
                     <div className="flex h-14 items-center border-b border-border px-4 lg:h-[60px] lg:px-6">
                         <Link href="/empleado-club" className="flex items-center gap-2 font-semibold">
                             <span className="font-headline text-xl">Empleado Club</span>
