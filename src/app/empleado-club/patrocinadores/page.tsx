@@ -582,7 +582,7 @@ export default function EmpleadoClubPatrocinadoresPage() {
             if (editingPatrocinadorId) {
                 await patrocinadoresApi.update(editingPatrocinadorId, { nombre, exclusivo: false });
 
-                let latest = {
+                let latest: Pick<Patrocinador, "imagenBlanca" | "imagenNegra"> = {
                     imagenBlanca: formData.existingImagenBlanca,
                     imagenNegra: formData.existingImagenNegra,
                 };
