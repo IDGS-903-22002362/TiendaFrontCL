@@ -45,21 +45,12 @@ export function isProductVisible(product: Product) {
   return !normalized.includes("test") && !normalized.includes("prueba");
 }
 
+/**
+ * El backend resuelve y envía este flag. Inferirlo aquí por nombre hacía que la UI
+ * ofreciera personalizar productos que el carrito rechaza.
+ */
 export function isPersonalizableProduct(product: Product) {
-  if (product.personalizable === true) {
-    return true;
-  }
-  if (product.personalizable === false) {
-    return false;
-  }
-
-  const normalized = normalizeStorefrontText(
-    `${product.name} ${product.description} ${product.category}`,
-  );
-  return (
-    normalized.includes("jersey") &&
-    Boolean(product.sizes?.length)
-  );
+  return product.personalizable === true;
 }
 
 export function getProductStockState(product: Product) {

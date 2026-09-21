@@ -31,10 +31,12 @@ import { ordersApi } from "@/lib/api/orders";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import type { Orden } from "@/lib/types";
 import { Button } from "@/components/ui/button";
+import { formatOrderDisplayId, getOrderContactName } from "@/lib/orders/display";
+import { formatCurrency } from "@/lib/storefront";
 import {
-  formatOrderDisplayId,
-  getOrderContactName,
-} from "@/lib/orders/display";
+  getOrderDisplayTotal,
+  hasFieraPointsRedemption,
+} from "@/lib/orders/fiera-points";
 import {
   getOrderStatusLabel,
   getOrderStatusVariant,
@@ -198,6 +200,9 @@ export default function OrderHistoryPage() {
                         ? "Recoger en tienda"
                         : "Envío a domicilio"}
                     </Badge>
+                    {hasFieraPointsRedemption(order) ? (
+                      <Badge variant="outline">FieraPuntos</Badge>
+                    ) : null}
                   </div>
                   <div className="mt-4 flex items-end justify-between gap-3">
                     <div>
@@ -209,7 +214,7 @@ export default function OrderHistoryPage() {
                       </p>
                     </div>
                     <p className="font-headline text-lg font-bold text-secondary">
-                      ${order.total.toFixed(2)}
+                      {formatCurrency(getOrderDisplayTotal(order))}
                     </p>
                   </div>
                   <Button
@@ -277,7 +282,14 @@ export default function OrderHistoryPage() {
                         {getDeliveryStatusLabel(order)}
                       </TableCell>
                       <TableCell className="text-right font-headline text-secondary">
-                        ${order.total.toFixed(2)}
+                        <div className="flex flex-col items-end gap-1">
+                          <span>{formatCurrency(getOrderDisplayTotal(order))}</span>
+                          {hasFieraPointsRedemption(order) ? (
+                            <span className="text-xs font-normal text-muted-foreground">
+                              Incluyó FieraPuntos
+                            </span>
+                          ) : null}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <Button asChild variant="outline" size="sm">

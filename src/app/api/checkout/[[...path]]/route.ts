@@ -14,7 +14,7 @@ function requiresAuthForPath(path?: string[]) {
   }
 
   const suffix = `/${path.join("/")}`;
-  return suffix.startsWith("/attempts");
+  return suffix.startsWith("/attempts") || suffix.startsWith("/fiera-points");
 }
 
 function forward(request: NextRequest, path?: string[]) {

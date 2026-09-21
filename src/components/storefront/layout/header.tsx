@@ -391,9 +391,6 @@ export function StorefrontHeader({
                     <DropdownMenuItem asChild>
                       <Link href="/order-history">Mis pedidos</Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link href="/ai">Asistente AI</Link>
-                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive"

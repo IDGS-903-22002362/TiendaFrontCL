@@ -52,8 +52,10 @@ import {
   markCheckoutPaymentRedirecting,
   setActiveCheckoutAttemptId,
   setPendingCheckoutAttemptId,
+  quoteFieraPoints,
   startCheckoutAttempt,
 } from "@/lib/api/checkout-attempt";
+import { getCheckoutPayableTotal } from "@/lib/fiera-points-quote";
 import {
   clearCheckoutDraft,
   loadCheckoutDraft,
@@ -99,6 +101,8 @@ import type {
   CartItem,
   FedExShippingOption,
   FedExShippingQuote,
+  FieraPointsQuote,
+  FieraPointsRequest,
   Orden,
   PaymentMethod,
   ShippingSelection,
@@ -107,6 +111,8 @@ import type {
   CheckoutShippingAddress,
 } from "@/types/shipping";
 import { showErrorToast } from "@/lib/app-toast";
+import { getMyWallet, type LoyaltyWallet } from "@/lib/api/loyalty";
+import { FieraPointsPayment } from "@/components/checkout/fiera-points-payment";
 import {
   CheckoutAddressAutocomplete,
 } from "@/components/checkout/CheckoutAddressAutocomplete";
@@ -440,8 +446,30 @@ function getCheckoutErrorMessage(error: unknown): string {
         return "Completa la direccion de entrega para continuar.";
       case "CHECKOUT_CART_EMPTY":
         return "Tu carrito esta vacio. Regresa al carrito para continuar.";
+      case "INSUFFICIENT_POINTS":
+        return "No tienes FieraPuntos suficientes para completar el canje.";
+      case "FIERA_POINTS_MIN_NOT_MET":
+        return (
+          error.message ||
+          "No alcanzas el mínimo de FieraPuntos para este canje."
+        );
+      case "FIERA_POINTS_EXCEEDS_TOTAL":
+        return "La cantidad de FieraPuntos excede el total de la compra.";
+      case "SERVICE_UNAVAILABLE":
+        if (/FieraPuntos|canje|lealtad|puntos/i.test(error.message || "")) {
+          return (
+            error.message ||
+            "El canje de FieraPuntos no está disponible en este momento."
+          );
+        }
+        break;
       default:
         if (error.status === 409) {
+          if (
+            /FieraPuntos|canje|puntos/i.test(error.message || "")
+          ) {
+            return error.message;
+          }
           return (
             error.message ||
             "No hay suficiente stock disponible para completar tu compra."
@@ -528,6 +556,8 @@ function OrderSummaryPanel({
   descuentoCodigo,
   codigoError,
   isLoadingCodigo,
+  fieraQuote,
+  fieraPoints,
 }: {
   fulfillmentMethod: FulfillmentMethod;
   shippingSelection?: DeliveryShippingSelection | null;
@@ -540,6 +570,8 @@ function OrderSummaryPanel({
   descuentoCodigo: number;
   codigoError: string | null;
   isLoadingCodigo: boolean;
+  fieraQuote?: FieraPointsQuote | null;
+  fieraPoints: FieraPointsRequest;
 }) {
   const { state, totalItems } = useCart();
   const { getPersonalization } = useStorefront();
@@ -554,6 +586,11 @@ function OrderSummaryPanel({
           fulfillmentMethod,
           fulfillmentMethod === "DELIVERY" ? resolvedShippingAmount : 0,
         );
+  const payableTotal = getCheckoutPayableTotal(
+    pricing.total,
+    fieraQuote,
+    fieraPoints,
+  );
 
   return (
     <Card className="rounded-[1.9rem] border-border bg-card shadow-[var(--shadow-card)]">
@@ -657,6 +694,20 @@ function OrderSummaryPanel({
             </div>
           ) : null}
 
+          {fieraQuote?.canRedeem &&
+          fieraQuote.paymentComposition.pointsDiscountMinor > 0 ? (
+            <div className="flex items-center justify-between text-[#073A26]">
+              <span>
+                FieraPuntos (
+                {fieraQuote.paymentComposition.pointsUsed.toLocaleString("es-MX")}{" "}
+                pts)
+              </span>
+              <span>
+                -{formatCurrency(fieraQuote.paymentComposition.pointsDiscountMinor / 100)}
+              </span>
+            </div>
+          ) : null}
+
           <div className="flex items-center justify-between">
             <span>
               {fulfillmentMethod === "PICKUP" ? "Recoger en tienda" : "Envio manual"}
@@ -690,8 +741,13 @@ function OrderSummaryPanel({
           </p>
 
           <p className="mt-2 font-headline text-4xl font-semibold uppercase leading-none tracking-[0.03em]">
-            {formatCurrency(pricing.total)}
+            {formatCurrency(payableTotal)}
           </p>
+          {payableTotal < pricing.total ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Total original {formatCurrency(pricing.total)}
+            </p>
+          ) : null}
         </div>
       </CardContent>
     </Card>
@@ -1854,6 +1910,10 @@ function CardPaymentStep({
   onBack,
   onRegisterLeaveHandler,
   onRecoverableDeliveryError,
+  fieraPoints,
+  onFieraPointsChange,
+  fieraQuote,
+  isQuotingFiera,
 }: {
   values: CheckoutValues;
   cartId?: string;
@@ -1864,6 +1924,10 @@ function CardPaymentStep({
   onBack: () => void;
   onRegisterLeaveHandler?: (handler: () => Promise<void>) => void;
   onRecoverableDeliveryError: (values: DeliveryCheckoutValues) => void;
+  fieraPoints: FieraPointsRequest;
+  onFieraPointsChange: (value: FieraPointsRequest) => void;
+  fieraQuote?: FieraPointsQuote | null;
+  isQuotingFiera?: boolean;
 }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [stockUnavailableItems, setStockUnavailableItems] = useState<
@@ -1871,6 +1935,34 @@ function CardPaymentStep({
   >([]);
   const preparingRef = useRef(false);
   const attemptIdRef = useRef<string | null>(null);
+  const [wallet, setWallet] = useState<LoyaltyWallet | null>(null);
+  const [isLoadingWallet, setIsLoadingWallet] = useState(true);
+  const payableTotal = getCheckoutPayableTotal(total, fieraQuote, fieraPoints);
+  const paysWithPointsOnly =
+    fieraPoints.mode !== "NONE" &&
+    Boolean(fieraQuote?.canRedeem) &&
+    payableTotal <= 0;
+  const fieraSelectionBlocked =
+    fieraPoints.mode !== "NONE" &&
+    (isQuotingFiera || (fieraQuote != null && !fieraQuote.canRedeem));
+
+  useEffect(() => {
+    let mounted = true;
+    setIsLoadingWallet(true);
+    void getMyWallet()
+      .then((value) => {
+        if (mounted) setWallet(value);
+      })
+      .catch(() => {
+        if (mounted) setWallet(null);
+      })
+      .finally(() => {
+        if (mounted) setIsLoadingWallet(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const releaseActiveCheckoutAttempt = useCallback(async () => {
     const attemptId = attemptIdRef.current;
@@ -1919,6 +2011,31 @@ function CardPaymentStep({
     try {
       assertDeliveryShippingReady(values);
 
+      if (
+        fieraPoints.mode === "EXACT" &&
+        (!fieraPoints.points || fieraPoints.points <= 0)
+      ) {
+        throw new Error("Indica cuántos FieraPuntos deseas usar.");
+      }
+      if (
+        fieraPoints.mode === "EXACT" &&
+        wallet &&
+        (fieraPoints.points ?? 0) > wallet.availablePoints
+      ) {
+        throw new Error("No tienes FieraPuntos suficientes.");
+      }
+      if (
+        fieraPoints.mode !== "NONE" &&
+        fieraQuote &&
+        !fieraQuote.canRedeem
+      ) {
+        throw new Error(
+          fieraQuote.reason === "MIN_NOT_MET"
+            ? `El canje mínimo es de ${fieraQuote.minimumRedemptionPoints} FieraPuntos.`
+            : "No se pueden usar esos FieraPuntos en esta compra.",
+        );
+      }
+
       if (values.fulfillmentMethod === "PICKUP") {
         const pickupCart = await resolveCartIdForPickup(cartId);
         const availability = await pickupApi.validateAvailability({
@@ -1938,15 +2055,16 @@ function CardPaymentStep({
       const attempt = await startCheckoutAttempt(
         {
           ...buildCheckoutPayload(values, "TARJETA", codigoPromocion),
-          successUrl: `${origin}/checkout/confirmation?attemptId={CHECKOUT_ATTEMPT_ID}&session_id={CHECKOUT_SESSION_ID}&status=processing&total=${encodeURIComponent(total.toFixed(2))}`,
+          fieraPoints,
+          successUrl: `${origin}/checkout/confirmation?attemptId={CHECKOUT_ATTEMPT_ID}&session_id={CHECKOUT_SESSION_ID}&status=processing&total=${encodeURIComponent(payableTotal.toFixed(2))}`,
           cancelUrl: `${origin}/checkout?payment_canceled=1`,
           retryPayment: paymentCanceled,
         },
         { cartSignature: paymentSignature },
       );
 
-      if (!attempt.attemptId || !attempt.url) {
-        throw new Error("No se recibió una URL de pago válida");
+      if (!attempt.attemptId) {
+        throw new Error("No se recibió un intento de pago válido");
       }
 
       attemptIdRef.current = attempt.attemptId;
@@ -1962,7 +2080,20 @@ function CardPaymentStep({
           values.fulfillmentMethod === "PICKUP"
             ? values.pickupContact
             : { name: "", phone: "", email: "" },
+        fieraPoints,
       });
+      if (
+        attempt.status === "finalized" &&
+        attempt.paymentComposition.providerAmountMinor === 0
+      ) {
+        window.location.assign(
+          `${origin}/checkout/confirmation?attemptId=${encodeURIComponent(attempt.attemptId)}&status=paid&total=0`,
+        );
+        return;
+      }
+      if (!attempt.url) {
+        throw new Error("No se recibió una URL de pago válida");
+      }
       markCheckoutPaymentRedirecting();
       window.location.assign(attempt.url);
     } catch (error) {
@@ -1991,8 +2122,12 @@ function CardPaymentStep({
     onRecoverableDeliveryError,
     paymentCanceled,
     paymentSignature,
+    payableTotal,
     total,
     values,
+    fieraPoints,
+    fieraQuote,
+    wallet,
   ]);
 
   return (
@@ -2040,6 +2175,17 @@ function CardPaymentStep({
             </Alert>
           ) : null}
 
+          <FieraPointsPayment
+            wallet={wallet}
+            loading={isLoadingWallet}
+            value={fieraPoints}
+            onChange={onFieraPointsChange}
+            disabled={isProcessing}
+            quote={fieraQuote}
+            quoting={isQuotingFiera}
+          />
+
+          {!paysWithPointsOnly ? (
           <div className="relative overflow-hidden rounded-[1.6rem] border border-primary/15 bg-[linear-gradient(135deg,rgba(7,58,38,0.06),rgba(246,248,243,0.6))] p-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
@@ -2076,6 +2222,16 @@ function CardPaymentStep({
               ))}
             </div>
           </div>
+          ) : (
+            <div className="rounded-[1.6rem] border border-[#D9A928]/35 bg-[#D9A928]/10 px-5 py-4">
+              <p className="text-sm font-semibold text-[#073A26]">
+                Esta compra se cubre por completo con FieraPuntos.
+              </p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                No se te redirigirá a Stripe ni se cobrará a tu tarjeta.
+              </p>
+            </div>
+          )}
 
           <div className="flex items-center justify-between gap-3 rounded-[1.4rem] border border-border bg-muted/45 px-5 py-4">
             <div>
@@ -2083,11 +2239,13 @@ function CardPaymentStep({
                 Total a pagar
               </p>
               <p className="mt-1 font-headline text-3xl font-semibold uppercase leading-none tracking-[0.02em]">
-                {formatCurrency(total)}
+                {formatCurrency(payableTotal)}
               </p>
             </div>
           </div>
 
+          {!paysWithPointsOnly ? (
+            <>
           <ul className="grid gap-2.5">
             {PAYMENT_REASSURANCES.map((item) => (
               <li
@@ -2114,6 +2272,8 @@ function CardPaymentStep({
           <p className="text-xs leading-5 text-muted-foreground">
             {MSI_NOTICE}
           </p>
+            </>
+          ) : null}
 
           <div className="hidden gap-3 md:flex">
             <Button
@@ -2129,14 +2289,18 @@ function CardPaymentStep({
               type="button"
               className="h-12 flex-1 gap-2 rounded-full"
               onClick={() => void redirectToStripeCheckout()}
-              disabled={isProcessing}
+              disabled={isProcessing || Boolean(fieraSelectionBlocked)}
             >
               <Lock className="h-4 w-4" />
               {isProcessing
-                ? "Redirigiendo a Stripe..."
+                ? paysWithPointsOnly
+                  ? "Confirmando..."
+                  : "Redirigiendo a Stripe..."
                 : paymentCanceled
                   ? "Volver a intentar"
-                  : `Pagar ${formatCurrency(total)}`}
+                  : paysWithPointsOnly
+                    ? "Pagar con FieraPuntos"
+                    : `Pagar ${formatCurrency(payableTotal)}${fieraPoints.mode === "NONE" ? "" : " con tarjeta"}`}
             </Button>
           </div>
         </CardContent>
@@ -2156,14 +2320,18 @@ function CardPaymentStep({
           type="button"
           className="h-12 flex-1 gap-2 rounded-full"
           onClick={() => void redirectToStripeCheckout()}
-          disabled={isProcessing}
+          disabled={isProcessing || Boolean(fieraSelectionBlocked)}
         >
           <Lock className="h-4 w-4" />
           {isProcessing
-            ? "Redirigiendo..."
+            ? paysWithPointsOnly
+              ? "Confirmando..."
+              : "Redirigiendo..."
             : paymentCanceled
               ? "Reintentar"
-              : `Pagar ${formatCurrency(total)}`}
+              : paysWithPointsOnly
+                ? "Pagar con FieraPuntos"
+                : `Pagar ${formatCurrency(payableTotal)}`}
         </Button>
       </MobileCheckoutActions>
     </>
@@ -2178,6 +2346,11 @@ function readPaymentCanceledFromUrl(): boolean {
 
 export default function CheckoutPage() {
   const [showPaymentCanceled, setShowPaymentCanceled] = useState(false);
+  const [fieraPoints, setFieraPoints] = useState<FieraPointsRequest>({
+    mode: "NONE",
+  });
+  const [fieraQuote, setFieraQuote] = useState<FieraPointsQuote | null>(null);
+  const [isQuotingFiera, setIsQuotingFiera] = useState(false);
   const [paymentCanceledLanding] = useState(readPaymentCanceledFromUrl);
   const paymentDraftRestoredRef = useRef(false);
   const checkoutStartedRef = useRef(false);
@@ -2568,6 +2741,8 @@ export default function CheckoutPage() {
         `subtotal=${roundCurrency(subtotalConCodigo)}`,
         `codigo=${codigoPromocionAplicado}`,
         `fulfillment=${fulfillmentMethod}`,
+        `fieraMode=${fieraPoints.mode}`,
+        `fieraPoints=${fieraPoints.mode === "EXACT" ? fieraPoints.points ?? 0 : 0}`,
       ].join("||"),
     [
       cartSignature,
@@ -2575,8 +2750,55 @@ export default function CheckoutPage() {
       subtotalConCodigo,
       codigoPromocionAplicado,
       fulfillmentMethod,
+      fieraPoints,
     ],
   );
+
+  useEffect(() => {
+    if (currentStep !== 1 || !checkoutValues || !isAuthenticated) {
+      return;
+    }
+
+    let cancelled = false;
+    const delay = fieraPoints.mode === "EXACT" ? 350 : 0;
+    const timer = window.setTimeout(() => {
+      setIsQuotingFiera(true);
+      void quoteFieraPoints({
+        ...buildCheckoutPayload(
+          checkoutValues,
+          "TARJETA",
+          codigoPromocionAplicado,
+        ),
+        fieraPoints,
+      })
+        .then((next) => {
+          if (!cancelled) {
+            setFieraQuote(next);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setFieraQuote(null);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsQuotingFiera(false);
+          }
+        });
+    }, delay);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    currentStep,
+    checkoutValues,
+    fieraPoints,
+    codigoPromocionAplicado,
+    isAuthenticated,
+  ]);
 
   useEffect(() => {
     if (!paymentCanceledLanding || paymentDraftRestoredRef.current || isLoading) {
@@ -2602,6 +2824,10 @@ export default function CheckoutPage() {
 
     if (draft.pickupContact) {
       setPickupContact(draft.pickupContact);
+    }
+
+    if (draft.fieraPoints) {
+      setFieraPoints(draft.fieraPoints);
     }
 
     if (
@@ -2781,6 +3007,10 @@ export default function CheckoutPage() {
               codigoPromocion={codigoPromocionAplicado}
               paymentSignature={paymentSignature}
               paymentCanceled={showPaymentCanceled}
+              fieraPoints={fieraPoints}
+              onFieraPointsChange={setFieraPoints}
+              fieraQuote={fieraQuote}
+              isQuotingFiera={isQuotingFiera}
               onBack={() => setCurrentStep(0)}
               onRegisterLeaveHandler={(handler) => {
                 leavePaymentStepRef.current = handler;
@@ -2817,6 +3047,8 @@ export default function CheckoutPage() {
             descuentoCodigo={descuentoCodigo}
             codigoError={codigoError}
             isLoadingCodigo={isLoadingCodigo}
+            fieraQuote={fieraQuote}
+            fieraPoints={fieraPoints}
           />
         </div>
       </div>

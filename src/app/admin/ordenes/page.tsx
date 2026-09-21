@@ -27,6 +27,12 @@ import {
   matchesOrderSearch,
 } from "@/lib/orders/display";
 import {
+  getFieraPointsRedemptionDetail,
+  getOrderDisplayTotal,
+  getOrderPaymentMethodLabel,
+  hasFieraPointsRedemption,
+} from "@/lib/orders/fiera-points";
+import {
   getPaymentStateLabel,
   getPaymentStateVariant,
   getPreparationStatusLabel,
@@ -684,10 +690,12 @@ export default function AdminOrdersPage() {
 
                     <TableCell className="py-4">
                       <p className="font-headline text-lg font-semibold text-secondary">
-                        ${order.total.toFixed(2)}
+                        {formatCurrency(getOrderDisplayTotal(order))}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        MXN
+                        {hasFieraPointsRedemption(order)
+                          ? getOrderPaymentMethodLabel(order)
+                          : "MXN"}
                       </p>
                     </TableCell>
 
@@ -1148,6 +1156,7 @@ export default function AdminOrdersPage() {
                 const actionsDisabled =
                   !paid || cancelled || isFulfillmentSubmitting;
                 const direccion = order.direccionEnvio;
+                const redemptionDetail = getFieraPointsRedemptionDetail(order);
 
                 return (
                   <div className="space-y-5">
@@ -1182,9 +1191,19 @@ export default function AdminOrdersPage() {
                           Total
                         </p>
                         <p className="mt-1 font-medium">
-                          {formatCurrency(order.total)}
+                          {formatCurrency(getOrderDisplayTotal(order))}
                         </p>
+                        {hasFieraPointsRedemption(order) ? (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {getOrderPaymentMethodLabel(order)}
+                          </p>
+                        ) : null}
                       </div>
+                      {redemptionDetail ? (
+                        <div className="sm:col-span-2 rounded-md border border-[#D9A928]/35 bg-[#D9A928]/10 px-3 py-2 text-xs leading-5 text-[#073A26]">
+                          {redemptionDetail}
+                        </div>
+                      ) : null}
                       {isPickup ? (
                         <div className="sm:col-span-2">
                           <p className="text-xs font-semibold uppercase text-muted-foreground">

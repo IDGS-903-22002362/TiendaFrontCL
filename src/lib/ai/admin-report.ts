@@ -22,6 +22,15 @@ import type {
   AdminReportTextKind,
   AdminReportTrace,
   AdminReportValueFormat,
+  AdminComparisonOption,
+  AdminDiagramEdge,
+  AdminDiagramNode,
+  AdminEvidenceLevel,
+  AdminInsightClassification,
+  AdminInsightPriority,
+  AdminReportMetricValue,
+  AdminReportSource,
+  AdminSegmentItem,
 } from "@/lib/ai/admin-report-types";
 
 type UnknownRecord = Record<string, unknown>;
@@ -35,6 +44,11 @@ const BLOCK_TYPES = new Set<AdminReportBlockType>([
   "warning",
   "forecast",
   "anomaly",
+  "insight",
+  "scenario",
+  "comparison",
+  "diagram",
+  "segment",
 ]);
 
 const CHART_TYPES = new Set<AdminReportChartType>([
@@ -60,9 +74,34 @@ const PRIORITIES = new Set(["alta", "media", "baja"]);
 const TEXT_KINDS = new Set<AdminReportTextKind>([
   "observacion",
   "inferencia",
+  "recomendacion",
+  "prediccion",
+  "simulacion",
   "conclusion",
   "contexto",
 ]);
+
+const INSIGHT_PRIORITIES = new Set<AdminInsightPriority>([
+  "critical",
+  "high",
+  "medium",
+  "low",
+  "opportunity",
+]);
+const EVIDENCE_LEVELS = new Set<AdminEvidenceLevel>([
+  "high",
+  "medium",
+  "limited",
+]);
+const CLASSIFICATIONS = new Set<AdminInsightClassification>([
+  "observed",
+  "inference",
+  "recommendation",
+  "prediction",
+  "simulation",
+]);
+const DIAGRAM_TYPES = new Set(["flow", "funnel", "cause-tree"]);
+const SEGMENT_TYPES = new Set(["product", "customer", "cohort"]);
 
 function toRecord(value: unknown): UnknownRecord {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -250,7 +289,33 @@ function normalizeRecommendations(value: unknown): AdminReportRecommendation[] {
   });
 }
 
-type BlockBase = Pick<AdminReportBlock, "type" | "title">;
+function normalizeStringList(value: unknown, limit = 10): string[] {
+  return toArray(value)
+    .map(toText)
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
+function normalizeMetricValues(value: unknown): AdminReportMetricValue[] {
+  return toArray(value).flatMap((raw) => {
+    const record = toRecord(raw);
+    const label = toText(record.label);
+    const numeric = toFiniteNumber(record.value);
+    if (!label || numeric === null) return [];
+    const format = toText(record.format) as AdminReportValueFormat;
+    const status = toText(record.status);
+    return [{
+      label,
+      value: numeric,
+      ...(VALUE_FORMATS.has(format) ? { format } : {}),
+      ...(status === "observed" || status === "forecast" || status === "simulated"
+        ? { status }
+        : {}),
+    } satisfies AdminReportMetricValue];
+  });
+}
+
+type BlockBase = Pick<AdminReportBlock, "type" | "title" | "sourceIds">;
 
 function optionalText(
   value: unknown,
@@ -371,6 +436,183 @@ function normalizeAnomalyBlock(
   };
 }
 
+function normalizeInsightBlock(
+  base: BlockBase,
+  record: UnknownRecord,
+): AdminReportBlock | null {
+  const summary = toText(record.summary);
+  const priority = toText(record.priority) as AdminInsightPriority;
+  const evidence = toText(record.evidence) as AdminEvidenceLevel;
+  const classification = toText(record.classification) as AdminInsightClassification;
+  if (
+    !base.title ||
+    !summary ||
+    !INSIGHT_PRIORITIES.has(priority) ||
+    !EVIDENCE_LEVELS.has(evidence) ||
+    !CLASSIFICATIONS.has(classification)
+  ) return null;
+  const change = toFiniteNumber(record.change);
+  return {
+    ...base,
+    summary,
+    priority,
+    evidence,
+    classification,
+    ...optionalText(record.findingId, "findingId"),
+    ...optionalText(record.metric, "metric"),
+    ...(change === null ? {} : { change }),
+    ...(normalizeStringList(record.limitations, 6).length
+      ? { limitations: normalizeStringList(record.limitations, 6) }
+      : {}),
+  };
+}
+
+function normalizeScenarioBlock(
+  base: BlockBase,
+  record: UnknownRecord,
+): AdminReportBlock | null {
+  const baseline = normalizeMetricValues(record.baseline);
+  const result = normalizeMetricValues(record.result);
+  const scenarioType = toText(record.scenarioType);
+  const assumptions = normalizeStringList(record.assumptions);
+  const limitations = normalizeStringList(record.limitations);
+  if (
+    !base.title ||
+    baseline.length === 0 ||
+    result.length === 0 ||
+    !["pessimistic", "base", "optimistic", "custom"].includes(scenarioType) ||
+    assumptions.length === 0 ||
+    limitations.length === 0
+  ) return null;
+  return {
+    ...base,
+    scenarioType: scenarioType as NonNullable<AdminReportBlock["scenarioType"]>,
+    status: "simulated",
+    baseline,
+    result,
+    assumptions,
+    limitations,
+  };
+}
+
+function normalizeComparisonBlock(
+  base: BlockBase,
+  record: UnknownRecord,
+): AdminReportBlock | null {
+  const options = toArray(record.options).flatMap((raw) => {
+    const option = toRecord(raw);
+    const name = toText(option.name);
+    const description = toText(option.description);
+    const evidence = toText(option.evidence) as AdminEvidenceLevel;
+    const expectedDirection = toText(option.expectedDirection);
+    if (!name || !description || !expectedDirection || !EVIDENCE_LEVELS.has(evidence)) return [];
+    return [{
+      name,
+      description,
+      evidence,
+      advantages: normalizeStringList(option.advantages, 6),
+      risks: normalizeStringList(option.risks, 6),
+      expectedDirection,
+      requirements: normalizeStringList(option.requirements, 6),
+    } satisfies AdminComparisonOption];
+  }).slice(0, 4);
+  if (!base.title || options.length < 2) return null;
+  return {
+    ...base,
+    options,
+    ...optionalText(record.recommendedOption, "recommendedOption"),
+    ...optionalText(record.recommendationReason, "recommendationReason"),
+  };
+}
+
+function normalizeDiagramBlock(
+  base: BlockBase,
+  record: UnknownRecord,
+): AdminReportBlock | null {
+  const diagramType = toText(record.diagramType);
+  if (!base.title || !DIAGRAM_TYPES.has(diagramType)) return null;
+  const nodes = toArray(record.nodes).flatMap((raw) => {
+    const node = toRecord(raw);
+    const id = toText(node.id);
+    const label = toText(node.label);
+    if (!id || !label) return [];
+    const value = toFiniteNumber(node.value);
+    const format = toText(node.format) as AdminReportValueFormat;
+    const classification = toText(node.classification);
+    const evidence = toText(node.evidence) as AdminEvidenceLevel;
+    return [{
+      id,
+      label,
+      ...(value === null ? {} : { value }),
+      ...(VALUE_FORMATS.has(format) ? { format } : {}),
+      ...(classification === "observed" || classification === "inference"
+        ? { classification }
+        : {}),
+      ...(EVIDENCE_LEVELS.has(evidence) ? { evidence } : {}),
+    } satisfies AdminDiagramNode];
+  }).slice(0, 20);
+  const ids = new Set(nodes.map((node) => node.id));
+  // IDs repetidos vuelven ambiguas las relaciones y podrían hacer que un
+  // diagrama apunte al nodo equivocado. Se rechaza el bloque completo.
+  if (ids.size !== nodes.length) return null;
+  const edges = toArray(record.edges).flatMap((raw) => {
+    const edge = toRecord(raw);
+    const from = toText(edge.from);
+    const to = toText(edge.to);
+    if (!ids.has(from) || !ids.has(to)) return [];
+    const rate = toFiniteNumber(edge.rate);
+    return [{
+      from,
+      to,
+      ...optionalText(edge.label, "label"),
+      ...(rate === null ? {} : { rate }),
+    } satisfies AdminDiagramEdge];
+  }).slice(0, 30);
+  const requiresRelationship =
+    diagramType === "flow" || diagramType === "cause-tree";
+  return nodes.length >= 2 && (!requiresRelationship || edges.length > 0)
+    ? {
+        ...base,
+        diagramType: diagramType as NonNullable<AdminReportBlock["diagramType"]>,
+        nodes,
+        edges,
+      }
+    : null;
+}
+
+function normalizeSegmentBlock(
+  base: BlockBase,
+  record: UnknownRecord,
+): AdminReportBlock | null {
+  const segmentType = toText(record.segmentType);
+  const methodology = toText(record.methodology);
+  if (!base.title || !SEGMENT_TYPES.has(segmentType) || !methodology) return null;
+  const segmentItems = toArray(record.items).flatMap((raw) => {
+    const item = toRecord(raw);
+    const label = toText(item.label);
+    const segment = toText(item.segment);
+    const evidence = toText(item.evidence) as AdminEvidenceLevel;
+    if (!label || !segment || !EVIDENCE_LEVELS.has(evidence)) return [];
+    const score = toFiniteNumber(item.score);
+    return [{
+      label,
+      segment,
+      evidence,
+      ...(score === null ? {} : { score }),
+      metrics: normalizeMetricValues(item.metrics),
+    } satisfies AdminSegmentItem];
+  }).slice(0, 50);
+  return segmentItems.length > 0
+    ? {
+        ...base,
+        segmentType: segmentType as NonNullable<AdminReportBlock["segmentType"]>,
+        methodology,
+        thresholds: normalizeStringList(record.thresholds),
+        segmentItems,
+      }
+    : null;
+}
+
 const BLOCK_NORMALIZERS: Record<
   AdminReportBlockType,
   (base: BlockBase, record: UnknownRecord) => AdminReportBlock | null
@@ -380,6 +622,11 @@ const BLOCK_NORMALIZERS: Record<
   chart: normalizeChartBlock,
   forecast: normalizeForecastBlock,
   anomaly: normalizeAnomalyBlock,
+  insight: normalizeInsightBlock,
+  scenario: normalizeScenarioBlock,
+  comparison: normalizeComparisonBlock,
+  diagram: normalizeDiagramBlock,
+  segment: normalizeSegmentBlock,
   kpis: (base, record) => {
     const items = normalizeKpis(record.items);
     return items.length > 0 ? { ...base, items } : null;
@@ -405,8 +652,13 @@ function normalizeBlock(raw: unknown): AdminReportBlock | null {
   }
 
   const title = toText(record.title);
+  const sourceIds = normalizeStringList(record.sourceIds, 8);
   return BLOCK_NORMALIZERS[type](
-    { type, ...(title ? { title } : {}) },
+    {
+      type,
+      ...(title ? { title } : {}),
+      ...(sourceIds.length > 0 ? { sourceIds } : {}),
+    },
     record,
   );
 }
@@ -448,12 +700,49 @@ export function normalizeAdminReport(raw: unknown): AdminReport | null {
   const suggestedQuestions = normalizeSuggestedQuestions(
     record.suggestedQuestions,
   );
+  const sourceMetadata = toArray(record.sourceMetadata).flatMap((rawSource) => {
+    const source = toRecord(rawSource);
+    const id = toText(source.id);
+    const label = toText(source.label);
+    const observedAt = toText(source.observedAt);
+    const freshness = toText(source.freshness);
+    const coverage = toText(source.coverage);
+    if (
+      !id ||
+      !label ||
+      !observedAt ||
+      !["fresh", "partial", "stale"].includes(freshness) ||
+      !["complete", "partial"].includes(coverage)
+    ) return [];
+    return [{
+      id,
+      label,
+      observedAt,
+      freshness: freshness as AdminReportSource["freshness"],
+      coverage: coverage as AdminReportSource["coverage"],
+      ...optionalText(source.period, "period"),
+      ...(normalizeStringList(source.filters, 8).length
+        ? { filters: normalizeStringList(source.filters, 8) }
+        : {}),
+      ...optionalText(source.note, "note"),
+    } satisfies AdminReportSource];
+  }).filter(
+    (source, index, sources) => sources.findIndex((candidate) => candidate.id === source.id) === index,
+  ).slice(0, 24);
+  const validSourceIds = new Set(sourceMetadata.map((source) => source.id));
+  const tracedBlocks = blocks.map((block) => ({
+    ...block,
+    ...(block.sourceIds
+      ? { sourceIds: block.sourceIds.filter((id) => validSourceIds.has(id)) }
+      : {}),
+  }));
 
   return {
     summary,
     confidence: normalizePriority(record.confidence, "media") ?? "media",
-    blocks,
+    blocks: tracedBlocks,
     ...(suggestedQuestions.length > 0 ? { suggestedQuestions } : {}),
+    ...(sourceMetadata.length > 0 ? { sourceMetadata } : {}),
   };
 }
 
@@ -481,6 +770,23 @@ export function normalizeAdminReportTrace(raw: unknown): AdminReportTrace {
     reachedToolLimit: record.reachedToolLimit === true,
     model: toText(record.model),
     durationMs: toFiniteNumber(record.durationMs) ?? 0,
+    totalAgentDuration:
+      toFiniteNumber(record.totalAgentDuration) ??
+      toFiniteNumber(record.durationMs) ??
+      0,
+    geminiDuration: toFiniteNumber(record.geminiDuration) ?? 0,
+    toolDuration: toFiniteNumber(record.toolDuration) ?? 0,
+    numberOfToolCalls:
+      toFiniteNumber(record.numberOfToolCalls) ?? toArray(record.toolCalls).length,
+    slowestTools: toArray(record.slowestTools).flatMap((rawSlow) => {
+      const slow = toRecord(rawSlow);
+      const label = toText(slow.label);
+      const durationMs = toFiniteNumber(slow.durationMs);
+      return label && durationMs !== null
+        ? [{ label, durationMs, success: slow.success !== false }]
+        : [];
+    }).slice(0, 3),
+    sourceTimestamps: normalizeStringList(record.sourceTimestamps, 24),
     timeZone: toText(record.timeZone),
     forecasts: toArray(record.forecasts).map((rawForecast) => {
       const forecast = toRecord(rawForecast);

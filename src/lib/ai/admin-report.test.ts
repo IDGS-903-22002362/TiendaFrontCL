@@ -311,3 +311,151 @@ test("formatAdminReportValue applies the declared format", () => {
   assert.equal(formatAdminReportChange(-7.4), "-7.4%");
   assert.equal(formatAdminReportChange(7.4), "+7.4%");
 });
+
+test("normalizeAdminReport keeps safe phase 3 blocks and source metadata", () => {
+  const report = normalizeAdminReport({
+    summary: "La conversion merece atencion.",
+    confidence: "alta",
+    sourceMetadata: [
+      {
+        id: "source-1",
+        label: "Embudo de conversion",
+        period: "Esta semana",
+        observedAt: "2026-08-25T12:00:00.000Z",
+        freshness: "fresh",
+        coverage: "complete",
+      },
+      { id: "unsafe", label: "", observedAt: "x", freshness: "fresh", coverage: "complete" },
+    ],
+    blocks: [
+      {
+        type: "insight",
+        title: "Conversion",
+        summary: "Bajo frente al periodo anterior.",
+        classification: "observed",
+        priority: "high",
+        evidence: "high",
+        change: -12,
+        sourceIds: ["source-1", "missing"],
+      },
+      {
+        type: "scenario",
+        title: "Conversion +10%",
+        scenarioType: "custom",
+        status: "simulated",
+        baseline: [{ label: "Ingresos", value: 100, format: "currency", status: "observed" }],
+        result: [{ label: "Ingresos", value: 110, format: "currency", status: "simulated" }],
+        assumptions: ["Todo lo demas constante"],
+        limitations: ["No es un pronostico"],
+      },
+      {
+        type: "comparison",
+        title: "Opciones",
+        options: [
+          { name: "A", description: "Primera", evidence: "medium", advantages: ["Rapida"], risks: [], expectedDirection: "positiva", requirements: [] },
+          { name: "B", description: "Segunda", evidence: "limited", advantages: [], risks: ["Sin experimento"], expectedDirection: "incierta", requirements: [] },
+        ],
+      },
+      {
+        type: "diagram",
+        diagramType: "funnel",
+        title: "Embudo",
+        nodes: [{ id: "visit", label: "Visitas", value: 1000 }, { id: "purchase", label: "Compras", value: 20 }],
+        edges: [{ from: "visit", to: "purchase", rate: 2 }, { from: "bad", to: "purchase" }],
+      },
+      {
+        type: "segment",
+        segmentType: "product",
+        title: "Productos",
+        methodology: "Medianas dinamicas",
+        items: [{ label: "Jersey", segment: "OPPORTUNITIES", score: 82, evidence: "medium", metrics: [{ label: "Vistas", value: 500 }] }],
+      },
+    ],
+  });
+
+  assert.ok(report);
+  assert.deepEqual(report.blocks.map((block) => block.type), [
+    "insight",
+    "scenario",
+    "comparison",
+    "diagram",
+    "segment",
+  ]);
+  assert.deepEqual(report.blocks[0].sourceIds, ["source-1"]);
+  assert.equal(report.blocks[3].edges?.length, 1);
+  assert.equal(report.blocks[4].segmentItems?.[0].score, 82);
+  assert.equal(report.sourceMetadata?.length, 1);
+});
+
+test("normalizeAdminReportTrace keeps aggregate timings with legacy fallback", () => {
+  const trace = normalizeAdminReportTrace({
+    toolCalls: [],
+    durationMs: 5000,
+    geminiDuration: 3200,
+    toolDuration: 900,
+    numberOfToolCalls: 3,
+    slowestTools: [{ label: "Ventas confirmadas", durationMs: 500, success: true }],
+    sourceTimestamps: ["2026-08-25T12:00:00Z"],
+  });
+  assert.equal(trace.totalAgentDuration, 5000);
+  assert.equal(trace.geminiDuration, 3200);
+  assert.equal(trace.numberOfToolCalls, 3);
+  assert.equal(trace.slowestTools[0].label, "Ventas confirmadas");
+});
+
+test("normalizeAdminReport rejects diagrams with duplicate node ids", () => {
+  const report = normalizeAdminReport({
+    summary: "Diagrama ambiguo.",
+    confidence: "media",
+    blocks: [
+      {
+        type: "diagram",
+        diagramType: "flow",
+        title: "Flujo duplicado",
+        nodes: [
+          { id: "same", label: "Inicio" },
+          { id: "same", label: "Fin" },
+        ],
+        edges: [{ from: "same", to: "same" }],
+      },
+    ],
+  });
+
+  assert.ok(report);
+  assert.deepEqual(report.blocks, []);
+});
+
+test("normalizeAdminReport requires a valid relationship for flow and cause-tree only", () => {
+  const report = normalizeAdminReport({
+    summary: "Diagramas validados.",
+    confidence: "media",
+    blocks: [
+      {
+        type: "diagram",
+        diagramType: "flow",
+        title: "Flujo sin relaciones",
+        nodes: [{ id: "a", label: "A" }, { id: "b", label: "B" }],
+        edges: [],
+      },
+      {
+        type: "diagram",
+        diagramType: "cause-tree",
+        title: "Arbol con relaciones colgantes",
+        nodes: [{ id: "root", label: "Raiz" }, { id: "leaf", label: "Hoja" }],
+        edges: [{ from: "missing", to: "leaf" }],
+      },
+      {
+        type: "diagram",
+        diagramType: "funnel",
+        title: "Funnel sin aristas explicitas",
+        nodes: [{ id: "visit", label: "Visitas" }, { id: "purchase", label: "Compras" }],
+        edges: [],
+      },
+    ],
+  });
+
+  assert.ok(report);
+  assert.equal(report.blocks.length, 1);
+  assert.equal(report.blocks[0].type, "diagram");
+  assert.equal(report.blocks[0].diagramType, "funnel");
+});

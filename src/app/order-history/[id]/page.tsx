@@ -11,13 +11,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { ordersApi } from "@/lib/api/orders";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import { formatCurrency } from "@/lib/storefront";
 import { OrderTimeline } from "@/components/orders/order-timeline";
 import { OrderItemsList } from "@/components/orders/order-items-list";
+import { OrderFieraPointsTotals } from "@/components/orders/order-fiera-points-totals";
+import {
+  getFieraPointsRedemptionDetail,
+  getOrderPaymentMethodLabel,
+  hasFieraPointsRedemption,
+} from "@/lib/orders/fiera-points";
 import {
   getOrderStatusLabel,
   getOrderStatusVariant,
@@ -126,6 +131,7 @@ export default function OrderDetailPage({
       ? Math.max(0, order.subtotalOriginal - (order.subtotal ?? 0))
       : 0;
   const discountCodigo = order.descuentoCodigoPromocion ?? 0;
+  const redemptionDetail = getFieraPointsRedemptionDetail(order);
 
   return (
     <div className="container py-5 md:py-8">
@@ -152,6 +158,9 @@ export default function OrderDetailPage({
           <Badge variant="outline">
             {isPickup ? "Recoger en tienda" : "Envío a domicilio"}
           </Badge>
+          {hasFieraPointsRedemption(order) ? (
+            <Badge variant="outline">Incluyó FieraPuntos</Badge>
+          ) : null}
         </div>
       </div>
 
@@ -173,6 +182,15 @@ export default function OrderDetailPage({
                 value={isPickup ? "Recoger en tienda" : "Envío a domicilio"}
               />
               <SummaryRow label="Estado de pago" value={getPaymentStateLabel(order)} />
+              <SummaryRow
+                label="Método de pago"
+                value={getOrderPaymentMethodLabel(order)}
+              />
+              {redemptionDetail ? (
+                <div className="rounded-[1rem] border border-[#D9A928]/35 bg-[#D9A928]/10 px-3 py-2 text-xs leading-5 text-[#073A26]">
+                  {redemptionDetail}
+                </div>
+              ) : null}
               <SummaryRow
                 label="Estado de preparación"
                 value={getPreparationStatusLabel(order)}
@@ -196,38 +214,32 @@ export default function OrderDetailPage({
             <CardHeader>
               <CardTitle>Totales</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              <SummaryRow
-                label="Subtotal"
-                value={formatCurrency(order.subtotal ?? 0)}
-              />
-              {discountOferta > 0 ? (
-                <SummaryRow
-                  label="Descuento por oferta"
-                  value={`- ${formatCurrency(discountOferta)}`}
-                />
-              ) : null}
-              {discountCodigo > 0 ? (
-                <SummaryRow
-                  label={`Descuento por código${order.codigoPromocion ? ` (${order.codigoPromocion})` : ""}`}
-                  value={`- ${formatCurrency(discountCodigo)}`}
-                />
-              ) : null}
-              <SummaryRow
-                label="Envío"
-                value={
-                  isPickup
-                    ? "Gratis"
-                    : formatCurrency(order.shippingCost ?? 0)
+            <CardContent>
+              <OrderFieraPointsTotals
+                order={order}
+                shippingLabel="Envío"
+                shippingValue={
+                  isPickup ? "Gratis" : formatCurrency(order.shippingCost ?? 0)
                 }
+                extraRows={[
+                  ...(discountOferta > 0
+                    ? [
+                        {
+                          label: "Descuento por oferta",
+                          value: `- ${formatCurrency(discountOferta)}`,
+                        },
+                      ]
+                    : []),
+                  ...(discountCodigo > 0
+                    ? [
+                        {
+                          label: `Descuento por código${order.codigoPromocion ? ` (${order.codigoPromocion})` : ""}`,
+                          value: `- ${formatCurrency(discountCodigo)}`,
+                        },
+                      ]
+                    : []),
+                ]}
               />
-              <Separator className="my-2" />
-              <div className="flex items-center justify-between">
-                <span className="font-semibold">Total</span>
-                <span className="font-headline text-xl font-bold text-secondary">
-                  {formatCurrency(order.total)}
-                </span>
-              </div>
             </CardContent>
           </Card>
         </div>

@@ -6,6 +6,7 @@ import type {
   OrderStatusHistoryEntry,
   OrderDireccionEnvio,
   Pago,
+  PaymentComposition,
 } from "@/lib/types";
 import { apiFetch, unwrapData } from "./client";
 
@@ -24,6 +25,28 @@ function toStringValue(value: unknown, fallback = "") {
 function toNumber(value: unknown, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function mapPaymentComposition(input: unknown): PaymentComposition | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const value = input as UnknownRecord;
+  const rawMode = toStringValue(value.mode, "NONE");
+  const mode = rawMode === "EXACT" || rawMode === "MAX" ? rawMode : "NONE";
+  return {
+    mode,
+    grossTotalMinor: toNumber(value.grossTotalMinor),
+    providerAmountMinor: toNumber(value.providerAmountMinor),
+    pointsRequested: toNumber(value.pointsRequested),
+    pointsUsed: toNumber(value.pointsUsed),
+    pointValueMinor: toNumber(value.pointValueMinor),
+    pointsDiscountMinor: toNumber(value.pointsDiscountMinor),
+    minimumRedemptionPoints: toNumber(value.minimumRedemptionPoints),
+    redemptionId: toStringValue(value.redemptionId) || undefined,
+    redemptionStatus: (toStringValue(
+      value.redemptionStatus,
+      "NOT_REQUESTED",
+    ) || "NOT_REQUESTED") as PaymentComposition["redemptionStatus"],
+  };
 }
 
 function toStringArray(value: unknown): string[] {
@@ -201,6 +224,9 @@ function mapOrden(input: unknown): Orden {
     usuarioId: toStringValue(item.usuarioId) || undefined,
     estado: toStringValue(item.estado, "PENDIENTE"),
     total: toNumber(item.total, 0),
+    grossTotal:
+      item.grossTotal === undefined ? undefined : toNumber(item.grossTotal, 0),
+    paymentComposition: mapPaymentComposition(item.paymentComposition),
     subtotal: toNumber(item.subtotal, 0),
     subtotalOriginal:
       item.subtotalOriginal === undefined

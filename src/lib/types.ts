@@ -440,6 +440,47 @@ export type PaymentStatus =
   | "REEMBOLSADO";
 
 export type PaymentMethod = "TARJETA";
+export type FieraPointsRequest = {
+  mode: "NONE" | "EXACT" | "MAX";
+  points?: number;
+};
+export type PaymentComposition = {
+  mode: FieraPointsRequest["mode"];
+  grossTotalMinor: number;
+  providerAmountMinor: number;
+  pointsRequested: number;
+  pointsUsed: number;
+  pointValueMinor: number;
+  pointsDiscountMinor: number;
+  minimumRedemptionPoints: number;
+  redemptionId?: string;
+  redemptionStatus:
+    | "NOT_REQUESTED"
+    | "PENDING"
+    | "CONFIRMED"
+    | "CANCELLED"
+    | "EXPIRED"
+    | "REFUNDED";
+};
+export type FieraPointsQuoteReason =
+  | "NONE"
+  | "OK"
+  | "MIN_NOT_MET"
+  | "DISABLED"
+  | "INSUFFICIENT"
+  | "EXCEEDS_TOTAL"
+  | "INVALID_AMOUNT"
+  | "INVALID_CONFIG";
+export type FieraPointsQuote = {
+  canRedeem: boolean;
+  reason: FieraPointsQuoteReason;
+  availablePoints: number;
+  pointValueMinor: number;
+  minimumRedemptionPoints: number;
+  grossTotal: number;
+  providerAmount: number;
+  paymentComposition: PaymentComposition;
+};
 export type FulfillmentMethod = "DELIVERY" | "PICKUP";
 export type CheckoutFulfillmentMethod =
   | FulfillmentMethod
@@ -672,6 +713,8 @@ export type Orden = {
   usuarioId?: string;
   estado: OrderStatus | string;
   total: number;
+  grossTotal?: number;
+  paymentComposition?: PaymentComposition;
   subtotal?: number;
   subtotalOriginal?: number;
   shippingCost?: number;
@@ -773,6 +816,7 @@ export type CheckoutPayload = {
   selectedServiceType?: string;
   shippingSelection?: ShippingSelection;
   notas?: string;
+  fieraPoints?: FieraPointsRequest;
 };
 
 export type CheckoutResponse = {
@@ -892,6 +936,7 @@ export type CatalogProductCard = {
   stockFisico?: number;
   disponible: boolean;
   destacado: boolean;
+  personalizable?: boolean;
 };
 
 export type CatalogResponse = {

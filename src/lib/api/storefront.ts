@@ -726,6 +726,10 @@ export function mapCatalogProductToProductCardViewModel(
     stockTotal: stock,
     stockFisico,
     activo: true,
+    personalizable:
+      typeof catalogProduct.personalizable === "boolean"
+        ? catalogProduct.personalizable
+        : undefined,
   };
 }
 

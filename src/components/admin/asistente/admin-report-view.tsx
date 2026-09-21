@@ -1,40 +1,22 @@
 "use client";
 
 import * as React from "react";
-import {
-  Area,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ComposedChart,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  Scatter,
-  ScatterChart,
-  XAxis,
-  YAxis,
-  ZAxis,
-} from "recharts";
+import dynamic from "next/dynamic";
+import { motion } from "motion/react";
 import {
   ActivitySquare,
   AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
+  Compass,
+  Database,
   Info,
   Lightbulb,
+  Sparkles,
   TrendingUp,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart";
 import {
   Table,
   TableBody,
@@ -50,16 +32,37 @@ import {
 import type {
   AdminReport,
   AdminReportBlock,
-  AdminReportChartPoint,
   AdminReportPriority,
   AdminReportTextKind,
 } from "@/lib/ai/admin-report-types";
+import {
+  buildAdminChartModel,
+  buildForecastChartModel,
+} from "@/lib/ai/admin-report-echarts";
 import { cn } from "@/lib/utils";
+import {
+  ComparisonBlock,
+  DiagramBlock,
+  InsightBlock,
+  ScenarioBlock,
+  SegmentBlock,
+} from "@/components/admin/asistente/admin-decision-blocks";
+
+const AdminReportEchart = dynamic(
+  () =>
+    import("@/components/admin/asistente/admin-report-echart").then(
+      (mod) => mod.AdminReportEchart,
+    ),
+  { ssr: false },
+);
 
 const TEXT_KIND_LABEL: Record<AdminReportTextKind, string> = {
   observacion: "Dato observado",
   inferencia: "Inferencia",
-  conclusion: "Conclusion",
+  recomendacion: "Recomendación",
+  prediccion: "Predicción",
+  simulacion: "Simulación",
+  conclusion: "Conclusión",
   contexto: "Contexto",
 };
 
@@ -69,68 +72,35 @@ const CONFIDENCE_LABEL: Record<AdminReport["confidence"], string> = {
   baja: "Confianza baja",
 };
 
-const CHART_COLORS = [
-  "var(--chart-1, #1e5fa8)",
-  "var(--chart-2, #16a34a)",
-  "var(--chart-3, #f59e0b)",
-  "var(--chart-4, #db2777)",
-  "var(--chart-5, #6366f1)",
-];
+const CONFIDENCE_DOT: Record<AdminReport["confidence"], string> = {
+  alta: "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]",
+  media: "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]",
+  baja: "bg-slate-400",
+};
 
-function seriesKeys(data: AdminReportChartPoint[]): string[] {
-  const keys: string[] = [];
-  for (const point of data) {
-    for (const entry of point.series) {
-      if (!keys.includes(entry.key)) {
-        keys.push(entry.key);
-      }
-    }
-  }
-  return keys;
-}
-
-function toChartRows(data: AdminReportChartPoint[], keys: string[]) {
-  return data.map((point) => {
-    const row: Record<string, string | number> = { x: point.x };
-    for (const key of keys) {
-      const match = point.series.find((entry) => entry.key === key);
-      row[key] = match ? match.value : 0;
-    }
-    return row;
-  });
-}
-
-/**
- * En scatter el eje X es numerico (por ejemplo vistas) y la primera serie es el
- * eje Y (por ejemplo unidades vendidas). Los puntos sin X numerica se descartan
- * para no colapsar todos los productos sobre el cero.
- */
-function toScatterRows(data: AdminReportChartPoint[], valueKey: string) {
-  return data.flatMap((point) => {
-    const x = Number(point.x);
-    const match = point.series.find((entry) => entry.key === valueKey);
-
-    if (!Number.isFinite(x) || !match) {
-      return [];
-    }
-
-    return [{ x, [valueKey]: match.value, name: point.label ?? point.x }];
-  });
+function formatDateForSource(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "fecha no disponible"
+    : new Intl.DateTimeFormat("es-MX", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(date);
 }
 
 function BlockTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="text-sm font-medium text-foreground">{children}</h3>
+    <h3 className="text-sm font-semibold tracking-tight text-foreground">{children}</h3>
   );
 }
 
 function TextBlock({ block }: { block: AdminReportBlock }) {
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2.5 rounded-2xl border border-border/70 bg-card/60 p-4.5 shadow-xs">
       <div className="flex flex-wrap items-center gap-2">
         {block.title ? <BlockTitle>{block.title}</BlockTitle> : null}
         {block.kind ? (
-          <Badge variant="outline" className="text-[11px] font-normal">
+          <Badge variant="outline" className="text-[11px] font-normal border-border/80 bg-background/60">
             {TEXT_KIND_LABEL[block.kind]}
           </Badge>
         ) : null}
@@ -146,15 +116,14 @@ function WarningBlock({ block }: { block: AdminReportBlock }) {
   return (
     <div
       role="status"
-      className="flex gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3"
+      className="flex gap-3.5 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent p-4 shadow-xs"
     >
-      <AlertTriangle
-        className="mt-0.5 size-4 shrink-0 text-amber-600"
-        aria-hidden
-      />
+      <div className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600">
+        <AlertTriangle className="size-4" aria-hidden />
+      </div>
       <div className="flex flex-col gap-1">
-        <p className="text-sm font-medium text-amber-700">
-          {block.title || "Limitacion de los datos"}
+        <p className="text-sm font-semibold text-amber-900 dark:text-amber-300">
+          {block.title || "Limitación de los datos"}
         </p>
         <p className="text-sm leading-relaxed text-text-secondary">
           {block.content}
@@ -168,7 +137,7 @@ function KpisBlock({ block }: { block: AdminReportBlock }) {
   return (
     <div className="flex flex-col gap-3">
       {block.title ? <BlockTitle>{block.title}</BlockTitle> : null}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
         {block.items?.map((item) => {
           const positive = typeof item.change === "number" && item.change > 0;
           const negative = typeof item.change === "number" && item.change < 0;
@@ -177,32 +146,37 @@ function KpisBlock({ block }: { block: AdminReportBlock }) {
           return (
             <div
               key={item.label}
-              className="flex flex-col gap-1 rounded-xl border border-border/80 bg-card px-4 py-3"
+              className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-border/80 bg-card p-4.5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-500/30 hover:shadow-md"
             >
-              <p className="text-xs font-medium text-text-secondary">
-                {item.label}
-              </p>
-              <p className="admin-tabular text-xl font-semibold text-foreground">
-                {formatAdminReportValue(item.value, item.format)}
-              </p>
-              {typeof item.change === "number" ? (
-                <p
-                  className={cn(
-                    "flex items-center gap-1 text-xs font-medium",
-                    positive && "text-emerald-600",
-                    negative && "text-destructive",
-                    !positive && !negative && "text-text-muted",
-                  )}
-                >
-                  {positive || negative ? (
-                    <ChangeIcon className="size-3" aria-hidden />
-                  ) : null}
-                  {formatAdminReportChange(item.change)}
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-xs font-medium text-text-secondary line-clamp-2">
+                  {item.label}
                 </p>
-              ) : null}
-              {item.hint ? (
-                <p className="text-xs text-text-muted">{item.hint}</p>
-              ) : null}
+                {typeof item.change === "number" ? (
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                      positive && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+                      negative && "bg-destructive/10 text-destructive",
+                      !positive && !negative && "bg-muted text-text-muted",
+                    )}
+                  >
+                    {positive || negative ? (
+                      <ChangeIcon className="size-3" aria-hidden />
+                    ) : null}
+                    {formatAdminReportChange(item.change)}
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="mt-3">
+                <p className="admin-tabular text-2xl font-bold tracking-tight text-foreground">
+                  {formatAdminReportValue(item.value, item.format)}
+                </p>
+                {item.hint ? (
+                  <p className="mt-1 text-[11px] text-text-muted">{item.hint}</p>
+                ) : null}
+              </div>
             </div>
           );
         })}
@@ -217,15 +191,15 @@ function TableBlock({ block }: { block: AdminReportBlock }) {
   return (
     <div className="flex flex-col gap-3">
       {block.title ? <BlockTitle>{block.title}</BlockTitle> : null}
-      <div className="overflow-x-auto rounded-xl border border-border/80">
+      <div className="overflow-x-auto rounded-2xl border border-border/80 shadow-xs bg-card">
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="bg-muted/40 hover:bg-muted/40">
               {columns.map((column, index) => (
                 <TableHead
                   key={`${column.label}-${index}`}
                   className={cn(
-                    "whitespace-nowrap",
+                    "font-semibold text-xs text-foreground whitespace-nowrap",
                     column.format &&
                       column.format !== "text" &&
                       "text-right",
@@ -238,14 +212,15 @@ function TableBlock({ block }: { block: AdminReportBlock }) {
           </TableHeader>
           <TableBody>
             {block.rows?.map((row, rowIndex) => (
-              <TableRow key={`row-${rowIndex}`}>
+              <TableRow key={`row-${rowIndex}`} className="hover:bg-muted/30">
                 {row.cells.map((cell, cellIndex) => {
                   const format = columns[cellIndex]?.format ?? "text";
                   return (
                     <TableCell
                       key={`cell-${rowIndex}-${cellIndex}`}
                       className={cn(
-                        format !== "text" && "admin-tabular text-right",
+                        "text-sm",
+                        format !== "text" && "admin-tabular text-right font-medium",
                       )}
                     >
                       {formatAdminReportValue(cell, format)}
@@ -261,233 +236,47 @@ function TableBlock({ block }: { block: AdminReportBlock }) {
   );
 }
 
-type ChartRow = Record<string, string | number>;
-type ValueFormatter = (value: number | string) => string;
-
-function ValueTooltip({ formatter }: { formatter: ValueFormatter }) {
-  return (
-    <ChartTooltipContent formatter={(value) => formatter(value as number)} />
-  );
-}
-
-function PieChartView({
-  rows,
-  valueKey,
-  valueFormatter,
-}: {
-  rows: ChartRow[];
-  valueKey: string;
-  valueFormatter: ValueFormatter;
-}) {
-  return (
-    <PieChart>
-      <ChartTooltip content={<ValueTooltip formatter={valueFormatter} />} />
-      <Pie data={rows} dataKey={valueKey} nameKey="x" outerRadius="75%">
-        {rows.map((row, index) => (
-          <Cell
-            key={`slice-${row.x}`}
-            fill={CHART_COLORS[index % CHART_COLORS.length]}
-          />
-        ))}
-      </Pie>
-    </PieChart>
-  );
-}
-
-function LineChartView({
-  rows,
-  keys,
-  valueFormatter,
-}: {
-  rows: ChartRow[];
-  keys: string[];
-  valueFormatter: ValueFormatter;
-}) {
-  return (
-    <LineChart data={rows} margin={{ left: 8, right: 8, top: 8 }}>
-      <CartesianGrid vertical={false} strokeDasharray="3 3" />
-      <XAxis
-        dataKey="x"
-        tickLine={false}
-        axisLine={false}
-        tickMargin={8}
-        minTickGap={16}
-      />
-      <YAxis
-        tickLine={false}
-        axisLine={false}
-        width={72}
-        tickFormatter={(value) => valueFormatter(value as number)}
-      />
-      <ChartTooltip content={<ValueTooltip formatter={valueFormatter} />} />
-      {keys.map((key) => (
-        <Line
-          key={key}
-          dataKey={key}
-          type="monotone"
-          stroke={`var(--color-${key})`}
-          strokeWidth={2}
-          dot={false}
-        />
-      ))}
-    </LineChart>
-  );
-}
-
-function BarChartView({
-  rows,
-  keys,
-  valueFormatter,
-}: {
-  rows: ChartRow[];
-  keys: string[];
-  valueFormatter: ValueFormatter;
-}) {
-  const crowded = rows.length > 6;
-
-  return (
-    <BarChart data={rows} margin={{ left: 8, right: 8, top: 8 }}>
-      <CartesianGrid vertical={false} strokeDasharray="3 3" />
-      <XAxis
-        dataKey="x"
-        tickLine={false}
-        axisLine={false}
-        tickMargin={8}
-        interval={0}
-        angle={crowded ? -30 : 0}
-        textAnchor={crowded ? "end" : "middle"}
-        height={crowded ? 64 : 32}
-      />
-      <YAxis
-        tickLine={false}
-        axisLine={false}
-        width={72}
-        tickFormatter={(value) => valueFormatter(value as number)}
-      />
-      <ChartTooltip content={<ValueTooltip formatter={valueFormatter} />} />
-      {keys.map((key) => (
-        <Bar
-          key={key}
-          dataKey={key}
-          fill={`var(--color-${key})`}
-          radius={[4, 4, 0, 0]}
-        />
-      ))}
-    </BarChart>
-  );
-}
-
-function ScatterChartView({
-  rows,
-  valueKey,
-  valueName,
-  xLabel,
-  valueFormatter,
-}: {
-  rows: ChartRow[];
-  valueKey: string;
-  valueName: string;
-  xLabel: string;
-  valueFormatter: ValueFormatter;
-}) {
-  return (
-    <ScatterChart margin={{ left: 8, right: 16, top: 8, bottom: 8 }}>
-      <CartesianGrid strokeDasharray="3 3" />
-      <XAxis
-        type="number"
-        dataKey="x"
-        name={xLabel}
-        tickLine={false}
-        axisLine={false}
-        tickMargin={8}
-      />
-      <YAxis
-        type="number"
-        dataKey={valueKey}
-        name={valueName}
-        tickLine={false}
-        axisLine={false}
-        width={72}
-        tickFormatter={(value) => valueFormatter(value as number)}
-      />
-      <ZAxis dataKey="name" name="Elemento" />
-      <ChartTooltip
-        content={
-          <ChartTooltipContent
-            labelKey="name"
-            formatter={(value) => valueFormatter(value as number)}
-          />
-        }
-      />
-      <Scatter data={rows} dataKey={valueKey} fill={`var(--color-${valueKey})`} />
-    </ScatterChart>
-  );
-}
-
 function ChartBlock({ block }: { block: AdminReportBlock }) {
-  const data = block.data ?? [];
-  const keys = seriesKeys(data);
-  const rows = toChartRows(data, keys);
-  const isScatter = block.chartType === "scatter";
-  const scatterRows = isScatter ? toScatterRows(data, keys[0]) : [];
-  const labelByKey = new Map(
-    (block.seriesLabels ?? []).map((entry) => [entry.key, entry.label]),
+  const model = React.useMemo(
+    () => buildAdminChartModel(block),
+    [
+      block.chartType,
+      block.data,
+      block.seriesLabels,
+      block.valueFormat,
+      block.xLabel,
+    ],
   );
 
-  // Un scatter con menos de tres puntos comparables no comunica relacion alguna.
-  if (isScatter && scatterRows.length < 3) {
-    return null;
+  if (!model) {
+    return block.title ? (
+      <div className="flex flex-col gap-2 rounded-2xl border border-border/70 p-4">
+        <BlockTitle>{block.title}</BlockTitle>
+        <p className="text-sm text-text-muted">
+          No hay datos suficientes para graficar.
+        </p>
+      </div>
+    ) : null;
   }
 
-  const config: ChartConfig = Object.fromEntries(
-    keys.map((key, index) => [
-      key,
-      {
-        label: labelByKey.get(key) ?? key,
-        color: CHART_COLORS[index % CHART_COLORS.length],
-      },
-    ]),
-  );
-
-  const valueFormatter: ValueFormatter = (value) =>
-    formatAdminReportValue(value, block.valueFormat ?? "number");
-
-  const charts: Record<string, React.ReactElement> = {
-    scatter: (
-      <ScatterChartView
-        rows={scatterRows}
-        valueKey={keys[0]}
-        valueName={labelByKey.get(keys[0]) ?? keys[0]}
-        xLabel={block.xLabel || "Eje X"}
-        valueFormatter={valueFormatter}
-      />
-    ),
-    pie: (
-      <PieChartView
-        rows={rows}
-        valueKey={keys[0]}
-        valueFormatter={valueFormatter}
-      />
-    ),
-    line: (
-      <LineChartView rows={rows} keys={keys} valueFormatter={valueFormatter} />
-    ),
-    bar: <BarChartView rows={rows} keys={keys} valueFormatter={valueFormatter} />,
-  };
-
   return (
-    <div className="flex flex-col gap-3">
-      {block.title ? <BlockTitle>{block.title}</BlockTitle> : null}
-      <ChartContainer
-        config={config}
-        className="aspect-[16/9] w-full min-h-[220px]"
-      >
-        {charts[block.chartType ?? "bar"] ?? charts.bar}
-      </ChartContainer>
-      {block.xLabel ? (
-        <p className="text-xs text-text-muted">{block.xLabel}</p>
+    <figure className="flex min-w-0 flex-col gap-3 rounded-2xl border border-border/80 bg-card p-5 shadow-xs">
+      {block.title ? (
+        <figcaption className="flex items-center justify-between gap-2 border-b border-border/50 pb-3">
+          <BlockTitle>{block.title}</BlockTitle>
+        </figcaption>
       ) : null}
-    </div>
+      <div className="w-full min-w-0" style={{ height: model.height }}>
+        <AdminReportEchart
+          option={model.option}
+          height={model.height}
+          ariaLabel={block.title || "Gráfica del informe"}
+        />
+      </div>
+      {block.xLabel ? (
+        <p className="text-xs text-text-muted text-center italic">{block.xLabel}</p>
+      ) : null}
+    </figure>
   );
 }
 
@@ -503,52 +292,11 @@ const SEVERITY_LABEL: Record<AdminReportPriority, string> = {
   baja: "Severidad baja",
 };
 
-const FORECAST_CONFIG: ChartConfig = {
-  historico: { label: "Historico", color: CHART_COLORS[0] },
-  proyeccion: { label: "Proyeccion", color: CHART_COLORS[2] },
-  rango: { label: "Rango estimado", color: CHART_COLORS[2] },
-};
-
-type ForecastRow = {
-  x: string;
-  historico?: number;
-  proyeccion?: number;
-  rango?: [number, number];
-};
-
-/**
- * Une historico y proyeccion en una sola serie temporal. El ultimo punto real se
- * repite como inicio de la proyeccion para que la linea no quede desconectada.
- */
-function toForecastRows(block: AdminReportBlock): ForecastRow[] {
-  const historical = block.historical ?? [];
-  const forecast = block.forecast ?? [];
-  const lastRealIndex = historical.length - 1;
-  const rows: ForecastRow[] = historical.map((point, index) => ({
-    x: point.date,
-    historico: point.value,
-    ...(index === lastRealIndex ? { proyeccion: point.value } : {}),
-  }));
-
-  for (const point of forecast) {
-    rows.push({
-      x: point.date,
-      proyeccion: point.value,
-      ...(typeof point.lower === "number" && typeof point.upper === "number"
-        ? { rango: [point.lower, point.upper] as [number, number] }
-        : {}),
-    });
-  }
-
-  return rows;
-}
-
 function ForecastBlock({ block }: { block: AdminReportBlock }) {
-  const rows = toForecastRows(block);
-  const hasBand = rows.some((row) => row.rango !== undefined);
-  const valueFormatter = (value: number | string) =>
-    formatAdminReportValue(value, block.valueFormat ?? "number");
-
+  const model = React.useMemo(
+    () => buildForecastChartModel(block),
+    [block.forecast, block.historical, block.valueFormat],
+  );
   const metricLabel = block.metricLabel || block.metric;
   const errorParts = [
     typeof block.error?.mae === "number"
@@ -560,112 +308,64 @@ function ForecastBlock({ block }: { block: AdminReportBlock }) {
   ].filter((part): part is string => part !== null);
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <BlockTitle>
-          <span className="flex items-center gap-2">
-            <TrendingUp className="size-4 text-primary" aria-hidden />
-            {block.title || `Proyeccion de ${metricLabel}`}
+    <div className="flex flex-col gap-4 rounded-2xl border border-border/80 bg-card p-5 shadow-xs">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-3">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex size-7 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-600">
+            <TrendingUp className="size-4" aria-hidden />
           </span>
-        </BlockTitle>
-        {block.quality ? (
-          <Badge variant="outline" className="text-[11px] font-normal">
-            {QUALITY_LABEL[block.quality]}
-          </Badge>
-        ) : null}
-        {block.horizon ? (
-          <Badge variant="outline" className="text-[11px] font-normal">
-            {block.horizon} dias
-          </Badge>
-        ) : null}
+          <BlockTitle>
+            {block.title || `Proyección de ${metricLabel}`}
+          </BlockTitle>
+        </div>
+        <div className="flex items-center gap-2">
+          {block.quality ? (
+            <Badge variant="outline" className="text-[11px] font-normal border-emerald-500/30 text-emerald-700 bg-emerald-500/5">
+              {QUALITY_LABEL[block.quality]}
+            </Badge>
+          ) : null}
+          {block.horizon ? (
+            <Badge variant="secondary" className="text-[11px] font-normal">
+              Horizonte {block.horizon} días
+            </Badge>
+          ) : null}
+        </div>
       </div>
 
-      <ChartContainer
-        config={FORECAST_CONFIG}
-        className="aspect-[16/9] w-full min-h-[220px]"
-      >
-        <ComposedChart data={rows} margin={{ left: 8, right: 8, top: 8 }}>
-          <CartesianGrid vertical={false} strokeDasharray="3 3" />
-          <XAxis
-            dataKey="x"
-            tickLine={false}
-            axisLine={false}
-            tickMargin={8}
-            minTickGap={24}
+      {model ? (
+        <div className="w-full min-w-0" style={{ height: model.height }}>
+          <AdminReportEchart
+            option={model.option}
+            height={model.height}
+            ariaLabel={block.title || `Proyección de ${metricLabel}`}
           />
-          <YAxis
-            tickLine={false}
-            axisLine={false}
-            width={72}
-            tickFormatter={(value) => valueFormatter(value as number)}
-          />
-          <ChartTooltip
-            content={
-              <ChartTooltipContent
-                formatter={(value) =>
-                  Array.isArray(value)
-                    ? `${valueFormatter(value[0] as number)} - ${valueFormatter(
-                        value[1] as number,
-                      )}`
-                    : valueFormatter(value as number)
-                }
-              />
-            }
-          />
-          {hasBand ? (
-            <Area
-              dataKey="rango"
-              stroke="none"
-              fill="var(--color-rango)"
-              fillOpacity={0.18}
-              connectNulls={false}
-              isAnimationActive={false}
-            />
-          ) : null}
-          <Line
-            dataKey="historico"
-            type="monotone"
-            stroke="var(--color-historico)"
-            strokeWidth={2}
-            dot={false}
-            connectNulls={false}
-          />
-          <Line
-            dataKey="proyeccion"
-            type="monotone"
-            stroke="var(--color-proyeccion)"
-            strokeWidth={2}
-            strokeDasharray="5 4"
-            dot={false}
-            connectNulls={false}
-          />
-        </ComposedChart>
-      </ChartContainer>
+        </div>
+      ) : null}
 
-      <dl className="flex flex-col gap-1 text-xs text-text-muted">
+      <div className="grid grid-cols-1 gap-2 rounded-xl bg-muted/40 p-3 text-xs text-text-muted sm:grid-cols-3">
         {block.method ? (
-          <div className="flex flex-wrap gap-1">
-            <dt className="font-medium">Modelo:</dt>
-            <dd>{block.method}</dd>
+          <div>
+            <span className="font-semibold text-text-secondary">Modelo: </span>
+            <span>{block.method}</span>
           </div>
         ) : null}
         {block.historical && block.historical.length > 0 ? (
-          <div className="flex flex-wrap gap-1">
-            <dt className="font-medium">Historial usado:</dt>
-            <dd>{block.historical.length} observaciones</dd>
+          <div>
+            <span className="font-semibold text-text-secondary">Historial: </span>
+            <span>{block.historical.length} observaciones</span>
           </div>
         ) : null}
         {errorParts.length > 0 ? (
-          <div className="flex flex-wrap gap-1">
-            <dt className="font-medium">Error historico:</dt>
-            <dd>{errorParts.join(" · ")}</dd>
+          <div>
+            <span className="font-semibold text-text-secondary">Error histórico: </span>
+            <span>{errorParts.join(" · ")}</span>
           </div>
         ) : null}
-      </dl>
+      </div>
 
-      <p className="text-xs text-text-muted">
+      <p className="text-xs text-text-muted italic">
         {block.note ||
-          "La proyeccion es un escenario estimado a partir del historial, no un resultado garantizado."}
+          "La proyección es un escenario estadístico estimado a partir del historial, no un resultado garantizado."}
       </p>
     </div>
   );
@@ -678,35 +378,40 @@ function AnomalyBlock({ block }: { block: AdminReportBlock }) {
   return (
     <div
       className={cn(
-        "flex gap-3 rounded-xl border px-4 py-3",
+        "flex gap-3.5 rounded-2xl border p-5 shadow-xs",
         severity === "alta"
-          ? "border-destructive/40 bg-destructive/5"
-          : "border-amber-500/30 bg-amber-500/5",
+          ? "border-destructive/40 bg-gradient-to-br from-destructive/8 via-destructive/3 to-transparent"
+          : "border-amber-500/30 bg-gradient-to-br from-amber-500/8 via-amber-500/3 to-transparent",
       )}
     >
-      <ActivitySquare
+      <div
         className={cn(
-          "mt-0.5 size-4 shrink-0",
-          severity === "alta" ? "text-destructive" : "text-amber-600",
+          "inline-flex size-8 shrink-0 items-center justify-center rounded-xl",
+          severity === "alta"
+            ? "bg-destructive/15 text-destructive"
+            : "bg-amber-500/15 text-amber-600",
         )}
-        aria-hidden
-      />
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm font-medium text-foreground">
-            {block.title || `Anomalia en ${metricLabel}`}
+      >
+        <ActivitySquare className="size-4.5" aria-hidden />
+      </div>
+
+      <div className="flex flex-col gap-2.5 flex-1">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-foreground">
+            {block.title || `Anomalía detectada en ${metricLabel}`}
           </p>
           <Badge
             variant={severity === "alta" ? "destructive" : "outline"}
-            className="text-[11px] font-normal"
+            className="text-[11px] font-medium"
           >
             {SEVERITY_LABEL[severity]}
           </Badge>
         </div>
-        <dl className="grid grid-cols-1 gap-x-6 gap-y-1 text-xs text-text-secondary sm:grid-cols-2">
+
+        <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 rounded-xl bg-background/70 border border-border/60 p-3 text-xs text-text-secondary sm:grid-cols-2">
           <div className="flex flex-wrap gap-1">
-            <dt className="font-medium">Observado:</dt>
-            <dd className="admin-tabular">
+            <dt className="text-text-muted">Observado:</dt>
+            <dd className="admin-tabular font-bold text-foreground">
               {formatAdminReportValue(
                 block.observed ?? 0,
                 block.valueFormat ?? "number",
@@ -714,16 +419,17 @@ function AnomalyBlock({ block }: { block: AdminReportBlock }) {
             </dd>
           </div>
           <div className="flex flex-wrap gap-1">
-            <dt className="font-medium">Esperado:</dt>
-            <dd>{block.expected}</dd>
+            <dt className="text-text-muted">Esperado:</dt>
+            <dd className="font-semibold text-foreground">{block.expected}</dd>
           </div>
           {block.reference ? (
-            <div className="flex flex-wrap gap-1 sm:col-span-2">
-              <dt className="font-medium">Periodo:</dt>
-              <dd>{block.reference}</dd>
+            <div className="flex flex-wrap gap-1 sm:col-span-2 pt-1 border-t border-border/40">
+              <dt className="text-text-muted">Periodo de referencia:</dt>
+              <dd className="text-foreground">{block.reference}</dd>
             </div>
           ) : null}
         </dl>
+
         <p className="text-sm leading-relaxed text-text-secondary">
           {block.explanation}
         </p>
@@ -734,51 +440,59 @@ function AnomalyBlock({ block }: { block: AdminReportBlock }) {
 
 function RecommendationsBlock({ block }: { block: AdminReportBlock }) {
   return (
-    <div className="flex flex-col gap-3">
-      <BlockTitle>
-        <span className="flex items-center gap-2">
-          <Lightbulb className="size-4 text-primary" aria-hidden />
-          {block.title || "Recomendaciones"}
+    <div className="flex flex-col gap-3.5">
+      <div className="flex items-center gap-2">
+        <span className="inline-flex size-7 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-600">
+          <Lightbulb className="size-4" aria-hidden />
         </span>
-      </BlockTitle>
+        <BlockTitle>{block.title || "Recomendaciones Estratégicas"}</BlockTitle>
+      </div>
+
       <ul className="flex flex-col gap-3">
         {block.recommendations?.map((item, index) => (
           <li
             key={`${item.action}-${index}`}
-            className="rounded-xl border border-border/80 bg-card px-4 py-3"
+            className="flex flex-col gap-2 rounded-2xl border border-border/80 bg-card p-4.5 shadow-xs transition-all hover:border-emerald-500/30"
           >
             <div className="flex flex-wrap items-start justify-between gap-2">
-              <p className="text-sm font-medium text-foreground">
-                {item.action}
+              <p className="text-sm font-semibold text-foreground">
+                {index + 1}. {item.action}
               </p>
               <Badge
                 variant={item.priority === "alta" ? "default" : "outline"}
-                className="text-[11px] font-normal"
+                className={cn(
+                  "text-[10px] font-medium",
+                  item.priority === "alta" && "bg-emerald-600 hover:bg-emerald-700 text-white",
+                )}
               >
                 Prioridad {item.priority}
               </Badge>
             </div>
-            <p className="mt-1 text-sm text-text-secondary">{item.reason}</p>
-            <dl className="mt-2 flex flex-col gap-1 text-xs text-text-muted">
-              {item.evidence ? (
-                <div className="flex gap-1">
-                  <dt className="font-medium">Evidencia:</dt>
-                  <dd>{item.evidence}</dd>
-                </div>
-              ) : null}
-              {item.expectedImpact ? (
-                <div className="flex gap-1">
-                  <dt className="font-medium">Impacto esperado:</dt>
-                  <dd>{item.expectedImpact}</dd>
-                </div>
-              ) : null}
-              {item.risk ? (
-                <div className="flex gap-1">
-                  <dt className="font-medium">Riesgo:</dt>
-                  <dd>{item.risk}</dd>
-                </div>
-              ) : null}
-            </dl>
+
+            <p className="text-sm leading-relaxed text-text-secondary">{item.reason}</p>
+
+            {(item.evidence || item.expectedImpact || item.risk) && (
+              <div className="mt-2 grid grid-cols-1 gap-2 rounded-xl bg-muted/40 p-3 text-xs text-text-muted sm:grid-cols-3">
+                {item.evidence ? (
+                  <div>
+                    <span className="font-semibold text-text-secondary">Evidencia: </span>
+                    <span>{item.evidence}</span>
+                  </div>
+                ) : null}
+                {item.expectedImpact ? (
+                  <div>
+                    <span className="font-semibold text-emerald-700 dark:text-emerald-400">Impacto: </span>
+                    <span className="text-foreground">{item.expectedImpact}</span>
+                  </div>
+                ) : null}
+                {item.risk ? (
+                  <div>
+                    <span className="font-semibold text-amber-700 dark:text-amber-400">Riesgo: </span>
+                    <span>{item.risk}</span>
+                  </div>
+                ) : null}
+              </div>
+            )}
           </li>
         ))}
       </ul>
@@ -804,6 +518,16 @@ export function AdminReportBlockView({ block }: { block: AdminReportBlock }) {
       return <AnomalyBlock block={block} />;
     case "recommendations":
       return <RecommendationsBlock block={block} />;
+    case "insight":
+      return <InsightBlock block={block} />;
+    case "scenario":
+      return <ScenarioBlock block={block} />;
+    case "comparison":
+      return <ComparisonBlock block={block} />;
+    case "diagram":
+      return <DiagramBlock block={block} />;
+    case "segment":
+      return <SegmentBlock block={block} />;
     default:
       return null;
   }
@@ -815,43 +539,61 @@ export function AdminReportView({
   suggestionsDisabled = false,
 }: {
   report: AdminReport;
-  /** Continua la conversacion con la sugerencia elegida, sin cambiar de vista. */
   onSuggestionSelect?: (question: string) => void;
   suggestionsDisabled?: boolean;
 }) {
   const suggestions = report.suggestedQuestions ?? [];
 
   return (
-    <article className="flex flex-col gap-5">
-      <header className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary" className="text-[11px] font-normal">
-            {CONFIDENCE_LABEL[report.confidence]}
-          </Badge>
+    <article className="flex flex-col gap-6">
+      {/* Executive Summary Card */}
+      <header className="rounded-2xl border border-emerald-500/25 bg-gradient-to-br from-emerald-500/8 via-card to-card p-5 shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-3 mb-3">
+          <div className="flex items-center gap-2">
+            <span className={cn("size-2 rounded-full", CONFIDENCE_DOT[report.confidence])} aria-hidden />
+            <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
+              {CONFIDENCE_LABEL[report.confidence]}
+            </span>
+          </div>
+          <span className="text-[11px] text-text-muted">
+            Informe generado por Garritas IA
+          </span>
         </div>
+
         <p className="text-base font-medium leading-relaxed text-foreground">
           {report.summary}
         </p>
       </header>
 
+      {/* Structured Blocks with Staggered Entrance */}
       {report.blocks.length === 0 ? (
         <p className="flex items-center gap-2 text-sm text-text-muted">
           <Info className="size-4" aria-hidden />
-          El analisis no genero bloques adicionales.
+          El análisis no generó bloques adicionales.
         </p>
       ) : (
         <div className="flex flex-col gap-5">
           {report.blocks.map((block, index) => (
-            <AdminReportBlockView key={`block-${index}`} block={block} />
+            <motion.div
+              key={`block-${index}`}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.28, delay: index * 0.05 }}
+            >
+              <AdminReportBlockView block={block} />
+            </motion.div>
           ))}
         </div>
       )}
 
+      {/* Gemini Follow-up Prompt Suggestions */}
       {suggestions.length > 0 && onSuggestionSelect ? (
-        <section className="flex flex-col gap-2 border-t border-border/70 pt-4">
-          <h3 className="text-xs font-medium text-text-secondary">
-            Continuar el analisis
-          </h3>
+        <section className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-muted/20 p-4.5">
+          <div className="flex items-center gap-2 text-xs font-semibold text-text-secondary uppercase tracking-wider">
+            <Sparkles className="size-3.5 text-emerald-600" aria-hidden />
+            <span>Continuar profundizando el análisis</span>
+          </div>
+
           <div className="flex flex-wrap gap-2">
             {suggestions.map((suggestion) => (
               <Button
@@ -861,13 +603,60 @@ export function AdminReportView({
                 size="sm"
                 disabled={suggestionsDisabled}
                 onClick={() => onSuggestionSelect(suggestion)}
-                className="h-auto whitespace-normal py-1.5 text-left text-xs font-normal"
+                className="group relative h-auto rounded-full border-border/80 bg-background/90 px-3.5 py-2 text-left text-xs font-normal text-foreground shadow-2xs transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-500/40 hover:bg-emerald-500/5 hover:text-emerald-800 dark:hover:text-emerald-300"
               >
+                <span className="mr-1.5 inline-block text-emerald-600 transition-transform group-hover:translate-x-0.5">
+                  ✦
+                </span>
                 {suggestion}
               </Button>
             ))}
           </div>
         </section>
+      ) : null}
+
+      {/* Verified Data Sources */}
+      {report.sourceMetadata?.length ? (
+        <details className="group rounded-2xl border border-border/70 bg-card/60 px-4.5 py-3 transition-all">
+          <summary className="flex cursor-pointer items-center justify-between text-xs font-medium text-text-secondary select-none">
+            <span className="flex items-center gap-2">
+              <Database className="size-3.5 text-emerald-600" aria-hidden />
+              <span>Fuentes de datos consultadas ({report.sourceMetadata.length})</span>
+            </span>
+            <span className="text-[11px] text-text-muted group-open:rotate-180 transition-transform">
+              ▼
+            </span>
+          </summary>
+
+          <ul className="mt-3.5 grid grid-cols-1 gap-2.5 md:grid-cols-2">
+            {report.sourceMetadata.map((source) => (
+              <li
+                key={source.id}
+                className="rounded-xl border border-border/60 bg-background/80 p-3.5 text-xs shadow-2xs"
+              >
+                <p className="font-semibold text-foreground">{source.label}</p>
+                {source.period ? (
+                  <p className="mt-1 text-text-muted">
+                    <span className="font-medium text-text-secondary">Periodo: </span>
+                    {source.period}
+                  </p>
+                ) : null}
+                <div className="mt-1 flex items-center gap-2 text-text-muted">
+                  <span>
+                    Cobertura: {source.coverage === "complete" ? "Completa" : "Parcial"}
+                  </span>
+                  <span>·</span>
+                  <span>{formatDateForSource(source.observedAt)}</span>
+                </div>
+                {source.note ? (
+                  <p className="mt-1.5 text-text-muted italic border-t border-border/40 pt-1.5">
+                    {source.note}
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </details>
       ) : null}
     </article>
   );

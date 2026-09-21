@@ -96,18 +96,16 @@ export default function ProfilePage() {
             ? backendUser.puntosActuales
             : null;
 
-        if (walletPoints !== null && legacyPoints !== null) {
-          setPoints(Math.max(walletPoints, legacyPoints));
+        if (walletPoints !== null) {
+          // El wallet respaldado por ledger es autoritativo. El espejo legacy
+          // solo es fallback si el endpoint moderno no está disponible; usar
+          // Math.max podía revivir puntos ya canjeados.
+          setPoints(walletPoints);
           if (pointsResult.status === "fulfilled" && pointsResult.value.level) {
             setProfileLevel(pointsResult.value.level);
           }
         } else if (legacyPoints !== null) {
           setPoints(legacyPoints);
-        } else if (walletPoints !== null) {
-          setPoints(walletPoints);
-          if (pointsResult.status === "fulfilled" && pointsResult.value.level) {
-            setProfileLevel(pointsResult.value.level);
-          }
         } else {
           setPoints(null);
           if (pointsResult.status === "rejected" && !backendUser) {

@@ -97,10 +97,7 @@ export default async function Home() {
     HOME_DESTACADOS_RAIL_LIMIT,
   );
 
-  // Con producto fijado, no tratar jerseys como personalizables por heurística de nombre.
-  const collectionIsPersonalizable = pinnedCollectionProduct
-    ? pinnedCollectionProduct.personalizable === true
-    : isPersonalizableProduct(collectionProduct);
+  const collectionIsPersonalizable = isPersonalizableProduct(collectionProduct);
   const collectionTitle = collectionIsPersonalizable
     ? "Personaliza la prenda oficial"
     : "Colección oficial";

@@ -840,3 +840,84 @@ body[data-storefront="true"] {
 [data-admin="true"] .admin-panel-card .table-row:hover {
   background: rgb(246 249 252 / 0.9);
 }
+
+/* Gemini AI Assistant Animations & Styles */
+@keyframes gemini-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes gemini-pulse-glow {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes gemini-sparkle-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes gemini-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.animate-gemini-shimmer {
+  background-size: 200% 200%;
+  animation: gemini-shimmer 3s ease infinite;
+}
+
+.animate-gemini-pulse-glow {
+  animation: gemini-pulse-glow 2.8s ease-in-out infinite;
+}
+
+.animate-gemini-sparkle-spin {
+  animation: gemini-sparkle-spin 20s linear infinite;
+}
+
+.animate-gemini-float {
+  animation: gemini-float 4s ease-in-out infinite;
+}
+
+.gemini-gradient-text {
+  background: linear-gradient(135deg, #10b981 0%, #0d9488 35%, #6366f1 70%, #d97706 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gemini-gradient-subtle {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(99, 102, 241, 0.06) 50%, rgba(217, 119, 6, 0.06) 100%);
+}
+
+.gemini-composer-shadow {
+  box-shadow:
+    0 4px 20px -2px rgba(0, 0, 0, 0.05),
+    0 12px 36px -4px rgba(13, 75, 56, 0.08),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+.gemini-composer-shadow:focus-within {
+  box-shadow:
+    0 6px 28px -2px rgba(0, 0, 0, 0.08),
+    0 16px 44px -4px rgba(13, 75, 56, 0.16),
+    0 0 0 1.5px rgba(13, 75, 56, 0.35);
+}

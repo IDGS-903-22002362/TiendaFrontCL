@@ -1,4 +1,4 @@
-import type { CheckoutPayload } from "@/lib/types";
+import type { CheckoutPayload, FieraPointsQuote, PaymentComposition } from "@/lib/types";
 import { apiFetch, unwrapData } from "./client";
 
 const IDEMPOTENCY_STORAGE_KEY = "tiendafront_checkout_idempotency_key";
@@ -26,6 +26,8 @@ export type CheckoutAttemptStartResult = {
   sessionId?: string;
   pagoId?: string;
   total: number;
+  grossTotal: number;
+  paymentComposition: PaymentComposition;
   currency?: string;
   created?: boolean;
 };
@@ -36,6 +38,8 @@ export type CheckoutAttemptStatusResult = {
   orderId?: string;
   pagoId?: string;
   total: number;
+  grossTotal: number;
+  paymentComposition: PaymentComposition;
   currency: string;
   paymentStatus?: string;
 };
@@ -51,6 +55,59 @@ function toNumber(value: unknown, fallback = 0): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function mapFieraPointsQuote(input: unknown): FieraPointsQuote {
+  const value = input && typeof input === "object" ? (input as UnknownRecord) : {};
+  const composition = mapPaymentComposition(value.paymentComposition);
+  const rawReason = toStringValue(value.reason, "NONE");
+  const reason: FieraPointsQuote["reason"] =
+    rawReason === "OK" ||
+    rawReason === "MIN_NOT_MET" ||
+    rawReason === "DISABLED" ||
+    rawReason === "INSUFFICIENT" ||
+    rawReason === "EXCEEDS_TOTAL" ||
+    rawReason === "INVALID_AMOUNT" ||
+    rawReason === "INVALID_CONFIG"
+      ? rawReason
+      : "NONE";
+  return {
+    canRedeem: value.canRedeem === true,
+    reason,
+    availablePoints: toNumber(value.availablePoints),
+    pointValueMinor: toNumber(value.pointValueMinor, composition.pointValueMinor),
+    minimumRedemptionPoints: toNumber(
+      value.minimumRedemptionPoints,
+      composition.minimumRedemptionPoints,
+    ),
+    grossTotal: toNumber(value.grossTotal, composition.grossTotalMinor / 100),
+    providerAmount: toNumber(
+      value.providerAmount,
+      composition.providerAmountMinor / 100,
+    ),
+    paymentComposition: composition,
+  };
+}
+
+function mapPaymentComposition(input: unknown): PaymentComposition {
+  const value = input && typeof input === "object" ? (input as UnknownRecord) : {};
+  const rawMode = toStringValue(value.mode, "NONE");
+  const mode = rawMode === "EXACT" || rawMode === "MAX" ? rawMode : "NONE";
+  return {
+    mode,
+    grossTotalMinor: toNumber(value.grossTotalMinor),
+    providerAmountMinor: toNumber(value.providerAmountMinor),
+    pointsRequested: toNumber(value.pointsRequested),
+    pointsUsed: toNumber(value.pointsUsed),
+    pointValueMinor: toNumber(value.pointValueMinor),
+    pointsDiscountMinor: toNumber(value.pointsDiscountMinor),
+    minimumRedemptionPoints: toNumber(value.minimumRedemptionPoints),
+    redemptionId: toStringValue(value.redemptionId) || undefined,
+    redemptionStatus: (toStringValue(
+      value.redemptionStatus,
+      "NOT_REQUESTED",
+    ) || "NOT_REQUESTED") as PaymentComposition["redemptionStatus"],
+  };
+}
+
 function mapStartResult(input: unknown): CheckoutAttemptStartResult {
   const record =
     input && typeof input === "object" ? (input as UnknownRecord) : {};
@@ -62,6 +119,8 @@ function mapStartResult(input: unknown): CheckoutAttemptStartResult {
     sessionId: toStringValue(record.sessionId) || undefined,
     pagoId: toStringValue(record.pagoId) || undefined,
     total: toNumber(record.total, 0),
+    grossTotal: toNumber(record.grossTotal, toNumber(record.total, 0)),
+    paymentComposition: mapPaymentComposition(record.paymentComposition),
     currency: toStringValue(record.currency) || undefined,
     created: record.created === true,
   };
@@ -76,6 +135,8 @@ function mapStatusResult(input: unknown): CheckoutAttemptStatusResult {
     orderId: toStringValue(record.orderId) || undefined,
     pagoId: toStringValue(record.pagoId) || undefined,
     total: toNumber(record.total, 0),
+    grossTotal: toNumber(record.grossTotal, toNumber(record.total, 0)),
+    paymentComposition: mapPaymentComposition(record.paymentComposition),
     currency: toStringValue(record.currency, "MXN"),
     paymentStatus: toStringValue(record.paymentStatus) || undefined,
   };
@@ -204,6 +265,21 @@ export async function cancelActiveCheckoutAttemptIfAny(): Promise<void> {
     return;
   }
   await cancelCheckoutAttempt(attemptId);
+}
+
+export async function quoteFieraPoints(
+  payload: CheckoutPayload,
+): Promise<FieraPointsQuote> {
+  const raw = await apiFetch<unknown>(
+    "/api/checkout/fiera-points/quote",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    { local: true },
+  );
+  const data = unwrapData<unknown>(raw);
+  return mapFieraPointsQuote(data);
 }
 
 export async function startCheckoutAttempt(

@@ -25,9 +25,15 @@ import {
 } from "@/lib/api/checkout-attempt";
 import { clearCheckoutDraft } from "@/lib/checkout-draft";
 import { getPickupCodeFromOrder } from "@/lib/orders/pickup-code";
+import {
+  getFieraPointsEarnNote,
+  getFieraPointsRedemptionDetail,
+  getOrderDisplayTotal,
+  getOrderPaymentMethodLabel,
+} from "@/lib/orders/fiera-points";
 import { trackPurchase } from "@/lib/analytics/store-events";
 import { useCart } from "@/hooks/use-cart";
-import type { Orden } from "@/lib/types";
+import type { Orden, PaymentComposition } from "@/lib/types";
 
 const PAID_STATUSES = new Set([
   "paid",
@@ -137,6 +143,8 @@ export function ConfirmationClient() {
   const [sessionStatus, setSessionStatus] = useState("");
   const [total, setTotal] = useState(fallbackTotal);
   const [order, setOrder] = useState<Orden | null>(null);
+  const [paymentComposition, setPaymentComposition] =
+    useState<PaymentComposition | null>(null);
   const [verificationState, setVerificationState] =
     useState<VerificationState>(
       attemptId || orderId ? "checking" : "confirming",
@@ -166,6 +174,7 @@ export function ConfirmationClient() {
     let activeOrderId = resolvedOrderId;
     let activePaymentId = paymentId;
     let currentAttemptStatus = attemptStatus;
+    let currentPaymentComposition = paymentComposition;
 
     const checkoutSession = sessionId
       ? await paymentsApi.getCheckoutSession(sessionId)
@@ -178,7 +187,9 @@ export function ConfirmationClient() {
     if (attemptId) {
       const attempt = await getCheckoutAttemptStatus(attemptId);
       currentAttemptStatus = attempt.status;
+      currentPaymentComposition = attempt.paymentComposition;
       setAttemptStatus(attempt.status);
+      setPaymentComposition(attempt.paymentComposition);
       if (attempt.orderId) {
         activeOrderId = attempt.orderId;
         setResolvedOrderId(attempt.orderId);
@@ -189,7 +200,7 @@ export function ConfirmationClient() {
       if (
         typeof attempt.total === "number" &&
         Number.isFinite(attempt.total) &&
-        attempt.total > 0
+        attempt.total >= 0
       ) {
         setTotal(attempt.total.toFixed(2));
       }
@@ -218,7 +229,10 @@ export function ConfirmationClient() {
 
     const [nextOrder, payment] = await Promise.all([
       activeOrderId ? ordersApi.getById(activeOrderId) : Promise.resolve(null),
-      activePaymentId
+      currentPaymentComposition?.providerAmountMinor === 0 &&
+      (currentPaymentComposition?.pointsUsed ?? 0) > 0
+        ? Promise.resolve(null)
+        : activePaymentId
         ? paymentsApi.getById(activePaymentId)
         : activeOrderId
           ? paymentsApi.getByOrden(activeOrderId)
@@ -227,6 +241,9 @@ export function ConfirmationClient() {
 
     if (nextOrder) {
       setOrder(nextOrder);
+      if (nextOrder.paymentComposition) {
+        setPaymentComposition(nextOrder.paymentComposition);
+      }
       if (
         typeof nextOrder.total === "number" &&
         Number.isFinite(nextOrder.total)
@@ -260,7 +277,14 @@ export function ConfirmationClient() {
 
     setVerificationState("checking");
     return false;
-  }, [attemptId, resolvedOrderId, paymentId, sessionId, attemptStatus]);
+  }, [
+    attemptId,
+    resolvedOrderId,
+    paymentId,
+    sessionId,
+    attemptStatus,
+    paymentComposition,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -340,6 +364,30 @@ export function ConfirmationClient() {
   );
   const deliveryTitle = isPickup ? "Recoger en tienda" : "Envío a domicilio";
   const DeliveryIcon = isPickup ? Store : Truck;
+  const redemptionOrder = order ?? {
+    total: Number(total) || 0,
+    paymentComposition: paymentComposition ?? undefined,
+  };
+  const usedFieraPoints =
+    Boolean(paymentComposition && paymentComposition.pointsUsed > 0);
+  const displayTotal = usedFieraPoints
+    ? getOrderDisplayTotal({
+        total: Number(total) || 0,
+        grossTotal: paymentComposition
+          ? paymentComposition.grossTotalMinor / 100
+          : undefined,
+        paymentComposition: paymentComposition ?? undefined,
+      })
+    : Number(total) || 0;
+  const redemptionDetail = usedFieraPoints
+    ? getFieraPointsRedemptionDetail(redemptionOrder)
+    : null;
+  const earnNote = usedFieraPoints
+    ? getFieraPointsEarnNote(redemptionOrder)
+    : null;
+  const paymentMethodLabel = usedFieraPoints
+    ? getOrderPaymentMethodLabel(redemptionOrder)
+    : null;
 
   const title = isPaid
     ? "¡Gracias por tu compra!"
@@ -431,13 +479,57 @@ export function ConfirmationClient() {
             </div>
             <div className="rounded-2xl border border-border bg-muted/35 p-4">
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                Total pagado
+                {usedFieraPoints ? "Total de la compra" : "Total pagado"}
               </p>
               <p className="mt-1 font-headline text-2xl font-bold text-secondary">
-                {formatCurrency(total)}
+                {formatCurrency(usedFieraPoints ? displayTotal : total)}
               </p>
+              {paymentMethodLabel ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {paymentMethodLabel}
+                </p>
+              ) : null}
             </div>
           </div>
+
+          {isPaid && usedFieraPoints && paymentComposition ? (
+            <div className="mx-5 mb-5 space-y-3 rounded-2xl border border-[#D9A928]/35 bg-[#D9A928]/10 p-5 md:mx-8 md:mb-8">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    FieraPuntos utilizados
+                  </p>
+                  <p className="mt-1 font-semibold text-[#073A26]">
+                    {paymentComposition.pointsUsed.toLocaleString("es-MX")} pts
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Cubierto con puntos
+                  </p>
+                  <p className="mt-1 font-semibold">
+                    {formatCurrency(paymentComposition.pointsDiscountMinor / 100)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    {paymentComposition.providerAmountMinor > 0
+                      ? "Pagado con tarjeta"
+                      : "Pagado con FieraPuntos"}
+                  </p>
+                  <p className="mt-1 font-semibold">
+                    {formatCurrency(paymentComposition.providerAmountMinor / 100)}
+                  </p>
+                </div>
+              </div>
+              {redemptionDetail ? (
+                <p className="text-xs leading-5 text-[#073A26]">{redemptionDetail}</p>
+              ) : null}
+              {earnNote ? (
+                <p className="text-xs leading-5 text-muted-foreground">{earnNote}</p>
+              ) : null}
+            </div>
+          ) : null}
 
           {isPaid && isPickup && pickupCode ? (
             <div className="mx-5 mb-5 rounded-2xl border border-primary/25 bg-primary/5 p-5 md:mx-8 md:mb-8 md:p-6">

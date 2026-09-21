@@ -235,3 +235,142 @@ export function mxnToPointsPreview(amountMxn: number): number {
 export function mxnToAmountCents(amountMxn: number): number {
   return Math.round(amountMxn * 100);
 }
+
+export type PointsReportMember = {
+  usuarioId: string;
+  nombre: string | null;
+  email: string | null;
+};
+
+export type PointsRedemptionRow = PointsReportMember & {
+  movimientoId: string;
+  puntos: number;
+  descripcion: string | null;
+  origen: string | null;
+  referencia: string | null;
+  saldoNuevo: number | null;
+  createdAt: string;
+};
+
+export type PointsBalanceRow = PointsReportMember & {
+  puntosActuales: number;
+  nivel: string | null;
+};
+
+export type PointsEarnerRow = PointsReportMember & {
+  puntosObtenidos: number;
+  movimientos: number;
+};
+
+export type PointsRedemptionsReport = {
+  items: PointsRedemptionRow[];
+  summary: {
+    pageCount: number;
+    pagePoints: number;
+  };
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
+export type PointsTopEarnersReport = {
+  items: PointsEarnerRow[];
+  summary: {
+    day: string;
+    totalPuntos: number;
+    usuarios: number;
+    movimientosRevisados: number;
+    truncated: boolean;
+  };
+};
+
+function mexicoDayKey(date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function shiftMexicoDayKey(dayKey: string, deltaDays: number): string {
+  const [year, month, day] = dayKey.split("-").map(Number);
+  const shifted = new Date(Date.UTC(year, month - 1, day) + deltaDays * 86_400_000);
+  return shifted.toISOString().slice(0, 10);
+}
+
+export function getMexicoPointsReportDefaults(now = new Date()): {
+  today: string;
+  from: string;
+  to: string;
+} {
+  const today = mexicoDayKey(now);
+  return {
+    today,
+    from: shiftMexicoDayKey(today, -29),
+    to: today,
+  };
+}
+
+export async function getPointsRedemptionsReport(params: {
+  from?: string;
+  to?: string;
+  limit?: number;
+  cursor?: string;
+}): Promise<PointsRedemptionsReport> {
+  const search = new URLSearchParams();
+  if (params.from) search.set("from", params.from);
+  if (params.to) search.set("to", params.to);
+  if (params.limit) search.set("limit", String(params.limit));
+  if (params.cursor) search.set("cursor", params.cursor);
+  const qs = search.toString();
+  const data = await apiFetch<{
+    items: PointsRedemptionRow[];
+    summary?: { pageCount: number; pagePoints: number };
+    pagination?: { nextCursor?: string | null; hasMore?: boolean };
+  }>(
+    `/api/loyalty/admin/reports/redemptions${qs ? `?${qs}` : ""}`,
+    { method: "GET" },
+    { local: true },
+  );
+
+  return {
+    items: data.items ?? [],
+    summary: data.summary ?? {
+      pageCount: data.items?.length ?? 0,
+      pagePoints: 0,
+    },
+    nextCursor: data.pagination?.nextCursor ?? null,
+    hasMore: data.pagination?.hasMore ?? false,
+  };
+}
+
+export async function getPointsTopBalancesReport(limit = 20): Promise<{
+  items: PointsBalanceRow[];
+}> {
+  const search = new URLSearchParams();
+  search.set("limit", String(limit));
+  return apiFetch(
+    `/api/loyalty/admin/reports/top-balances?${search.toString()}`,
+    { method: "GET" },
+    { local: true },
+  );
+}
+
+export async function getPointsTopEarnersReport(params: {
+  day: string;
+  limit?: number;
+}): Promise<PointsTopEarnersReport> {
+  const search = new URLSearchParams();
+  search.set("day", params.day);
+  if (params.limit) search.set("limit", String(params.limit));
+  const data = await apiFetch<PointsTopEarnersReport>(
+    `/api/loyalty/admin/reports/top-earners?${search.toString()}`,
+    { method: "GET" },
+    { local: true },
+  );
+
+  return {
+    items: data.items ?? [],
+    summary: data.summary,
+  };
+}

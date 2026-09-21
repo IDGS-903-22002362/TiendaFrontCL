@@ -1,4 +1,5 @@
 import type { FulfillmentMethod, PickupContact } from "@/lib/api/pickup";
+import type { FieraPointsRequest } from "@/lib/types";
 
 const CHECKOUT_DRAFT_STORAGE_KEY = "tiendafront_checkout_draft";
 const DRAFT_VERSION = 1;
@@ -11,6 +12,7 @@ export type PersistedCheckoutDraft = {
   checkoutValues: unknown;
   selectedPickupLocationId: string;
   pickupContact: PickupContact;
+  fieraPoints?: FieraPointsRequest;
   savedAt: number;
 };
 

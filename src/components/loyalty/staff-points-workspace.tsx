@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -147,6 +148,14 @@ export function StaffPointsWorkspace() {
                 El lector está activo en todas las pantallas de personal. Escanea
                 el QR del cliente; nunca captures su identificador manualmente.
               </p>
+              {role === "ADMIN" || role === "SUPER_ADMIN" ? (
+                <Link
+                  href="/admin/puntos/reportes"
+                  className="mt-3 inline-flex text-sm font-medium text-white underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                >
+                  Ver informes de canjes y rankings
+                </Link>
+              ) : null}
             </div>
           </div>
         </div>

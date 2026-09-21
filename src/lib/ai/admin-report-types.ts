@@ -13,6 +13,9 @@ export type AdminReportValueFormat =
 export type AdminReportTextKind =
   | "observacion"
   | "inferencia"
+  | "recomendacion"
+  | "prediccion"
+  | "simulacion"
   | "conclusion"
   | "contexto";
 
@@ -75,7 +78,79 @@ export type AdminReportBlockType =
   | "recommendations"
   | "warning"
   | "forecast"
-  | "anomaly";
+  | "anomaly"
+  | "insight"
+  | "scenario"
+  | "comparison"
+  | "diagram"
+  | "segment";
+
+export type AdminInsightPriority =
+  | "critical"
+  | "high"
+  | "medium"
+  | "low"
+  | "opportunity";
+
+export type AdminEvidenceLevel = "high" | "medium" | "limited";
+export type AdminInsightClassification =
+  | "observed"
+  | "inference"
+  | "recommendation"
+  | "prediction"
+  | "simulation";
+
+export type AdminReportMetricValue = {
+  label: string;
+  value: number;
+  format?: AdminReportValueFormat;
+  status?: "observed" | "forecast" | "simulated";
+};
+
+export type AdminComparisonOption = {
+  name: string;
+  description: string;
+  evidence: AdminEvidenceLevel;
+  advantages: string[];
+  risks: string[];
+  expectedDirection: string;
+  requirements: string[];
+};
+
+export type AdminDiagramNode = {
+  id: string;
+  label: string;
+  value?: number;
+  format?: AdminReportValueFormat;
+  classification?: "observed" | "inference";
+  evidence?: AdminEvidenceLevel;
+};
+
+export type AdminDiagramEdge = {
+  from: string;
+  to: string;
+  label?: string;
+  rate?: number;
+};
+
+export type AdminSegmentItem = {
+  label: string;
+  segment: string;
+  score?: number;
+  evidence: AdminEvidenceLevel;
+  metrics: AdminReportMetricValue[];
+};
+
+export type AdminReportSource = {
+  id: string;
+  label: string;
+  period?: string;
+  filters?: string[];
+  observedAt: string;
+  freshness: "fresh" | "partial" | "stale";
+  coverage: "complete" | "partial";
+  note?: string;
+};
 
 export type AdminReportBlock = {
   type: AdminReportBlockType;
@@ -106,6 +181,35 @@ export type AdminReportBlock = {
   observed?: number;
   expected?: string;
   explanation?: string;
+  /** Trazabilidad segura hacia report.sourceMetadata. */
+  sourceIds?: string[];
+  /** Bloque insight. */
+  findingId?: string;
+  summary?: string;
+  classification?: AdminInsightClassification;
+  priority?: AdminInsightPriority;
+  evidence?: AdminEvidenceLevel;
+  change?: number;
+  limitations?: string[];
+  /** Bloque scenario. */
+  scenarioType?: "pessimistic" | "base" | "optimistic" | "custom";
+  status?: "simulated";
+  baseline?: AdminReportMetricValue[];
+  result?: AdminReportMetricValue[];
+  assumptions?: string[];
+  /** Bloque comparison. */
+  options?: AdminComparisonOption[];
+  recommendedOption?: string;
+  recommendationReason?: string;
+  /** Bloque diagram. */
+  diagramType?: "flow" | "funnel" | "cause-tree";
+  nodes?: AdminDiagramNode[];
+  edges?: AdminDiagramEdge[];
+  /** Bloque segment. */
+  segmentType?: "product" | "customer" | "cohort";
+  methodology?: string;
+  thresholds?: string[];
+  segmentItems?: AdminSegmentItem[];
 };
 
 export type AdminReport = {
@@ -114,6 +218,7 @@ export type AdminReport = {
   blocks: AdminReportBlock[];
   /** Siguientes preguntas sugeridas segun lo que se acaba de analizar. */
   suggestedQuestions?: string[];
+  sourceMetadata?: AdminReportSource[];
 };
 
 export type AdminReportToolCall = {
@@ -142,6 +247,12 @@ export type AdminReportTrace = {
   reachedToolLimit: boolean;
   model: string;
   durationMs: number;
+  totalAgentDuration: number;
+  geminiDuration: number;
+  toolDuration: number;
+  numberOfToolCalls: number;
+  slowestTools: Array<{ label: string; durationMs: number; success: boolean }>;
+  sourceTimestamps: string[];
   timeZone: string;
   forecasts?: AdminReportForecastTrace[];
   anomaliesDetected?: number;
