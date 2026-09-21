@@ -138,7 +138,6 @@ export function FieraPointsPayment({
             </p>
           ) : null}
           <p id="fiera-points-help">
-            El backend confirmará tu saldo antes de reservar los puntos. Solo el remanente se enviará a Stripe.
           </p>
         </div>
       </div>

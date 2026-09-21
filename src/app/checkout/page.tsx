@@ -140,7 +140,6 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { EmptyState } from "@/components/storefront/shared/empty-state";
 import { Breadcrumbs } from "@/components/storefront/shared/breadcrumbs";
-import { PaymentMethodStrip } from "@/components/storefront/shared/payment-method-strip";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/storefront";
 
@@ -1887,7 +1886,7 @@ const ACCEPTED_PAYMENT_BRANDS = [
 ] as const;
 
 const PAYMENT_METHODS_NOTICE =
-  "Stripe muestra tarjeta, Link, Apple Pay y Google Pay según tu dispositivo, navegador y banco. Si no ves una opción, prueba otro método o navegador compatible.";
+  "Link, Apple Pay y Google Pay según tu dispositivo, navegador y banco. Si no ves una opción, prueba otro método o navegador compatible.";
 
 const MSI_NOTICE =
   "Meses sin intereses dependen de la tarjeta y el banco participante. Stripe mostrará los planes disponibles; no calculamos cuotas en la tienda.";
@@ -3018,12 +3017,6 @@ export default function CheckoutPage() {
               onRecoverableDeliveryError={handleRecoverableDeliveryError}
             />
           )}
-
-          <PaymentMethodStrip
-            className="mt-6"
-            title="Métodos de pago disponibles"
-            description="Aceptamos tarjetas, SPEI y billeteras digitales para el cierre del pago, elige el que mejor te convenga"
-          />
         </div>
 
         <div className="lg:sticky lg:top-[calc(var(--storefront-header-current-height,var(--storefront-header-desktop-height))+1.5rem)]">

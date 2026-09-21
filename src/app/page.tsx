@@ -99,10 +99,10 @@ export default async function Home() {
 
   const collectionIsPersonalizable = isPersonalizableProduct(collectionProduct);
   const collectionTitle = collectionIsPersonalizable
-    ? "Personaliza la prenda oficial"
+    ? "JERSEY LEON OFICIAL"
     : "Colección oficial";
   const collectionDescription = collectionIsPersonalizable
-    ? "La personalización sigue conectada al PDP y al carrito actual, pero ahora entra en una composición más limpia, más directa y más centrada en la pieza."
+    ? "La personalización disponible"
     : "Descubre nuestro nuevo lanzamiento dando clic en 'Ver colección', adquierela y luce los colores esmeralda.";
 
   return (
