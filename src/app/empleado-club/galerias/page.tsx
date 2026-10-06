@@ -11,7 +11,7 @@ import {
     type GalleryMediaType,
 } from "@/lib/api/gallery-media";
 import { getApiErrorMessage } from "@/lib/api/errors";
-import { Plus, RefreshCw, X, RotateCcw } from "lucide-react";
+import { Plus, RefreshCw, X, RotateCcw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     Table,
@@ -604,12 +604,47 @@ export default function EmpleadoClubGaleriaPage() {
 
     // Eliminar galería
     const handleDelete = async (id: string) => {
-        if (!confirm("¿Eliminar esta galería? Esta acción no se puede deshacer.")) return;
+        if (!confirm("¿Desactivar esta galería? Podrás reactivarla o eliminarla por completo después.")) return;
         try {
             await galeriaApi.deleteGallery(id);
             if (selectedGaleriaId === id) setSelectedGaleriaId("");
-            toast({ title: "Galería eliminada" });
+            toast({ title: "Galería desactivada" });
             void loadGalerias();
+        } catch (error) {
+            toast({
+                variant: "destructive",
+                title: "Error al desactivar",
+                description: getApiErrorMessage(error),
+            });
+        }
+    };
+
+    const handlePermanentDelete = async (galeria: Galeria) => {
+        const confirmed = confirm(
+            `¿Eliminar permanentemente "${galeria.descripcion || "esta galería"}"?\n\nSe borrarán las fotos, videos y el registro. Esta acción no se puede deshacer.`,
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            await galeriaApi.permanentlyDelete(galeria.id);
+
+            if (selectedGaleriaId === galeria.id) {
+                setSelectedGaleriaId("");
+            }
+
+            if (editingGaleriaId === galeria.id) {
+                setIsDialogOpen(false);
+                setEditingGaleriaId(null);
+            }
+
+            toast({
+                title: "Galería eliminada",
+                description: "Se eliminó permanentemente de la base de datos y de Storage.",
+            });
+            await loadGalerias();
         } catch (error) {
             toast({
                 variant: "destructive",
@@ -802,20 +837,32 @@ export default function EmpleadoClubGaleriaPage() {
                                                         size="icon"
                                                         className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                                                         onClick={() => void handleDelete(gal.id)}
+                                                        title="Desactivar galería"
                                                     >
                                                         <X className="h-4 w-4" />
                                                     </Button>
                                                 ) : (
-                                                    // Si está inactiva → botón de reactivar (verde)
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="h-8 px-2 text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
-                                                        onClick={() => void handleReactivate(gal.id)}
-                                                    >
-                                                        <RotateCcw className="h-4 w-4 mr-1" />
-                                                        Reactivar
-                                                    </Button>
+                                                    <>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="h-8 px-2 text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
+                                                            onClick={() => void handleReactivate(gal.id)}
+                                                            title="Reactivar galería"
+                                                        >
+                                                            <RotateCcw className="h-4 w-4 mr-1" />
+                                                            Reactivar
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                                            onClick={() => void handlePermanentDelete(gal)}
+                                                            title="Eliminar permanentemente"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </>
                                                 )}
                                             </div>
                                         </TableCell>

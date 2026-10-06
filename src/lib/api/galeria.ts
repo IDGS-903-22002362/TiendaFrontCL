@@ -122,6 +122,19 @@ export const galeriaApi = {
         return response.data;
     },
 
+    async permanentlyDelete(id: string) {
+        const response = await apiFetch<
+            ApiSuccess<{ id: string; deletedMediaCount: number }>
+        >(
+            `/api/galeria/${id}/permanente`,
+            {
+                method: "DELETE",
+            },
+            { local: true },
+        );
+        return response.data;
+    },
+
     async reactivate(id: string) {
         const response = await apiFetch<ApiSuccess<Galeria>>(
             `/api/galeria/${id}/reactivar`,
