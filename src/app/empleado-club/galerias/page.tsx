@@ -5,7 +5,8 @@ import { galeriaApi } from "@/lib/api/galeria";
 import {
     ALLOWED_IMAGE_TYPES,
     ALLOWED_VIDEO_TYPES,
-    uploadAndRegisterGalleryMedia,
+    MAX_IMAGE_FILES_PER_REQUEST,
+    MAX_VIDEO_FILES_PER_REQUEST,
     validateGalleryFile,
     type GalleryMediaType,
 } from "@/lib/api/gallery-media";
@@ -42,6 +43,15 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { DialogDescription } from "@/components/ui/dialog";
+import {
+    Pagination,
+    PaginationContent,
+    PaginationEllipsis,
+    PaginationItem,
+    PaginationLink,
+    PaginationNext,
+    PaginationPrevious,
+} from "@/components/ui/pagination";
 
 // Interfaz local de galería (ajusta según tu API)
 export interface Galeria {
@@ -91,6 +101,31 @@ function normalizeSearch(value: string): string {
         .trim();
 }
 
+function getVisiblePages(current: number, total: number): Array<number | "ellipsis"> {
+    if (total <= 7) {
+        return Array.from({ length: total }, (_, index) => index + 1);
+    }
+
+    const pages: Array<number | "ellipsis"> = [1];
+    const start = Math.max(2, current - 1);
+    const end = Math.min(total - 1, current + 1);
+
+    if (start > 2) {
+        pages.push("ellipsis");
+    }
+
+    for (let page = start; page <= end; page += 1) {
+        pages.push(page);
+    }
+
+    if (end < total - 1) {
+        pages.push("ellipsis");
+    }
+
+    pages.push(total);
+    return pages;
+}
+
 // Tipos para archivos pendientes
 type PendingImageUpload = {
     id: string;
@@ -129,6 +164,8 @@ export default function EmpleadoClubGaleriaPage() {
     const [pendingVideoUploads, setPendingVideoUploads] = useState<PendingVideoUpload[]>([]);
     const [pendingDeletedVideos, setPendingDeletedVideos] = useState<string[]>([]);
     const [statusFilter, setStatusFilter] = useState<"todos" | "activo" | "inactivo">("todos");
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
 
     const { toast } = useToast();
 
@@ -170,14 +207,38 @@ export default function EmpleadoClubGaleriaPage() {
     // Filtrar galerías para la tabla (cuando hay selección, mostrar solo esa)
     const filteredGalerias = useMemo(() => {
         const query = normalizeSearch(searchQuery);
-        return galerias.filter((g) => {
-            if (selectedGaleriaId && g.id !== selectedGaleriaId) return false;
-            if (query && !normalizeSearch(g.descripcion).includes(query)) return false;
-            if (statusFilter === "activo" && !g.estatus) return false;
-            if (statusFilter === "inactivo" && g.estatus) return false;
-            return true;
-        });
+        return galerias
+            .filter((g) => {
+                if (selectedGaleriaId && g.id !== selectedGaleriaId) return false;
+                if (query && !normalizeSearch(g.descripcion).includes(query)) return false;
+                if (statusFilter === "activo" && !g.estatus) return false;
+                if (statusFilter === "inactivo" && g.estatus) return false;
+                return true;
+            })
+            .sort((a, b) => {
+                const aTime = parseDate(a.createdAt)?.getTime() ?? 0;
+                const bTime = parseDate(b.createdAt)?.getTime() ?? 0;
+                return bTime - aTime;
+            });
     }, [searchQuery, galerias, selectedGaleriaId, statusFilter]);
+
+    const totalPages = Math.max(1, Math.ceil(filteredGalerias.length / itemsPerPage));
+    const safeCurrentPage = Math.min(currentPage, totalPages);
+
+    const paginatedGalerias = useMemo(() => {
+        const start = (safeCurrentPage - 1) * itemsPerPage;
+        return filteredGalerias.slice(start, start + itemsPerPage);
+    }, [filteredGalerias, safeCurrentPage]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, selectedGaleriaId, statusFilter]);
+
+    useEffect(() => {
+        if (currentPage > totalPages) {
+            setCurrentPage(totalPages);
+        }
+    }, [currentPage, totalPages]);
 
     // Limpiar cambios de archivos
     const clearPendingChanges = () => {
@@ -241,20 +302,24 @@ export default function EmpleadoClubGaleriaPage() {
         endProgress: number;
     }) => {
         const { targetId, files, tipo, startProgress, endProgress } = params;
-        const total = files.length;
+        const chunkSize =
+            tipo === "imagen" ? MAX_IMAGE_FILES_PER_REQUEST : MAX_VIDEO_FILES_PER_REQUEST;
+        const chunks: File[][] = [];
 
-        for (const [index, file] of files.entries()) {
-            await uploadAndRegisterGalleryMedia({
-                galeriaId: targetId,
-                file,
-                tipo,
-                onProgress: (fileProgress) => {
-                    const batchProgress = (index + fileProgress / 100) / total;
-                    const nextProgress =
-                        startProgress + batchProgress * (endProgress - startProgress);
-                    setSavingProgress(Math.round(nextProgress));
-                },
-            });
+        for (let index = 0; index < files.length; index += chunkSize) {
+            chunks.push(files.slice(index, index + chunkSize));
+        }
+
+        for (const [index, chunk] of chunks.entries()) {
+            if (tipo === "imagen") {
+                await galeriaApi.uploadImages(targetId, chunk);
+            } else {
+                await galeriaApi.uploadVideos(targetId, chunk);
+            }
+
+            const nextProgress =
+                startProgress + ((index + 1) / chunks.length) * (endProgress - startProgress);
+            setSavingProgress(Math.round(nextProgress));
         }
 
         setSavingProgress(endProgress);
@@ -702,7 +767,7 @@ export default function EmpleadoClubGaleriaPage() {
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                filteredGalerias.map((gal) => (
+                                paginatedGalerias.map((gal) => (
                                     <TableRow key={gal.id}>
                                         <TableCell className="font-medium max-w-xs truncate">
                                             {gal.descripcion || "Sin descripción"}
@@ -760,6 +825,68 @@ export default function EmpleadoClubGaleriaPage() {
                         </TableBody>
                     </Table>
                 </div>
+
+                {filteredGalerias.length > 0 && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t">
+                        <p className="text-sm text-muted-foreground">
+                            Mostrando {(safeCurrentPage - 1) * itemsPerPage + 1} -{" "}
+                            {Math.min(safeCurrentPage * itemsPerPage, filteredGalerias.length)} de{" "}
+                            {filteredGalerias.length} galerías
+                        </p>
+                        {totalPages > 1 && (
+                            <Pagination>
+                                <PaginationContent>
+                                    <PaginationItem>
+                                        <PaginationPrevious
+                                            href="#"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                if (safeCurrentPage > 1) {
+                                                    setCurrentPage(safeCurrentPage - 1);
+                                                }
+                                            }}
+                                            className={safeCurrentPage === 1 ? "pointer-events-none opacity-50" : ""}
+                                        />
+                                    </PaginationItem>
+                                    {getVisiblePages(safeCurrentPage, totalPages).map((page, index) => (
+                                        <PaginationItem key={page === "ellipsis" ? `ellipsis-${index}` : page}>
+                                            {page === "ellipsis" ? (
+                                                <PaginationEllipsis />
+                                            ) : (
+                                                <PaginationLink
+                                                    href="#"
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        setCurrentPage(page);
+                                                    }}
+                                                    isActive={page === safeCurrentPage}
+                                                >
+                                                    {page}
+                                                </PaginationLink>
+                                            )}
+                                        </PaginationItem>
+                                    ))}
+                                    <PaginationItem>
+                                        <PaginationNext
+                                            href="#"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                if (safeCurrentPage < totalPages) {
+                                                    setCurrentPage(safeCurrentPage + 1);
+                                                }
+                                            }}
+                                            className={
+                                                safeCurrentPage === totalPages
+                                                    ? "pointer-events-none opacity-50"
+                                                    : ""
+                                            }
+                                        />
+                                    </PaginationItem>
+                                </PaginationContent>
+                            </Pagination>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Diálogo de creación/edición */}
@@ -840,7 +967,7 @@ export default function EmpleadoClubGaleriaPage() {
                             </div>
                             {!editingGaleriaId && pendingImageUploads.length === 0 && (
                                 <p className="text-xs text-muted-foreground">
-                                    Puedes seleccionar imágenes ahora. Se subirán automáticamente al guardar la galería.
+                                    JPEG, PNG, WEBP o GIF. Máximo 20 MB. Se subirán al guardar la galería.
                                 </p>
                             )}
                         </div>
@@ -896,7 +1023,7 @@ export default function EmpleadoClubGaleriaPage() {
                             </div>
                             {!editingGaleriaId && pendingVideoUploads.length === 0 && (
                                 <p className="text-xs text-muted-foreground">
-                                    Puedes seleccionar videos ahora. Se subirán automáticamente al guardar la galería.
+                                    MP4, MOV o AVI. Máximo 30 MB. Se subirán al guardar la galería.
                                 </p>
                             )}
                         </div>
