@@ -21,6 +21,102 @@ export type BeneficioDestinoModulo = (typeof BENEFICIO_DESTINOS)[number];
 
 export type BeneficioMediaTipo = "imagen" | "video";
 
+export const BENEFICIO_TIPOS = ["estandar", "minijuego"] as const;
+export type BeneficioTipo = (typeof BENEFICIO_TIPOS)[number];
+
+export const MINIJUEGO_TIPOS = [
+    "ruleta",
+    "cofre",
+    "rasca",
+    "cartas",
+    "sobre",
+] as const;
+export type MinijuegoTipo = (typeof MINIJUEGO_TIPOS)[number];
+
+export const PRIZE_TYPES = [
+    "points",
+    "coupon",
+    "physical",
+    "digital",
+    "none",
+] as const;
+export type PrizeType = (typeof PRIZE_TYPES)[number];
+
+export type MinijuegoVisibilidad = "publico" | "restringido";
+
+export type GanadoresEspecialAdmin = {
+    premio: string;
+    maxGanadores: number | null;
+    totalGanadores: number;
+    ganadores: Array<{
+        uid: string;
+        email: string;
+        telefono: string;
+    }>;
+};
+
+export type GanadorPremioEspecial = {
+    id: string;
+    playId: string;
+    minijuegoId: string;
+    beneficioId: string;
+    beneficioTitulo: string;
+    uid: string;
+    nombre: string;
+    email: string;
+    telefono: string;
+    premioId: string;
+    premioNombre: string;
+    createdAt: string;
+};
+
+export type PremioMinijuego = {
+    id?: string;
+    nombre: string;
+    tipo: PrizeType;
+    valor?: number;
+    stock?: number | null;
+    weight?: number;
+    descripcion?: string;
+    imagenUrl?: string;
+    color?: string;
+    especial?: boolean;
+    maxGanadores?: number;
+};
+
+export type MinijuegoAdmin = {
+    id: string;
+    tipo: MinijuegoTipo;
+    estatus: boolean;
+    fechaInicio?: string;
+    fechaFin?: string;
+    intentosPorUsuario: number;
+    audiencia: {
+        visibilidad: MinijuegoVisibilidad;
+        usuariosPermitidos: string[];
+    };
+    premios: PremioMinijuego[];
+};
+
+export type GuardarMinijuegoDTO = {
+    beneficio: {
+        titulo: string;
+        descripcion: string;
+        estatus: boolean;
+    };
+    minijuego: {
+        tipo: MinijuegoTipo;
+        fechaInicio?: string | null;
+        fechaFin?: string | null;
+        intentosPorUsuario: number;
+        audiencia: {
+            visibilidad: MinijuegoVisibilidad;
+            usuariosPermitidos: string[];
+        };
+    };
+    premios: PremioMinijuego[];
+};
+
 export const MAX_BENEFICIO_IMAGENES = 10;
 export const MAX_BENEFICIO_PUNTOS_RECOMPENSA = 10_000;
 
@@ -38,6 +134,12 @@ export type Beneficio = {
     mediaTipo?: BeneficioMediaTipo;
     redireccion?: BeneficioRedireccion;
     puntosRecompensa?: number;
+    tipo?: BeneficioTipo;
+    minijuegoId?: string;
+    minijuegoTipo?: MinijuegoTipo;
+    minijuegoVisibilidad?: MinijuegoVisibilidad | null;
+    usuariosPermitidosCount?: number;
+    minijuego?: MinijuegoAdmin;
     estatus: boolean;
     createdAt?: string | Date | { _seconds: number; _nanoseconds: number } | { seconds: number; nanoseconds: number };
     updatedAt?: string | Date | { _seconds: number; _nanoseconds: number } | { seconds: number; nanoseconds: number };
@@ -57,7 +159,30 @@ export type ActualizarBeneficioDTO = {
     redireccion?: BeneficioRedireccion;
     puntosRecompensa?: number;
     estatus?: boolean;
+    tipo?: "estandar";
 };
+
+export const MINIJUEGO_TIPO_LABELS: Record<MinijuegoTipo, string> = {
+    ruleta: "Ruleta",
+    cofre: "Cofre sorpresa",
+    rasca: "Rasca y gana",
+    cartas: "Elige una carta",
+    sobre: "Sobre sorpresa",
+};
+
+export const PRIZE_TYPE_LABELS: Record<PrizeType, string> = {
+    points: "Puntos",
+    coupon: "Cupón",
+    physical: "Físico",
+    digital: "Digital",
+    none: "Ninguno",
+};
+
+export function resolveBeneficioTipo(
+    beneficio: Pick<Beneficio, "tipo">,
+): BeneficioTipo {
+    return beneficio.tipo === "minijuego" ? "minijuego" : "estandar";
+}
 
 export const BENEFICIO_DESTINO_LABELS: Record<BeneficioDestinoModulo, string> = {
     none: "Sin redirección",
@@ -110,9 +235,29 @@ export function resolveBeneficioImagenes(beneficio: Pick<Beneficio, "imagen" | "
 }
 
 export const beneficiosApi = {
+    async getGanadoresEspecial(id: string) {
+        const response = await apiFetch<ApiSuccess<GanadoresEspecialAdmin>>(
+            `/api/minijuegos/${id}/ganadores-especial`,
+            { method: "GET" },
+            { local: true },
+        );
+
+        return response.data;
+    },
+
+    async listGanadoresEspecial() {
+        const response = await apiFetch<ApiSuccess<GanadorPremioEspecial[]>>(
+            "/api/beneficios/ganadores-especial",
+            { method: "GET" },
+            { local: true },
+        );
+
+        return response.data || [];
+    },
+
     async getAll() {
         const response = await apiFetch<ApiSuccess<Beneficio[]>>(
-            "/api/beneficios",
+            "/api/beneficios?admin=1",
             { method: "GET" },
             { local: true },
         );
@@ -122,7 +267,7 @@ export const beneficiosApi = {
 
     async getById(id: string) {
         const response = await apiFetch<ApiSuccess<Beneficio>>(
-            `/api/beneficios/${id}`,
+            `/api/beneficios/${id}?admin=1`,
             { method: "GET" },
             { local: true },
         );
@@ -191,6 +336,53 @@ export const beneficiosApi = {
         mediaTipo: BeneficioMediaTipo,
     ) {
         const beneficio = await this.create(payload);
+
+        try {
+            if (mediaTipo === "imagen") {
+                const result = await this.uploadImages(beneficio.id, files);
+                return result.beneficio;
+            }
+
+            const result = await this.uploadVideo(beneficio.id, files[0]);
+            return result.beneficio;
+        } catch (error) {
+            await this.delete(beneficio.id).catch(() => undefined);
+            throw error;
+        }
+    },
+
+    async createMinijuego(payload: GuardarMinijuegoDTO) {
+        const response = await apiFetch<ApiSuccess<Beneficio>>(
+            "/api/beneficios/minijuego",
+            {
+                method: "POST",
+                body: JSON.stringify(payload),
+            },
+            { local: true },
+        );
+
+        return response.data;
+    },
+
+    async updateMinijuego(id: string, payload: GuardarMinijuegoDTO) {
+        const response = await apiFetch<ApiSuccess<Beneficio>>(
+            `/api/beneficios/${id}/minijuego`,
+            {
+                method: "PUT",
+                body: JSON.stringify(payload),
+            },
+            { local: true },
+        );
+
+        return response.data;
+    },
+
+    async createMinijuegoWithMedia(
+        payload: GuardarMinijuegoDTO,
+        files: File[],
+        mediaTipo: BeneficioMediaTipo,
+    ) {
+        const beneficio = await this.createMinijuego(payload);
 
         try {
             if (mediaTipo === "imagen") {
