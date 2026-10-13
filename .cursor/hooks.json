@@ -3,7 +3,7 @@
   "hooks": {
     "preToolUse": [
       {
-        "command": "node \"C:\\\\Users\\\\luisr\\\\.cursor\\\\skills\\\\impeccable\\\\scripts\\\\hook-before-edit.mjs\"",
+        "command": "cmd /c \"if exist .cursor\\skills\\impeccable\\scripts\\impeccable.cmd .cursor\\skills\\impeccable\\scripts\\impeccable.cmd hook-before-edit\"",
         "timeout": 5
       }
     ]

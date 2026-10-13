@@ -1,9 +1,23 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
+const productionApiOrigin =
+  "https://us-central1-e-comerce-leon.cloudfunctions.net";
+
+const configuredApiOrigin =
+  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/api\/?$/, "") ?? "";
+const configuredApiIsLocal =
+  configuredApiOrigin.startsWith("http://localhost") ||
+  configuredApiOrigin.startsWith("http://127.0.0.1");
 const apiBaseUrl =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/api\/?$/, "") ||
-  "http://localhost:3000";
+  process.env.NODE_ENV === "production"
+    ? !configuredApiOrigin || configuredApiIsLocal
+      ? productionApiOrigin
+      : configuredApiOrigin
+    : configuredApiOrigin || "http://localhost:3000";
+
+const localImageSource =
+  process.env.NODE_ENV === "production" ? "" : " http://localhost:3000";
 
 const baseSecurityHeaders = [
   {
@@ -27,7 +41,7 @@ const defaultCsp = [
   "object-src 'none'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://js.stripe.com https://www.gstatic.com https://www.google.com https://maps.googleapis.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "img-src 'self' data: blob: https: http://localhost:3000",
+  `img-src 'self' data: blob: https:${localImageSource}`,
   "font-src 'self' data: https://fonts.gstatic.com",
   `connect-src 'self' ${apiBaseUrl} https://*.googleapis.com https://api.stripe.com https://js.stripe.com https://hooks.stripe.com https://r.stripe.com https://m.stripe.com https://pay.google.com https://*.cloudfunctions.net https://*.firebaseapp.com https://*.firebaseio.com wss://*.firebaseio.com https://www.google.com https://www.gstatic.com`,
   "frame-src 'self' https://apis.google.com https://js.stripe.com https://hooks.stripe.com https://pay.google.com https://www.google.com https://*.firebaseapp.com",
@@ -135,12 +149,16 @@ const nextConfig: NextConfig = {
         port: "",
         pathname: "/**",
       },
-      {
-        protocol: "http",
-        hostname: "localhost",
-        port: "3000",
-        pathname: "/**",
-      },
+      ...(process.env.NODE_ENV === "production"
+        ? []
+        : [
+            {
+              protocol: "http" as const,
+              hostname: "localhost",
+              port: "3000",
+              pathname: "/**",
+            },
+          ]),
     ],
   },
 };

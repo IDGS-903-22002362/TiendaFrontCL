@@ -6,6 +6,20 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Ban, Film, Gift, ImageIcon, Link2, Plus, RefreshCw, RotateCcw, Trash2, X } from "lucide-react";
 import { EntityPicker, type EntityOption } from "@/components/admin/entity-picker";
+import { BeneficioTypeSelect } from "@/components/beneficios/beneficio-type-select";
+import { MinigameFields } from "@/components/beneficios/minigame-fields";
+import {
+    defaultRoulettePointPrizes,
+    type PremioFormValue,
+} from "@/components/beneficios/minigame-prize-editor";
+import { RoulettePointsEditor } from "@/components/beneficios/roulette-points-editor";
+import { RouletteWinnersSection } from "@/components/beneficios/roulette-winners-section";
+import {
+    RouletteSpecialPrize,
+    emptySpecialPrize,
+    type SpecialPrizeForm,
+} from "@/components/beneficios/roulette-special-prize";
+import { MinigameVisibilityFields } from "@/components/beneficios/minigame-visibility-fields";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,15 +65,26 @@ import {
     MAX_BENEFICIO_IMAGENES,
     MAX_BENEFICIO_PUNTOS_RECOMPENSA,
     MAX_BENEFICIO_VIDEO_SIZE_BYTES,
+    MINIJUEGO_TIPO_LABELS,
     beneficiosApi,
     resolveBeneficioImagenes,
+    resolveBeneficioTipo,
+    type ActualizarBeneficioDTO,
     type Beneficio,
     type BeneficioDestinoModulo,
     type BeneficioMediaTipo,
     type BeneficioRedireccion,
+    type BeneficioTipo,
     type CrearBeneficioDTO,
-    type ActualizarBeneficioDTO,
+    type GanadoresEspecialAdmin,
+    type GuardarMinijuegoDTO,
+    type MinijuegoTipo,
+    type MinijuegoVisibilidad,
 } from "@/lib/api/beneficios";
+import {
+    datetimeLocalToIso,
+    isoToDatetimeLocal,
+} from "@/lib/beneficios/minijuego-form";
 import {
     Carousel,
     CarouselContent,
@@ -79,6 +104,16 @@ type FormState = {
     existingVideo?: string;
     redirectEnabled: boolean;
     redirectModulo: BeneficioDestinoModulo;
+    tipo: BeneficioTipo;
+    hadMinijuego: boolean;
+    minijuegoTipo: MinijuegoTipo;
+    fechaInicio: string;
+    fechaFin: string;
+    intentosPorUsuario: string;
+    minijuegoVisibilidad: MinijuegoVisibilidad;
+    usuariosPermitidos: Array<{ uid: string; nombre: string; email: string }>;
+    premios: PremioFormValue[];
+    premioEspecial: SpecialPrizeForm;
 };
 
 const EMPTY_FORM: FormState = {
@@ -90,6 +125,16 @@ const EMPTY_FORM: FormState = {
     existingImagenes: [],
     redirectEnabled: false,
     redirectModulo: "none",
+    tipo: "estandar",
+    hadMinijuego: false,
+    minijuegoTipo: "ruleta",
+    fechaInicio: "",
+    fechaFin: "",
+    intentosPorUsuario: "1",
+    minijuegoVisibilidad: "publico",
+    usuariosPermitidos: [],
+    premios: [],
+    premioEspecial: emptySpecialPrize(),
 };
 
 type PendingMediaUpload = {
@@ -183,6 +228,28 @@ function resolveRedirectLabel(beneficio: Beneficio): string {
     return BENEFICIO_DESTINO_LABELS[modulo] ?? modulo;
 }
 
+function resolveDestinoLabel(beneficio: Beneficio): string {
+    if (resolveBeneficioTipo(beneficio) !== "minijuego") {
+        return resolveRedirectLabel(beneficio);
+    }
+
+    const tipo = beneficio.minijuegoTipo;
+    return tipo ? MINIJUEGO_TIPO_LABELS[tipo] : "Minijuego";
+}
+
+function resolveVisibilidadLabel(beneficio: Beneficio): string {
+    if (resolveBeneficioTipo(beneficio) !== "minijuego") {
+        return "—";
+    }
+
+    if (beneficio.minijuegoVisibilidad === "restringido") {
+        const count = beneficio.usuariosPermitidosCount ?? 0;
+        return count === 1 ? "Solo pruebas · 1 usuario" : `Solo pruebas · ${count} usuarios`;
+    }
+
+    return "Público";
+}
+
 function buildRedireccion(form: FormState): BeneficioRedireccion | undefined {
     if (!form.redirectEnabled || form.redirectModulo === "none") {
         return { modulo: "none" };
@@ -221,6 +288,9 @@ function formFromBeneficio(beneficio: Beneficio): FormState {
 
     const redirectModulo = normalizeRedirectModulo(beneficio.redireccion?.modulo);
 
+    const tipo = resolveBeneficioTipo(beneficio);
+    const minijuego = beneficio.minijuego;
+
     return {
         titulo: beneficio.titulo,
         descripcion: beneficio.descripcion,
@@ -231,6 +301,205 @@ function formFromBeneficio(beneficio: Beneficio): FormState {
         existingVideo: beneficio.video,
         redirectEnabled: redirectModulo !== "none",
         redirectModulo,
+        tipo,
+        hadMinijuego: tipo === "minijuego",
+        minijuegoTipo: minijuego?.tipo ?? beneficio.minijuegoTipo ?? "ruleta",
+        fechaInicio: isoToDatetimeLocal(minijuego?.fechaInicio),
+        fechaFin: isoToDatetimeLocal(minijuego?.fechaFin),
+        intentosPorUsuario: String(minijuego?.intentosPorUsuario ?? 1),
+        minijuegoVisibilidad: minijuego?.audiencia.visibilidad ?? "publico",
+        usuariosPermitidos: (minijuego?.audiencia.usuariosPermitidos ?? []).map(
+            (uid) => ({ uid, nombre: "", email: "" }),
+        ),
+        ...splitRoulettePrizes(minijuego?.premios ?? []),
+    };
+}
+
+function splitRoulettePrizes(
+    premios: Array<{
+        id?: string;
+        nombre: string;
+        tipo: PremioFormValue["tipo"];
+        valor?: number;
+        stock?: number | null;
+        weight?: number;
+        descripcion?: string;
+        imagenUrl?: string;
+        especial?: boolean;
+        maxGanadores?: number;
+    }>,
+): Pick<FormState, "premios" | "premioEspecial"> {
+    const mapped: PremioFormValue[] = premios.map((premio, index) => ({
+        key: premio.id ?? `premio-${index}`,
+        id: premio.id,
+        nombre: premio.nombre,
+        tipo: premio.tipo,
+        valor: premio.valor != null ? String(premio.valor) : "",
+        stock: premio.stock != null ? String(premio.stock) : "",
+        weight: String(premio.weight ?? 1),
+        descripcion: premio.descripcion ?? "",
+        imagenUrl: premio.imagenUrl ?? "",
+        especial: premio.especial === true,
+    }));
+    const marked = mapped.find((premio) => premio.especial);
+    const inherited =
+        marked ?? mapped.find((premio) => premio.tipo !== "points");
+    if (!inherited) {
+        return { premios: mapped, premioEspecial: emptySpecialPrize() };
+    }
+
+    const source = premios[mapped.indexOf(inherited)];
+    const cap = source?.maxGanadores;
+
+    return {
+        premios: mapped.filter((premio) => premio !== inherited),
+        premioEspecial: {
+            id: inherited.id,
+            nombre: inherited.nombre,
+            descripcion: inherited.descripcion ?? "",
+            tipo: inherited.tipo === "points" ? "physical" : inherited.tipo,
+            stock: cap != null ? String(cap) : inherited.stock || "1",
+            weight: inherited.weight || "1",
+            imagenUrl: inherited.imagenUrl ?? "",
+        },
+    };
+}
+
+function pointPrizeSeed(
+    current: FormState,
+): Partial<Pick<FormState, "premios">> {
+    if (current.premios.length === 0) {
+        return { premios: defaultRoulettePointPrizes() };
+    }
+    return {};
+}
+
+function validateMinijuegoForm(form: FormState): string | null {
+    const intentos = Number.parseInt(form.intentosPorUsuario, 10);
+    if (!Number.isInteger(intentos) || intentos < 1 || intentos > 100) {
+        return "Los intentos por usuario deben estar entre 1 y 100.";
+    }
+
+    const inicio = datetimeLocalToIso(form.fechaInicio);
+    const fin = datetimeLocalToIso(form.fechaFin);
+    if (form.fechaInicio.trim() && !inicio) {
+        return "La fecha de inicio no es válida.";
+    }
+    if (form.fechaFin.trim() && !fin) {
+        return "La fecha de fin no es válida.";
+    }
+    if (inicio && fin && new Date(fin).getTime() < new Date(inicio).getTime()) {
+        return "La fecha de fin no puede ser anterior al inicio.";
+    }
+    if (form.minijuegoVisibilidad === "restringido" && form.usuariosPermitidos.length === 0) {
+        return "Selecciona al menos un usuario autorizado.";
+    }
+    if (form.premioEspecial.nombre.trim()) {
+        if (form.premioEspecial.descripcion.trim().length > 200) {
+            return "La descripción del premio especial es demasiado larga.";
+        }
+        const maximo = Number.parseInt(form.premioEspecial.stock, 10);
+        if (!Number.isInteger(maximo) || maximo < 0) {
+            return "Indica el máximo de ganadores del premio especial.";
+        }
+        const peso = Number.parseInt(form.premioEspecial.weight || "1", 10);
+        if (!Number.isInteger(peso) || peso < 1) {
+            return "El peso del premio especial debe ser un entero mayor a cero.";
+        }
+    }
+    const incluyeEspecial = Boolean(form.premioEspecial.nombre.trim());
+    if (form.premios.length === 0 && !incluyeEspecial) {
+        return "Agrega al menos un premio.";
+    }
+    if (form.premios.length + (incluyeEspecial ? 1 : 0) > 12) {
+        return "Un minijuego puede tener máximo 12 premios.";
+    }
+
+    for (const premio of form.premios) {
+        if (!premio.nombre.trim()) {
+            return "Cada premio necesita un nombre.";
+        }
+        if (premio.tipo === "points") {
+            const valor = Number.parseInt(premio.valor, 10);
+            if (!Number.isInteger(valor) || valor <= 0 || valor > MAX_BENEFICIO_PUNTOS_RECOMPENSA) {
+                return "Indica los puntos del premio.";
+            }
+        } else if (premio.valor.trim()) {
+            const valor = Number.parseInt(premio.valor, 10);
+            if (!Number.isInteger(valor) || valor < 0) {
+                return "El valor del premio no es válido.";
+            }
+        }
+
+        const weight = Number.parseInt(premio.weight || "1", 10);
+        if (!Number.isInteger(weight) || weight < 1) {
+            return "El peso del premio debe ser un entero mayor a cero.";
+        }
+        if (premio.stock.trim()) {
+            const stock = Number.parseInt(premio.stock, 10);
+            if (!Number.isInteger(stock) || stock < 0) {
+                return "El stock del premio no es válido.";
+            }
+        }
+    }
+
+    return null;
+}
+
+function buildMinijuegoPayload(
+    form: FormState,
+    titulo: string,
+    descripcion: string,
+): GuardarMinijuegoDTO {
+    return {
+        beneficio: {
+            titulo,
+            descripcion,
+            estatus: form.estatus,
+        },
+        minijuego: {
+            tipo: form.minijuegoTipo,
+            fechaInicio: datetimeLocalToIso(form.fechaInicio),
+            fechaFin: datetimeLocalToIso(form.fechaFin),
+            intentosPorUsuario: Number.parseInt(form.intentosPorUsuario, 10),
+            audiencia: {
+                visibilidad: form.minijuegoVisibilidad,
+                usuariosPermitidos: form.usuariosPermitidos.map((usuario) => usuario.uid),
+            },
+        },
+        premios: [
+            ...form.premios.map((premio) => {
+                const valor = premio.valor.trim() ? Number.parseInt(premio.valor, 10) : undefined;
+                const puntos = premio.tipo === "points";
+                return {
+                    ...(premio.id ? { id: premio.id } : {}),
+                    nombre: puntos && valor != null ? `${valor} puntos` : premio.nombre.trim(),
+                    tipo: premio.tipo,
+                    ...(valor != null ? { valor } : {}),
+                    stock: premio.stock.trim() ? Number.parseInt(premio.stock, 10) : null,
+                    weight: Number.parseInt(premio.weight || "1", 10),
+                };
+            }),
+            ...(form.premioEspecial.nombre.trim()
+                ? [
+                      {
+                          ...(form.premioEspecial.id ? { id: form.premioEspecial.id } : {}),
+                          nombre: form.premioEspecial.nombre.trim(),
+                          tipo: form.premioEspecial.tipo,
+                          ...(form.premioEspecial.descripcion.trim()
+                              ? { descripcion: form.premioEspecial.descripcion.trim() }
+                              : {}),
+                          ...(form.premioEspecial.imagenUrl.trim()
+                              ? { imagenUrl: form.premioEspecial.imagenUrl.trim() }
+                              : {}),
+                          stock: Number.parseInt(form.premioEspecial.stock, 10),
+                          maxGanadores: Number.parseInt(form.premioEspecial.stock, 10),
+                          weight: Number.parseInt(form.premioEspecial.weight || "1", 10),
+                          especial: true,
+                      },
+                  ]
+                : []),
+        ],
     };
 }
 
@@ -276,6 +545,8 @@ function sanitizePuntosRecompensaInput(value: string): string {
 
 export default function EmpleadoClubBeneficiosPage() {
     const [beneficios, setBeneficios] = useState<Beneficio[]>([]);
+    const [ganadoresEspecial, setGanadoresEspecial] = useState<GanadoresEspecialAdmin | null>(null);
+    const [isLoadingGanadores, setIsLoadingGanadores] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedBeneficioId, setSelectedBeneficioId] = useState("");
     const [estatusFilter, setEstatusFilter] = useState<"todos" | "activo" | "inactivo">("todos");
@@ -311,6 +582,23 @@ export default function EmpleadoClubBeneficiosPage() {
             });
         } finally {
             setIsLoading(false);
+        }
+    }, [toast]);
+
+    const loadGanadoresEspecial = useCallback(async (minijuegoId: string) => {
+        setIsLoadingGanadores(true);
+
+        try {
+            setGanadoresEspecial(await beneficiosApi.getGanadoresEspecial(minijuegoId));
+        } catch (error) {
+            setGanadoresEspecial(null);
+            toast({
+                variant: "destructive",
+                title: "Error al cargar ganadores",
+                description: getApiErrorMessage(error),
+            });
+        } finally {
+            setIsLoadingGanadores(false);
         }
     }, [toast]);
 
@@ -484,6 +772,7 @@ export default function EmpleadoClubBeneficiosPage() {
     const resetForm = () => {
         setEditingBeneficioId(null);
         setFormData(EMPTY_FORM);
+        setGanadoresEspecial(null);
         clearPendingMedia();
     };
 
@@ -615,7 +904,13 @@ export default function EmpleadoClubBeneficiosPage() {
 
         try {
             const detail = await beneficiosApi.getById(beneficio.id);
-            setFormData(formFromBeneficio(detail));
+            const nextForm = formFromBeneficio(detail);
+            setFormData(nextForm);
+            if (nextForm.tipo === "minijuego") {
+                await loadGanadoresEspecial(detail.minijuegoId ?? detail.id);
+            } else {
+                setGanadoresEspecial(null);
+            }
         } catch (error) {
             toast({
                 variant: "destructive",
@@ -653,8 +948,20 @@ export default function EmpleadoClubBeneficiosPage() {
             return;
         }
 
+        if (formData.tipo === "minijuego") {
+            const minijuegoError = validateMinijuegoForm(formData);
+            if (minijuegoError) {
+                toast({
+                    variant: "destructive",
+                    title: "Minijuego incompleto",
+                    description: minijuegoError,
+                });
+                return;
+            }
+        }
+
         const redirectError = validateRedirectForm(formData);
-        if (redirectError) {
+        if (formData.tipo !== "minijuego" && redirectError) {
             toast({
                 variant: "destructive",
                 title: "Redirección incompleta",
@@ -696,8 +1003,51 @@ export default function EmpleadoClubBeneficiosPage() {
         setIsSaving(true);
 
         try {
-            if (editingBeneficioId) {
+            if (formData.tipo === "minijuego") {
+                const payload = buildMinijuegoPayload(formData, titulo, descripcion);
+                const beneficioId = editingBeneficioId
+                    ? editingBeneficioId
+                    : null;
+
+                if (beneficioId) {
+                    await beneficiosApi.updateMinijuego(beneficioId, payload);
+                } else if (hasPendingMedia && formData.mediaTipo !== "none") {
+                    await beneficiosApi.createMinijuegoWithMedia(
+                        payload,
+                        pendingMediaUploads.map((upload) => upload.file),
+                        formData.mediaTipo,
+                    );
+                } else {
+                    await beneficiosApi.createMinijuego(payload);
+                }
+
+                if (beneficioId && hasPendingMedia && formData.mediaTipo === "imagen") {
+                    const uploadResult = await beneficiosApi.appendImages(
+                        beneficioId,
+                        pendingMediaUploads.map((upload) => upload.file),
+                    );
+                    const uploadedCount = uploadResult.beneficio.imagenes?.length ?? 0;
+                    if (uploadedCount === 0) {
+                        throw new Error(
+                            "La imagen no se guardó en el servidor. Intenta subirla de nuevo.",
+                        );
+                    }
+                } else if (beneficioId && hasPendingMedia && formData.mediaTipo === "video") {
+                    await beneficiosApi.uploadVideo(
+                        beneficioId,
+                        pendingMediaUploads[0].file,
+                    );
+                }
+
+                toast({
+                    title: editingBeneficioId ? "Minijuego actualizado" : "Minijuego creado",
+                    description: `"${titulo}" ha sido guardado.`,
+                });
+            } else if (editingBeneficioId) {
                 const payload = buildPayloadBase(titulo, descripcion) as ActualizarBeneficioDTO;
+                if (formData.hadMinijuego) {
+                    payload.tipo = "estandar";
+                }
 
                 await beneficiosApi.update(editingBeneficioId, payload);
 
@@ -946,9 +1296,10 @@ export default function EmpleadoClubBeneficiosPage() {
                             <TableRow>
                                 <TableHead>Media</TableHead>
                                 <TableHead>Título</TableHead>
+                                <TableHead>Tipo</TableHead>
                                 <TableHead>Descripción</TableHead>
-                                <TableHead>Redirección</TableHead>
-                                <TableHead>Puntos</TableHead>
+                                <TableHead>Destino / juego</TableHead>
+                                <TableHead>Visibilidad</TableHead>
                                 <TableHead>Estado</TableHead>
                                 <TableHead>Creado</TableHead>
                                 <TableHead className="text-right">Acciones</TableHead>
@@ -957,13 +1308,13 @@ export default function EmpleadoClubBeneficiosPage() {
                         <TableBody>
                             {isLoading ? (
                                 <TableRow>
-                                    <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                                    <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
                                         Cargando beneficios...
                                     </TableCell>
                                 </TableRow>
                             ) : paginatedBeneficios.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                                    <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
                                         No hay beneficios que coincidan con los filtros.
                                     </TableCell>
                                 </TableRow>
@@ -997,16 +1348,25 @@ export default function EmpleadoClubBeneficiosPage() {
                                             </p>
                                         </TableCell>
                                         <TableCell className="font-medium">{beneficio.titulo}</TableCell>
+                                        <TableCell>
+                                            <Badge variant={resolveBeneficioTipo(beneficio) === "minijuego" ? "default" : "outline"}>
+                                                {resolveBeneficioTipo(beneficio) === "minijuego" ? "Minijuego" : "Estándar"}
+                                            </Badge>
+                                        </TableCell>
                                         <TableCell className="max-w-[320px] whitespace-normal text-sm text-muted-foreground">
                                             {beneficio.descripcion}
                                         </TableCell>
                                         <TableCell className="max-w-[180px] text-sm text-muted-foreground">
-                                            {resolveRedirectLabel(beneficio)}
+                                            {resolveDestinoLabel(beneficio)}
                                         </TableCell>
-                                        <TableCell className="text-sm text-muted-foreground">
-                                            {(beneficio.puntosRecompensa ?? 0) > 0
-                                                ? `${beneficio.puntosRecompensa} pts`
-                                                : "—"}
+                                        <TableCell>
+                                            {resolveBeneficioTipo(beneficio) !== "minijuego" ? (
+                                                <span className="text-sm text-muted-foreground">—</span>
+                                            ) : beneficio.minijuegoVisibilidad === "restringido" ? (
+                                                <Badge variant="outline">{resolveVisibilidadLabel(beneficio)}</Badge>
+                                            ) : (
+                                                <Badge variant="secondary">Público</Badge>
+                                            )}
                                         </TableCell>
                                         <TableCell>
                                             {beneficio.estatus ? (
@@ -1136,7 +1496,13 @@ export default function EmpleadoClubBeneficiosPage() {
                     setIsDialogOpen(true);
                 }}
             >
-                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+                <DialogContent
+                    className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"
+                    onPointerDownOutside={(event) => event.preventDefault()}
+                    onInteractOutside={(event) => event.preventDefault()}
+                    onFocusOutside={(event) => event.preventDefault()}
+                    onEscapeKeyDown={(event) => event.preventDefault()}
+                >
                     <DialogHeader>
                         <DialogTitle>
                             {editingBeneficioId ? "Editar beneficio" : "Nuevo beneficio"}
@@ -1147,6 +1513,25 @@ export default function EmpleadoClubBeneficiosPage() {
                         {isLoadingDetail && (
                             <p className="text-sm text-muted-foreground">Cargando datos...</p>
                         )}
+
+                        <BeneficioTypeSelect
+                            value={formData.tipo}
+                            onChange={(tipo) =>
+                                setFormData((current) => ({
+                                    ...current,
+                                    tipo,
+                                    ...(tipo === "minijuego"
+                                        ? {
+                                              puntosRecompensaInput: "0",
+                                              redirectEnabled: false,
+                                              redirectModulo: "none",
+                                              ...pointPrizeSeed(current),
+                                          }
+                                        : {}),
+                                }))
+                            }
+                            disabled={isLoadingDetail || isSaving}
+                        />
 
                         <div className="space-y-2">
                             <Label htmlFor="titulo">Título *</Label>
@@ -1179,6 +1564,89 @@ export default function EmpleadoClubBeneficiosPage() {
                             />
                         </div>
 
+                        {formData.tipo === "minijuego" ? (
+                            <>
+                                <MinigameFields
+                                    tipo={formData.minijuegoTipo}
+                                    fechaInicio={formData.fechaInicio}
+                                    fechaFin={formData.fechaFin}
+                                    intentosPorUsuario={formData.intentosPorUsuario}
+                                    onTipoChange={(minijuegoTipo) =>
+                                        setFormData((current) => ({
+                                            ...current,
+                                            minijuegoTipo,
+                                            ...pointPrizeSeed(current),
+                                        }))
+                                    }
+                                    onFechaInicioChange={(fechaInicio) =>
+                                        setFormData((current) => ({ ...current, fechaInicio }))
+                                    }
+                                    onFechaFinChange={(fechaFin) =>
+                                        setFormData((current) => ({ ...current, fechaFin }))
+                                    }
+                                    onIntentosChange={(intentosPorUsuario) =>
+                                        setFormData((current) => ({ ...current, intentosPorUsuario }))
+                                    }
+                                    disabled={isLoadingDetail || isSaving}
+                                />
+                                <MinigameVisibilityFields
+                                    visibilidad={formData.minijuegoVisibilidad}
+                                    usuarios={formData.usuariosPermitidos}
+                                    onVisibilidadChange={(minijuegoVisibilidad) =>
+                                        setFormData((current) => ({
+                                            ...current,
+                                            minijuegoVisibilidad,
+                                        }))
+                                    }
+                                    onAdd={(usuario) =>
+                                        setFormData((current) => ({
+                                            ...current,
+                                            usuariosPermitidos: current.usuariosPermitidos.some(
+                                                (item) => item.uid === usuario.uid,
+                                            )
+                                                ? current.usuariosPermitidos
+                                                : [...current.usuariosPermitidos, usuario],
+                                        }))
+                                    }
+                                    onRemove={(uid) =>
+                                        setFormData((current) => ({
+                                            ...current,
+                                            usuariosPermitidos: current.usuariosPermitidos.filter(
+                                                (item) => item.uid !== uid,
+                                            ),
+                                        }))
+                                    }
+                                    disabled={isLoadingDetail || isSaving}
+                                />
+                                <RoulettePointsEditor
+                                    premios={formData.premios}
+                                    especialNombre={formData.premioEspecial.nombre}
+                                    showWheelPreview={formData.minijuegoTipo === "ruleta"}
+                                    onChange={(premios) =>
+                                        setFormData((current) => ({ ...current, premios }))
+                                    }
+                                    disabled={isLoadingDetail || isSaving}
+                                />
+                                <RouletteSpecialPrize
+                                    premio={formData.premioEspecial}
+                                    otros={formData.premios}
+                                    onChange={(premioEspecial) =>
+                                        setFormData((current) => ({
+                                            ...current,
+                                            premioEspecial,
+                                        }))
+                                    }
+                                    disabled={isLoadingDetail || isSaving}
+                                />
+                                <RouletteWinnersSection
+                                    premioNombre={formData.premioEspecial.nombre}
+                                    maxGanadores={formData.premioEspecial.stock}
+                                    data={ganadoresEspecial}
+                                    isLoading={isLoadingGanadores}
+                                    saved={Boolean(editingBeneficioId)}
+                                />
+                            </>
+                        ) : (
                         <div className="space-y-2">
                             <Label htmlFor="puntosRecompensa">Puntos al reclamar</Label>
                             <Input
@@ -1215,6 +1683,7 @@ export default function EmpleadoClubBeneficiosPage() {
                                 Cada usuario puede reclamar estos puntos una sola vez. Usa 0 si el beneficio no otorga puntos.
                             </p>
                         </div>
+                        )}
 
                         <div className="space-y-3 border-t pt-4">
                             <div className="flex items-center gap-2">
@@ -1254,6 +1723,11 @@ export default function EmpleadoClubBeneficiosPage() {
                                         </SelectItem>
                                     </SelectContent>
                                 </Select>
+                                {formData.tipo === "minijuego" ? (
+                                    <p className="text-xs leading-relaxed text-muted-foreground">
+                                        Esta imagen o video es solo la portada del minijuego en Rewards.
+                                    </p>
+                                ) : null}
                                 {(formData.mediaTipo === "imagen" ||
                                     formData.mediaTipo === "video") && (
                                     <p className="text-xs leading-relaxed text-muted-foreground">
@@ -1408,6 +1882,7 @@ export default function EmpleadoClubBeneficiosPage() {
                             )}
                         </div>
 
+                        {formData.tipo === "estandar" ? (
                         <div className="space-y-3 border-t pt-4">
                             <div className="flex items-center gap-2">
                                 <Link2 className="h-4 w-4 text-primary" />
@@ -1469,6 +1944,7 @@ export default function EmpleadoClubBeneficiosPage() {
                                 </>
                             )}
                         </div>
+                        ) : null}
                     </div>
 
                     <div className="flex justify-end gap-3 border-t pt-4">

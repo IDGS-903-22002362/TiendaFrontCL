@@ -1,11 +1,37 @@
-export const FALLBACK_BACKEND_BASE = "http://localhost:3000/api";
+export const PRODUCTION_BACKEND_BASE =
+  "https://us-central1-e-comerce-leon.cloudfunctions.net/api";
+
+export const LOCAL_BACKEND_BASE = "http://localhost:3000/api";
+
+export const FALLBACK_BACKEND_BASE =
+  process.env.NODE_ENV === "production"
+    ? PRODUCTION_BACKEND_BASE
+    : LOCAL_BACKEND_BASE;
+
+function isLocalDevelopmentBase(url: string): boolean {
+  try {
+    const host = new URL(url).hostname;
+    return host === "localhost" || host === "127.0.0.1";
+  } catch {
+    return false;
+  }
+}
 
 export function resolveBackendBaseUrl(): string {
-  return (
+  const configured = (
     process.env.API_BASE_URL ||
     process.env.NEXT_PUBLIC_API_BASE_URL ||
-    FALLBACK_BACKEND_BASE
+    ""
   ).replace(/\/+$/, "");
+
+  if (
+    process.env.NODE_ENV === "production" &&
+    (!configured || isLocalDevelopmentBase(configured))
+  ) {
+    return PRODUCTION_BACKEND_BASE;
+  }
+
+  return (configured || FALLBACK_BACKEND_BASE).replace(/\/+$/, "");
 }
 
 /**

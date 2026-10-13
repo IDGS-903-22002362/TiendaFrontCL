@@ -183,6 +183,21 @@ export async function checkInUserStreak() {
   );
 }
 
+export type UsuarioClubBusqueda = {
+  uid: string;
+  nombre: string;
+  email: string;
+};
+
+export async function searchClubUsers(term: string) {
+  const params = new URLSearchParams({ q: term.trim() });
+  return apiFetch<{ success: true; count: number; data: UsuarioClubBusqueda[] }>(
+    `/api/usuarios/club-busqueda?${params.toString()}`,
+    { method: "GET" },
+    { local: true },
+  );
+}
+
 export async function checkEmailExists(email: string) {
   const params = new URLSearchParams({ email });
   return apiFetch<{ success: true; exists: boolean }>(
