@@ -78,6 +78,9 @@ export type PremioMinijuego = {
     stock?: number | null;
     weight?: number;
     descripcion?: string;
+    terminos?: string;
+    validoDesde?: string | null;
+    caducaEl?: string | null;
     imagenUrl?: string;
     color?: string;
     especial?: boolean;

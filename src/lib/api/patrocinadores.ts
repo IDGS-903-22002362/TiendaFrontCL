@@ -1,5 +1,7 @@
 import { apiFetch } from "./client";
 
+export { normalizeSponsorUrl } from "./patrocinadores-url";
+
 type ApiSuccess<T> = {
     success: true;
     message?: string;
@@ -16,6 +18,8 @@ export type Patrocinador = {
     imagenNegra?: string;
     /** Logo unico del patrocinador exclusivo, o logo legado. */
     imagen?: string;
+    /** Enlace opcional del banner exclusivo. */
+    url?: string;
     exclusivo?: boolean;
     estatus: boolean;
     createdAt?: string | Date | { _seconds: number; _nanoseconds: number } | { seconds: number; nanoseconds: number };
@@ -26,12 +30,14 @@ export type CrearPatrocinadorDTO = {
     nombre: string;
     estatus?: boolean;
     exclusivo?: boolean;
+    url?: string;
 };
 
 export type ActualizarPatrocinadorDTO = {
     nombre?: string;
     estatus?: boolean;
     exclusivo?: boolean;
+    url?: string;
 };
 
 export const ALLOWED_PATROCINADOR_IMAGE_TYPES = [

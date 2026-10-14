@@ -51,6 +51,7 @@ import {
     isAllowedPatrocinadorImageFile,
     isGifSource,
     isPatrocinadorExclusivo,
+    normalizeSponsorUrl,
     patrocinadoresApi,
     type Patrocinador,
     type PatrocinadorLogoVariante,
@@ -59,6 +60,7 @@ import { useToast } from "@/hooks/use-toast";
 
 type FormState = {
     nombre: string;
+    url: string;
     existingImagenBlanca?: string;
     existingImagenNegra?: string;
     existingImagenExclusiva?: string;
@@ -67,6 +69,7 @@ type FormState = {
 
 const EMPTY_FORM: FormState = {
     nombre: "",
+    url: "",
 };
 
 const LOGO_VARIANT_LABEL: Record<PatrocinadorLogoVariante, string> = {
@@ -143,6 +146,7 @@ function formatDate(value: DateValue): string {
 function formFromPatrocinador(patrocinador: Patrocinador): FormState {
     return {
         nombre: patrocinador.nombre,
+        url: patrocinador.url ?? "",
         existingImagenBlanca: patrocinador.imagenBlanca,
         existingImagenNegra: patrocinador.imagenNegra,
         existingImagenExclusiva: patrocinador.imagen,
@@ -511,6 +515,16 @@ export default function EmpleadoClubPatrocinadoresPage() {
                 return;
             }
 
+            const url = normalizeSponsorUrl(formData.url);
+            if (url === null) {
+                toast({
+                    variant: "destructive",
+                    title: "Enlace inválido",
+                    description: "Usa una dirección que empiece con http:// o https://, o déjala vacía.",
+                });
+                return;
+            }
+
             setIsSaving(true);
 
             try {
@@ -518,6 +532,7 @@ export default function EmpleadoClubPatrocinadoresPage() {
                     await patrocinadoresApi.update(editingPatrocinadorId, {
                         nombre,
                         exclusivo: true,
+                        url,
                     });
 
                     if (pendingExclusiva) {
@@ -537,7 +552,7 @@ export default function EmpleadoClubPatrocinadoresPage() {
                     });
                 } else if (pendingExclusiva) {
                     await patrocinadoresApi.createExclusive(
-                        { nombre, estatus: true, exclusivo: true },
+                        { nombre, estatus: true, exclusivo: true, ...(url ? { url } : {}) },
                         pendingExclusiva.file,
                     );
 
@@ -853,6 +868,11 @@ export default function EmpleadoClubPatrocinadoresPage() {
                                     {formatDate(exclusivePatrocinador.createdAt)}
                                 </span>
                             </div>
+                            {exclusivePatrocinador.url ? (
+                                <p className="truncate text-xs text-muted-foreground">
+                                    {exclusivePatrocinador.url}
+                                </p>
+                            ) : null}
                         </div>
                     </div>
                 ) : (
@@ -1188,6 +1208,26 @@ export default function EmpleadoClubPatrocinadoresPage() {
                                         </Button>
                                     </div>
                                 )}
+                                <div className="flex flex-col gap-2">
+                                    <Label htmlFor="url-exclusiva">Enlace (opcional)</Label>
+                                    <Input
+                                        id="url-exclusiva"
+                                        type="url"
+                                        inputMode="url"
+                                        placeholder="https://"
+                                        value={formData.url}
+                                        onChange={(event) =>
+                                            setFormData((current) => ({
+                                                ...current,
+                                                url: event.target.value,
+                                            }))
+                                        }
+                                        disabled={isLoadingDetail || isSaving}
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Si lo dejas vacío, el banner del inicio no abre nada. Si pones un enlace, al tocarlo se abre en el navegador.
+                                    </p>
+                                </div>
                             </div>
                         ) : (
                         <div className="flex flex-col gap-3">

@@ -82,7 +82,9 @@ import {
     type MinijuegoVisibilidad,
 } from "@/lib/api/beneficios";
 import {
+    dateInputToIso,
     datetimeLocalToIso,
+    isoToDateInput,
     isoToDatetimeLocal,
 } from "@/lib/beneficios/minijuego-form";
 import {
@@ -324,6 +326,9 @@ function splitRoulettePrizes(
         stock?: number | null;
         weight?: number;
         descripcion?: string;
+        terminos?: string;
+        validoDesde?: string | null;
+        caducaEl?: string | null;
         imagenUrl?: string;
         especial?: boolean;
         maxGanadores?: number;
@@ -357,6 +362,9 @@ function splitRoulettePrizes(
             id: inherited.id,
             nombre: inherited.nombre,
             descripcion: inherited.descripcion ?? "",
+            terminos: source?.terminos ?? "",
+            validoDesde: isoToDateInput(source?.validoDesde),
+            caducaEl: isoToDateInput(source?.caducaEl),
             tipo: inherited.tipo === "points" ? "physical" : inherited.tipo,
             stock: cap != null ? String(cap) : inherited.stock || "1",
             weight: inherited.weight || "1",
@@ -397,6 +405,24 @@ function validateMinijuegoForm(form: FormState): string | null {
     if (form.premioEspecial.nombre.trim()) {
         if (form.premioEspecial.descripcion.trim().length > 200) {
             return "La descripción del premio especial es demasiado larga.";
+        }
+        if (form.premioEspecial.terminos.trim().length > 4000) {
+            return "Los términos del premio especial son demasiado largos.";
+        }
+        const validoDesde = dateInputToIso(form.premioEspecial.validoDesde);
+        const caducaEl = dateInputToIso(form.premioEspecial.caducaEl, true);
+        if (form.premioEspecial.validoDesde.trim() && !validoDesde) {
+            return "La fecha de inicio de vigencia no es válida.";
+        }
+        if (form.premioEspecial.caducaEl.trim() && !caducaEl) {
+            return "La fecha de caducidad no es válida.";
+        }
+        if (
+            validoDesde &&
+            caducaEl &&
+            new Date(caducaEl).getTime() < new Date(validoDesde).getTime()
+        ) {
+            return "La caducidad no puede ser anterior al inicio de la vigencia.";
         }
         const maximo = Number.parseInt(form.premioEspecial.stock, 10);
         if (!Number.isInteger(maximo) || maximo < 0) {
@@ -488,6 +514,24 @@ function buildMinijuegoPayload(
                           tipo: form.premioEspecial.tipo,
                           ...(form.premioEspecial.descripcion.trim()
                               ? { descripcion: form.premioEspecial.descripcion.trim() }
+                              : {}),
+                          ...(form.premioEspecial.terminos.trim()
+                              ? { terminos: form.premioEspecial.terminos.trim() }
+                              : {}),
+                          ...(dateInputToIso(form.premioEspecial.validoDesde)
+                              ? {
+                                    validoDesde: dateInputToIso(
+                                        form.premioEspecial.validoDesde,
+                                    ),
+                                }
+                              : {}),
+                          ...(dateInputToIso(form.premioEspecial.caducaEl, true)
+                              ? {
+                                    caducaEl: dateInputToIso(
+                                        form.premioEspecial.caducaEl,
+                                        true,
+                                    ),
+                                }
                               : {}),
                           ...(form.premioEspecial.imagenUrl.trim()
                               ? { imagenUrl: form.premioEspecial.imagenUrl.trim() }

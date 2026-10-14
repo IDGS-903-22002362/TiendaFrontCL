@@ -21,6 +21,9 @@ export type SpecialPrizeForm = {
     id?: string;
     nombre: string;
     descripcion: string;
+    terminos: string;
+    validoDesde: string;
+    caducaEl: string;
     tipo: PrizeType;
     stock: string;
     weight: string;
@@ -36,6 +39,9 @@ export function emptySpecialPrize(): SpecialPrizeForm {
     return {
         nombre: "",
         descripcion: "",
+        terminos: "",
+        validoDesde: "",
+        caducaEl: "",
         tipo: "physical",
         stock: "1",
         weight: "1",
@@ -197,6 +203,43 @@ export function RouletteSpecialPrize({
                                 ? "Agotado: no entra al sorteo"
                                 : `${odds.weight} / ${odds.total} · ${odds.percentLabel}`
                             : "—"}
+                    </p>
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                    <Label>Términos y condiciones</Label>
+                    <Textarea
+                        value={premio.terminos}
+                        placeholder="Dónde se canjea, qué incluye y qué debe presentar el ganador."
+                        onChange={(event) =>
+                            patch({ terminos: event.target.value })
+                        }
+                        disabled={disabled}
+                    />
+                </div>
+                <div className="space-y-2">
+                    <Label>Válido desde</Label>
+                    <Input
+                        type="date"
+                        value={premio.validoDesde}
+                        onChange={(event) =>
+                            patch({ validoDesde: event.target.value })
+                        }
+                        disabled={disabled}
+                    />
+                </div>
+                <div className="space-y-2">
+                    <Label>Caduca el</Label>
+                    <Input
+                        type="date"
+                        value={premio.caducaEl}
+                        onChange={(event) =>
+                            patch({ caducaEl: event.target.value })
+                        }
+                        disabled={disabled}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                        Elige el día. La caducidad cubre todo ese día. Si lo
+                        dejas vacío, la app usa el fin de la campaña.
                     </p>
                 </div>
                 <div className="space-y-2 sm:col-span-2">
