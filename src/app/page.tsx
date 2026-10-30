@@ -15,6 +15,7 @@ import {
   getHomeFeaturedCollectionProduct,
   getHomeLineaCards,
   isPersonalizableProduct,
+  JERSEYS_CATALOG_HREF,
 } from "@/lib/storefront";
 import { CategoryGrid } from "@/components/storefront/home/category-grid";
 import { EditorialSplit } from "@/components/storefront/home/editorial-split";
@@ -125,7 +126,7 @@ export default async function Home() {
           }
           secondaryHref={
             collectionIsPersonalizable
-              ? "/products?category=jerseys"
+              ? JERSEYS_CATALOG_HREF
               : "/products"
           }
           secondaryLabel={

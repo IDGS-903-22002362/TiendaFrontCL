@@ -386,6 +386,15 @@ export function getHeroProduct(products: Product[]) {
   );
 }
 
+/**
+ * Enlace canónico a "jerseys" en el catálogo.
+ * No existe una categoría `jerseys` en el backend (los jerseys viven en
+ * `categoriaId: "playera"` junto a polos y playeras de entreno), por lo que
+ * `/products?category=jerseys` devolvía 0 resultados. La búsqueda por texto
+ * sí filtra exactamente los jerseys.
+ */
+export const JERSEYS_CATALOG_HREF = "/products?q=jersey";
+
 /** Clave fija del producto en la sección "Colección destacada" de la home. */
 export const HOME_FEATURED_COLLECTION_CLAVE = "CHA 428";
 

@@ -3,13 +3,14 @@ import { ChevronRight } from "lucide-react";
 import { Logo } from "@/components/icons";
 import { CookieSettingsFooterLink } from "@/components/cookies/cookie-settings-footer-link";
 import { useIsFromMobileApp } from "@/hooks/use-from-mobile-app";
+import { JERSEYS_CATALOG_HREF } from "@/lib/storefront";
 
 const footerColumns = [
   {
     title: "Comprar",
     links: [
       { href: "/products", label: "Todos los productos" },
-      { href: "/products?category=jerseys", label: "Jerseys" },
+      { href: JERSEYS_CATALOG_HREF, label: "Jerseys" },
       { href: "/products?tag=new", label: "Novedades" },
       { href: "/products?onlyOffers=true", label: "Oferton" },
     ],

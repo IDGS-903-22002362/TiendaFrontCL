@@ -1,3 +1,5 @@
+import { JERSEYS_CATALOG_HREF } from "@/lib/storefront";
+
 export type HeroSlide = {
   type: "video" | "image";
   src: string;
@@ -20,7 +22,7 @@ export const heroSlides: HeroSlide[] = [
     title: "",
     subtitle: "",
     ctaText: "Comprar jerseys",
-    ctaLink: "/products?category=jerseys",
+    ctaLink: JERSEYS_CATALOG_HREF,
     secondaryCtaText: "Ver novedades",
     secondaryCtaLink: "/products?tag=new",
     alt: "Video principal de la nueva campana de La Guarida",
@@ -33,7 +35,7 @@ export const heroSlides: HeroSlide[] = [
     ctaText: "Explorar coleccion",
     ctaLink: "/products",
     secondaryCtaText: "Ver jersey oficial",
-    secondaryCtaLink: "/products?category=jerseys",
+    secondaryCtaLink: JERSEYS_CATALOG_HREF,
     alt: "Imagen editorial de jersey oficial del Club Leon",
     autoPlayDurationMs: 5200,
   },
