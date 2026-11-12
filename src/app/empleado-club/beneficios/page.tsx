@@ -13,6 +13,7 @@ import {
     type PremioFormValue,
 } from "@/components/beneficios/minigame-prize-editor";
 import { RoulettePointsEditor } from "@/components/beneficios/roulette-points-editor";
+import { ProbabilityTotalIndicator } from "@/components/beneficios/probability-total-indicator";
 import { RouletteWinnersSection } from "@/components/beneficios/roulette-winners-section";
 import {
     RouletteSpecialPrize,
@@ -95,6 +96,12 @@ import {
     CarouselPrevious,
 } from "@/components/ui/carousel";
 import { useToast } from "@/hooks/use-toast";
+import {
+    parsePercentToUnits,
+    percentInputToNumber,
+    percentNumberToInput,
+    summarizeProbabilities,
+} from "@/lib/minigame-probability";
 
 type FormState = {
     titulo: string;
@@ -116,6 +123,8 @@ type FormState = {
     usuariosPermitidos: Array<{ uid: string; nombre: string; email: string }>;
     premios: PremioFormValue[];
     premioEspecial: SpecialPrizeForm;
+    /** El minijuego guardado usaba pesos y se muestra convertido a porcentajes. */
+    probabilidadConvertida: boolean;
 };
 
 const EMPTY_FORM: FormState = {
@@ -137,6 +146,7 @@ const EMPTY_FORM: FormState = {
     usuariosPermitidos: [],
     premios: [],
     premioEspecial: emptySpecialPrize(),
+    probabilidadConvertida: false,
 };
 
 type PendingMediaUpload = {
@@ -314,6 +324,7 @@ function formFromBeneficio(beneficio: Beneficio): FormState {
             (uid) => ({ uid, nombre: "", email: "" }),
         ),
         ...splitRoulettePrizes(minijuego?.premios ?? []),
+        probabilidadConvertida: minijuego?.probabilidadModo === "convertida",
     };
 }
 
@@ -324,7 +335,7 @@ function splitRoulettePrizes(
         tipo: PremioFormValue["tipo"];
         valor?: number;
         stock?: number | null;
-        weight?: number;
+        probabilidad?: number;
         descripcion?: string;
         terminos?: string;
         validoDesde?: string | null;
@@ -341,7 +352,7 @@ function splitRoulettePrizes(
         tipo: premio.tipo,
         valor: premio.valor != null ? String(premio.valor) : "",
         stock: premio.stock != null ? String(premio.stock) : "",
-        weight: String(premio.weight ?? 1),
+        probabilidad: percentNumberToInput(premio.probabilidad),
         descripcion: premio.descripcion ?? "",
         imagenUrl: premio.imagenUrl ?? "",
         especial: premio.especial === true,
@@ -367,7 +378,7 @@ function splitRoulettePrizes(
             caducaEl: isoToDateInput(source?.caducaEl),
             tipo: inherited.tipo === "points" ? "physical" : inherited.tipo,
             stock: cap != null ? String(cap) : inherited.stock || "1",
-            weight: inherited.weight || "1",
+            probabilidad: inherited.probabilidad,
             imagenUrl: inherited.imagenUrl ?? "",
         },
     };
@@ -428,9 +439,9 @@ function validateMinijuegoForm(form: FormState): string | null {
         if (!Number.isInteger(maximo) || maximo < 0) {
             return "Indica el máximo de ganadores del premio especial.";
         }
-        const peso = Number.parseInt(form.premioEspecial.weight || "1", 10);
-        if (!Number.isInteger(peso) || peso < 1) {
-            return "El peso del premio especial debe ser un entero mayor a cero.";
+        const probabilidad = parsePercentToUnits(form.premioEspecial.probabilidad);
+        if (probabilidad == null || probabilidad < 1) {
+            return "La probabilidad del premio especial debe ser mayor a 0% y hasta 100%, con máximo 3 decimales.";
         }
     }
     const incluyeEspecial = Boolean(form.premioEspecial.nombre.trim());
@@ -457,9 +468,9 @@ function validateMinijuegoForm(form: FormState): string | null {
             }
         }
 
-        const weight = Number.parseInt(premio.weight || "1", 10);
-        if (!Number.isInteger(weight) || weight < 1) {
-            return "El peso del premio debe ser un entero mayor a cero.";
+        const probabilidad = parsePercentToUnits(premio.probabilidad);
+        if (probabilidad == null || probabilidad < 1) {
+            return "La probabilidad de cada premio debe ser mayor a 0% y hasta 100%, con máximo 3 decimales.";
         }
         if (premio.stock.trim()) {
             const stock = Number.parseInt(premio.stock, 10);
@@ -469,7 +480,20 @@ function validateMinijuegoForm(form: FormState): string | null {
         }
     }
 
+    const total = summarizeProbabilities(enabledPrizeProbabilities(form));
+    if (total.status !== "valid") {
+        return total.message;
+    }
+
     return null;
+}
+
+/** Probabilidades que cuentan para el 100 %: premios + especial si está habilitado. */
+function enabledPrizeProbabilities(form: FormState): string[] {
+    return [
+        ...form.premios.map((premio) => premio.probabilidad),
+        ...(form.premioEspecial.nombre.trim() ? [form.premioEspecial.probabilidad] : []),
+    ];
 }
 
 function buildMinijuegoPayload(
@@ -503,7 +527,7 @@ function buildMinijuegoPayload(
                     tipo: premio.tipo,
                     ...(valor != null ? { valor } : {}),
                     stock: premio.stock.trim() ? Number.parseInt(premio.stock, 10) : null,
-                    weight: Number.parseInt(premio.weight || "1", 10),
+                    probabilidad: percentInputToNumber(premio.probabilidad) ?? 0,
                 };
             }),
             ...(form.premioEspecial.nombre.trim()
@@ -538,7 +562,8 @@ function buildMinijuegoPayload(
                               : {}),
                           stock: Number.parseInt(form.premioEspecial.stock, 10),
                           maxGanadores: Number.parseInt(form.premioEspecial.stock, 10),
-                          weight: Number.parseInt(form.premioEspecial.weight || "1", 10),
+                          probabilidad:
+                              percentInputToNumber(form.premioEspecial.probabilidad) ?? 0,
                           especial: true,
                       },
                   ]
@@ -1671,9 +1696,18 @@ export default function EmpleadoClubBeneficiosPage() {
                                     }
                                     disabled={isLoadingDetail || isSaving}
                                 />
+                                {formData.probabilidadConvertida ? (
+                                    <div
+                                        role="note"
+                                        className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+                                    >
+                                        Este minijuego se configuró con pesos relativos. Convertimos sus valores a los
+                                        porcentajes equivalentes (redondeados a 0.001%). Hasta que guardes, el sorteo
+                                        sigue usando la configuración original; al guardar se aplicarán estos porcentajes.
+                                    </div>
+                                ) : null}
                                 <RouletteSpecialPrize
                                     premio={formData.premioEspecial}
-                                    otros={formData.premios}
                                     onChange={(premioEspecial) =>
                                         setFormData((current) => ({
                                             ...current,
@@ -1681,6 +1715,9 @@ export default function EmpleadoClubBeneficiosPage() {
                                         }))
                                     }
                                     disabled={isLoadingDetail || isSaving}
+                                />
+                                <ProbabilityTotalIndicator
+                                    values={enabledPrizeProbabilities(formData)}
                                 />
                                 <RouletteWinnersSection
                                     premioNombre={formData.premioEspecial.nombre}

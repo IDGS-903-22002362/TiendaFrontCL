@@ -3,6 +3,7 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { PremioFormValue } from "@/components/beneficios/minigame-prize-editor";
+import { sanitizePercentInput } from "@/lib/minigame-probability";
 
 const SLICE_COLORS = [
     "#006A54",
@@ -118,13 +119,13 @@ export function RoulettePointsEditor({
             <div>
                 <p className="text-sm font-medium">Premios de puntos</p>
                 <p className="text-xs text-muted-foreground">
-                    Cada número es el premio de puntos que se acredita si sale. Puedes cambiarlos; no tienen que ser de 10 en 10. El peso solo afecta la probabilidad.
+                    Cada número es el premio de puntos que se acredita si sale. Puedes cambiarlos; no tienen que ser de 10 en 10. La probabilidad es el porcentaje de tiradas en que sale ese premio; acepta hasta 3 decimales (por ejemplo 0.3) y, junto con el premio especial, debe sumar 100%.
                 </p>
             </div>
             {showWheelPreview ? <RoulettePreview labels={labels} /> : null}
             <div className="grid gap-2 sm:grid-cols-2">
                 {premios.map((premio, index) => (
-                    <div key={premio.key} className="grid grid-cols-[1fr_72px] gap-2">
+                    <div key={premio.key} className="grid grid-cols-[1fr_112px] gap-2">
                         <div className="space-y-1">
                             <Label>{`Premio ${index + 1}`}</Label>
                             <Input
@@ -144,18 +145,28 @@ export function RoulettePointsEditor({
                             />
                         </div>
                         <div className="space-y-1">
-                            <Label>Peso</Label>
-                            <Input
-                                inputMode="numeric"
-                                value={premio.weight}
-                                aria-label={`Peso del premio ${index + 1}`}
-                                onChange={(event) =>
-                                    update(premio.key, {
-                                        weight: event.target.value.replace(/\D/g, ""),
-                                    })
-                                }
-                                disabled={disabled}
-                            />
+                            <Label>Probabilidad (%)</Label>
+                            <div className="relative">
+                                <Input
+                                    inputMode="decimal"
+                                    placeholder="0.000"
+                                    className="pr-7"
+                                    value={premio.probabilidad}
+                                    aria-label={`Probabilidad en porcentaje del premio ${index + 1}`}
+                                    onChange={(event) =>
+                                        update(premio.key, {
+                                            probabilidad: sanitizePercentInput(event.target.value),
+                                        })
+                                    }
+                                    disabled={disabled}
+                                />
+                                <span
+                                    aria-hidden="true"
+                                    className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground"
+                                >
+                                    %
+                                </span>
+                            </div>
                         </div>
                     </div>
                 ))}

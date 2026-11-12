@@ -76,7 +76,10 @@ export type PremioMinijuego = {
     tipo: PrizeType;
     valor?: number;
     stock?: number | null;
+    /** Obsoleto. El backend lo ignora al guardar. */
     weight?: number;
+    /** Probabilidad en porcentaje, hasta 3 decimales. La suma debe ser 100. */
+    probabilidad?: number;
     descripcion?: string;
     terminos?: string;
     validoDesde?: string | null;
@@ -98,6 +101,12 @@ export type MinijuegoAdmin = {
         visibilidad: MinijuegoVisibilidad;
         usuariosPermitidos: string[];
     };
+    /**
+     * "convertida": minijuego creado con pesos relativos. El backend muestra
+     * sus porcentajes equivalentes y sigue sorteando con los pesos originales
+     * hasta que se guarde de nuevo.
+     */
+    probabilidadModo?: "porcentaje" | "convertida";
     premios: PremioMinijuego[];
 };
 

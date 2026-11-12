@@ -16,6 +16,7 @@ import {
     PRIZE_TYPE_LABELS,
     type PrizeType,
 } from "@/lib/api/beneficios";
+import { sanitizePercentInput } from "@/lib/minigame-probability";
 
 export type PremioFormValue = {
     key: string;
@@ -24,7 +25,8 @@ export type PremioFormValue = {
     tipo: PrizeType;
     valor: string;
     stock: string;
-    weight: string;
+    /** Probabilidad en porcentaje, como texto del input (p. ej. "0.3"). */
+    probabilidad: string;
     descripcion?: string;
     imagenUrl?: string;
     especial?: boolean;
@@ -40,7 +42,9 @@ type MinigamePrizeEditorProps = {
 };
 
 const ROULETTE_POINT_VALUES = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-const ROULETTE_POINT_WEIGHTS = [30, 25, 20, 15, 12, 10, 8, 6, 4, 3];
+// Suman 100 %. Al habilitar un premio especial hay que restarle su porcentaje
+// a alguno de estos; el indicador de total lo señala.
+const ROULETTE_POINT_PROBABILITIES = ["30", "25", "15", "10", "7", "5", "3", "2", "1.5", "1.5"];
 
 export function defaultRoulettePointPrizes(): PremioFormValue[] {
     return ROULETTE_POINT_VALUES.map((valor, index) => ({
@@ -49,7 +53,7 @@ export function defaultRoulettePointPrizes(): PremioFormValue[] {
         tipo: "points",
         valor: String(valor),
         stock: "",
-        weight: String(ROULETTE_POINT_WEIGHTS[index]),
+        probabilidad: ROULETTE_POINT_PROBABILITIES[index],
     }));
 }
 
@@ -70,7 +74,7 @@ export function createEmptyPremio(): PremioFormValue {
         tipo: "points",
         valor: "",
         stock: "",
-        weight: "1",
+        probabilidad: "",
     };
 }
 
@@ -80,7 +84,7 @@ export function MinigamePrizeEditor({
     disabled,
     maxCount = 12,
     title = "Premios",
-    hint = "El servidor sortea con el peso. La app solo recibe el resultado.",
+    hint = "El servidor sortea con la probabilidad de cada premio. La app solo recibe el resultado.",
 }: MinigamePrizeEditorProps) {
     const update = (key: string, patch: Partial<PremioFormValue>) => {
         onChange(
@@ -171,17 +175,27 @@ export function MinigamePrizeEditor({
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label>Peso</Label>
-                                        <Input
-                                            inputMode="numeric"
-                                            value={premio.weight}
-                                            onChange={(event) =>
-                                                update(premio.key, {
-                                                    weight: event.target.value.replace(/\D/g, ""),
-                                                })
-                                            }
-                                            disabled={disabled}
-                                        />
+                                        <Label>Probabilidad (%)</Label>
+                                        <div className="relative">
+                                            <Input
+                                                inputMode="decimal"
+                                                placeholder="0.000"
+                                                className="pr-8"
+                                                value={premio.probabilidad}
+                                                onChange={(event) =>
+                                                    update(premio.key, {
+                                                        probabilidad: sanitizePercentInput(event.target.value),
+                                                    })
+                                                }
+                                                disabled={disabled}
+                                            />
+                                            <span
+                                                aria-hidden="true"
+                                                className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground"
+                                            >
+                                                %
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
                                 <Button

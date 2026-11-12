@@ -15,7 +15,7 @@ import {
     PRIZE_TYPE_LABELS,
     type PrizeType,
 } from "@/lib/api/beneficios";
-import type { PremioFormValue } from "@/components/beneficios/minigame-prize-editor";
+import { sanitizePercentInput } from "@/lib/minigame-probability";
 
 export type SpecialPrizeForm = {
     id?: string;
@@ -26,13 +26,9 @@ export type SpecialPrizeForm = {
     caducaEl: string;
     tipo: PrizeType;
     stock: string;
-    weight: string;
+    /** Probabilidad en porcentaje, como texto del input (p. ej. "0.3"). */
+    probabilidad: string;
     imagenUrl: string;
-};
-
-type OddsPrize = {
-    weight: string;
-    stock: string;
 };
 
 export function emptySpecialPrize(): SpecialPrizeForm {
@@ -44,70 +40,24 @@ export function emptySpecialPrize(): SpecialPrizeForm {
         caducaEl: "",
         tipo: "physical",
         stock: "1",
-        weight: "1",
+        probabilidad: "0.3",
         imagenUrl: "",
-    };
-}
-
-function parseWeight(value: string): number {
-    const weight = Number.parseInt(value || "1", 10);
-    return Number.isInteger(weight) && weight >= 1 ? weight : 0;
-}
-
-function staysInDraw(stock: string): boolean {
-    if (!stock.trim()) return true;
-    const value = Number.parseInt(stock, 10);
-    return Number.isInteger(value) && value > 0;
-}
-
-export function estimateSpecialOdds(
-    prizes: OddsPrize[],
-    special: OddsPrize,
-): { exhausted: boolean; weight: number; total: number; percentLabel: string } {
-    const specialWeight = parseWeight(special.weight);
-    if (!staysInDraw(special.stock) || specialWeight < 1) {
-        return {
-            exhausted: !staysInDraw(special.stock),
-            weight: 0,
-            total: 0,
-            percentLabel: "0%",
-        };
-    }
-
-    const others = prizes.reduce((sum, prize) => {
-        if (!staysInDraw(prize.stock)) return sum;
-        return sum + parseWeight(prize.weight);
-    }, 0);
-    const total = others + specialWeight;
-    const percent = (specialWeight / total) * 100;
-    const rounded = Math.round(percent * 100) / 100;
-
-    return {
-        exhausted: false,
-        weight: specialWeight,
-        total,
-        percentLabel: `~${rounded.toLocaleString("es-MX", {
-            maximumFractionDigits: 2,
-        })}%`,
     };
 }
 
 type RouletteSpecialPrizeProps = {
     premio: SpecialPrizeForm;
-    otros: PremioFormValue[];
     onChange: (premio: SpecialPrizeForm) => void;
     disabled?: boolean;
 };
 
 export function RouletteSpecialPrize({
     premio,
-    otros,
     onChange,
     disabled,
 }: RouletteSpecialPrizeProps) {
-    const odds = premio.nombre.trim()
-        ? estimateSpecialOdds(otros, premio)
-        : null;
+    const agotado =
+        premio.stock.trim() !== "" && Number.parseInt(premio.stock, 10) === 0;
     const patch = (next: Partial<SpecialPrizeForm>) =>
         onChange({ ...premio, ...next });
 
@@ -116,7 +66,7 @@ export function RouletteSpecialPrize({
             <div>
                 <p className="text-sm font-medium">Premio especial</p>
                 <p className="text-xs text-muted-foreground">
-                    El aspecto visual no cambia la probabilidad. La probabilidad la define el peso, y el máximo de ganadores indica cuántas personas pueden ganarlo durante toda la campaña. Quien lo gane queda registrado con su uid, correo y teléfono.
+                    El aspecto visual no cambia la probabilidad. La probabilidad es el porcentaje de tiradas en que sale este premio y cuenta en el total de 100%. El máximo de ganadores indica cuántas personas pueden ganarlo durante toda la campaña; al agotarse deja de salir y su porcentaje se reparte proporcionalmente entre los demás premios. Quien lo gane queda registrado con su uid, correo y teléfono.
                 </p>
             </div>
 
@@ -183,26 +133,34 @@ export function RouletteSpecialPrize({
                     </p>
                 </div>
                 <div className="space-y-2">
-                    <Label>Peso</Label>
-                    <Input
-                        inputMode="numeric"
-                        value={premio.weight}
-                        onChange={(event) =>
-                            patch({
-                                weight: event.target.value.replace(/\D/g, ""),
-                            })
-                        }
-                        disabled={disabled}
-                    />
-                </div>
-                <div className="space-y-2">
-                    <Label>Probabilidad aproximada</Label>
-                    <p className="text-sm font-medium">
-                        {odds
-                            ? odds.exhausted
-                                ? "Agotado: no entra al sorteo"
-                                : `${odds.weight} / ${odds.total} · ${odds.percentLabel}`
-                            : "—"}
+                    <Label htmlFor="premioEspecialProbabilidad">Probabilidad (%)</Label>
+                    <div className="relative">
+                        <Input
+                            id="premioEspecialProbabilidad"
+                            inputMode="decimal"
+                            placeholder="0.3"
+                            className="pr-7"
+                            value={premio.probabilidad}
+                            onChange={(event) =>
+                                patch({
+                                    probabilidad: sanitizePercentInput(event.target.value),
+                                })
+                            }
+                            disabled={disabled}
+                        />
+                        <span
+                            aria-hidden="true"
+                            className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground"
+                        >
+                            %
+                        </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                        {agotado
+                            ? "Agotado: no entra al sorteo, aunque conserva su porcentaje configurado."
+                            : premio.nombre.trim() && premio.probabilidad
+                              ? `Sale en ${premio.probabilidad}% de las tiradas mientras queden ganadores disponibles.`
+                              : "Escribe el nombre del premio para habilitarlo."}
                     </p>
                 </div>
                 <div className="space-y-2 sm:col-span-2">
