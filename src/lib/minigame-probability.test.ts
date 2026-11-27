@@ -56,9 +56,30 @@ test("un exceso decimal pequeño también bloquea", () => {
   assert.equal(summary.message, "Probabilidad total: 100.001%. Excedes el límite por 0.001%.");
 });
 
-test("0% o un valor vacío invalidan la configuración", () => {
-  assert.equal(summarizeProbabilities(["100", "0"]).status, "invalid");
-  assert.equal(summarizeProbabilities(["100", ""]).status, "invalid");
+test("0% es válido: el premio queda guardado pero no suma", () => {
+  assert.equal(parsePercentToUnits("0"), 0);
+  assert.equal(parsePercentToUnits("0.000"), 0);
+  const summary = summarizeProbabilities(["100", "0"]);
+  assert.equal(summary.status, "valid");
+  assert.equal(summary.totalUnits, 100_000);
+  assert.equal(summarizeProbabilities(["99.7", "0", "0.3", "0.000"]).status, "valid");
+});
+
+test("todos en 0% no completan el 100%", () => {
+  const summary = summarizeProbabilities(["0", "0"]);
+  assert.equal(summary.status, "missing");
+  assert.equal(summary.message, "Probabilidad total: 0%. Falta asignar 100%.");
+});
+
+test("un valor vacío o no numérico sigue invalidando la configuración", () => {
+  for (const value of ["", " ", "abc", "-1", "100.5", "0.0001"]) {
+    const summary = summarizeProbabilities(["100", value]);
+    assert.equal(summary.status, "invalid", JSON.stringify(value));
+    assert.equal(
+      summary.message,
+      "Cada premio necesita una probabilidad entre 0 % y 100 %, con máximo 3 decimales.",
+    );
+  }
 });
 
 test("limpia la entrada del usuario y acepta coma decimal", () => {

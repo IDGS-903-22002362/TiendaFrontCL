@@ -12,6 +12,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import {
+    MAX_MINIJUEGO_PREMIOS,
     PRIZE_TYPES,
     PRIZE_TYPE_LABELS,
     type PrizeType,
@@ -82,7 +83,7 @@ export function MinigamePrizeEditor({
     premios,
     onChange,
     disabled,
-    maxCount = 12,
+    maxCount = MAX_MINIJUEGO_PREMIOS,
     title = "Premios",
     hint = "El servidor sortea con la probabilidad de cada premio. La app solo recibe el resultado.",
 }: MinigamePrizeEditorProps) {

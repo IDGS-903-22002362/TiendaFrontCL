@@ -50,6 +50,7 @@ export type GanadoresEspecialAdmin = {
     totalGanadores: number;
     ganadores: Array<{
         uid: string;
+        nombre?: string | null;
         email: string;
         telefono: string;
     }>;
@@ -85,6 +86,13 @@ export type PremioMinijuego = {
     validoDesde?: string | null;
     caducaEl?: string | null;
     imagenUrl?: string;
+    /**
+     * Arte de la carta coleccionable. Solo aplica al premio especial.
+     * Al guardar: un texto fija o conserva la carta, null la quita y, sin la
+     * clave, el servidor conserva la anterior del mismo premio (al crear, sin
+     * carta). Es independiente de imagenUrl.
+     */
+    cartaImagenUrl?: string | null;
     color?: string;
     especial?: boolean;
     maxGanadores?: number;
@@ -131,6 +139,12 @@ export type GuardarMinijuegoDTO = {
 
 export const MAX_BENEFICIO_IMAGENES = 10;
 export const MAX_BENEFICIO_PUNTOS_RECOMPENSA = 10_000;
+
+/**
+ * Tope técnico de premios por minijuego, incluido el especial. Es el mismo
+ * que valida el backend (MAX_PREMIOS_MINIJUEGO).
+ */
+export const MAX_MINIJUEGO_PREMIOS = 50;
 
 export type BeneficioRedireccion = {
     modulo: BeneficioDestinoModulo;
@@ -221,6 +235,36 @@ export const ALLOWED_BENEFICIO_VIDEO_TYPES = [
 
 export const MAX_BENEFICIO_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 export const MAX_BENEFICIO_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
+
+/** Arte de la carta coleccionable del premio especial. Sin GIF: la carta es una imagen fija. */
+export const ALLOWED_CARTA_IMAGE_TYPES = [
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+] as const;
+
+export const MAX_CARTA_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
+
+/** El servidor rechaza imágenes con algún lado menor a esto. */
+export const MIN_CARTA_IMAGE_SIDE_PX = 400;
+
+/** El servidor rechaza imágenes de más de 40 megapíxeles (ancho × alto). */
+export const MAX_CARTA_IMAGE_PIXELS = 40_000_000;
+
+/** Tamaño al que el servidor normaliza el arte (2× la ventana de la carta, 872×591). */
+export const CARTA_IMAGE_WIDTH_PX = 1744;
+export const CARTA_IMAGE_HEIGHT_PX = 1182;
+
+export const CARTA_IMAGE_RECOMMENDATION =
+    "1744 × 1182 px (horizontal, proporción 1.48:1)";
+
+export type CartaImagenUpload = {
+    url: string;
+    path?: string;
+    width?: number;
+    height?: number;
+    bytes?: number;
+};
 
 /** Recomendaciones de dimensiones para que el media se vea bien en la app móvil. */
 export const BENEFICIO_MEDIA_SIZE_RECOMMENDATIONS = {
@@ -322,6 +366,31 @@ export const beneficiosApi = {
 
     async uploadImage(id: string, file: File) {
         return this.uploadImages(id, [file]);
+    },
+
+    /**
+     * Sube el arte de la carta coleccionable del premio especial. No depende
+     * del minijuego: el panel lo sube al guardar y manda la URL en el JSON.
+     */
+    async uploadCartaImagen(file: File): Promise<{ url: string }> {
+        const formData = new FormData();
+        formData.append("imagen", file);
+
+        const response = await apiFetch<ApiSuccess<CartaImagenUpload>>(
+            "/api/beneficios/minijuego/carta-imagen",
+            {
+                method: "POST",
+                body: formData,
+            },
+            { local: true },
+        );
+
+        const url = response.data?.url;
+        if (typeof url !== "string" || !url.trim()) {
+            throw new Error("El servidor no devolvió la imagen de la carta. Intenta de nuevo.");
+        }
+
+        return { url: url.trim() };
     },
 
     async uploadVideo(id: string, file: File) {

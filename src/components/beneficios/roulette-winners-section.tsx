@@ -47,14 +47,16 @@ export function RouletteWinnersSection({
                     </p>
                 ) : (
                     <div className="space-y-2">
-                        {data?.ganadores.map((ganador) => (
-                            <div key={ganador.uid} className="rounded-md border px-3 py-2 text-sm">
-                                <p className="text-xs text-muted-foreground">UID</p>
-                                <p className="break-all font-mono text-xs">{ganador.uid || "—"}</p>
+                        {data?.ganadores.map((ganador, index) => (
+                            <div key={`${ganador.uid}-${index}`} className="rounded-md border px-3 py-2 text-sm">
+                                <p className="text-xs text-muted-foreground">Nombre</p>
+                                <p className="font-medium">{ganador.nombre?.trim() || "No disponible"}</p>
                                 <p className="mt-2 text-xs text-muted-foreground">Correo</p>
                                 <p>{ganador.email || "Sin correo"}</p>
                                 <p className="mt-2 text-xs text-muted-foreground">Teléfono</p>
                                 <p>{ganador.telefono || "Sin teléfono"}</p>
+                                <p className="mt-2 text-xs text-muted-foreground">UID</p>
+                                <p className="break-all font-mono text-xs">{ganador.uid || "—"}</p>
                             </div>
                         ))}
                     </div>

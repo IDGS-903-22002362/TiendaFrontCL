@@ -64,16 +64,22 @@ export type ProbabilitySummary = {
     message: string;
 };
 
+/** Mensaje para una probabilidad vacía, no numérica, con más de 3 decimales o mayor a 100 %. */
+export const PROBABILITY_RANGE_MESSAGE =
+    "entre 0 % y 100 %, con máximo 3 decimales";
+
 /**
  * Suma las probabilidades configuradas. Los premios deshabilitados (por
  * ejemplo, un premio especial sin nombre) no deben incluirse en `values`.
+ * 0 % es válido (el premio queda guardado pero nunca sale); vacío o no
+ * numérico invalida la configuración.
  */
 export function summarizeProbabilities(values: string[]): ProbabilitySummary {
     let totalUnits = 0;
     let invalid = false;
     for (const value of values) {
         const units = parsePercentToUnits(value);
-        if (units == null || units < 1) {
+        if (units == null) {
             invalid = true;
             continue;
         }
@@ -85,8 +91,7 @@ export function summarizeProbabilities(values: string[]): ProbabilitySummary {
         return {
             status: "invalid",
             totalUnits,
-            message:
-                "Cada premio necesita una probabilidad mayor a 0% y hasta 100%, con máximo 3 decimales.",
+            message: `Cada premio necesita una probabilidad ${PROBABILITY_RANGE_MESSAGE}.`,
         };
     }
     if (totalUnits === PROBABILITY_TOTAL_UNITS) {
