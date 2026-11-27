@@ -11,24 +11,39 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
+    CartaColeccionableField,
+    type CartaPendiente,
+} from "@/components/beneficios/carta-coleccionable-field";
+import {
     PRIZE_TYPES,
     PRIZE_TYPE_LABELS,
     type PrizeType,
 } from "@/lib/api/beneficios";
-import { sanitizePercentInput } from "@/lib/minigame-probability";
+import { specialPrizeRemainingStock } from "@/lib/beneficios/minijuego-premios";
+import {
+    parsePercentToUnits,
+    sanitizePercentInput,
+} from "@/lib/minigame-probability";
 
 export type SpecialPrizeForm = {
     id?: string;
     nombre: string;
     descripcion: string;
     terminos: string;
-    validoDesde: string;
-    caducaEl: string;
     tipo: PrizeType;
+    /** Máximo de ganadores (texto del input); es lo que se envía como stock y maxGanadores. */
     stock: string;
+    /** maxGanadores con el que se cargó el especial (null al crear). */
+    maxGanadoresGuardado: number | null;
+    /** stock restante con el que se cargó el especial (null al crear o ilimitado). */
+    stockRestanteGuardado: number | null;
     /** Probabilidad en porcentaje, como texto del input (p. ej. "0.3"). */
     probabilidad: string;
     imagenUrl: string;
+    /** Carta coleccionable guardada que se conserva ('' si no hay o se quitó). */
+    cartaImagenUrl: string;
+    /** Carta con la que se cargó el premio, para saber si se quitó al guardar. */
+    cartaImagenUrlGuardada: string;
 };
 
 export function emptySpecialPrize(): SpecialPrizeForm {
@@ -36,12 +51,14 @@ export function emptySpecialPrize(): SpecialPrizeForm {
         nombre: "",
         descripcion: "",
         terminos: "",
-        validoDesde: "",
-        caducaEl: "",
         tipo: "physical",
         stock: "1",
+        maxGanadoresGuardado: null,
+        stockRestanteGuardado: null,
         probabilidad: "0.3",
         imagenUrl: "",
+        cartaImagenUrl: "",
+        cartaImagenUrlGuardada: "",
     };
 }
 
@@ -49,15 +66,26 @@ type RouletteSpecialPrizeProps = {
     premio: SpecialPrizeForm;
     onChange: (premio: SpecialPrizeForm) => void;
     disabled?: boolean;
+    /** Archivo de carta elegido y sin subir; se sube al guardar. */
+    cartaPendiente: CartaPendiente | null;
+    onCartaSelect: (file: File) => void;
+    onCartaRemove: () => void;
+    onCartaRejected: (message: string) => void;
 };
 
 export function RouletteSpecialPrize({
     premio,
     onChange,
     disabled,
+    cartaPendiente,
+    onCartaSelect,
+    onCartaRemove,
+    onCartaRejected,
 }: RouletteSpecialPrizeProps) {
+    // Agotado según los ganadores que le quedan, no según el máximo.
+    const restante = specialPrizeRemainingStock(premio);
     const agotado =
-        premio.stock.trim() !== "" && Number.parseInt(premio.stock, 10) === 0;
+        restante.trim() !== "" && Number.parseInt(restante, 10) === 0;
     const patch = (next: Partial<SpecialPrizeForm>) =>
         onChange({ ...premio, ...next });
 
@@ -158,9 +186,11 @@ export function RouletteSpecialPrize({
                     <p className="text-xs text-muted-foreground">
                         {agotado
                             ? "Agotado: no entra al sorteo, aunque conserva su porcentaje configurado."
-                            : premio.nombre.trim() && premio.probabilidad
-                              ? `Sale en ${premio.probabilidad}% de las tiradas mientras queden ganadores disponibles.`
-                              : "Escribe el nombre del premio para habilitarlo."}
+                            : premio.nombre.trim() && parsePercentToUnits(premio.probabilidad) === 0
+                              ? "Con 0 % queda guardado pero no sale ni aparece en la ruleta."
+                              : premio.nombre.trim() && premio.probabilidad
+                                ? `Sale en ${premio.probabilidad}% de las tiradas mientras queden ganadores disponibles.`
+                                : "Escribe el nombre del premio para habilitarlo."}
                     </p>
                 </div>
                 <div className="space-y-2 sm:col-span-2">
@@ -174,32 +204,6 @@ export function RouletteSpecialPrize({
                         disabled={disabled}
                     />
                 </div>
-                <div className="space-y-2">
-                    <Label>Válido desde</Label>
-                    <Input
-                        type="date"
-                        value={premio.validoDesde}
-                        onChange={(event) =>
-                            patch({ validoDesde: event.target.value })
-                        }
-                        disabled={disabled}
-                    />
-                </div>
-                <div className="space-y-2">
-                    <Label>Caduca el</Label>
-                    <Input
-                        type="date"
-                        value={premio.caducaEl}
-                        onChange={(event) =>
-                            patch({ caducaEl: event.target.value })
-                        }
-                        disabled={disabled}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                        Elige el día. La caducidad cubre todo ese día. Si lo
-                        dejas vacío, la app usa el fin de la campaña.
-                    </p>
-                </div>
                 <div className="space-y-2 sm:col-span-2">
                     <Label>Imagen (opcional)</Label>
                     <Input
@@ -211,6 +215,19 @@ export function RouletteSpecialPrize({
                         disabled={disabled}
                     />
                 </div>
+                <CartaColeccionableField
+                    premioNombre={premio.nombre}
+                    savedUrl={premio.cartaImagenUrl}
+                    initialUrl={premio.cartaImagenUrlGuardada}
+                    pendiente={cartaPendiente}
+                    onSelect={onCartaSelect}
+                    onRemove={onCartaRemove}
+                    onRestore={() =>
+                        patch({ cartaImagenUrl: premio.cartaImagenUrlGuardada })
+                    }
+                    onRejected={onCartaRejected}
+                    disabled={disabled}
+                />
             </div>
         </div>
     );

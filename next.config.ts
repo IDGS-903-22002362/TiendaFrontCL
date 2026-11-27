@@ -16,8 +16,11 @@ const apiBaseUrl =
       : configuredApiOrigin
     : configuredApiOrigin || "http://localhost:3000";
 
+// Solo en desarrollo: backend local y emulador de Firebase Storage (cartas coleccionables).
 const localImageSource =
-  process.env.NODE_ENV === "production" ? "" : " http://localhost:3000";
+  process.env.NODE_ENV === "production"
+    ? ""
+    : " http://localhost:3000 http://127.0.0.1:9199 http://localhost:9199";
 
 const baseSecurityHeaders = [
   {

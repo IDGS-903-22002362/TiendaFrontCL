@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Ban, Film, Gift, ImageIcon, Link2, Plus, RefreshCw, RotateCcw, Trash2, X } from "lucide-react";
@@ -83,11 +83,21 @@ import {
     type MinijuegoVisibilidad,
 } from "@/lib/api/beneficios";
 import {
-    dateInputToIso,
     datetimeLocalToIso,
-    isoToDateInput,
     isoToDatetimeLocal,
 } from "@/lib/beneficios/minijuego-form";
+import {
+    minijuegoPrizeWarnings,
+    shouldSeedPointPrizes,
+    specialPrizeRemainingStock,
+    validateMinijuegoPrizeCount,
+    validatePointPrizes,
+} from "@/lib/beneficios/minijuego-premios";
+import {
+    cartaImagenUrlFromPremio,
+    resolveCartaImagenUrlPayload,
+    validateCartaImageFile,
+} from "@/lib/beneficios/carta-coleccionable";
 import {
     Carousel,
     CarouselContent,
@@ -97,6 +107,7 @@ import {
 } from "@/components/ui/carousel";
 import { useToast } from "@/hooks/use-toast";
 import {
+    PROBABILITY_RANGE_MESSAGE,
     parsePercentToUnits,
     percentInputToNumber,
     percentNumberToInput,
@@ -122,6 +133,11 @@ type FormState = {
     minijuegoVisibilidad: MinijuegoVisibilidad;
     usuariosPermitidos: Array<{ uid: string; nombre: string; email: string }>;
     premios: PremioFormValue[];
+    /**
+     * Ya se sembraron (o se cargaron) los premios de puntos. Los 10 iniciales
+     * solo se siembran la primera vez que se elige «Minijuego» al crear.
+     */
+    premiosPuntosIniciados: boolean;
     premioEspecial: SpecialPrizeForm;
     /** El minijuego guardado usaba pesos y se muestra convertido a porcentajes. */
     probabilidadConvertida: boolean;
@@ -145,6 +161,7 @@ const EMPTY_FORM: FormState = {
     minijuegoVisibilidad: "publico",
     usuariosPermitidos: [],
     premios: [],
+    premiosPuntosIniciados: false,
     premioEspecial: emptySpecialPrize(),
     probabilidadConvertida: false,
 };
@@ -154,6 +171,14 @@ type PendingMediaUpload = {
     file: File;
     previewUrl?: string;
     name: string;
+};
+
+/** Arte de la carta coleccionable elegido y aún sin guardar. */
+type PendingCartaUpload = {
+    file: File;
+    previewUrl: string;
+    /** URL ya subida: si el guardado falla, el reintento no vuelve a subir el archivo. */
+    uploadedUrl?: string;
 };
 
 type DateValue =
@@ -324,6 +349,8 @@ function formFromBeneficio(beneficio: Beneficio): FormState {
             (uid) => ({ uid, nombre: "", email: "" }),
         ),
         ...splitRoulettePrizes(minijuego?.premios ?? []),
+        // Editar nunca siembra los 10 premios iniciales.
+        premiosPuntosIniciados: true,
         probabilidadConvertida: minijuego?.probabilidadModo === "convertida",
     };
 }
@@ -338,9 +365,8 @@ function splitRoulettePrizes(
         probabilidad?: number;
         descripcion?: string;
         terminos?: string;
-        validoDesde?: string | null;
-        caducaEl?: string | null;
         imagenUrl?: string;
+        cartaImagenUrl?: string | null;
         especial?: boolean;
         maxGanadores?: number;
     }>,
@@ -366,6 +392,7 @@ function splitRoulettePrizes(
 
     const source = premios[mapped.indexOf(inherited)];
     const cap = source?.maxGanadores;
+    const cartaImagenUrl = cartaImagenUrlFromPremio(source?.cartaImagenUrl);
 
     return {
         premios: mapped.filter((premio) => premio !== inherited),
@@ -374,23 +401,31 @@ function splitRoulettePrizes(
             nombre: inherited.nombre,
             descripcion: inherited.descripcion ?? "",
             terminos: source?.terminos ?? "",
-            validoDesde: isoToDateInput(source?.validoDesde),
-            caducaEl: isoToDateInput(source?.caducaEl),
             tipo: inherited.tipo === "points" ? "physical" : inherited.tipo,
             stock: cap != null ? String(cap) : inherited.stock || "1",
+            // Lo que devolvió GET ?admin=1, para saber cuántos ganadores le quedan.
+            maxGanadoresGuardado: typeof cap === "number" ? cap : null,
+            stockRestanteGuardado: typeof source?.stock === "number" ? source.stock : null,
             probabilidad: inherited.probabilidad,
             imagenUrl: inherited.imagenUrl ?? "",
+            cartaImagenUrl,
+            cartaImagenUrlGuardada: cartaImagenUrl,
         },
     };
 }
 
+/**
+ * Siembra los 10 premios de puntos solo la primera vez que se elige
+ * «Minijuego» al crear; después (al borrar premios, al cambiar el tipo de
+ * juego o al editar) nunca vuelve a sembrar.
+ */
 function pointPrizeSeed(
     current: FormState,
-): Partial<Pick<FormState, "premios">> {
-    if (current.premios.length === 0) {
-        return { premios: defaultRoulettePointPrizes() };
+): Partial<Pick<FormState, "premios" | "premiosPuntosIniciados">> {
+    if (shouldSeedPointPrizes(current)) {
+        return { premios: defaultRoulettePointPrizes(), premiosPuntosIniciados: true };
     }
-    return {};
+    return { premiosPuntosIniciados: true };
 }
 
 function validateMinijuegoForm(form: FormState): string | null {
@@ -420,64 +455,25 @@ function validateMinijuegoForm(form: FormState): string | null {
         if (form.premioEspecial.terminos.trim().length > 4000) {
             return "Los términos del premio especial son demasiado largos.";
         }
-        const validoDesde = dateInputToIso(form.premioEspecial.validoDesde);
-        const caducaEl = dateInputToIso(form.premioEspecial.caducaEl, true);
-        if (form.premioEspecial.validoDesde.trim() && !validoDesde) {
-            return "La fecha de inicio de vigencia no es válida.";
-        }
-        if (form.premioEspecial.caducaEl.trim() && !caducaEl) {
-            return "La fecha de caducidad no es válida.";
-        }
-        if (
-            validoDesde &&
-            caducaEl &&
-            new Date(caducaEl).getTime() < new Date(validoDesde).getTime()
-        ) {
-            return "La caducidad no puede ser anterior al inicio de la vigencia.";
-        }
         const maximo = Number.parseInt(form.premioEspecial.stock, 10);
         if (!Number.isInteger(maximo) || maximo < 0) {
             return "Indica el máximo de ganadores del premio especial.";
         }
+        // 0 % es válido: el premio queda guardado pero no sale.
         const probabilidad = parsePercentToUnits(form.premioEspecial.probabilidad);
-        if (probabilidad == null || probabilidad < 1) {
-            return "La probabilidad del premio especial debe ser mayor a 0% y hasta 100%, con máximo 3 decimales.";
+        if (probabilidad == null) {
+            return `La probabilidad del premio especial debe estar ${PROBABILITY_RANGE_MESSAGE}.`;
         }
     }
     const incluyeEspecial = Boolean(form.premioEspecial.nombre.trim());
-    if (form.premios.length === 0 && !incluyeEspecial) {
-        return "Agrega al menos un premio.";
-    }
-    if (form.premios.length + (incluyeEspecial ? 1 : 0) > 12) {
-        return "Un minijuego puede tener máximo 12 premios.";
+    const conteoError = validateMinijuegoPrizeCount(form.premios.length, incluyeEspecial);
+    if (conteoError) {
+        return conteoError;
     }
 
-    for (const premio of form.premios) {
-        if (!premio.nombre.trim()) {
-            return "Cada premio necesita un nombre.";
-        }
-        if (premio.tipo === "points") {
-            const valor = Number.parseInt(premio.valor, 10);
-            if (!Number.isInteger(valor) || valor <= 0 || valor > MAX_BENEFICIO_PUNTOS_RECOMPENSA) {
-                return "Indica los puntos del premio.";
-            }
-        } else if (premio.valor.trim()) {
-            const valor = Number.parseInt(premio.valor, 10);
-            if (!Number.isInteger(valor) || valor < 0) {
-                return "El valor del premio no es válido.";
-            }
-        }
-
-        const probabilidad = parsePercentToUnits(premio.probabilidad);
-        if (probabilidad == null || probabilidad < 1) {
-            return "La probabilidad de cada premio debe ser mayor a 0% y hasta 100%, con máximo 3 decimales.";
-        }
-        if (premio.stock.trim()) {
-            const stock = Number.parseInt(premio.stock, 10);
-            if (!Number.isInteger(stock) || stock < 0) {
-                return "El stock del premio no es válido.";
-            }
-        }
+    const premioError = validatePointPrizes(form.premios, MAX_BENEFICIO_PUNTOS_RECOMPENSA);
+    if (premioError) {
+        return premioError;
     }
 
     const total = summarizeProbabilities(enabledPrizeProbabilities(form));
@@ -496,10 +492,15 @@ function enabledPrizeProbabilities(form: FormState): string[] {
     ];
 }
 
+/**
+ * @param cartaSubidaUrl URL de la carta coleccionable recién subida al
+ * guardar (o null si no se eligió un archivo nuevo).
+ */
 function buildMinijuegoPayload(
     form: FormState,
     titulo: string,
     descripcion: string,
+    cartaSubidaUrl: string | null = null,
 ): GuardarMinijuegoDTO {
     return {
         beneficio: {
@@ -542,24 +543,16 @@ function buildMinijuegoPayload(
                           ...(form.premioEspecial.terminos.trim()
                               ? { terminos: form.premioEspecial.terminos.trim() }
                               : {}),
-                          ...(dateInputToIso(form.premioEspecial.validoDesde)
-                              ? {
-                                    validoDesde: dateInputToIso(
-                                        form.premioEspecial.validoDesde,
-                                    ),
-                                }
-                              : {}),
-                          ...(dateInputToIso(form.premioEspecial.caducaEl, true)
-                              ? {
-                                    caducaEl: dateInputToIso(
-                                        form.premioEspecial.caducaEl,
-                                        true,
-                                    ),
-                                }
-                              : {}),
                           ...(form.premioEspecial.imagenUrl.trim()
                               ? { imagenUrl: form.premioEspecial.imagenUrl.trim() }
                               : {}),
+                          // URL nueva, la guardada que se conserva, null si se quitó
+                          // o sin la clave si nunca tuvo carta.
+                          ...resolveCartaImagenUrlPayload({
+                              uploadedUrl: cartaSubidaUrl,
+                              savedUrl: form.premioEspecial.cartaImagenUrl,
+                              initialUrl: form.premioEspecial.cartaImagenUrlGuardada,
+                          }),
                           stock: Number.parseInt(form.premioEspecial.stock, 10),
                           maxGanadores: Number.parseInt(form.premioEspecial.stock, 10),
                           probabilidad:
@@ -628,7 +621,29 @@ export default function EmpleadoClubBeneficiosPage() {
     const [isLoadingDetail, setIsLoadingDetail] = useState(false);
     const [formData, setFormData] = useState<FormState>(EMPTY_FORM);
     const [pendingMediaUploads, setPendingMediaUploads] = useState<PendingMediaUpload[]>([]);
+    const [pendingCarta, setPendingCartaState] = useState<PendingCartaUpload | null>(null);
+    const pendingCartaRef = useRef<PendingCartaUpload | null>(null);
     const { toast } = useToast();
+
+    /** Cambia la carta pendiente y revoca la vista previa anterior (solo esa). */
+    const setPendingCarta = useCallback((next: PendingCartaUpload | null) => {
+        const previous = pendingCartaRef.current;
+        if (previous && previous.previewUrl !== next?.previewUrl) {
+            URL.revokeObjectURL(previous.previewUrl);
+        }
+        pendingCartaRef.current = next;
+        setPendingCartaState(next);
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            const current = pendingCartaRef.current;
+            if (current) {
+                URL.revokeObjectURL(current.previewUrl);
+                pendingCartaRef.current = null;
+            }
+        };
+    }, []);
 
     const itemsPerPage = 10;
 
@@ -843,6 +858,39 @@ export default function EmpleadoClubBeneficiosPage() {
         setFormData(EMPTY_FORM);
         setGanadoresEspecial(null);
         clearPendingMedia();
+        setPendingCarta(null);
+    };
+
+    const handleCartaSelect = (file: File) => {
+        const error = validateCartaImageFile(file);
+        if (error) {
+            toast({
+                variant: "destructive",
+                title: "Imagen de carta no válida",
+                description: `${file.name}: ${error}`,
+            });
+            return;
+        }
+
+        setPendingCarta({ file, previewUrl: URL.createObjectURL(file) });
+    };
+
+    const handleCartaRejected = (message: string) => {
+        setPendingCarta(null);
+        toast({
+            variant: "destructive",
+            title: "Imagen de carta no válida",
+            description: message,
+        });
+    };
+
+    /** Quita la carta: la pendiente y la guardada (la guardada se quita al guardar). */
+    const handleCartaRemove = () => {
+        setPendingCarta(null);
+        setFormData((current) => ({
+            ...current,
+            premioEspecial: { ...current.premioEspecial, cartaImagenUrl: "" },
+        }));
     };
 
     const closeDialog = () => {
@@ -970,6 +1018,7 @@ export default function EmpleadoClubBeneficiosPage() {
         setIsDialogOpen(true);
         setIsLoadingDetail(true);
         clearPendingMedia();
+        setPendingCarta(null);
 
         try {
             const detail = await beneficiosApi.getById(beneficio.id);
@@ -1027,6 +1076,16 @@ export default function EmpleadoClubBeneficiosPage() {
                 });
                 return;
             }
+
+            if (pendingCarta && !formData.premioEspecial.nombre.trim()) {
+                toast({
+                    variant: "destructive",
+                    title: "Minijuego incompleto",
+                    description:
+                        "Premio especial: escribe el nombre para usar la carta coleccionable, o quita la carta.",
+                });
+                return;
+            }
         }
 
         const redirectError = validateRedirectForm(formData);
@@ -1073,7 +1132,37 @@ export default function EmpleadoClubBeneficiosPage() {
 
         try {
             if (formData.tipo === "minijuego") {
-                const payload = buildMinijuegoPayload(formData, titulo, descripcion);
+                // La carta se sube antes de crear o actualizar; si falla, no se guarda nada.
+                let cartaSubidaUrl: string | null = null;
+                if (pendingCarta && formData.premioEspecial.nombre.trim()) {
+                    if (pendingCarta.uploadedUrl) {
+                        cartaSubidaUrl = pendingCarta.uploadedUrl;
+                    } else {
+                        try {
+                            const { url } = await beneficiosApi.uploadCartaImagen(
+                                pendingCarta.file,
+                            );
+                            cartaSubidaUrl = url;
+                            if (pendingCartaRef.current === pendingCarta) {
+                                setPendingCarta({ ...pendingCarta, uploadedUrl: url });
+                            }
+                        } catch (error) {
+                            toast({
+                                variant: "destructive",
+                                title: "No se pudo subir la carta coleccionable",
+                                description: `${getApiErrorMessage(error)} No se guardó ningún cambio.`,
+                            });
+                            return;
+                        }
+                    }
+                }
+
+                const payload = buildMinijuegoPayload(
+                    formData,
+                    titulo,
+                    descripcion,
+                    cartaSubidaUrl,
+                );
                 const beneficioId = editingBeneficioId
                     ? editingBeneficioId
                     : null;
@@ -1644,7 +1733,6 @@ export default function EmpleadoClubBeneficiosPage() {
                                         setFormData((current) => ({
                                             ...current,
                                             minijuegoTipo,
-                                            ...pointPrizeSeed(current),
                                         }))
                                     }
                                     onFechaInicioChange={(fechaInicio) =>
@@ -1690,6 +1778,8 @@ export default function EmpleadoClubBeneficiosPage() {
                                 <RoulettePointsEditor
                                     premios={formData.premios}
                                     especialNombre={formData.premioEspecial.nombre}
+                                    especialProbabilidad={formData.premioEspecial.probabilidad}
+                                    especialStock={specialPrizeRemainingStock(formData.premioEspecial)}
                                     showWheelPreview={formData.minijuegoTipo === "ruleta"}
                                     onChange={(premios) =>
                                         setFormData((current) => ({ ...current, premios }))
@@ -1715,10 +1805,33 @@ export default function EmpleadoClubBeneficiosPage() {
                                         }))
                                     }
                                     disabled={isLoadingDetail || isSaving}
+                                    cartaPendiente={
+                                        pendingCarta
+                                            ? {
+                                                  previewUrl: pendingCarta.previewUrl,
+                                                  nombre: pendingCarta.file.name,
+                                              }
+                                            : null
+                                    }
+                                    onCartaSelect={handleCartaSelect}
+                                    onCartaRemove={handleCartaRemove}
+                                    onCartaRejected={handleCartaRejected}
                                 />
                                 <ProbabilityTotalIndicator
                                     values={enabledPrizeProbabilities(formData)}
                                 />
+                                {minijuegoPrizeWarnings(
+                                    formData.premios,
+                                    formData.premioEspecial,
+                                ).map((warning) => (
+                                    <div
+                                        key={warning}
+                                        role="status"
+                                        className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+                                    >
+                                        {warning}
+                                    </div>
+                                ))}
                                 <RouletteWinnersSection
                                     premioNombre={formData.premioEspecial.nombre}
                                     maxGanadores={formData.premioEspecial.stock}
